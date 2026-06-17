@@ -324,6 +324,12 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
   font-size: .68rem; flex-shrink: 0;
 }
 .log-cite:hover { text-decoration: underline; }
+/* The eo-address chip — operator(Site, Stance) read live off the event */
+.log-addr {
+  flex-shrink: 0; font-family: ui-monospace, monospace; font-size: .64rem;
+  color: #a5b4fc; border: 1px solid #312e81; background: #14132b;
+  border-radius: 4px; padding: .02rem .3rem; cursor: help; letter-spacing: .02em;
+}
 
 /* Predictive-coding line in reading mode */
 .rl-pred {

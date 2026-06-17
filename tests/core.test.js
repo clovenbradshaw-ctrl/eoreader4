@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { OPERATORS, isOperator } from '../src/core/operators.js';
 import { createLog } from '../src/core/log.js';
-import { eoAddressOfEvent } from '../src/core/address.js';
+import { eoAddressOfEvent, eoNotation } from '../src/core/address.js';
 import { projectGraph, projectionStats } from '../src/core/project.js';
 
 test('there are exactly nine operators', () => {
@@ -58,6 +58,15 @@ test('eoAddressOfEvent derives the three faces', () => {
   assert.equal(addr.act.domain,  'Existence');
   assert.equal(addr.site.grain,  'Ground');
   assert.equal(addr.resolution.mode, 'Generate');
+});
+
+test('eoNotation emits operator(Site,Stance) — the address the Log view shows', () => {
+  // Compact form: operator(Domain, Grain); the operator carries the mode, so
+  // all three cube axes are recoverable from the one string the row displays.
+  assert.equal(eoNotation({ op: 'INS', id: 'a' }),                       'INS(Exi,Gro)');
+  assert.equal(eoNotation({ op: 'CON', src: 'a', tgt: 'b' }),            'CON(Str,Pat)');
+  assert.equal(eoNotation({ op: 'DEF', id: 'topps', key: 'predicate' }), 'DEF(Int,Fig)');
+  assert.equal(eoNotation(null),                                         '?');
 });
 
 test('projectGraph is memoized while the log is unchanged', () => {
