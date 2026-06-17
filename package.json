@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Holonic document-chat over an append-only event log",
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test tests/*.test.js",
     "serve": "python3 -m http.server 8000"
   },
   "engines": {

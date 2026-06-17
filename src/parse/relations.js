@@ -63,6 +63,13 @@ const KIN_RE = new RegExp(
 // (w = 1). A pronoun does not decide — it reads the referent field and takes
 // the strongest candidate, carrying that candidate's weight as the bond's
 // coupling so the uncertainty rides along instead of being thrown away.
+//
+// KNOWN CARVE LIMIT (do not patch here): subjects are found only at the
+// sentence head — a leading pronoun or a sentence-initial name. Mid-clause
+// subjects ("Video shows Topps approaching") never reach the field, so their
+// bonds never fire. This is the §8 segmentation failure, not a coref bug; it
+// belongs to the SEG-first rework. Patching subject-finding here too would
+// scatter the fix across two places and make that rework harder.
 const leadingSubject = (sentence, admission, coref) => {
   const pn = sentence.match(/^\s*(He|She|They|We|It|I|You)\b/);
   if (pn) {

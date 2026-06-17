@@ -4,6 +4,13 @@
 // the source hash it was read from. Read top to bottom and you watch meaning
 // accrete on the text in passes, each event traceable to the exact bytes it
 // came from.
+//
+// Each transformation also carries its eo-address — operator(Site, Stance) —
+// computed live by `eoNotation`, never stamped on the event. The log stays the
+// single source of truth; the address is a reading of it. Surfacing it per row
+// makes "the spec is the notation" literal: every cut is a point on the EO cube.
+
+import { eoNotation, eoAddressOfEvent } from '../core/index.js';
 
 export const renderLog = (doc, root, { onSelectSentence } = {}) => {
   root.innerHTML = '';
@@ -32,7 +39,8 @@ export const renderLog = (doc, root, { onSelectSentence } = {}) => {
   head.className = 'log-head';
   head.innerHTML =
     `<div class="log-title">${events.length} events — the source cited verbatim, then every transformation</div>` +
-    `<div class="log-sub">each unit is content-addressed; every transformation cites the hash it read</div>`;
+    `<div class="log-sub">each unit is content-addressed; every transformation cites the hash it read</div>` +
+    `<div class="log-sub">every cut carries its address — <span class="log-addr">operator(Site, Stance)</span> — read live, never stored</div>`;
   root.appendChild(head);
 
   if (conventions.length) {
@@ -46,7 +54,7 @@ export const renderLog = (doc, root, { onSelectSentence } = {}) => {
     for (const e of conventions) {
       const r = document.createElement('div');
       r.className = 'log-row';
-      r.innerHTML = `<span class="op REC">REC</span><span class="log-desc">learn: “${escapeHtml(e.token)}” marks speech${e.weight ? ` ×${e.weight}` : ''}</span>`;
+      r.innerHTML = `<span class="op REC">REC</span>${addr(e)}<span class="log-desc">learn: “${escapeHtml(e.token)}” marks speech${e.weight ? ` ×${e.weight}` : ''}</span>`;
       rows.appendChild(r);
     }
     sec.appendChild(rows);
@@ -76,9 +84,26 @@ export const renderLog = (doc, root, { onSelectSentence } = {}) => {
   });
 };
 
+// A transformation chip carries the operator, its eo-address, and the reading.
 const chip = (e, name) => {
   const op = (e.op === 'DEF' && e.key === 'role') ? 'SEG' : e.op;
-  return `<span class="op ${op}" title="${e.op}${e.cites ? ' · cites ' + e.cites : ''}">${escapeHtml(desc(e, name))}</span>`;
+  return `<span class="op ${op}" title="${tip(e)}">${addr(e)}${escapeHtml(desc(e, name))}</span>`;
+};
+
+// The reading's address, computed from the event at read time. eoNotation gives
+// the compact operator(Domain,Grain) — e.g. DEF(Int,Fig). The tooltip spells out
+// the three faces the cube reads off it: Site (where), Stance (how held), Act.
+const addr = (e) => {
+  const a = eoAddressOfEvent(e);
+  return a ? `<span class="log-addr">${escapeHtml(eoNotation(e))}</span>` : '';
+};
+
+const tip = (e) => {
+  const a = eoAddressOfEvent(e);
+  const faces = a
+    ? `${eoNotation(e)} · Site ${a.site.domain}·${a.site.grain} · Stance ${a.resolution.mode}·${a.resolution.grain} · Act ${a.act.mode}×${a.act.domain}`
+    : e.op;
+  return escapeHtml(faces + (e.cites ? ` · cites ${e.cites}` : ''));
 };
 
 const desc = (e, name) => {

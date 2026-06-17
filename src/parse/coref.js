@@ -8,10 +8,13 @@
 // becomes the bond's coupling. As evidence accumulates the field concentrates,
 // so the weight asymptotically approaches 1 — truth as a limit, not a verdict.
 //
-// This is also the seam where a model collapses referents the right way: not
-// by returning a choice, but by emitting meta-content (a paraphrase, a feature,
-// an embedding similarity) that adds weight to candidates. `reinforce(id, w)`
-// is that door — a continuous nudge to the field, never a switch.
+// A model may also have an opinion about a referent. It does NOT get to write
+// that opinion into the field: a witness observes, it does not decide. The
+// fold-safe shape is a deposition — the model emits a Given event ("read `he`
+// as Gregor here"), append-only and addressed, and the fold weighs it as
+// testimony beside the count and the γ-mass. `reinforce` below is the wrong
+// door — an injection straight into the field — kept inert and unwired (the
+// firewall holding) until that deposition path exists, after the SEG rework.
 
 export const createCorefField = ({ gamma = 0.7, maxDist = 8 } = {}) => {
   const traces = new Map(); // id → { lastIdx, mass }
@@ -24,7 +27,10 @@ export const createCorefField = ({ gamma = 0.7, maxDist = 8 } = {}) => {
     traces.set(id, tr);
   };
 
-  // Optional model/meta nudge: weight a candidate without deciding it.
+  // WRONG DOOR — kept inert, never called. A direct mass write is the model
+  // deciding a referent, the move the witness/fold split forbids. A model's
+  // influence must enter as a deposited Given event the fold reads as
+  // testimony, never as an injection here. See header; do not wire until then.
   const reinforce = (id, w, sentIdx) => {
     const tr = traces.get(id) || { lastIdx: sentIdx ?? 0, mass: 0 };
     tr.mass += Math.max(0, w);
