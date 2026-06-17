@@ -14,7 +14,7 @@
 // name is admitted on its second sighting, a multi-word name on its first,
 // and "Gregor" folds into "Gregor Samsa" as a SYN synthesis.
 
-const WORD   = String.raw`[A-Z][a-z]+(?:['’][a-z]+)?`;            // a titlecase word (Marlow, Marlow's) — never ALLCAPS
+const WORD   = String.raw`(?:[A-Z][a-z]+(?:['’][a-z]+)?|[A-Z]{2,})`;       // titlecase word OR an acronym (THP, NDP)
 const CONN   = new Set(['of', 'the', 'and', 'de', 'von', 'van', 'da', 'del', 'di', 'la', 'le', 'du', 'der']);
 const TITLES = new Set(['Mr', 'Mrs', 'Ms', 'Dr', 'Miss', 'Mister', 'Sir', 'Lady', 'Lord', 'Professor',
                         'Prof', 'Captain', 'Capt', 'Rev', 'St', 'Aunt', 'Uncle', 'General', 'Colonel', 'Major']);
@@ -22,7 +22,9 @@ const CONN_RE  = [...CONN].join('|');
 const TITLE_RE = [...TITLES].join('|') + String.raw`)\.?`;
 const RUN_RE   = new RegExp(String.raw`\b(?:(?:${TITLE_RE}\s+)?${WORD}(?:\s+(?:(?:${CONN_RE})\s+)?${WORD})*`, 'g');
 
-const isTitleWord = (w) => /^[A-Z][a-z]+$/.test(w);
+// A name word is titlecase (Marlow) OR an acronym (THP). Name-hood is then
+// decided by distribution, not by this shape — shape only proposes candidates.
+const isNameWord = (w) => /^[A-Z][a-z]+$/.test(w) || /^[A-Z]{2,}$/.test(w);
 const baseOf = (w) => w.replace(/['’].*$/, '').replace(/\.$/, '');
 
 // Pass: learn which capitalised words are names — the list-free way. A common
@@ -36,7 +38,7 @@ export const induceProperNouns = (sentences) => {
   const caps  = new Set();
   for (const s of sentences) {
     for (const m of String(s).matchAll(/\b[a-z]+/g)) lower.add(m[0]);   // whole lowercase words only
-    for (const m of String(s).matchAll(/[A-Z][a-z]+(?:['’][a-z]+)?/g)) caps.add(m[0]);
+    for (const m of String(s).matchAll(/[A-Z][a-z]+(?:['’][a-z]+)?|[A-Z]{2,}/g)) caps.add(m[0]);
   }
   const proper = new Set();
   for (const w of caps) {
@@ -60,7 +62,7 @@ const cleanLabel = (raw, proper) => {
     const isConn  = CONN.has(w.toLowerCase());
     const isTitle = TITLES.has(w.replace(/\.$/, ''));
     const base    = baseOf(w);
-    const name    = !isConn && !isTitle && isTitleWord(base) && (proper ? proper.has(base) : true);
+    const name    = !isConn && !isTitle && isNameWord(base) && (proper ? proper.has(base) : true);
     return { w, base, isConn, isTitle, name };
   });
   let a = info.findIndex((x) => x.name);
