@@ -78,6 +78,78 @@ test('empty retrieval terminates with a chat fallback', async () => {
   assert.equal(result.sources.length, 0);
 });
 
+test('runs without a doc — chat mode, no veto noise', async () => {
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'hello there',
+    doc: null,
+    model,
+    embedder: createHashEmbedder(),
+    auditLog: audit,
+  });
+  assert.equal(result.turn.route, 'chat');
+  assert.equal(result.sources.length, 0);
+  assert.equal(result.flags.length, 0);
+  assert.ok(result.answer);
+  // The model still ran — chat mode reaches the llm stage.
+  assert.ok(result.turn.steps.find(s => s.name === 'llm'));
+});
+
+test('math short-circuits even without a doc', async () => {
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'What is 7 * 6?',
+    doc: null,
+    model,
+    embedder: createHashEmbedder(),
+    auditLog: audit,
+  });
+  assert.equal(result.turn.route, 'math');
+  assert.ok(result.answer.includes('42'));
+  assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
+});
+
+test('vetoes flag but never substitute the answer', async () => {
+  const doc = setup('Alice loves apples. Bob hates broccoli.');
+  // A backend that emits an obviously unbound claim — overlap < the
+  // bind threshold against every span. The unbound veto must fire.
+  const unboundModel = {
+    id: 'unbound', kind: 'test', isLoaded: () => true,
+    async load() {},
+    async phrase() { return 'Zebras unrelated cosmic nonsense.'; },
+  };
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'apples',
+    doc, model: unboundModel, embedder: createHashEmbedder(), auditLog: audit,
+  });
+  const ids = result.flags.map(f => f.id);
+  assert.ok(ids.includes('unbound'), `expected unbound flag, got: ${ids.join(',')}`);
+  // The answer is the model's text — NOT the substitution string.
+  assert.ok(!/did not produce a grounded answer/i.test(result.answer));
+  assert.ok(/zebras/i.test(result.answer));
+});
+
+test('onStep callback fires once per executed stage', async () => {
+  const doc = setup('Alice loves apples.');
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const seen = [];
+  await runTurn({
+    question: 'apples',
+    doc, model, embedder: createHashEmbedder(), auditLog: audit,
+    onStep: (name) => seen.push(name),
+  });
+  assert.ok(seen.includes('route'));
+  assert.ok(seen.includes('llm'));
+  assert.ok(seen.includes('bind'));
+});
+
 test('audit exports JSONL one record per turn', async () => {
   const doc = setup('Alice loves apples.');
   const model = createModel('echo');

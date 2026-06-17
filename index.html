@@ -20,7 +20,7 @@
     </header>
     <main>
       <section id="doc-pane">
-        <h2>Document</h2>
+        <h2>Document <span class="hint">(optional — chat works without one)</span></h2>
         <div class="dropzone" id="dropzone">
           <input type="file" id="file-input" accept=".txt,.md,text/plain">
           <p>Drop a text file, or <label for="file-input">browse</label>.</p>
@@ -31,7 +31,7 @@
         <h2>Chat</h2>
         <div id="messages"></div>
         <form id="composer">
-          <textarea id="input" placeholder="Ask about the document…" rows="2"></textarea>
+          <textarea id="input" placeholder="Ask anything — a doc makes answers grounded…" rows="2"></textarea>
           <button type="submit" id="send">Send</button>
         </form>
       </section>

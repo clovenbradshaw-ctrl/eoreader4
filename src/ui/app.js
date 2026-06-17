@@ -1,12 +1,21 @@
 // Wire the UI. No turn logic here — every interaction calls into the
 // turn holon (`runTurn`) and renders the result. The UI sees the audit
 // turn returned from the pipeline; it does not compute anything itself.
+//
+// Three small choices the user asked for live here:
+//   1. The selected model auto-loads (on page open and on backend change),
+//      not on first message.
+//   2. Chat works without a document — the pipeline degrades to ungrounded
+//      chat; mechanical math still short-circuits.
+//   3. The assistant message renders live, updating per stage so the
+//      thinking is visible while the turn is in flight.
 
 import { ingestText }       from '../ingest/index.js';
 import { runTurn }          from '../turn/index.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder } from '../model/index.js';
-import { renderUserMessage, renderAssistantMessage } from './chat.js';
+import { renderUserMessage, createThinkingMessage,
+         updateThinking, finalizeThinking } from './chat.js';
 import { renderDoc, highlightSources } from './doc-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 
@@ -16,6 +25,7 @@ const STATE = {
   embedder:  createHashEmbedder(),
   backendName: 'echo',
   model:     null,
+  loadingBackend: null,  // promise of the in-flight model load, if any
 };
 
 const els = {
@@ -34,12 +44,35 @@ const els = {
 
 const setStatus = (s) => { els.status.textContent = s; };
 
+// Load the currently selected backend, idempotently. Auto-runs on boot and
+// whenever the backend select changes — the user never has to wait for the
+// first message to start the download.
 const ensureModel = async () => {
-  if (STATE.model && STATE.model.id === STATE.backendName) return;
-  STATE.model = createModel(STATE.backendName);
-  await STATE.model.load((p) =>
-    setStatus(`${STATE.backendName}: ${p.phase} · ${Math.round((p.pct || 0) * 100)}%`));
-  setStatus(`${STATE.backendName}: ready`);
+  if (STATE.model && STATE.model.id === STATE.backendName) return STATE.model;
+  if (STATE.loadingBackend?.name === STATE.backendName) return STATE.loadingBackend.promise;
+
+  const name = STATE.backendName;
+  const model = createModel(name);
+  const promise = (async () => {
+    try {
+      await model.load((p) =>
+        setStatus(`${name}: ${p.phase} · ${Math.round((p.pct || 0) * 100)}%`));
+      if (STATE.backendName === name) {
+        STATE.model = model;
+        setStatus(`${name}: ready`);
+      }
+      return model;
+    } catch (err) {
+      if (STATE.backendName === name) {
+        setStatus(`${name}: failed — ${err?.message || err}`);
+      }
+      throw err;
+    } finally {
+      if (STATE.loadingBackend?.name === name) STATE.loadingBackend = null;
+    }
+  })();
+  STATE.loadingBackend = { name, promise };
+  return promise;
 };
 
 const ingest = async (file) => {
@@ -55,25 +88,38 @@ const ingest = async (file) => {
 const send = async () => {
   const question = els.input.value.trim();
   if (!question) return;
-  if (!STATE.doc) { setStatus('Drop a document first.'); return; }
-  await ensureModel();
 
   els.input.value = '';
   els.send.disabled = true;
   renderUserMessage(els.messages, question);
 
+  // Live "thinking" bubble — updates as each pipeline stage finishes.
+  const thinking = createThinkingMessage(els.messages,
+    STATE.doc ? 'thinking…' : 'thinking (no doc — chat mode)…');
+
+  try {
+    await ensureModel();
+  } catch (err) {
+    finalizeThinking(thinking, `Model failed to load: ${err?.message || err}`, [], {
+      route: 'error', flags: [],
+    });
+    els.send.disabled = false;
+    return;
+  }
+
   const t0 = performance.now();
   const result = await runTurn({
     question,
-    doc:      STATE.doc,
+    doc:      STATE.doc,        // may be null — chat-only path
     model:    STATE.model,
     embedder: STATE.embedder,
     auditLog: STATE.audit,
+    onStep:   (name, ctx, data) => updateThinking(thinking, name, data, ctx),
   });
   const ms = Math.round(performance.now() - t0);
 
-  renderAssistantMessage(els.messages, result.answer, result.sources, {
-    route: result.turn.route, ms,
+  finalizeThinking(thinking, result.answer, result.sources, {
+    route: result.turn.route, ms, flags: result.flags,
   });
   if (result.sources?.length) highlightSources(els.docView, result.sources);
   els.send.disabled = false;
@@ -110,14 +156,15 @@ els.input.addEventListener('keydown', (e) => {
   }
 });
 
-// Backend switch
+// Backend switch — auto-load the new model immediately.
 els.backend.addEventListener('change', () => {
   STATE.backendName = els.backend.value;
   STATE.model = null;
-  setStatus(`${STATE.backendName}: will load on next message`);
+  setStatus(`${STATE.backendName}: starting…`);
+  ensureModel().catch(() => { /* status already reflects failure */ });
 });
 
-// Audit: live-render on every step / finish
+// Audit: live-render on every step / finish.
 STATE.audit.subscribe((turn) => renderAuditTurn(els.auditView, turn));
 els.exportBtn.addEventListener('click', () => exportAudit(STATE.audit));
 renderEmptyAudit(els.auditView);
@@ -131,7 +178,7 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// Boot: echo is ready immediately. The page is alive on open.
-ensureModel().then(() => setStatus(`echo: ready · drop a document to begin`));
+// Boot: kick the selected model now so first message is instant.
+ensureModel().catch(() => { /* status already reflects failure */ });
 
 window.STATE = STATE; // for in-browser inspection

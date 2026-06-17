@@ -32,6 +32,7 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
       rawOutput: null,
       bound: null,
       vetoes: null,
+      flags: [],
       answer: null,
       sources: [],
       step(name, data) {
@@ -74,6 +75,7 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
       rawOutput:  t.rawOutput,
       bound:      t.bound,
       vetoes:     t.vetoes,
+      flags:      t.flags,
       answer:     t.answer,
       sources:    t.sources,
     })).join('\n');
