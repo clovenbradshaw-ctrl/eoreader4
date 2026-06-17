@@ -1,6 +1,10 @@
 // The parse holon: text → events on a fresh log + a forward token index.
+//
+// Two entry points:
+//   parseText(text, opts)        — one-shot, fresh parser each call.
+//   createParser(opts).parse(text, ...) — long-lived parser owning state.
 
-export { parseText }       from './pipeline.js';
-export { tok, tokSet, isStop } from './tokenize.js';
-export { segmentSentences }from './sentences.js';
-export { isChrome }        from './chrome.js';
+export { parseText, createParser } from './pipeline.js';
+export { tok, tokSet, isStop }     from './tokenize.js';
+export { segmentSentences }        from './sentences.js';
+export { isChrome }                from './chrome.js';

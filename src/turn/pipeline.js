@@ -1,7 +1,17 @@
-// runTurn — composes the named stages under one audit record.
+// runTurn — the turn is a fold of its named stages.
 //
-// Each stage gets one audit step around it. A stage returning {terminate:true}
-// short-circuits the rest — mechanical routes never run the LLM stage.
+// stages.reduce(...) over the pipeline list; each stage takes a context
+// and returns a context; a stage returning {terminate:true} short-
+// circuits the rest. The audit's step entry is the projection of that
+// fold via the onStep callback — there is no parallel bookkeeping to drift.
+//
+// Same spine, two levels:
+//   document = fold of the event log → projectGraph
+//   turn     = fold of the stage list → audit log
+//
+// The eoreader3 audit already named the fold
+// (route · intent · ground · retrieve · traverse · llm · veto · settle);
+// this commit makes the code admit it.
 
 import { stages } from './stages.js';
 
@@ -10,15 +20,23 @@ const GROUNDED_PIPELINE = [
 ];
 
 export const runTurn = async ({ question, doc, model, embedder, auditLog }) => {
-  const turn = auditLog.turn(question);
-  let ctx = { question, doc, model, embedder };
+  const turn   = auditLog.turn(question);
+  const onStep = (name, ctx, ms) => turn.step(name, summarize(name, ctx, ms));
+  const ctx0   = { question, doc, model, embedder };
+
   try {
-    for (const name of GROUNDED_PIPELINE) {
-      const t0 = nowMs();
-      ctx = await stages[name](ctx);
-      turn.step(name, summarize(name, ctx, nowMs() - t0));
-      if (ctx.terminate) break;
-    }
+    const ctx = await GROUNDED_PIPELINE.reduce(
+      async (accPromise, name) => {
+        const acc = await accPromise;
+        if (acc.terminate) return acc;
+        const t0   = nowMs();
+        const next = await stages[name](acc);
+        onStep(name, next, nowMs() - t0);
+        return next;
+      },
+      Promise.resolve(ctx0)
+    );
+
     turn.finish({
       route:     ctx.route || 'grounded',
       prompt:    ctx.promptText || null,
@@ -32,8 +50,8 @@ export const runTurn = async ({ question, doc, model, embedder, auditLog }) => {
   } catch (err) {
     turn.step('error', { message: String(err?.message || err) });
     turn.finish({
-      route: 'error',
-      answer: `Error: ${err?.message || err}`,
+      route:   'error',
+      answer:  `Error: ${err?.message || err}`,
       sources: [],
     });
     return { answer: turn.answer, sources: [], turn, error: err };

@@ -6,4 +6,4 @@ export { MODES, DOMAINS, GRAINS, OPERATORS, isOperator,
          operatorsByMode, operatorsByDomain } from './operators.js';
 export { createLog, isLog } from './log.js';
 export { eoAddressOfEvent, eoNotation } from './address.js';
-export { projectGraph, projectionStats } from './project.js';
+export { projectGraph, projectionStats, DEFAULT_PROJECTION_RULES } from './project.js';
