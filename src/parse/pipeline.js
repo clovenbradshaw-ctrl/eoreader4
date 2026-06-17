@@ -23,6 +23,7 @@ import { createConventions, induceAttributionVerbs } from '../conventions/index.
 export const createParser = ({
   languageModules    = {},
   transcriptHandler  = null,
+  chromeHint         = null,   // optional (sentence) → score nudge toward chrome
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -66,7 +67,9 @@ export const createParser = ({
     const corefField = createCorefField();
 
     sentences.forEach((sent, sentIdx) => {
-      if (isChrome(sent)) {
+      // Chrome-ness is a weight: the mechanical score plus an optional nudge
+      // (a mini-LLM's chrome probability) decides whether the line is held.
+      if (isChrome(sent, chromeHint ? chromeHint(sent) : 0)) {
         // NUL is non-transformation — the line is *held*, not cleared. It is
         // simply not turned into entities or relations. (Voiding a fact would
         // be a DEF to VOID, an assertion; NUL asserts nothing.)

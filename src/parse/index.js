@@ -7,4 +7,4 @@
 export { parseText, createParser } from './pipeline.js';
 export { tok, tokSet, isStop }     from './tokenize.js';
 export { segmentSentences }        from './sentences.js';
-export { isChrome }                from './chrome.js';
+export { isChrome, isDegenerate }  from './chrome.js';

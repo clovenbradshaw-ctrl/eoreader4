@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/index.js';
 import { createCorefField } from '../src/parse/coref.js';
-import { readingAt, structureSurface, consciousness } from '../src/read/index.js';
+import { readingAt, structureSurface, consciousness, siteRoles, predictNext } from '../src/read/index.js';
 import { foldNote } from '../src/fold/index.js';
 
 test('coref field is a normalised distribution, strongest first', () => {
@@ -53,4 +53,26 @@ test('foldNote without a doc condenses the spans (a fold, not a copy)', () => {
   const note = foldNote(spans);
   assert.match(note.text, /\[s0\]/);
   assert.deepEqual(note.sources, [0, 1]);
+});
+
+test('site role is semantic: off-distribution + figure-less reads as a site', () => {
+  // Three on-body units pointing one way, one boilerplate unit pointing another.
+  const vecs = [[1, 0], [0.96, 0.28], [0.99, 0.1], [0, 1]];
+  const anchored = new Set([0, 1, 2]);          // the boilerplate anchors no figure
+  const roles = siteRoles(['a', 'b', 'c', 'LICENSE'], vecs, anchored, 0.5);
+  assert.equal(roles[3].role, 'site');
+  assert.equal(roles[0].role, 'figure');
+});
+
+test('predictive surprise = embedding distance from the model\'s predicted next line', async () => {
+  const doc = { sentences: ['The cat sat.', 'It purred softly.'] };
+  // A model that predicts the actual next line → near-zero surprise.
+  const model = { phrase: async () => 'It purred softly.' };
+  const embedder = { embed: async (t) => t === 'It purred softly.' ? new Float32Array([1, 0]) : new Float32Array([0, 1]) };
+  const hit = await predictNext(doc, 0, { model, embedder });
+  assert.ok(hit.surprise < 0.01, `confirmed prediction is unsurprising, got ${hit.surprise}`);
+
+  const wrong = { phrase: async () => 'A spaceship landed.' };
+  const miss = await predictNext(doc, 0, { model: wrong, embedder });
+  assert.ok(miss.surprise > 0.9, `a defied prediction is surprising, got ${miss.surprise}`);
 });

@@ -11,3 +11,5 @@ export {
   existenceSurface, structureSurface, significanceSurface, consciousness,
 } from './surfaces.js';
 export { readingAt } from './reading.js';
+export { predictNext } from './predict.js';
+export { siteRoles, markSites, siteIndices } from './site.js';
