@@ -95,7 +95,16 @@ export const createParser = ({
         }
       }
 
-      const coref = { field: () => priorField };
+      // The relations parser reads coref two ways: `field()` for a leading
+      // subject pronoun, and `resolve()` for a possessive owner pronoun in a
+      // kinship apposition ("his sister Grete"). Both look backward through the
+      // same pre-line field and take the strongest prior candidate. `resolve`
+      // had no implementation, so that call site got nothing and pronoun-owned
+      // kinship bonds dropped silently — only named owners survived. Wired now.
+      const coref = {
+        field:   () => priorField,
+        resolve: () => priorField[0]?.id ?? null,
+      };
       for (const rel of parseRelations(sent, admission, coref, { isSpeech })) {
         log.append({ ...rel, sentIdx });
       }

@@ -85,6 +85,20 @@ test('coreference is a weighted field: a pronoun subject bonds with a coupling w
   assert.ok(con.w > 0 && con.w < 1, `coupling is a weight, got ${con.w}`);
 });
 
+test('kinship apposition resolves a pronoun owner through the field ("His sister Grete")', () => {
+  // kinshipEdges calls coref.resolve for a possessive owner pronoun; the
+  // pipeline now provides it (the strongest prior candidate). Gregor is hottest
+  // before the last line, so "His" resolves to him and the kin bond fires.
+  // Before the fix `resolve` was missing and this bond dropped silently.
+  const doc = parseText(
+    'Grete arrived. Grete waited. Gregor Samsa woke. Gregor stood. His sister Grete left.',
+    { docId: 'k' });
+  const con = doc.log.filter(e => e.op === 'CON' && e.via === 'sister')[0];
+  assert.ok(con, 'pronoun-owned kinship apposition produced a bond');
+  assert.equal(con.src, 'gregor-samsa');
+  assert.equal(con.tgt, 'grete');
+});
+
 test('speech verbs emit SIG, other transitive verbs emit CON', () => {
   const doc = parseText('Alice told Bob. Alice told Bob. Alice told Bob now.', { docId: 'g' });
   assert.ok(doc.log.filter(e => e.op === 'SIG' && e.via === 'told').length >= 1);
