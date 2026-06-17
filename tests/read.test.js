@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/index.js';
 import { createCorefField } from '../src/parse/coref.js';
-import { readingAt, structureSurface, consciousness, siteRoles, predictNext } from '../src/read/index.js';
+import { readingAt, structureSurface, consciousness, siteRoles, predictNext, tokenField } from '../src/read/index.js';
 import { foldNote } from '../src/fold/index.js';
 
 test('coref field is a normalised distribution, strongest first', () => {
@@ -53,6 +53,15 @@ test('foldNote without a doc condenses the spans (a fold, not a copy)', () => {
   const note = foldNote(spans);
   assert.match(note.text, /\[s0\]/);
   assert.deepEqual(note.sources, [0, 1]);
+});
+
+test('every token is available for the graph — entities are the persistent subset', () => {
+  const doc = parseText('Topps slammed the man. Topps kicked the truck. Topps left.', { docId: 't' });
+  const byTok = new Map(tokenField(doc).map(n => [n.token, n]));
+  assert.ok(byTok.has('man'));                  // a common-noun object is an available node
+  assert.ok(byTok.has('truck'));
+  assert.ok(byTok.get('topps').persistent);     // the minted referent is flagged persistent
+  assert.ok(!byTok.get('man').persistent);      // a one-off token is available, not persistent
 });
 
 test('site role is semantic: off-distribution + figure-less reads as a site', () => {
