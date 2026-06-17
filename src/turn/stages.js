@@ -59,17 +59,21 @@ export const stages = {
     return { ...ctx, spans };
   },
 
-  // Fold the spans into a single note the model can read.
+  // Fold the spans into a single note the model can read — the reading. With
+  // a doc this is the consciousness: existence + structure + significance,
+  // read around the best-scoring span as the cursor.
   async fold(ctx) {
     if (!ctx.spans?.length) return { ...ctx, note: null };
-    const note = foldNote(ctx.spans);
+    const cursor = ctx.spans[0]?.idx ?? null;
+    const note = foldNote(ctx.spans, { doc: ctx.doc, cursor });
     return { ...ctx, note };
   },
 
   // Build messages. Grounded when we have spans; plain chat when we don't.
+  // The reading (fold note) rides alongside the verbatim spans.
   async prompt(ctx) {
     const messages = ctx.spans?.length
-      ? buildGroundedMessages({ question: ctx.question, spans: ctx.spans })
+      ? buildGroundedMessages({ question: ctx.question, spans: ctx.spans, note: ctx.note })
       : buildChatMessages({ question: ctx.question });
     return {
       ...ctx,
