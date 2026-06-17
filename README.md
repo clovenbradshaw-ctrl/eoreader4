@@ -139,6 +139,7 @@ hard-coded true; a convention is whatever the text keeps doing.
 | `model`       | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
 | `classify`    | `createPhasepostClassifier({cells, centroids, embedder})`     | `core`     |
 | `boot`        | `bootGeometricReader(root, {embedder})` · `createInstaller`   | `classify`, `model` |
+| `converse`    | `conversationalEvent` · `depositConversational` · `commitSurvives` | nothing |
 | `audit`       | `createAuditLog()`                                            | nothing    |
 | `turn`        | `runTurn({question, doc, model, embedder, auditLog})` (reduce)| all above  |
 | `ingest`      | `ingestText(file)` · `ingestImage(detections)` → doc          | `parse`, `core` |
@@ -161,6 +162,13 @@ degrading) behind an initialization animation that resolves to the *true* state
 of the reader — live, or unavailable and holding at no-commit. See
 [`docs/phasepost.md`](docs/phasepost.md); the animation runs in isolation at
 [`boot-animation.html`](boot-animation.html).
+
+The talker is wired as the **weakest reader**: its turns enter the activation
+field as conversational-provenance depositions (tagged, capped, decaying),
+witnessed by the talker, so they warm the field and orient the next turn but can
+never be cited as document provenance, originate a committed reading, or type a
+relation. A fold-time subtract-and-check refuses any reading that leans on that
+warmth. See [`docs/conversational-provenance.md`](docs/conversational-provenance.md).
 
 ## The nine operators
 
