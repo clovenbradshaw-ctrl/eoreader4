@@ -9,33 +9,40 @@
 //   document = fold of the event log → projectGraph
 //   turn     = fold of the stage list → audit log
 //
-// The eoreader3 audit already named the fold
-// (route · intent · ground · retrieve · traverse · llm · veto · settle);
-// this commit makes the code admit it.
+// Vetoes are flag-only here too: the answer is the model's text, the
+// vetoes ride alongside as `flags`.
 
 import { stages } from './stages.js';
 
-const GROUNDED_PIPELINE = [
+const PIPELINE = [
   'route', 'retrieve', 'fold', 'prompt', 'llm', 'bind', 'veto', 'settle',
 ];
 
-export const runTurn = async ({ question, doc, model, embedder, auditLog }) => {
-  const turn   = auditLog.turn(question);
-  const onStep = (name, ctx, ms) => turn.step(name, summarize(name, ctx, ms));
-  const ctx0   = { question, doc, model, embedder };
+export const runTurn = async ({ question, doc, model, embedder, auditLog, onStep }) => {
+  const turn      = auditLog.turn(question);
+  const stepFan   = (name, ctx, ms) => {
+    const data = summarize(name, ctx, ms);
+    turn.step(name, data);
+    onStep?.(name, ctx, data);
+  };
+  const ctx0      = { question, doc, model, embedder };
 
   try {
-    const ctx = await GROUNDED_PIPELINE.reduce(
+    const ctx = await PIPELINE.reduce(
       async (accPromise, name) => {
         const acc = await accPromise;
         if (acc.terminate) return acc;
         const t0   = nowMs();
         const next = await stages[name](acc);
-        onStep(name, next, nowMs() - t0);
+        stepFan(name, next, nowMs() - t0);
         return next;
       },
       Promise.resolve(ctx0)
     );
+
+    const flags = (ctx.vetoes || []).map(v => ({
+      id: v.id, message: v.message, refuses: v.refuses,
+    }));
 
     turn.finish({
       route:     ctx.route || 'grounded',
@@ -45,16 +52,18 @@ export const runTurn = async ({ question, doc, model, embedder, auditLog }) => {
       vetoes:    ctx.vetoes     || null,
       answer:    ctx.answer     || '',
       sources:   ctx.sources    || [],
+      flags,
     });
-    return { answer: ctx.answer, sources: ctx.sources || [], turn };
+    return { answer: ctx.answer, sources: ctx.sources || [], flags, turn };
   } catch (err) {
     turn.step('error', { message: String(err?.message || err) });
     turn.finish({
       route:   'error',
       answer:  `Error: ${err?.message || err}`,
       sources: [],
+      flags:   [],
     });
-    return { answer: turn.answer, sources: [], turn, error: err };
+    return { answer: turn.answer, sources: [], flags: [], turn, error: err };
   }
 };
 
@@ -75,8 +84,7 @@ const summarize = (name, ctx, ms) => {
                               claims: ctx.bound?.length || 0,
                               cited:  ctx.bound?.filter(b => b.citation).length || 0 };
     case 'veto':     return { ...base,
-                              fired:   ctx.vetoes?.map(v => v.id) || [],
-                              refused: !!ctx.refused };
+                              fired:   ctx.vetoes?.map(v => v.id) || [] };
     default:         return base;
   }
 };

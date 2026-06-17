@@ -2,63 +2,75 @@
 // The pipeline composes them; a stage returning {terminate:true} short-
 // circuits the rest.
 //
-// This file is the seam the eoreader3 map identified as the highest-value
-// cut: the 760-line `runGroundedScope` becomes a list of small,
-// independently testable steps. Adding a stage = adding an entry here
-// and in `pipeline.js`. Removing one = the opposite.
+// Stages are tolerant of a missing document: with no doc the pipeline
+// degrades to ungrounded chat. Mechanical math still short-circuits.
+//
+// Vetoes are flag-only — they never substitute the model's answer.
+// The user sees what the model actually said, with a flag pinned to it.
 
-import { tryMechanical }    from '../answer/index.js';
+import { tryMechanical, answerMath } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
-import { buildGroundedMessages } from '../model/prompt.js';
+import { buildGroundedMessages, buildChatMessages } from '../model/prompt.js';
 import { bindCitations, renderBound } from '../ground/bind.js';
 import { runVetoes }        from '../ground/veto.js';
 
 export const stages = {
 
-  // Cheapest paths first. The model never warms for a question we can
-  // answer mechanically.
+  // Cheapest paths first. Math always works; the other mechanicals need a doc.
   async route(ctx) {
-    const mech = tryMechanical(ctx.doc, ctx.question);
-    if (mech) {
-      return {
-        ...ctx,
-        route: mech.route,
-        mechanical: mech,
-        terminate: true,
-        answer:  mech.text,
-        sources: mech.sources,
-      };
+    if (ctx.doc) {
+      const mech = tryMechanical(ctx.doc, ctx.question);
+      if (mech) {
+        return {
+          ...ctx,
+          route: mech.route,
+          mechanical: mech,
+          terminate: true,
+          answer:  mech.text,
+          sources: mech.sources,
+        };
+      }
+      return { ...ctx, route: 'grounded' };
     }
-    return { ...ctx, route: 'grounded' };
-  },
-
-  // Hybrid retrieval. The query embedding is computed at most once per
-  // turn inside retrieveSemantic and re-used by impression / form.
-  async retrieve(ctx) {
-    const spans = await retrieveHybrid(ctx.doc, ctx.question, ctx.embedder, 6);
-    if (spans.length === 0) {
+    const m = answerMath(ctx.question);
+    if (m) {
       return {
         ...ctx,
-        spans: [],
-        route: 'chat',
+        route: m.route,
+        mechanical: m,
         terminate: true,
-        answer: '(Nothing in the document matches that question.)',
+        answer:  m.text,
         sources: [],
       };
+    }
+    return { ...ctx, route: 'chat' };
+  },
+
+  // Hybrid retrieval. Skipped entirely when there's no document — chat mode
+  // simply has nothing to retrieve.
+  async retrieve(ctx) {
+    if (!ctx.doc) return { ...ctx, spans: [] };
+    const spans = await retrieveHybrid(ctx.doc, ctx.question, ctx.embedder, 6);
+    if (spans.length === 0) {
+      // Doc loaded but nothing matches — fall through to ungrounded chat.
+      return { ...ctx, spans: [], route: 'chat' };
     }
     return { ...ctx, spans };
   },
 
   // Fold the spans into a single note the model can read.
   async fold(ctx) {
+    if (!ctx.spans?.length) return { ...ctx, note: null };
     const note = foldNote(ctx.spans);
     return { ...ctx, note };
   },
 
-  // Build the messages. System prompt is stable; only the user content varies.
+  // Build messages. Grounded when we have spans; plain chat when we don't.
   async prompt(ctx) {
-    const messages = buildGroundedMessages({ question: ctx.question, spans: ctx.spans });
+    const messages = ctx.spans?.length
+      ? buildGroundedMessages({ question: ctx.question, spans: ctx.spans })
+      : buildChatMessages({ question: ctx.question });
     return {
       ...ctx,
       messages,
@@ -73,7 +85,11 @@ export const stages = {
   },
 
   // Mechanical citation binding. The model never wrote [sN]; we do.
+  // Without spans we skip binding — the raw output is the answer.
   async bind(ctx) {
+    if (!ctx.spans?.length) {
+      return { ...ctx, bound: [], answer: String(ctx.rawOutput || '').trim(), sources: [] };
+    }
     const bound = bindCitations(ctx.rawOutput, ctx.spans);
     const answer = renderBound(bound);
     const sources = [...new Set(
@@ -82,18 +98,15 @@ export const stages = {
     return { ...ctx, bound, answer, sources };
   },
 
-  // The veto battery. Refuses are honest; flags ride alongside the answer.
+  // Flag-only veto pass. The answer is never substituted — the user sees
+  // the model's text with the flags pinned alongside.
+  // Without a doc we skip the grounding vetoes entirely.
   async veto(ctx) {
-    const { fired, refuse } = runVetoes({
+    if (!ctx.spans?.length) return { ...ctx, vetoes: [] };
+    const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
     });
-    let answer = ctx.answer;
-    let sources = ctx.sources;
-    if (refuse) {
-      answer = '(The model did not produce a grounded answer for this question.)';
-      sources = [];
-    }
-    return { ...ctx, vetoes: fired, answer, sources, refused: refuse };
+    return { ...ctx, vetoes: fired };
   },
 
   // Settle: a placeholder for conversation-field updates and form stamps.

@@ -3,9 +3,17 @@
 // don't summarize. Show the prompt, show the raw output, show the bindings.
 
 export const renderAuditTurn = (root, turn) => {
+  // Clear the empty-state placeholder on first render.
+  const placeholder = root.querySelector('.empty');
+  if (placeholder) placeholder.remove();
+
   // Replace existing row if we've seen this turn before; otherwise prepend.
   const existing = root.querySelector(`.turn[data-id="${turn.id}"]`);
+  // Preserve the user's open/closed choice on already-finished turns.
+  const keepOpen = existing && !existing.classList.contains('in-flight')
+    && existing.classList.contains('open');
   const el = renderRow(turn);
+  if (keepOpen) el.classList.add('open');
   if (existing) existing.replaceWith(el);
   else if (root.firstChild) root.insertBefore(el, root.firstChild);
   else root.appendChild(el);
@@ -28,6 +36,10 @@ export const exportAudit = (audit) => {
 const renderRow = (turn) => {
   const el = document.createElement('div');
   el.className = 'turn';
+  // The active turn stays open so the trail is visible as it runs.
+  // Finished turns keep whatever state the user last set; first finish
+  // collapses to a tidy row that can be clicked open.
+  if (turn.finishedAt == null) el.classList.add('open', 'in-flight');
   el.dataset.id = turn.id;
   const route = turn.route || 'in flight';
   const dur   = turn.durationMs != null ? `${turn.durationMs}ms` : '';

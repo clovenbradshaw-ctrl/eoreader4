@@ -25,3 +25,11 @@ export const buildGroundedMessages = ({ question, spans }) => {
     { role: 'user',   content: userContent },
   ];
 };
+
+export const buildChatMessages = ({ question, history = [] }) => {
+  return [
+    { role: 'system', content: SYSTEM_CHAT },
+    ...history,
+    { role: 'user',   content: question },
+  ];
+};
