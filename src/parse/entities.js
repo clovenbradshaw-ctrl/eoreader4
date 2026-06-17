@@ -6,8 +6,30 @@
 
 const CAP_RE = /\b([A-Z][a-zA-Z]+(?:\s+(?:[A-Z][a-zA-Z]+|de|von|van|of|the))*)\b/g;
 
+// Sentence-initial capitals that aren't names. The greedy regex above will
+// happily eat "Then Alice" as one phrase; we strip these leading starters
+// before counting so admission tracks the real entity.
+const CAP_STARTERS = new Set([
+  'The','A','An','This','That','These','Those',
+  'I','You','He','She','It','We','They',
+  'My','Your','His','Her','Its','Our','Their',
+  'Then','Now','Here','There','When','Where','Why','How','What','Who','Whom',
+  'Yes','No','Maybe','Perhaps','Otherwise','Also','However','Indeed','Still',
+  'But','And','So','Or','Nor','Yet','For','Because','Although','While','Since',
+  'In','On','At','To','From','By','With','Of','Up','Down','Over','Under',
+  'If','Unless','Until','Once',
+]);
+
 const idFor = (label) =>
   label.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+
+const cleanLabel = (raw) => {
+  const words = raw.trim().split(/\s+/);
+  while (words.length > 0 && CAP_STARTERS.has(words[0])) words.shift();
+  if (words.length === 0) return null;
+  if (words.length === 1 && CAP_STARTERS.has(words[0])) return null;
+  return words.join(' ');
+};
 
 export const createEntityAdmission = () => {
   const counts   = new Map(); // label → count
@@ -19,7 +41,8 @@ export const createEntityAdmission = () => {
     const re = new RegExp(CAP_RE.source, 'g');
     let m;
     while ((m = re.exec(sentence)) !== null) {
-      const label = m[1].trim();
+      const label = cleanLabel(m[1]);
+      if (!label) continue;
       if (seenInSentence.has(label)) continue;
       seenInSentence.add(label);
       const c = (counts.get(label) ?? 0) + 1;
