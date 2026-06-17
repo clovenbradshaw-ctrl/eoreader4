@@ -56,11 +56,19 @@ export const readingAt = (doc, cursor, opts = {}) => {
 
   const name = (id) => label.get(id) || id;
 
-  // LLM nudge seam (default off). The surprise pass is mechanical — surprisal
-  // over the γ-mass prior, no model in the loop. But a mini-LLM can *weight*
-  // the prediction the way it collapses referents: `opts.expect(id, label)`
-  // returns extra prior mass for a figure the model expects next. It nudges
-  // the field; it never decides. With no expecter, the reading is pure physics.
+  // Model-expectation seam — default off, and it must stay a NON-injection.
+  // The surprise computed here is the Existence-terrain witness: surprisal over
+  // the γ-mass prior, pure counts and decay, no model. A model's expectation is
+  // a different witness (meaning-terrain); adding it into this prior would be
+  // the model deciding salience — the witness-decides violation. Fold-safe
+  // shape: the model deposits its expectation as a Given event, and the
+  // LLM-embedding surprise (read/predict.js) co-deposits as its own
+  // meaning-terrain observation; the fold reads both and keeps their divergence
+  // as signal rather than merging them to one scalar. The block below is the
+  // wrong door (a direct write to the prior), kept inert until that deposition
+  // path exists (after the SEG rework). Then watch the divergence: if it never
+  // changes a reading, the terrains weren't separable and the merge was right —
+  // the same empty-cell test as the √2 conjecture.
   if (typeof opts.expect === 'function') {
     for (const id of [...priorMass.keys()]) {
       const boost = Number(opts.expect(id, label.get(id))) || 0;
