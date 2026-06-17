@@ -9,6 +9,13 @@
 //   Level 3 · significance DEF role     the role a unit plays (site vs figure)
 //
 // Every event traces to the line it came from — click [sN] to jump there.
+//
+// Each row also carries its eo-address — operator(Site, Stance) — computed
+// live by `eoNotation`, never stamped on the event. The log stays the single
+// source of truth; the address is a reading of it. Surfacing it per row makes
+// "the spec is the notation" literal: every line is a point on the EO cube.
+
+import { eoNotation, eoAddressOfEvent } from '../core/index.js';
 
 const LEVELS = [
   { key: 'p0', name: 'Pass 0 · conventions', note: 'what this document taught the reader',
@@ -37,7 +44,8 @@ export const renderLog = (doc, root, { onSelectSentence } = {}) => {
   head.className = 'log-head';
   head.innerHTML =
     `<div class="log-title">${events.length} events — the graph is a fold of this log</div>` +
-    `<div class="log-sub">each level reads what the one below admitted, approaching the meaning in passes</div>`;
+    `<div class="log-sub">each level reads what the one below admitted, approaching the meaning in passes</div>` +
+    `<div class="log-sub">every row carries its address — <span class="log-addr">operator(Site, Stance)</span> — read live, never stored</div>`;
   root.appendChild(head);
 
   for (const lvl of LEVELS) {
@@ -67,8 +75,25 @@ const row = (e, name) => {
   const el = document.createElement('div');
   el.className = 'log-row';
   const src = e.sentIdx != null ? `<span class="log-cite" data-idx="${e.sentIdx}">s${e.sentIdx}</span>` : '';
-  el.innerHTML = `<span class="op ${e.op}">${e.op}</span><span class="log-desc">${describe(e, name)}</span>${src}`;
+  el.innerHTML =
+    `<span class="op ${e.op}">${e.op}</span>` +
+    addr(e) +
+    `<span class="log-desc">${describe(e, name)}</span>${src}`;
   return el;
+};
+
+// The reading's address, computed from the event at read time. eoNotation
+// gives the compact operator(Domain,Grain) — e.g. DEF(Int,Fig); the tooltip
+// spells out the three faces the cube reads off it: Site (where), Stance
+// (how held) and Act (the operator's mode×domain).
+const addr = (e) => {
+  const a = eoAddressOfEvent(e);
+  if (!a) return '';
+  const tip =
+    `Site ${a.site.domain}·${a.site.grain} (where) · ` +
+    `Stance ${a.resolution.mode}·${a.resolution.grain} (how held) · ` +
+    `Act ${a.act.mode}×${a.act.domain}`;
+  return `<span class="log-addr" title="${escapeHtml(tip)}">${escapeHtml(eoNotation(e))}</span>`;
 };
 
 const describe = (e, name) => {

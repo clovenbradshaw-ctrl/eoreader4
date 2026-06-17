@@ -275,7 +275,7 @@ comments on gates that were on.
 ## Run
 
     # tests
-    node --test tests/
+    node --test "tests/**/*.test.js"
 
     # the app
     python3 -m http.server 8000
