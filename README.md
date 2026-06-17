@@ -137,6 +137,8 @@ hard-coded true; a convention is whatever the text keeps doing.
 | `ground`      | `bindCitations(draft, spans)` · `runVetoes`                   | `core`, `parse` |
 | `answer`      | `tryMechanical(doc, q)`                                       | `core`, `parse` |
 | `model`       | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
+| `classify`    | `createPhasepostClassifier({cells, centroids, embedder})`     | `core`     |
+| `boot`        | `bootGeometricReader(root, {embedder})` · `createInstaller`   | `classify`, `model` |
 | `audit`       | `createAuditLog()`                                            | nothing    |
 | `turn`        | `runTurn({question, doc, model, embedder, auditLog})` (reduce)| all above  |
 | `ingest`      | `ingestText(file)` · `ingestImage(detections)` → doc          | `parse`, `core` |
@@ -144,6 +146,21 @@ hard-coded true; a convention is whatever the text keeps doing.
 
 Each holon's `index.js` is its only entrance. No file imports the internals
 of another. The rule is a discipline enforced by inspection, not by tooling.
+
+## Phasepost perception — the geometric reader
+
+A proposition fills three grain positions at once — **Ground / Figure /
+Pattern** — and the cell each fills is *measured*, not chosen: the `classify`
+holon scores the proposition against the 27 cell centroids partitioned into
+three bands and reads off the address. Measurement is real only in the
+centroids' space, so the embedder carries a `measuresMeaning` guard — true on
+MiniLM, false on the hash organ — and under hash the classifier **holds every
+position at no-commit** rather than let spelling masquerade as meaning. The
+`boot` holon installs the instrument (idempotent, cached, non-blocking,
+degrading) behind an initialization animation that resolves to the *true* state
+of the reader — live, or unavailable and holding at no-commit. See
+[`docs/phasepost.md`](docs/phasepost.md); the animation runs in isolation at
+[`boot-animation.html`](boot-animation.html).
 
 ## The nine operators
 
