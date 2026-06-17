@@ -17,6 +17,7 @@ import { createModel, createHashEmbedder } from '../model/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking } from './chat.js';
 import { renderDoc, highlightSources } from './doc-view.js';
+import { renderGraph } from './graph-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 
 const STATE = {
@@ -26,6 +27,8 @@ const STATE = {
   backendName: 'echo',
   model:     null,
   loadingBackend: null,  // promise of the in-flight model load, if any
+  graph:     null,       // graph-view controller for the current doc
+  activeTab: 'text',
 };
 
 const els = {
@@ -33,6 +36,8 @@ const els = {
   dropzone:  document.getElementById('dropzone'),
   fileInput: document.getElementById('file-input'),
   docView:   document.getElementById('doc-view'),
+  graphView: document.getElementById('graph-view'),
+  docTabs:   document.getElementById('doc-tabs'),
   messages:  document.getElementById('messages'),
   composer:  document.getElementById('composer'),
   input:     document.getElementById('input'),
@@ -75,14 +80,40 @@ const ensureModel = async () => {
   return promise;
 };
 
+// The graph node → sentence jump: switch to text, highlight the line, and
+// move the reading cursor there so the graph re-focuses around it.
+const selectSentence = (idx) => {
+  setTab('text');
+  highlightSources(els.docView, [idx]);
+  STATE.graph?.setCursor(idx);
+};
+
 const ingest = async (file) => {
   setStatus('parsing…');
   const t0 = performance.now();
   const doc = await ingestText(file);
   STATE.doc = doc;
   renderDoc(doc, els.docView);
+  STATE.graph?.destroy?.();
+  STATE.graph = renderGraph(doc, els.graphView, { onSelectSentence: selectSentence });
   const t1 = performance.now();
-  setStatus(`parsed: ${doc.sentences.length} sentences, ${doc.log.length} events, ${Math.round(t1 - t0)}ms`);
+  const g = doc.projectGraph();
+  setStatus(`parsed: ${doc.sentences.length} sentences, ${doc.log.length} events, ` +
+    `${g.entities.size} figures, ${g.edges.length} links, ${Math.round(t1 - t0)}ms`);
+};
+
+// Tabs: Text ⇄ Graph share the document pane. The reading cursor is shared
+// too — clicking a sentence in Text moves the cursor the Graph reads from.
+const setTab = (name) => {
+  STATE.activeTab = name;
+  for (const b of els.docTabs.querySelectorAll('.tab')) {
+    b.classList.toggle('active', b.dataset.tab === name);
+  }
+  const showGraph = name === 'graph';
+  els.graphView.hidden = !showGraph;
+  els.docView.hidden   = showGraph;
+  els.dropzone.style.display = showGraph ? 'none' : '';
+  if (showGraph) STATE.graph?.reheat?.();
 };
 
 const send = async () => {
@@ -169,6 +200,23 @@ STATE.audit.subscribe((turn) => renderAuditTurn(els.auditView, turn));
 els.exportBtn.addEventListener('click', () => exportAudit(STATE.audit));
 renderEmptyAudit(els.auditView);
 
+// Document tabs.
+els.docTabs.addEventListener('click', (e) => {
+  const b = e.target.closest('.tab');
+  if (b) setTab(b.dataset.tab);
+});
+
+// Clicking a sentence moves the reading cursor (and highlights it). The
+// graph re-projects around that position with γ-decay.
+els.docView.addEventListener('click', (e) => {
+  const s = e.target.closest('.sentence');
+  if (!s) return;
+  const idx = parseInt(s.dataset.idx, 10);
+  if (isNaN(idx)) return;
+  highlightSources(els.docView, [idx]);
+  STATE.graph?.setCursor(idx);
+});
+
 // Citation clicks (delegated)
 document.addEventListener('click', (e) => {
   const t = e.target;
@@ -177,6 +225,9 @@ document.addEventListener('click', (e) => {
     if (!isNaN(idx)) highlightSources(els.docView, [idx]);
   }
 });
+
+// An empty graph placeholder until a document is loaded.
+STATE.graph = renderGraph(null, els.graphView, { onSelectSentence: selectSentence });
 
 // Boot: kick the selected model now so first message is instant.
 ensureModel().catch(() => { /* status already reflects failure */ });

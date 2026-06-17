@@ -20,12 +20,20 @@
     </header>
     <main>
       <section id="doc-pane">
-        <h2>Document <span class="hint">(optional — chat works without one)</span></h2>
+        <h2>Document
+          <span class="hint">(optional — chat works without one)</span>
+          <span class="spacer"></span>
+          <span class="tabs" id="doc-tabs">
+            <button type="button" class="tab active" data-tab="text">Text</button>
+            <button type="button" class="tab" data-tab="graph">Graph</button>
+          </span>
+        </h2>
         <div class="dropzone" id="dropzone">
           <input type="file" id="file-input" accept=".txt,.md,text/plain">
           <p>Drop a text file, or <label for="file-input">browse</label>.</p>
         </div>
         <div id="doc-view"></div>
+        <div id="graph-view" hidden></div>
       </section>
       <section id="chat-pane">
         <h2>Chat</h2>

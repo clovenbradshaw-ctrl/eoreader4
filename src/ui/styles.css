@@ -283,3 +283,111 @@ button.small:hover { background: #3f3f46; }
 #audit-view .empty {
   color: #52525b; font-style: italic; font-size: .85rem; padding: 1rem 0;
 }
+
+/* Document tabs: Text ⇄ Graph */
+section h2 .tabs { display: inline-flex; gap: .25rem; }
+.tab {
+  background: #18181b; color: #a1a1aa;
+  border: 1px solid #27272a; border-radius: 6px;
+  padding: .12rem .55rem; font-size: .72rem; cursor: pointer;
+  text-transform: none; letter-spacing: 0; line-height: 1.4;
+}
+.tab:hover { background: #232328; color: #e4e4e7; }
+.tab.active { background: #1d2030; color: #93c5fd; border-color: #1e3a8a; }
+#doc-view[hidden], #graph-view[hidden] { display: none; }
+
+/* Graph view */
+.graph-empty {
+  color: #52525b; font-style: italic; font-size: .85rem; padding: 1rem 0;
+}
+.graph-wrap { display: flex; flex-direction: column; gap: .5rem; height: 100%; }
+.graph-bar {
+  display: flex; align-items: center; gap: .6rem;
+  font-size: .72rem; color: #a1a1aa;
+}
+.graph-cursor { flex: 1; accent-color: #60a5fa; }
+.graph-readout {
+  font-family: ui-monospace, monospace; color: #93c5fd;
+  min-width: 8.5rem; text-align: right;
+}
+.graph-svg {
+  width: 100%; flex: 1; min-height: 22rem;
+  background: radial-gradient(circle at 50% 40%, #121218, #0b0b0d 70%);
+  border: 1px solid #1f1f23; border-radius: 8px;
+  touch-action: none;
+}
+.gedge { stroke: #3f4658; stroke-linecap: round; transition: opacity .12s; }
+.gedge.sig { stroke: #7c5cff; }
+.gedge.con { stroke: #3f6ad8; }
+.graph-svg.focusing .gedge:not(.hl) { opacity: .06 !important; }
+.gedge.hl { stroke: #93c5fd; }
+
+.gnode { cursor: pointer; }
+.gnode circle {
+  fill: #1e2a44; stroke: #60a5fa; stroke-width: 1.4;
+  transition: fill .12s, stroke .12s;
+}
+.gnode:hover circle, .gnode.hl circle { fill: #2a3a5e; stroke: #93c5fd; }
+.gnode.sel circle { fill: #3b2a5e; stroke: #c4b5fd; stroke-width: 2; }
+.gnode.dim { opacity: .25; }
+.glabel {
+  fill: #c7ccd6; font-size: 10px; text-anchor: middle;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  paint-order: stroke; stroke: #0b0b0d; stroke-width: 2.5px;
+  pointer-events: none; user-select: none;
+}
+.gnode.dim .glabel { fill: #6b7280; }
+
+.graph-tip {
+  position: absolute; z-index: 20; pointer-events: none;
+  background: #0e0e12; border: 1px solid #27272a; border-radius: 6px;
+  padding: .4rem .55rem; font-size: .72rem; color: #d4d4d8;
+  max-width: 16rem; line-height: 1.45;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+}
+.graph-tip strong { color: #93c5fd; }
+#doc-pane { position: relative; }
+
+/* Reading mode — the three levels surfaced as the cursor moves */
+.reading-panel {
+  border: 1px solid #1f1f23; border-radius: 8px;
+  background: #0e0e12; padding: .5rem .6rem; font-size: .76rem;
+  display: flex; flex-direction: column; gap: .4rem;
+}
+.reading-panel[hidden] { display: none; }
+.rl { display: flex; gap: .5rem; align-items: baseline; }
+.rl-tag {
+  flex-shrink: 0; width: 5.2rem; text-transform: uppercase;
+  font-size: .6rem; letter-spacing: .07em; color: #71717a; padding-top: .15rem;
+}
+.rl1 .rl-tag { color: #6b7280; }
+.rl2 .rl-tag { color: #60a5fa; }
+.rl3 .rl-tag { color: #c4b5fd; }
+.rl-body { color: #d4d4d8; line-height: 1.5; }
+.rl1 .rl-body { color: #c7ccd6; font-style: italic; }
+.rl-summary { color: #a1a1aa; margin-top: .25rem; font-size: .72rem; }
+
+/* EO operator chips */
+.op {
+  display: inline-block; font-family: ui-monospace, monospace; font-size: .66rem;
+  padding: .08rem .4rem; border-radius: 999px; margin: .1rem .12rem 0 0;
+  border: 1px solid #27272a; background: #18181b; color: #a1a1aa;
+}
+.op.INS { color: #93c5fd; border-color: #1e3a8a; background: #11203a; }
+.op.CON { color: #93c5fd; border-color: #1e3a8a; background: #131a2e; }
+.op.SIG { color: #c4b5fd; border-color: #4c1d95; background: #1e1633; }
+.op.DEF { color: #fcd34d; border-color: #78350f; background: #271a06; }
+.op.SYN { color: #6ee7b7; border-color: #065f46; background: #07241c; }
+.op.SEG { color: #fca5a5; border-color: #7f1d1d; background: #2a1216; }
+.op.REC { color: #a7f3d0; border-color: #065f46; background: #06231b; }
+.op.EVA { color: #fdba74; border-color: #7c2d12; background: #2a1709; }
+.op.NUL { color: #71717a; }
+
+.surprise-bar {
+  display: inline-block; vertical-align: middle; width: 5rem; height: .4rem;
+  background: #27272a; border-radius: 999px; overflow: hidden; margin-left: .4rem;
+}
+.surprise-bar i { display: block; height: 100%; background: linear-gradient(90deg,#60a5fa,#c4b5fd,#fca5a5); }
+
+.graph-step { min-width: 1.6rem; }
+.graph-play { color: #93c5fd; }
