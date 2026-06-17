@@ -63,3 +63,25 @@ export const depositConversational = (field, event) => {
 // the floor. Returns true if the reading stands without the talker's warmth.
 export const commitSurvives = (field, id, cursor, floor = 0) =>
   field.survivesSubtraction(id, cursor, floor);
+
+// A coreference PROPOSAL — the talker's coref strength as a proposer, never a
+// resolver. The talker is a strong coref reader: it binds "the trooper," "Sgt.
+// Topps," and "he" across long spans better than the document SYN does. That
+// capability is real and we want it — but letting the talker RESOLVE the
+// endpoints of its own claim is the witness grading its own testimony, so the
+// talker may only PROPOSE. The proposal enters talker-witnessed, which makes it
+// structurally uncitable AND structurally non-deciding by the same firewall that
+// keeps a talker turn out of citations: it carries `referents` so the field
+// reads it through the ordinary depositConversational path (capped warmth), and
+// a GROUNDING reader must second it on document-side evidence before any merge
+// commits. Tip, never originate.
+export const corefPerception = ({ a, b, cursor = null, turn = null }) =>
+  Object.freeze({
+    kind: 'coref-proposal',
+    witness: TALKER,
+    a: String(a),
+    b: String(b),
+    referents: Object.freeze([String(a), String(b)]),
+    cursor,
+    turn,
+  });

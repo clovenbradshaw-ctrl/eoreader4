@@ -139,7 +139,8 @@ hard-coded true; a convention is whatever the text keeps doing.
 | `model`       | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
 | `classify`    | `createPhasepostClassifier({cells, centroids, embedder})`     | `core`     |
 | `boot`        | `bootGeometricReader(root, {embedder})` · `createInstaller`   | `classify`, `model` |
-| `converse`    | `conversationalEvent` · `depositConversational` · `commitSurvives` | nothing |
+| `converse`    | `conversationalEvent` · `depositConversational` · `commitSurvives` · `corefPerception` | nothing |
+| `factcheck`   | `factCheck({prose, doc, graph, classifier})` · `corroborateCoref` (edge-grounding veto) | `core`, `parse`, `classify`, `converse` |
 | `audit`       | `createAuditLog()`                                            | nothing    |
 | `turn`        | `runTurn({question, doc, model, embedder, auditLog})` (reduce)| all above  |
 | `ingest`      | `ingestText(file)` · `ingestImage(detections)` → doc          | `parse`, `core` |
@@ -169,6 +170,19 @@ witnessed by the talker, so they warm the field and orient the next turn but can
 never be cited as document provenance, originate a committed reading, or type a
 relation. A fold-time subtract-and-check refuses any reading that leans on that
 warmth. See [`docs/conversational-provenance.md`](docs/conversational-provenance.md).
+
+On the way back, the **edge-grounding veto** (`factcheck`) holds the talker to
+the graph it spoke from. It parses the talker's prose with the same SVO parser
+the page uses, resolves the endpoints through the **document** referent table
+(never the talker's own coreference), types each relation to its cell, and
+compares each claimed edge to the document reading — yielding one of four
+verdicts: *corroborated* (and earns the document edge's citation), *unsupported*
+(flag), *contradicted* by a VOID or opposing edge (refuse), or *indeterminate*
+(held). `unbound` catches a claim with no node-witness; this catches a claimed
+*relation* with no edge-witness — the shape the invented-location lie wore. The
+talker's coref strength returns as a **proposal**: it may tip a merge, but a
+grounding reader must second it before the merge commits. See
+[`docs/edge-grounding.md`](docs/edge-grounding.md).
 
 ## The nine operators
 

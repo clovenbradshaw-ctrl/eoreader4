@@ -8,6 +8,7 @@
 // embedder the classifier returns no-commit on every position, because a cosine
 // between a spelling-space query and a MiniLM-space centroid measures nothing.
 
-export { createPhasepostClassifier, perceptionDeposit, DEFAULT_FLOORS } from './phasepost.js';
+export { createPhasepostClassifier, perceptionDeposit, DEFAULT_FLOORS,
+         createCellAdjacency, ADJACENCY_FLOOR } from './phasepost.js';
 export { BANDS, BAND_OPERATORS, bandOf, partitionCells, isDesert, isMisfireCell } from './bands.js';
 export { loadCentroids, CENTROID_SCHEMA } from './centroids.js';

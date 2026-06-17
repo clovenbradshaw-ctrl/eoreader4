@@ -11,5 +11,5 @@
 export {
   TALKER, SPAN, CONVERSATIONAL_CAP,
   conversationalEvent, witnessOf, isCitableAsDocument,
-  depositConversational, commitSurvives,
+  depositConversational, commitSurvives, corefPerception,
 } from './provenance.js';
