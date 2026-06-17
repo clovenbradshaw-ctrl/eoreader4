@@ -42,6 +42,15 @@ const SKIP = new Set([
 
 const SUBJECT_PRONOUN = new Set(['He', 'She', 'They', 'We', 'It', 'I', 'You']);
 
+// Words that are not verbs: if the head slot lands on one of these, there is
+// no relation here — better silence than "Grete who Just" or "Just by Gregor".
+const NOT_HEAD = new Set([
+  'who', 'whom', 'whose', 'which', 'that', 'what', 'where', 'when', 'why', 'how',
+  'by', 'of', 'in', 'on', 'at', 'to', 'from', 'with', 'for', 'as', 'than', 'about',
+  'and', 'but', 'or', 'nor', 'so', 'because', 'although', 'while', 'if', 'unless',
+  'a', 'an', 'the', 'his', 'her', 'their', 'its', 'this', 'these', 'those',
+]);
+
 const KIN = '(?:father|mother|sister|brother|son|daughter|wife|husband|parents|' +
   'uncle|aunt|cousin|nephew|niece|grandfather|grandmother|friend|master|' +
   'servant|boss|chief|partner|neighbour|neighbor|colleague|lover|fiance|fiancee)';
@@ -87,6 +96,7 @@ const headVerb = (text) => {
     const w = m[1].toLowerCase();
     if (COPULAR.has(w)) return { verb: w, rest: rest.slice(m[0].length), copular: true };
     if (SKIP.has(w)) { rest = rest.slice(m[0].length).replace(/^[\s,]+/, ''); continue; }
+    if (NOT_HEAD.has(w)) return null;   // a preposition/relative pronoun is not a verb
     return { verb: w, rest: rest.slice(m[0].length), copular: false };
   }
   return null;

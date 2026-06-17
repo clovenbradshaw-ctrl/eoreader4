@@ -19,7 +19,7 @@
 const GAMMA = 0.7;     // recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
 
-export const readingAt = (doc, cursor) => {
+export const readingAt = (doc, cursor, opts = {}) => {
   const units = doc.units || doc.sentences || [];
   const S = units.length;
   const at = Math.max(0, Math.min(S - 1, cursor | 0));
@@ -55,6 +55,18 @@ export const readingAt = (doc, cursor) => {
   }
 
   const name = (id) => label.get(id) || id;
+
+  // LLM nudge seam (default off). The surprise pass is mechanical — surprisal
+  // over the γ-mass prior, no model in the loop. But a mini-LLM can *weight*
+  // the prediction the way it collapses referents: `opts.expect(id, label)`
+  // returns extra prior mass for a figure the model expects next. It nudges
+  // the field; it never decides. With no expecter, the reading is pure physics.
+  if (typeof opts.expect === 'function') {
+    for (const id of [...priorMass.keys()]) {
+      const boost = Number(opts.expect(id, label.get(id))) || 0;
+      if (boost > 0) priorMass.set(id, priorMass.get(id) + boost);
+    }
+  }
 
   // --- Prediction (REC): a probability distribution over who acts next. ----
   // P(figure) ∝ γ-mass; a reserve of NOVELTY holds probability for someone

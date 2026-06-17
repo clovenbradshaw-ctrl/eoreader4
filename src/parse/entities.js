@@ -31,11 +31,16 @@ const CAP_STARTERS = new Set([
   'The','A','An','This','That','These','Those',
   'I','You','He','She','It','We','They',
   'My','Your','His','Her','Its','Our','Their',
-  'Then','Now','Here','There','When','Where','Why','How','What','Who','Whom',
-  'Yes','No','Maybe','Perhaps','Otherwise','Also','However','Indeed','Still',
-  'But','And','So','Or','Nor','Yet','For','Because','Although','While','Since',
-  'In','On','At','To','From','By','With','Of','Up','Down','Over','Under',
-  'If','Unless','Until','Once',
+  'Then','Now','Here','There','When','Where','Why','How','What','Who','Whom','Which',
+  'Yes','No','Maybe','Perhaps','Otherwise','Also','However','Indeed','Still','Yet',
+  'But','And','So','Or','Nor','For','Because','Although','While','Since','As',
+  'In','On','At','To','From','By','With','Of','Up','Down','Over','Under','Into','Out',
+  'If','Unless','Until','Once','Just','Only','Even','Soon','Again','Almost','Nearly',
+  'Suddenly','Finally','Meanwhile','Nevertheless','Therefore','Thus','Hence','Anyway',
+  'Well','Oh','Ah','Eh','Alas','Look','Listen',
+  'Can','Could','Would','Should','Shall','Will','May','Might','Must',
+  'Do','Does','Did','Have','Has','Had','Is','Are','Was','Were','Be','Been','Being',
+  'Not','Never','Always','Often','Sometimes','Perhaps',
 ]);
 
 const TITLE_WORDS = new Set([

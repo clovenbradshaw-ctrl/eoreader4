@@ -62,6 +62,28 @@ Every surprise is tagged by the operator that fired: `INS` (a figure enters),
 the expected figures). `REC` records what the reader expected; `EVA` records how
 it did.
 
+**Predictive coding (the LLM in the loop).** The surprisal above is the instant,
+mechanical baseline. The fuller significance pass reads the passage with the
+model, asks it to *predict the next line*, and measures the **embedding
+distance** between that prediction and what the document actually says next:
+
+```
+past ─model─▶ predicted next ─embed─┐
+                                     ├─ cosine ─▶ surprise = 1 − similarity
+actual next ──────────────────embed─┘
+```
+
+The model never decides anything; it predicts, and the prediction error is the
+surprise. (`read/predict.js`.)
+
+**Site vs figure is a role, not a list.** Chrome — furniture — is not matched
+against patterns. A unit is a *site* (ground) when its semantic role is to frame
+rather than carry a figure: it anchors no `INS`/`CON`/`SIG` and sits off the
+document's embedding distribution. The reader DEFs its role as `site`
+(`read/site.js`); retrieval and the fold skip it. The embedder reads the role,
+so the judgement is only as sharp as the embedder — a weight thresholded, never
+a verdict.
+
 ## The consciousness
 
 The fold (`read/consciousness`) queries all three surfaces and integrates them

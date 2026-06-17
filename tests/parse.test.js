@@ -8,11 +8,13 @@ import { segmentSentences } from '../src/parse/sentences.js';
 import { tok } from '../src/parse/tokenize.js';
 import { projectGraph } from '../src/core/project.js';
 
-test('chrome gate catches page numbers and separators', () => {
-  assert.ok(isChrome('Page 12'));
-  assert.ok(isChrome('---'));
-  assert.ok(isChrome('42'));
+test('chrome gate holds only degenerate structure — roles are semantic', () => {
+  assert.ok(isChrome('42'));            // a bare number
+  assert.ok(isChrome('III'));           // a bare roman numeral
+  assert.ok(isChrome('---'));           // a separator rule
+  assert.ok(!isChrome('Page 12'));      // a heading is a semantic site role, not a list match
   assert.ok(!isChrome('Alice met Bob at the cafe.'));
+  assert.ok(isChrome('Page 12', true)); // ...but a mini-LLM nudge can still hold it
 });
 
 test('segmentSentences splits on ?.!', () => {

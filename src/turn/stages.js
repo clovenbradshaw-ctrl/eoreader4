@@ -8,7 +8,7 @@
 // Vetoes are flag-only — they never substitute the model's answer.
 // The user sees what the model actually said, with a flag pinned to it.
 
-import { tryMechanical, answerMath } from '../answer/index.js';
+import { answerSmalltalk, answerMath, answerConfirm, answerWho } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
 import { buildGroundedMessages, buildChatMessages } from '../model/prompt.js';
@@ -17,32 +17,27 @@ import { runVetoes }        from '../ground/veto.js';
 
 export const stages = {
 
-  // Cheapest paths first. Math always works; the other mechanicals need a doc.
+  // Cheapest, model-free paths first — and routing is now intent-aware.
+  //   smalltalk → a greeting is never grounded against the document.
+  //   math      → arithmetic, with or without a doc.
+  //   who/confirm → mechanical lookups when a doc is open.
+  //   else      → grounded (doc) or chat (no doc).
   async route(ctx) {
+    const short = (m) => ({
+      ...ctx, route: m.route, mechanical: m, terminate: true,
+      answer: m.text, sources: m.sources || [],
+    });
+
+    const sm = answerSmalltalk(ctx.question);
+    if (sm) return short(sm);
+
+    const math = answerMath(ctx.question);
+    if (math) return short(math);
+
     if (ctx.doc) {
-      const mech = tryMechanical(ctx.doc, ctx.question);
-      if (mech) {
-        return {
-          ...ctx,
-          route: mech.route,
-          mechanical: mech,
-          terminate: true,
-          answer:  mech.text,
-          sources: mech.sources,
-        };
-      }
+      const mech = answerConfirm(ctx.doc, ctx.question) || answerWho(ctx.doc, ctx.question);
+      if (mech) return short(mech);
       return { ...ctx, route: 'grounded' };
-    }
-    const m = answerMath(ctx.question);
-    if (m) {
-      return {
-        ...ctx,
-        route: m.route,
-        mechanical: m,
-        terminate: true,
-        answer:  m.text,
-        sources: [],
-      };
     }
     return { ...ctx, route: 'chat' };
   },

@@ -256,6 +256,21 @@ comments on gates that were on.
   masses, edges are couplings, the reading cursor re-projects with γ-decay.
 - **Conventions ledger (REC)** and a **modality-universal** spine with text and
   image adapters.
+- **Intent routing** — a greeting routes to *smalltalk* (never grounded, no
+  model warmed); `who is …` is answered mechanically (alias-aware); math
+  short-circuits. The model is warmed only for real document questions.
+- **Chrome is a semantic role, not a list.** Parse holds only the genuinely
+  *degenerate* (a bare number, a roman numeral, a separator). Everything else's
+  role is read semantically: a unit off the document's distribution that anchors
+  no figure is DEF'd as a **site** (`read/site.js`), and retrieval skips it. A
+  mini-LLM nudges the borderline; nothing is matched against a pattern list.
+- **Predictive surprise.** Beyond the mechanical surprisal baseline, reading
+  mode runs predictive coding (`read/predict.js`): the LLM reads the passage,
+  predicts the next line, and surprise is the **embedding distance** to what the
+  document actually says next.
+- **The Log tab** shows the append-only event log the graph is a fold of,
+  grouped into the recursive levels of reading — each pass reads what the one
+  below admitted, approaching the meaning in passes rather than one verdict.
 
 ## Run
 
