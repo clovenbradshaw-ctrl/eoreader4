@@ -59,11 +59,11 @@ and baked into the code here:
 ## The spine
 
 ```
-text ─parse─▶ append-only event log ─project─▶ graph
-                  │
-                  ├─▶ retrieve ─▶ fold ─▶ prompt ─▶ llm ─▶ bind ─▶ veto ─▶ answer
-                  │                                                          │
-                  └─▶ audit ── (projection of the stages.reduce fold) ─────┘
+any modality ─adapter─▶ append-only event log ─project─▶ graph
+   (text · image)            │  (nine operators)
+                             ├─▶ retrieve ─▶ fold ─▶ prompt ─▶ llm ─▶ bind ─▶ veto ─▶ answer
+                             │        (the fold = the consciousness)            │
+                             └─▶ audit ── (projection of the stages.reduce fold) ┘
 ```
 
 The append-only log is the single source of truth. The graph is a fold of
@@ -72,21 +72,75 @@ the log; you can lose it at any moment and rebuild it by replay.
 the log is append-only and the frame (including its rules) is fully in
 the key.
 
+**Modality-universal.** `parse` is the *text adapter*; `ingestImage` is the
+*image adapter* (a vision model's detections, injected). Both emit the same
+nine operators onto the same log, so the graph, the reading cursor, the three
+reading levels and the fold all work unchanged whether the units are sentences
+or image regions. New modalities are new adapters, not a new spine.
+
+## Three levels of reading — three kinds of math
+
+Reading happens at three levels, the three domains of the EO cube read top to
+bottom. Each is a genuinely different mathematics, and each is a *surface* a
+mechanical "consciousness" queries behind the scenes to ground the talker.
+
+| Level | Domain | Operators | Math |
+|-------|--------|-----------|------|
+| **1 · existence** | Existence | NUL SIG INS | **counting measure** — cardinality of presence; token-set overlap (`hits/qLen`). |
+| **2 · structure** | Structure | SEG CON SYN | **graph linear algebra** — a union-find quotient over a weighted adjacency; edge weight bilinear in endpoint log-mass under a γ-decay kernel along the reading line. |
+| **3 · significance** | Interpretation | DEF EVA REC | **probability + information** — a prior over "who acts next" (the integral fold of γ-mass), an expectation (prediction), and a **surprisal** (−log₂p) when the next line lands (its differential). |
+
+The **integral fold** accumulates (∫) the reading up to the cursor; **surprise**
+is its differential — the residual between what the fold predicted and the
+increment the next line actually delivered. The `read` holon exposes all three
+surfaces and the `consciousness` that folds them into the note the model reads.
+
+## It is all physics, not decisions
+
+The reader never makes an irreversible choice; it accumulates weight that
+asymptotically approaches truth.
+
+- **Coreference is a field, not a decision.** A pronoun does not *pick* an
+  antecedent — each entity leaves a decaying mass-trace, and the pronoun induces
+  a weighted distribution over candidates. The strongest weight becomes the
+  bond's **coupling**, so the uncertainty rides along; as evidence concentrates
+  the weight → 1. A model collapses referents the same way: not by returning a
+  choice but by emitting meta-content that *weights* candidates (`reinforce`).
+- **The graph is a field.** Entities carry **mass** (γ-accumulated sightings),
+  bonds carry **coupling**; edge weight is a *measurement* of that field under a
+  frame (the cursor), never a stored fact. The force layout reflects it — a
+  heavier bond is a stiffer, shorter spring.
+- **NUL is non-transformation**, not clearing. A held line is simply not turned
+  into structure. Voiding a fact would be a **DEF to VOID** — an assertion — never
+  a NUL.
+
+## Conventions — the document teaches the reader (REC)
+
+Before the per-sentence loop reads a word, **Pass 0** induces how *this*
+document marks speech (a sci-fi text whose dialogue runs on "pinged" instead of
+"said"). Each induced verb is a **REC** ("learn a rule") entry in the
+conventions ledger — eoreader3's `conventions.jsonl` / `RULES_LEDGER` — written
+into the log and unioned with the seed set. The high (a learned rule) sets the
+probabilities for the low (how the next thousand sentences classify). Nothing is
+hard-coded true; a convention is whatever the text keeps doing.
+
 ## The sub-assemblies (each a holon)
 
-| Holon       | Public interface                                            | Depends on |
-|-------------|-------------------------------------------------------------|------------|
-| `core`      | log · address · operators · project (memoized, rules in frame) | nothing  |
-| `parse`     | `createParser(opts)` · `parseText(text, opts)` → doc          | `core`     |
-| `retrieve`  | `retrieveHybrid(doc, q, embedder)`                            | `core`, `parse` |
-| `fold`      | `foldNote(spans)` · `impressionQuery`                         | `core`     |
-| `ground`    | `bindCitations(draft, spans)` · `runVetoes`                   | `core`, `parse` |
-| `answer`    | `tryMechanical(doc, q)`                                       | `core`, `parse` |
-| `model`     | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
-| `audit`     | `createAuditLog()`                                            | nothing    |
-| `turn`      | `runTurn({question, doc, model, embedder, auditLog})` (reduce)| all above  |
-| `ingest`    | `ingestText(file)` → doc                                      | `parse`    |
-| `ui`        | DOM presentation, no logic                                    | `turn`, `audit` |
+| Holon         | Public interface                                            | Depends on |
+|---------------|-------------------------------------------------------------|------------|
+| `core`        | log · address · operators · project (memoized, rules in frame) | nothing  |
+| `conventions` | `createConventions()` (REC ledger) · `induceAttributionVerbs` | nothing  |
+| `parse`       | `createParser(opts)` · `parseText(text, opts)` → doc (text adapter) | `core`, `conventions` |
+| `read`        | `existence/structure/significance` surfaces · `consciousness` · `readingAt` | nothing |
+| `retrieve`    | `retrieveHybrid(doc, q, embedder)`                            | `core`, `parse` |
+| `fold`        | `foldNote(spans, {doc, cursor})` · `impressionQuery`         | `read`     |
+| `ground`      | `bindCitations(draft, spans)` · `runVetoes`                   | `core`, `parse` |
+| `answer`      | `tryMechanical(doc, q)`                                       | `core`, `parse` |
+| `model`       | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
+| `audit`       | `createAuditLog()`                                            | nothing    |
+| `turn`        | `runTurn({question, doc, model, embedder, auditLog})` (reduce)| all above  |
+| `ingest`      | `ingestText(file)` · `ingestImage(detections)` → doc          | `parse`, `core` |
+| `ui`          | DOM presentation + graph view / reading cursor               | `turn`, `read`, `audit` |
 
 Each holon's `index.js` is its only entrance. No file imports the internals
 of another. The rule is a discipline enforced by inspection, not by tooling.
@@ -97,9 +151,12 @@ The vocabulary the whole system speaks (the ACT face of the EO cube):
 
 |              | Existence           | Structure          | Interpretation   |
 |--------------|---------------------|--------------------|------------------|
-| Differentiate| **NUL** hold        | **SEG** resplit    | **DEF** assert   |
+| Differentiate| **NUL** hold¹       | **SEG** resplit    | **DEF** assert²  |
 | Relate       | **SIG** attribute   | **CON** bond       | **EVA** evaluate |
 | Generate     | **INS** instantiate | **SYN** synthesize | **REC** learn    |
+
+¹ NUL is **non-transformation** — a thing held as-is — *not* clearing.
+² Clearing/voiding is a **DEF to VOID** (an assertion), never a NUL.
 
 **CON** — the binding bond at Relate × Structure — is the central
 operator. It is what makes a citation hold a claim to a source. See
@@ -183,8 +240,22 @@ comments on gates that were on.
 - Turn as literal `stages.reduce(...)` with onStep callback (eoreader3
   records turn steps in parallel bookkeeping rather than as a projection
   of the fold).
-- Trimmed stable grounded prompt; lazy embedder; mechanical-paths-first
-  routing.
+
+**Rebuilt to match what worked (this branch):**
+- **Graph extraction** — coreference as a weighted field, speech→SIG /
+  copular→DEF / transitive→CON classification, kinship apposition, multi-word
+  names, name-containment SYN, `INS`-per-sighting so mass is real.
+- **The fold is the consciousness** — existence + structure + significance
+  folded into the reading the model receives (was a verbatim span dump the
+  `prompt` stage didn't even use).
+- **The grounded prompt** — spans (verbatim, trusted) → reading (the fold,
+  "usually right") → question last, the order that worked on small models.
+- **Reading mode** — predict (REC) / evaluate (EVA) / surprise (surprisal in
+  bits), EO-tagged, surfaced as you step a cursor through the document.
+- **The graph view** — see and explore the graph with a cursor; nodes are
+  masses, edges are couplings, the reading cursor re-projects with γ-decay.
+- **Conventions ledger (REC)** and a **modality-universal** spine with text and
+  image adapters.
 
 ## Run
 
