@@ -1,3 +1,15 @@
-// The ingest holon: file → parsed doc with a lazy embedding cache.
+// The ingest holon: a source → a doc with the modality-neutral contract.
+//
+// A doc is { docId, modality, units, log, projectGraph, mentions, ... }. The
+// log carries the nine operators; everything downstream (retrieve, fold,
+// read, ground, the graph view) speaks that contract, not a modality. Adapters
+// turn a modality into it:
+//
+//   ingestText(file)        text  → units = sentences
+//   ingestImage(detections) image → units = regions  (vision model injected)
+//
+// New modalities (audio, tables, OCR) are new adapters emitting the same
+// operators onto the same log. The spine does not change.
 
-export { ingestText } from './text.js';
+export { ingestText }  from './text.js';
+export { ingestImage } from './image.js';
