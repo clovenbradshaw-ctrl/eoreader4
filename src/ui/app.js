@@ -13,8 +13,8 @@
 import { ingestText }       from '../ingest/index.js';
 import { runTurn }          from '../turn/index.js';
 import { createAuditLog }   from '../audit/index.js';
-import { createModel, createHashEmbedder } from '../model/index.js';
-import { markSites }        from '../read/index.js';
+import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
+import { markSites, carveBonds } from '../read/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking } from './chat.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
@@ -29,6 +29,7 @@ const STATE = {
   backendName: 'echo',
   model:     null,
   loadingBackend: null,  // promise of the in-flight model load, if any
+  embedderName: 'hash',
   graph:     null,       // graph-view controller for the current doc
   activeTab: 'text',
 };
@@ -48,6 +49,25 @@ const els = {
   auditView: document.getElementById('audit-view'),
   exportBtn: document.getElementById('export-audit'),
   backend:   document.getElementById('backend'),
+  embedder:  document.getElementById('embedder'),
+  carve:     document.getElementById('carve'),
+};
+
+// The embedding organ — the √2/geometry cell. Hash is instant lexical; MiniLM
+// downloads a transformer and gives real geometry (and lets the site-role and
+// predictive-surprise passes run for real). Warming is lazy and idempotent.
+const ensureEmbedder = async () => {
+  const e = STATE.embedder;
+  if (!e || typeof e.warm !== 'function' || e.isWarm?.()) return e;
+  if (STATE.embedderName !== 'minilm') return e;
+  try {
+    setStatus('MiniLM: downloading…');
+    await e.warm();
+    setStatus('MiniLM: ready');
+  } catch (err) {
+    setStatus(`MiniLM: failed — ${err?.message || err}`);
+  }
+  return e;
 };
 
 const setStatus = (s) => { els.status.textContent = s; };
@@ -155,6 +175,7 @@ const send = async () => {
 
   try {
     await ensureModel();
+    await ensureEmbedder();   // warm the geometry organ so retrieval is semantic
   } catch (err) {
     finalizeThinking(thinking, `Model failed to load: ${err?.message || err}`, [], {
       route: 'error', flags: [],
@@ -218,6 +239,47 @@ els.backend.addEventListener('change', () => {
   STATE.model = null;
   setStatus(`${STATE.backendName}: starting…`);
   ensureModel().catch(() => { /* status already reflects failure */ });
+});
+
+// Embedder switch — swap the geometry organ. On upgrade to a real embedder,
+// warm it and re-run the semantic site-role pass over the open document.
+els.embedder.addEventListener('change', async () => {
+  STATE.embedderName = els.embedder.value;
+  STATE.embedder = STATE.embedderName === 'minilm' ? createMiniLMEmbedder() : createHashEmbedder();
+  await ensureEmbedder();
+  if (STATE.doc && STATE.embedder.id !== 'hash-embed') {
+    try {
+      const sites = await markSites(STATE.doc, STATE.embedder);
+      if (sites.length) {
+        markSiteSentences(els.docView, sites);
+        renderLog(STATE.doc, els.logView, { onSelectSentence: selectSentence });
+      }
+    } catch { /* role pass is best-effort */ }
+  }
+});
+
+// Carve — ask the model to read each sentence and state its bonds, beyond the
+// regex extractor. Re-renders the graph and log from the enriched log.
+els.carve.addEventListener('click', async () => {
+  if (!STATE.doc) { setStatus('load a document first'); return; }
+  els.carve.disabled = true;
+  try {
+    await ensureModel();
+    setStatus('carving bonds with the model…');
+    const { carved, scanned } = await carveBonds(STATE.doc, STATE.model, {
+      onProgress: ({ at, total, carved }) => setStatus(`carving… s${at}/${total} · ${carved} bonds`),
+    });
+    STATE.graph?.destroy?.();
+    STATE.graph = renderGraph(STATE.doc, els.graphView, {
+      onSelectSentence: selectSentence, getModel: () => STATE.model, embedder: STATE.embedder,
+    });
+    renderLog(STATE.doc, els.logView, { onSelectSentence: selectSentence });
+    setStatus(`carved ${carved} bonds across ${scanned} sentences`);
+  } catch (e) {
+    setStatus(`carve failed — ${e?.message || e}`);
+  } finally {
+    els.carve.disabled = false;
+  }
 });
 
 // Audit: live-render on every step / finish.

@@ -15,14 +15,16 @@ export const ingestText = async (file) => {
   // without the parse holon knowing the UI exists. Memoised in core.
   doc.projectGraph = (frame = {}) => projectGraph(doc.log, frame);
 
-  // Sentence embeddings are computed lazily and cached on the doc itself.
-  // First caller pays the warmup; subsequent callers (retrieve, impression,
-  // form) re-use the cache. The hot lexical path never invokes this.
-  let vecPromise = null;
+  // Sentence embeddings are computed lazily and cached on the doc, keyed by
+  // embedder id so swapping the organ (hash → MiniLM) recomputes rather than
+  // serving stale vectors. The hot lexical path never invokes this.
+  const vecCache = new Map(); // embedder.id → Promise<Float32Array[]>
   doc.sentenceEmbeddings = async (embedder) => {
-    if (vecPromise) return vecPromise;
-    vecPromise = Promise.all(doc.sentences.map(s => embedder.embed(s)));
-    return vecPromise;
+    const key = embedder?.id || 'default';
+    if (vecCache.has(key)) return vecCache.get(key);
+    const p = Promise.all(doc.sentences.map(s => embedder.embed(s)));
+    vecCache.set(key, p);
+    return p;
   };
 
   return doc;

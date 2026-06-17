@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/index.js';
 import { createCorefField } from '../src/parse/coref.js';
-import { readingAt, structureSurface, consciousness, siteRoles, predictNext, tokenField } from '../src/read/index.js';
+import { readingAt, structureSurface, consciousness, siteRoles, predictNext, tokenField, carveBonds } from '../src/read/index.js';
 import { foldNote } from '../src/fold/index.js';
+import { projectGraph } from '../src/core/index.js';
 
 test('coref field is a normalised distribution, strongest first', () => {
   const f = createCorefField();
@@ -62,6 +63,23 @@ test('every token is available for the graph — entities are the persistent sub
   assert.ok(byTok.has('truck'));
   assert.ok(byTok.get('topps').persistent);     // the minted referent is flagged persistent
   assert.ok(!byTok.get('man').persistent);      // a one-off token is available, not persistent
+});
+
+test('carveBonds: the model carves bonds onto entities and token nodes', async () => {
+  const doc = parseText('The trooper Topps slammed the man. Topps drove the truck.', { docId: 'c' });
+  const model = { phrase: async (msgs) => {
+    const u = msgs[1].content;
+    if (u.includes('slammed')) return 'Topps | slammed | the man';
+    if (u.includes('drove'))   return 'Topps | drove | the truck';
+    return 'NONE';
+  } };
+  const { carved } = await carveBonds(doc, model);
+  assert.ok(carved >= 1, 'the model carved at least one bond');
+  const carvedEvents = doc.log.filter(e => e.kind === 'carved');
+  assert.ok(carvedEvents.some(e => e.src === 'topps' && e.tgt === 't:man'),
+    'a bond landed on a token node, not just an entity');
+  const g = projectGraph(doc.log);
+  assert.ok([...g.entities.keys()].includes('t:man'), 'the token node is materialized in the graph');
 });
 
 test('site role is semantic: off-distribution + figure-less reads as a site', () => {

@@ -14,3 +14,4 @@ export { readingAt } from './reading.js';
 export { predictNext } from './predict.js';
 export { siteRoles, markSites, siteIndices } from './site.js';
 export { tokenField } from './tokens.js';
+export { carveBonds } from './carve.js';
