@@ -150,6 +150,33 @@ test('onStep callback fires once per executed stage', async () => {
   assert.ok(seen.includes('bind'));
 });
 
+test('a greeting routes to smalltalk — never grounded, never warms the model', async () => {
+  const doc = setup('Alice loves apples. Bob hates broccoli.');
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'hi', doc, model, embedder: createHashEmbedder(), auditLog: audit,
+  });
+  assert.equal(result.turn.route, 'smalltalk');
+  assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
+  assert.equal(result.sources.length, 0);
+});
+
+test('who-is is answered mechanically and resolves through the alias', async () => {
+  const doc = setup('Gregor Samsa is a travelling salesman. Gregor waited. Gregor left.');
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'who is gregor?', doc, model, embedder: createHashEmbedder(), auditLog: audit,
+  });
+  assert.equal(result.turn.route, 'who');
+  assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
+  assert.ok(/salesman/i.test(result.answer));
+  assert.ok(result.sources.length > 0);
+});
+
 test('audit exports JSONL one record per turn', async () => {
   const doc = setup('Alice loves apples.');
   const model = createModel('echo');
