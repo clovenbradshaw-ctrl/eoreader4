@@ -13,7 +13,8 @@
 import { ingestText }       from '../ingest/index.js';
 import { runTurn }          from '../turn/index.js';
 import { createAuditLog }   from '../audit/index.js';
-import { createModel, createHashEmbedder } from '../model/index.js';
+import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
+import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../read/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking } from './chat.js';
@@ -257,5 +258,12 @@ renderLog(null, els.logView, { onSelectSentence: selectSentence });
 
 // Boot: kick the selected model now so first message is instant.
 ensureModel().catch(() => { /* status already reflects failure */ });
+
+// Boot the geometric reader: a separate MiniLM organ + the phasepost classifier,
+// assembled behind the initialization animation. Non-blocking — the chat above
+// is usable throughout, and the classifier holds at no-commit until (and unless)
+// MiniLM and verified centroids both come online. Kept apart from STATE.embedder
+// (the hash organ the retrieval path uses) so this changes nothing below it.
+STATE.geometric = bootGeometricReader(document.body, { embedder: createMiniLMEmbedder() });
 
 window.STATE = STATE; // for in-browser inspection
