@@ -17,8 +17,6 @@
 //   - Kinship apposition. "his sister Grete", "Gregor's father" bond the
 //     owner to the named relative through the kin term.
 
-import { scanEntities } from './entities.js';
-
 const COPULAR = new Set(['is', 'are', 'was', 'were', 'be', 'been']);
 
 const SPEECH = new Set([
@@ -73,7 +71,7 @@ const leadingSubject = (sentence, admission, coref) => {
     return { id: top?.id ?? null, end: pn[0].length, kind: 'pronoun', w: top?.w ?? 0 };
   }
   // Otherwise the first capitalised phrase, if it is an admitted entity.
-  const ents = scanEntities(sentence);
+  const ents = admission.scan(sentence);
   const first = ents.find(e => e.start <= 1); // sentence-initial
   if (first && admission.isAdmitted(first.label)) {
     return { id: admission.idOf(first.label), end: first.end, kind: 'name', w: 1 };
@@ -102,10 +100,22 @@ const headVerb = (text) => {
   return null;
 };
 
+// Bound a copular predicate to its first clause — recursive segmentation in
+// the small: a long sentence carries many clauses, but the assertion is the
+// first one. Stops at a clause break (; — , who/which/that) or a length cap,
+// so a DEF is a fact, not a paragraph.
+const firstClause = (text) => {
+  let t = text.replace(/^[\s,]+/, '').replace(/[.!?]+\s*$/, '').trim();
+  const cut = t.search(/[;—–]|\s+(?:who|which|that|because|although|while|and then)\s+/i);
+  if (cut > 0) t = t.slice(0, cut);
+  if (t.length > 90) t = t.slice(0, 90).replace(/\s+\S*$/, '') + '…';
+  return t.trim();
+};
+
 const objectEntities = (text, admission, excludeId) => {
   const ids = [];
   const seen = new Set([excludeId]);
-  for (const e of scanEntities(text)) {
+  for (const e of admission.scan(text)) {
     if (!admission.isAdmitted(e.label)) continue;
     const id = admission.idOf(e.label);
     if (seen.has(id)) continue;
@@ -149,7 +159,7 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
     const head = headVerb(after);
     const w = coupling(subj);
     if (head && head.copular) {
-      const pred = head.rest.replace(/^[\s,]+/, '').replace(/[.!?]+\s*$/, '').trim();
+      const pred = firstClause(head.rest);
       if (pred) out.push({ op: 'DEF', id: subj.id, key: 'predicate', value: pred, ...w });
     } else if (head) {
       const op = isSpeech(head.verb) ? 'SIG' : 'CON';

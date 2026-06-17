@@ -14,8 +14,9 @@
 import { createLog }            from '../core/log.js';
 import { segmentSentences }     from './sentences.js';
 import { isChrome }             from './chrome.js';
-import { createEntityAdmission }from './entities.js';
+import { createEntityAdmission, induceProperNouns } from './entities.js';
 import { parseRelations }       from './relations.js';
+import { contentHash }          from './hash.js';
 import { createCorefField }     from './coref.js';
 import { tok }                  from './tokenize.js';
 import { createConventions, induceAttributionVerbs } from '../conventions/index.js';
@@ -35,7 +36,12 @@ export const createParser = ({
   const parse = (text, { docId } = {}) => {
     const log       = createLog({ docId });
     const sentences = segmentSentences(text);
-    const admission = createEntityAdmission();
+    // Pass: learn the document's names distributionally (a word capitalised
+    // mid-sentence is a name), then admit only against that learned set — no
+    // blocklist of non-names. The high (a learned convention) sets the
+    // probabilities for the low (what the per-sentence loop may admit).
+    const properWords = induceProperNouns(sentences);
+    const admission = createEntityAdmission({ properWords });
 
     // Transcript detection — the handler is injected, not imported.
     if (transcriptHandler && transcriptHandler.detect && transcriptHandler.detect(text)) {
@@ -50,9 +56,21 @@ export const createParser = ({
       }
     }
 
-    // Pass 0 — learn the document's conventions before reading it. Induced
-    // attribution verbs become REC entries in the ledger and are written into
-    // the log, so how *this* text marks speech biases every later sentence.
+    // ── The log is the entire source, cited verbatim ──────────────────────
+    // Every unit is held in the log as itself (NUL — non-transformation),
+    // content-addressed by hash (git for the hashes). The document now lives
+    // in the log: lose it, replay the log, get it back. Every transformation
+    // below is logged on top and *cites* the source hash it was read from.
+    const srcHash = [];
+    sentences.forEach((sent, sentIdx) => {
+      const hash = contentHash(sent);
+      srcHash[sentIdx] = hash;
+      log.append({ op: 'NUL', kind: 'source', sentIdx, text: sent, hash });
+    });
+
+    // ── Then every transformation on the source is a logged event ─────────
+    // Pass 0 — learn the document's conventions (induced attribution verbs)
+    // as REC entries, so how *this* text marks speech biases the reading.
     const conventions = createConventions();
     for (const { token, count } of induceAttributionVerbs(sentences)) {
       conventions.learnAttribution(token, count);
@@ -67,37 +85,36 @@ export const createParser = ({
     const corefField = createCorefField();
 
     sentences.forEach((sent, sentIdx) => {
-      // Chrome-ness is a weight: the mechanical score plus an optional nudge
-      // (a mini-LLM's chrome probability) decides whether the line is held.
-      if (isChrome(sent, chromeHint ? chromeHint(sent) : 0)) {
-        // NUL is non-transformation — the line is *held*, not cleared. It is
-        // simply not turned into entities or relations. (Voiding a fact would
-        // be a DEF to VOID, an assertion; NUL asserts nothing.)
-        log.append({ op: 'NUL', kind: 'chrome', sentIdx, text: sent });
-        return;
-      }
+      // A held/chrome unit gets no transformation — it stays at its source
+      // citation (the NUL above). Degenerate structure and, later, semantic
+      // sites are held; everything else is read.
+      if (isChrome(sent, chromeHint ? chromeHint(sent) : 0)) return;
+
       // Snapshot the field before this line's own entities are folded in, so
       // a subject pronoun looks backward for its antecedent.
       const priorField = corefField.field(sentIdx);
 
+      const cites = srcHash[sentIdx];
       for (const obs of admission.observe(sent, sentIdx)) {
-        // INS on every sighting (admit and present) so edge weights track how
-        // often a figure actually appears, not just that it exists.
+        // INS on every sighting. Admission *mints* a referent — the first INS
+        // brings the id into existence (kind:'mint'); later sightings are
+        // re-instantiations (kind:'sight'). Edge weight tracks the sightings.
         if (obs.status === 'admit' || obs.status === 'present') {
-          log.append({ op: 'INS', id: obs.id, label: obs.label, sentIdx });
+          log.append({ op: 'INS', kind: obs.status === 'admit' ? 'mint' : 'sight',
+                       id: obs.id, label: obs.label, sentIdx, cites });
           corefField.note(obs.id, sentIdx);
         }
-        // A name-containment alias is a synthesis (SYN): "Gregor" folded into
-        // the "Gregor Samsa" referent. Recorded for audit; the ids were
-        // already unified at admission, so the projection needs no second merge.
+        // A name-containment alias is a synthesis (SYN): the duplicate referent
+        // is annihilated into the established one — minting's antimatter. (A
+        // SEG retract / DEF-to-VOID is the general annihilation primitive.)
         if (obs.status === 'admit' && obs.aliasOf && obs.rawId !== obs.id) {
-          log.append({ op: 'SYN', kind: 'alias', from: obs.rawId, to: obs.id, label: obs.label, sentIdx });
+          log.append({ op: 'SYN', kind: 'alias', from: obs.rawId, to: obs.id, label: obs.label, sentIdx, cites });
         }
       }
 
       const coref = { field: () => priorField };
       for (const rel of parseRelations(sent, admission, coref, { isSpeech })) {
-        log.append({ ...rel, sentIdx });
+        log.append({ ...rel, sentIdx, cites });
       }
     });
 

@@ -23,19 +23,27 @@ test('segmentSentences splits on ?.!', () => {
 });
 
 test('two-sighting admission: candidate then admit', () => {
-  const a = createEntityAdmission();
+  // Admission is gauged against the document's learned names, not a blocklist.
+  const a = createEntityAdmission({ properWords: new Set(['Alice']) });
   const r1 = a.observe('Alice walked.');
   assert.equal(r1[0].status, 'candidate');
-  const r2 = a.observe('Then Alice ran.');
+  const r2 = a.observe('Then Alice ran.');   // "Then" is not a learned name → trimmed
   const aliceObs = r2.find(o => o.label === 'Alice');
   assert.equal(aliceObs.status, 'admit');
 });
 
 test('parseText emits INS only after a second sighting', () => {
-  const doc = parseText('Alice walked. Then Alice ran.', { docId: 'd1' });
+  const doc = parseText('Alice walked. Alice ran.', { docId: 'd1' });
   const inss = doc.log.filter(e => e.op === 'INS' && e.id === 'alice');
   assert.equal(inss.length, 1);
   assert.equal(inss[0].label, 'Alice');
+});
+
+test('a word seen lowercase is not a name; one never seen lowercase is', () => {
+  // "One" appears lowercase ("one") so it is not admitted; "Marlow" never does.
+  const doc = parseText('Marlow waited. one of them left. Marlow spoke. One left.', { docId: 'p' });
+  assert.ok(doc.admission.isAdmitted('Marlow'));
+  assert.ok(!doc.admission.isAdmitted('One'));
 });
 
 test('parseText emits DEF for copular sentences on admitted entities', () => {

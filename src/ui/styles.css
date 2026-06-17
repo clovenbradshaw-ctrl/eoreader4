@@ -325,6 +325,19 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 }
 .log-cite:hover { text-decoration: underline; }
 
+/* Log view — the source cited verbatim, each unit + its transformations */
+.log-doc { display: flex; flex-direction: column; gap: .15rem; }
+.log-unit { border-left: 2px solid #1f1f23; padding: .15rem 0 .15rem .5rem; }
+.log-unit.held { opacity: .5; }
+.log-unit:has(.op) { border-left-color: #1e3a8a; }
+.log-src { display: flex; align-items: baseline; gap: .45rem; font-size: .74rem; line-height: 1.4; }
+.log-hash {
+  font-family: ui-monospace, monospace; font-size: .62rem; color: #52525b; flex-shrink: 0;
+}
+.log-text { color: #c7ccd6; }
+.log-xforms { margin: .15rem 0 .1rem 1.6rem; display: flex; flex-wrap: wrap; gap: .15rem; }
+.log-xforms .op { font-size: .64rem; }
+
 /* Predictive-coding line in reading mode */
 .rl-pred {
   margin-top: .3rem; font-size: .72rem; color: #c7ccd6;

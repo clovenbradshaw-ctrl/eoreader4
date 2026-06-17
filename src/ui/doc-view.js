@@ -1,14 +1,19 @@
 // Doc view: renders sentences as clickable, citable elements.
 // Citations from chat highlight the corresponding sentence.
 
+import { isDegenerate } from '../parse/index.js';
+
 export const renderDoc = (doc, root) => {
   root.innerHTML = '';
-  const chromeSeqs = new Set(
-    doc.log.filter(e => e.op === 'NUL' && e.kind === 'chrome').map(e => e.sentIdx)
+  // A held unit is one with no transformation on it: degenerate structure now,
+  // or a semantic site (DEF role=site) added later by the role pass.
+  const siteSeqs = new Set(
+    doc.log.filter(e => e.op === 'DEF' && e.key === 'role' && e.value === 'site').map(e => e.sentIdx)
   );
   doc.sentences.forEach((s, idx) => {
+    const held = isDegenerate(s) || siteSeqs.has(idx);
     const el = document.createElement('div');
-    el.className = 'sentence' + (chromeSeqs.has(idx) ? ' chrome' : '');
+    el.className = 'sentence' + (held ? ' chrome' : '');
     el.dataset.idx = String(idx);
     el.innerHTML = `<span class="idx">s${idx}</span><span>${escapeHtml(s)}</span>`;
     root.appendChild(el);

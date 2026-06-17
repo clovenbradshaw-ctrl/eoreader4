@@ -1,87 +1,97 @@
-// Entity admission — the ceiling the low places on what the high may claim.
+// Entity admission by distributional role — no blocklist of "not-names".
 //
-// A capitalised span is a candidate on first sighting and admitted on the
-// second. Only admitted entities can be subjects of relations or be cited
-// as sources for facts.
+// Capitalisation plus recurrence is the wrong test: "One", "Some", "After",
+// "Good", an all-caps licence header — all capitalise and recur, none are
+// names. A blocklist of such words can never be complete. So we don't keep
+// one. Instead the document teaches the reader its own names:
 //
-// Two changes over the bare two-sighting rule, both lifting recall without
-// inventing nodes:
-//   - A *multi-word* proper name (e.g. "Gregor Samsa", "Project Gutenberg")
-//     is almost never a sentence-starter accident, so it is admitted on
-//     first sighting. Single-token names still need the second sighting.
-//   - Titles ("Mr.", "Mrs.", "Professor") are kept joined to the name and
-//     the trailing period normalised, so "Mr. Samsa" is one entity, not a
-//     spurious bare "Mr".
+//   A token is a proper noun only if it appears capitalised MID-sentence —
+//   somewhere position did not force the capital. "Marlow", "Kurtz", "Thames"
+//   do; "One", "After", "Some" only ever start a sentence, so they never
+//   qualify. This is a learned convention (induceProperNouns), not a list.
 //
-// The admission also remembers, per entity, the sentence indices where it
-// was mentioned. The graph view uses this to jump from a node to its lines;
-// the integral fold uses it to name the figures a passage turns on.
+// On top of that role signal the familiar rules still apply: a single-token
+// name is admitted on its second sighting, a multi-word name on its first,
+// and "Gregor" folds into "Gregor Samsa" as a SYN synthesis.
 
-const TITLE = String.raw`(?:Mr|Mrs|Ms|Dr|Miss|Mister|Sir|Madam|Madame|Lady|Lord|Professor|Prof|Capt|Captain|Rev|St|Aunt|Uncle)\.?`;
-// A lowercase connector (von, of, the) only counts when it sits *between* two
-// capitalised words — never trailing, so "Grete the news" is just "Grete".
-const CONN  = String.raw`de|von|van|der|del|di|du|la|le|of|the`;
-const NAME  = String.raw`[A-Z][a-zA-Z]+(?:\s+(?:${CONN}\s+)?[A-Z][a-zA-Z]+)*`;
-const CAP_RE = new RegExp(String.raw`\b(?:${TITLE}\s+)?${NAME}\b`, 'g');
+const WORD   = String.raw`[A-Z][a-z]+(?:['’][a-z]+)?`;            // a titlecase word (Marlow, Marlow's) — never ALLCAPS
+const CONN   = new Set(['of', 'the', 'and', 'de', 'von', 'van', 'da', 'del', 'di', 'la', 'le', 'du', 'der']);
+const TITLES = new Set(['Mr', 'Mrs', 'Ms', 'Dr', 'Miss', 'Mister', 'Sir', 'Lady', 'Lord', 'Professor',
+                        'Prof', 'Captain', 'Capt', 'Rev', 'St', 'Aunt', 'Uncle', 'General', 'Colonel', 'Major']);
+const CONN_RE  = [...CONN].join('|');
+const TITLE_RE = [...TITLES].join('|') + String.raw`)\.?`;
+const RUN_RE   = new RegExp(String.raw`\b(?:(?:${TITLE_RE}\s+)?${WORD}(?:\s+(?:(?:${CONN_RE})\s+)?${WORD})*`, 'g');
 
-// Sentence-initial capitals that aren't names. The greedy regex above will
-// happily eat "Then Alice" as one phrase; we strip these leading starters
-// before counting so admission tracks the real entity.
-const CAP_STARTERS = new Set([
-  'The','A','An','This','That','These','Those',
-  'I','You','He','She','It','We','They',
-  'My','Your','His','Her','Its','Our','Their',
-  'Then','Now','Here','There','When','Where','Why','How','What','Who','Whom','Which',
-  'Yes','No','Maybe','Perhaps','Otherwise','Also','However','Indeed','Still','Yet',
-  'But','And','So','Or','Nor','For','Because','Although','While','Since','As',
-  'In','On','At','To','From','By','With','Of','Up','Down','Over','Under','Into','Out',
-  'If','Unless','Until','Once','Just','Only','Even','Soon','Again','Almost','Nearly',
-  'Suddenly','Finally','Meanwhile','Nevertheless','Therefore','Thus','Hence','Anyway',
-  'Well','Oh','Ah','Eh','Alas','Look','Listen',
-  'Can','Could','Would','Should','Shall','Will','May','Might','Must',
-  'Do','Does','Did','Have','Has','Had','Is','Are','Was','Were','Be','Been','Being',
-  'Not','Never','Always','Often','Sometimes','Perhaps',
-]);
+const isTitleWord = (w) => /^[A-Z][a-z]+$/.test(w);
+const baseOf = (w) => w.replace(/['’].*$/, '').replace(/\.$/, '');
 
-const TITLE_WORDS = new Set([
-  'Mr','Mrs','Ms','Dr','Miss','Mister','Sir','Madam','Madame','Lady','Lord',
-  'Professor','Prof','Capt','Captain','Rev','St','Aunt','Uncle',
-]);
+// Pass: learn which capitalised words are names — the list-free way. A common
+// word ("one", "some", "after", "don't") appears lowercase somewhere in the
+// document; it only capitalises because position forced it. A name ("Marlow",
+// "Kurtz") is *never* seen lowercase. So a titlecase token is a proper noun iff
+// its lowercase form never occurs as a word. ALLCAPS (headings, "III") never
+// qualifies — it isn't titlecase. The document teaches the reader its names.
+export const induceProperNouns = (sentences) => {
+  const lower = new Set();
+  const caps  = new Set();
+  for (const s of sentences) {
+    for (const m of String(s).matchAll(/\b[a-z]+/g)) lower.add(m[0]);   // whole lowercase words only
+    for (const m of String(s).matchAll(/[A-Z][a-z]+(?:['’][a-z]+)?/g)) caps.add(m[0]);
+  }
+  const proper = new Set();
+  for (const w of caps) {
+    const base = baseOf(w);                       // "Marlow's" → "Marlow", "Don't" → "Don"
+    if (!lower.has(w.toLowerCase().replace(/['’].*$/, '')) && !lower.has(base.toLowerCase())) {
+      proper.add(base);
+    }
+  }
+  return proper;
+};
 
 const idFor = (label) =>
   label.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
-const cleanLabel = (raw) => {
-  let words = raw.trim().split(/\s+/);
-  while (words.length > 0 && CAP_STARTERS.has(words[0])) words.shift();
-  if (words.length === 0) return null;
-  // Normalise a leading title: drop the trailing period, keep it joined.
-  const head = words[0].replace(/\.$/, '');
-  if (TITLE_WORDS.has(head)) {
-    if (words.length === 1) return null; // a bare title is not an entity
-    words = [head, ...words.slice(1)];
-  }
-  if (words.length === 1 && CAP_STARTERS.has(words[0])) return null;
-  return words.join(' ');
+// Trim a titlecase run to the proper-noun core: drop leading/trailing words
+// the document never uses as names, keep connectors between names, keep a
+// leading title. Returns null when the run carries no name.
+const cleanLabel = (raw, proper) => {
+  const words = raw.trim().split(/\s+/);
+  const info = words.map((w) => {
+    const isConn  = CONN.has(w.toLowerCase());
+    const isTitle = TITLES.has(w.replace(/\.$/, ''));
+    const base    = baseOf(w);
+    const name    = !isConn && !isTitle && isTitleWord(base) && (proper ? proper.has(base) : true);
+    return { w, base, isConn, isTitle, name };
+  });
+  let a = info.findIndex((x) => x.name);
+  if (a < 0) return null;
+  let b = info.length - 1;
+  while (b >= 0 && !info[b].name) b--;
+  if (a > 0 && info[a - 1].isTitle) a--;
+  const parts = [];
+  for (let i = a; i <= b; i++) parts.push(info[i].isConn ? info[i].w.toLowerCase() : info[i].base);
+  const label = parts.join(' ').trim();
+  return label || null;
 };
 
-export const createEntityAdmission = () => {
-  const counts    = new Map(); // label → count
-  const admitted  = new Map(); // label → id (post-admission)
-  const sightSent = new Map(); // label → number[] (every sighting's sentIdx)
-  const mentions  = new Map(); // id    → number[] (sentence indices, ordered)
+export const createEntityAdmission = ({ properWords = null } = {}) => {
+  const proper    = properWords;
+  const counts    = new Map();
+  const admitted  = new Map();
+  const sightSent = new Map();
+  const mentions  = new Map();
 
-  const noteMention = (id, sentIdx) => {
-    if (sentIdx == null) return;
-    const arr = mentions.get(id) || [];
-    arr.push(sentIdx);
-    mentions.set(id, arr);
+  const scan = (text) => {
+    const out = [];
+    const re = new RegExp(RUN_RE.source, 'g');
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const label = cleanLabel(m[0], proper);
+      if (label) out.push({ label, start: m.index, end: m.index + m[0].length });
+    }
+    return out;
   };
 
-  // Name-containment synthesis (SYN): a single-token name that is the head or
-  // tail of an already-admitted 2–3 word name is the same referent ("Gregor"
-  // ⊂ "Gregor Samsa"). This is the high-confidence identity join — distinct
-  // from the soft pronoun field, which never merges. Returns the existing id.
   const aliasOf = (label) => {
     const t = label.split(' ');
     for (const [lab, id] of admitted) {
@@ -95,37 +105,28 @@ export const createEntityAdmission = () => {
   };
 
   const observe = (sentence, sentIdx = null) => {
-    const seenInSentence = new Set();
+    const seen = new Set();
     const out = [];
-    const re = new RegExp(CAP_RE.source, 'g');
-    let m;
-    while ((m = re.exec(sentence)) !== null) {
-      const label = cleanLabel(m[0]);
-      if (!label) continue;
-      if (seenInSentence.has(label)) continue;
-      seenInSentence.add(label);
-
+    for (const { label } of scan(sentence)) {
+      if (seen.has(label)) continue;
+      seen.add(label);
       if (sentIdx != null) {
         const s = sightSent.get(label) || [];
         s.push(sentIdx);
         sightSent.set(label, s);
       }
-
       const c = (counts.get(label) ?? 0) + 1;
       counts.set(label, c);
       const multiword = label.includes(' ');
-
       if (admitted.has(label)) {
         const id = admitted.get(label);
-        noteMention(id, sentIdx);
+        if (sentIdx != null) (mentions.get(id) || mentions.set(id, []).get(id)).push(sentIdx);
         out.push({ status: 'present', id, label });
       } else if (c >= 2 || multiword) {
         const rawId = idFor(label);
         const alias = aliasOf(label);
         const id = alias || rawId;
         admitted.set(label, id);
-        // Seed/accumulate mentions under the (possibly shared) referent id;
-        // the candidate sighting had no id yet, so the first line is not lost.
         if (!mentions.has(id)) mentions.set(id, []);
         for (const si of (sightSent.get(label) || [])) mentions.get(id).push(si);
         out.push({ status: 'admit', id, label, aliasOf: alias, rawId });
@@ -138,26 +139,12 @@ export const createEntityAdmission = () => {
 
   return {
     observe,
+    scan,
     isAdmitted: (label) => admitted.has(label),
     idOf:       (label) => admitted.get(label),
-    labelOf:    (id)    => {
-      for (const [label, eid] of admitted) if (eid === id) return label;
-      return null;
-    },
+    labelOf:    (id)    => { for (const [l, e] of admitted) if (e === id) return l; return null; },
     get counts()   { return counts; },
     get admitted() { return admitted; },
     get mentions() { return mentions; },
   };
-};
-
-// Exposed so the relation parser can share the exact same entity scanner.
-export const scanEntities = (text) => {
-  const re = new RegExp(CAP_RE.source, 'g');
-  const out = [];
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const label = cleanLabel(m[0]);
-    if (label) out.push({ label, start: m.index, end: m.index + m[0].length });
-  }
-  return out;
 };
