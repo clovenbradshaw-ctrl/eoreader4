@@ -14,14 +14,14 @@
 // 600×460 coordinate space that the SVG scales to fit, so it renders the same
 // whether the pane is visible or hidden when first built.
 
-import { readingAt, structureSurface } from '../read/index.js';
+import { readingAt, structureSurface, predictNext } from '../read/index.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const W = 600, H = 460, CX = W / 2, CY = H / 2;
 const CAP = 40;          // most-sighted entities to draw
 const GAMMA = 0.7;       // matches DEFAULT_PROJECTION_RULES.decay_gamma
 
-export const renderGraph = (doc, root, { onSelectSentence } = {}) => {
+export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder } = {}) => {
   root.innerHTML = '';
   if (!doc || typeof doc.projectGraph !== 'function') {
     root.innerHTML = `<div class="graph-empty">No document yet — load one and its graph appears here.</div>`;
@@ -189,6 +189,7 @@ export const renderGraph = (doc, root, { onSelectSentence } = {}) => {
 
   let readingMode = false;
   let playTimer = null;
+  let predReq = 0;
 
   const applyCursor = (cur) => {
     if (cur >= S) {
@@ -239,7 +240,26 @@ export const renderGraph = (doc, root, { onSelectSentence } = {}) => {
           `${chip('EVA', `surprise ${sig.surprisalBits} bits`)}` +
           `<span class="surprise-bar"><i style="width:${pct}%"></i></span>` +
           `<div class="rl-summary">${escapeHtml(sig.summary)}</div>` +
+          `<div class="rl-pred" hidden></div>` +
         `</span></div>`;
+
+    // Predictive coding: ask the model to read the past and predict the next
+    // line, then measure the embedding distance to what actually comes. Async,
+    // so it fills in after the instant mechanical pass. Skipped during play.
+    const model = getModel && getModel();
+    const predEl = panel.querySelector('.rl-pred');
+    if (model && embedder && !playTimer && predEl) {
+      const req = ++predReq;
+      predEl.hidden = false;
+      predEl.innerHTML = `<span class="rl-pred-tag">predicting next…</span>`;
+      predictNext(doc, cur, { model, embedder }).then(p => {
+        if (req !== predReq || !p) { if (req === predReq) predEl.hidden = true; return; }
+        const s = Math.round(p.surprise * 100);
+        predEl.innerHTML =
+          `<span class="rl-pred-tag">LLM predicted next:</span> “${escapeHtml(p.prediction)}” ` +
+          `<span class="rl-pred-score">embeds ${(p.similarity).toFixed(2)} → surprise ${s}%</span>`;
+      }).catch(() => { if (req === predReq) predEl.hidden = true; });
+    }
   };
 
   const stepCursor = (delta) => {

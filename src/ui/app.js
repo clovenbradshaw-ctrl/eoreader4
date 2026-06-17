@@ -14,10 +14,12 @@ import { ingestText }       from '../ingest/index.js';
 import { runTurn }          from '../turn/index.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder } from '../model/index.js';
+import { markSites }        from '../read/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking } from './chat.js';
-import { renderDoc, highlightSources } from './doc-view.js';
+import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
 import { renderGraph } from './graph-view.js';
+import { renderLog } from './log-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 
 const STATE = {
@@ -37,6 +39,7 @@ const els = {
   fileInput: document.getElementById('file-input'),
   docView:   document.getElementById('doc-view'),
   graphView: document.getElementById('graph-view'),
+  logView:   document.getElementById('log-view'),
   docTabs:   document.getElementById('doc-tabs'),
   messages:  document.getElementById('messages'),
   composer:  document.getElementById('composer'),
@@ -95,25 +98,47 @@ const ingest = async (file) => {
   STATE.doc = doc;
   renderDoc(doc, els.docView);
   STATE.graph?.destroy?.();
-  STATE.graph = renderGraph(doc, els.graphView, { onSelectSentence: selectSentence });
+  STATE.graph = renderGraph(doc, els.graphView, {
+    onSelectSentence: selectSentence,
+    getModel: () => STATE.model,
+    embedder: STATE.embedder,
+  });
+  renderLog(doc, els.logView, { onSelectSentence: selectSentence });
   const t1 = performance.now();
   const g = doc.projectGraph();
   setStatus(`parsed: ${doc.sentences.length} sentences, ${doc.log.length} events, ` +
     `${g.entities.size} figures, ${g.edges.length} links, ${Math.round(t1 - t0)}ms`);
+
+  // Semantic site-role pass — chrome by role, not a list. Marks off-distribution
+  // figure-less units as sites (DEF role=site) so retrieval skips furniture.
+  // It reads a unit's role with the embedder, so it needs real semantics: the
+  // hash embedder is too weak (it would mismark rare-vocabulary narrative), so
+  // the pass only runs with a capable embedder. The mechanism is the point;
+  // a stronger embedder sharpens the judgement.
+  const capable = STATE.embedder?.id && STATE.embedder.id !== 'hash-embed';
+  if (capable && doc.sentences.length > 20) {
+    try {
+      const sites = await markSites(doc, STATE.embedder);
+      if (sites.length) {
+        markSiteSentences(els.docView, sites);
+        renderLog(doc, els.logView, { onSelectSentence: selectSentence });
+      }
+    } catch { /* role pass is best-effort */ }
+  }
 };
 
-// Tabs: Text ⇄ Graph share the document pane. The reading cursor is shared
-// too — clicking a sentence in Text moves the cursor the Graph reads from.
+// Tabs: Text · Graph · Log share the document pane. The reading cursor is
+// shared — clicking a sentence in Text moves the cursor the Graph reads from.
 const setTab = (name) => {
   STATE.activeTab = name;
   for (const b of els.docTabs.querySelectorAll('.tab')) {
     b.classList.toggle('active', b.dataset.tab === name);
   }
-  const showGraph = name === 'graph';
-  els.graphView.hidden = !showGraph;
-  els.docView.hidden   = showGraph;
-  els.dropzone.style.display = showGraph ? 'none' : '';
-  if (showGraph) STATE.graph?.reheat?.();
+  els.docView.hidden   = name !== 'text';
+  els.graphView.hidden = name !== 'graph';
+  els.logView.hidden   = name !== 'log';
+  els.dropzone.style.display = name === 'text' ? '' : 'none';
+  if (name === 'graph') STATE.graph?.reheat?.();
 };
 
 const send = async () => {
@@ -226,8 +251,9 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// An empty graph placeholder until a document is loaded.
+// Empty placeholders until a document is loaded.
 STATE.graph = renderGraph(null, els.graphView, { onSelectSentence: selectSentence });
+renderLog(null, els.logView, { onSelectSentence: selectSentence });
 
 // Boot: kick the selected model now so first message is instant.
 ensureModel().catch(() => { /* status already reflects failure */ });

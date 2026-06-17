@@ -15,6 +15,15 @@ export const renderDoc = (doc, root) => {
   });
 };
 
+// Units the document DEF'd as sites (furniture) by their semantic role — dim
+// them so the reader sees what was held back from grounding, and why.
+export const markSiteSentences = (root, indices) => {
+  for (const idx of indices) {
+    const el = root.querySelector(`.sentence[data-idx="${idx}"]`);
+    if (el) { el.classList.add('site'); el.title = 'site role — held back from grounding'; }
+  }
+};
+
 export const highlightSources = (root, indices) => {
   for (const el of root.querySelectorAll('.sentence.cited')) {
     el.classList.remove('cited');
