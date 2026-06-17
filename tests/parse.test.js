@@ -6,6 +6,7 @@ import { isChrome } from '../src/parse/chrome.js';
 import { createEntityAdmission } from '../src/parse/entities.js';
 import { segmentSentences } from '../src/parse/sentences.js';
 import { tok } from '../src/parse/tokenize.js';
+import { projectGraph } from '../src/core/project.js';
 
 test('chrome gate catches page numbers and separators', () => {
   assert.ok(isChrome('Page 12'));
@@ -52,4 +53,51 @@ test('parseText keeps text and sentences alongside the log', () => {
   assert.equal(doc.sentences.length, 3);
   assert.equal(doc.text, 'One. Two. Three.');
   assert.equal(doc.docId, 'x');
+});
+
+test('multi-word proper names admit on first sighting', () => {
+  const doc = parseText('Project Gutenberg is great.', { docId: 'm' });
+  assert.ok(doc.admission.isAdmitted('Project Gutenberg'));
+});
+
+test('name-containment is a SYN synthesis: "Gregor" folds into "Gregor Samsa"', () => {
+  const doc = parseText('Gregor Samsa woke. Gregor dressed. Gregor ate.', { docId: 's' });
+  const g = projectGraph(doc.log);
+  assert.equal(g.entities.size, 1, 'one referent, not two');
+  assert.ok(doc.log.filter(e => e.op === 'SYN' && e.kind === 'alias').length >= 1);
+});
+
+test('a lowercase connector never trails a name ("Grete the news" → "Grete")', () => {
+  const doc = parseText('He told Grete the news. Grete waited. Grete left.', { docId: 'c' });
+  assert.ok(doc.admission.isAdmitted('Grete'));
+  assert.ok(!doc.admission.isAdmitted('Grete the'));
+});
+
+test('coreference is a weighted field: a pronoun subject bonds with a coupling weight', () => {
+  const doc = parseText(
+    'Grete Vale entered. Gregor Pike arrived. Gregor stood. Gregor paused. He greeted Grete Vale.',
+    { docId: 'r' });
+  const con = doc.log.filter(e => e.op === 'CON' && e.via === 'greeted')[0];
+  assert.ok(con, 'pronoun subject produced a bond');
+  assert.equal(con.src, 'gregor-pike');           // "He" resolved by the field
+  assert.ok(con.w > 0 && con.w < 1, `coupling is a weight, got ${con.w}`);
+});
+
+test('speech verbs emit SIG, other transitive verbs emit CON', () => {
+  const doc = parseText('Alice told Bob. Alice told Bob. Alice told Bob now.', { docId: 'g' });
+  assert.ok(doc.log.filter(e => e.op === 'SIG' && e.via === 'told').length >= 1);
+});
+
+test('Pass 0 induces the document\'s attribution verbs as REC entries', () => {
+  const doc = parseText('"Run!" shouted Alice. Alice waited. "Why?" pinged Bob.', { docId: 'p' });
+  const recs = doc.log.filter(e => e.op === 'REC' && e.kind === 'attribution-verb');
+  const tokens = recs.map(r => r.token);
+  assert.ok(tokens.includes('shouted'));
+  assert.ok(tokens.includes('pinged'), 'a document-specific verb is learned, not whitelisted');
+});
+
+test('parseText exposes a modality-neutral units list', () => {
+  const doc = parseText('One. Two.', { docId: 'u' });
+  assert.equal(doc.modality, 'text');
+  assert.deepEqual(doc.units, doc.sentences);
 });

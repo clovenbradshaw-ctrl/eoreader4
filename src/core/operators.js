@@ -14,8 +14,10 @@ export const MODES   = Object.freeze(['Differentiate', 'Relate', 'Generate']);
 export const DOMAINS = Object.freeze(['Existence', 'Structure', 'Interpretation']);
 export const GRAINS  = Object.freeze(['Ground', 'Figure', 'Pattern']);
 
+// NUL is non-transformation — it holds a thing as-is. It is NOT "clearing":
+// voiding a fact is a DEF to VOID (an assertion), never a NUL.
 export const OPERATORS = Object.freeze({
-  NUL: Object.freeze({ id: 'NUL', mode: 'Differentiate', domain: 'Existence',      label: 'hold/stall' }),
+  NUL: Object.freeze({ id: 'NUL', mode: 'Differentiate', domain: 'Existence',      label: 'hold (non-transformation)' }),
   SEG: Object.freeze({ id: 'SEG', mode: 'Differentiate', domain: 'Structure',      label: 'resplit' }),
   DEF: Object.freeze({ id: 'DEF', mode: 'Differentiate', domain: 'Interpretation', label: 'assert/define' }),
   SIG: Object.freeze({ id: 'SIG', mode: 'Relate',        domain: 'Existence',      label: 'attribute' }),

@@ -108,6 +108,10 @@ const computeProjection = (log, frame) => {
           via:  e.via,
           seq:  e.seq,
           sentIdx: e.sentIdx,
+          // Coupling: a referent resolved by field rather than by name carries
+          // a sub-unit weight. The projection measures the field scaled by it;
+          // a certain bond has no `w` and couples at 1.
+          coupling: e.w == null ? 1 : e.w,
         });
         break;
       case 'SYN':
@@ -116,9 +120,10 @@ const computeProjection = (log, frame) => {
         // disambiguated here: relation edges are CON; SYN is for merges.
         if (e.kind === 'merge') parent.set(find(e.from), find(e.to));
         break;
-      // NUL: hold — does not project to the graph.
+      // NUL: non-transformation — the thing is held as-is, not turned into
+      //   graph structure and not cleared. (Voiding would be a DEF to VOID.)
       // SEG: handled in the first pass.
-      // EVA, REC: live in the rules ledger, not in this projection.
+      // EVA, REC: live in the rules ledger (conventions), not in this projection.
     }
   }
 
@@ -131,9 +136,11 @@ const computeProjection = (log, frame) => {
     merged.set(root, m);
   }
 
-  // Edge weight = log-sightings on both ends, with cursor-distance decay
-  // (γ) applied as in engine.js Pass 2.5, gated by a weight floor. Both
-  // come from frame.rules — the projection reads no module scope.
+  // Edge weight is a field measurement, not a stored fact: bilinear in the
+  // endpoint log-mass, scaled by the bond's coupling, falling off with an
+  // exponential γ kernel in reading distance from the cursor (engine.js
+  // Pass 2.5), gated by a weight floor. Everything is read from frame.rules —
+  // the projection touches no module scope.
   const cursor = (frame.cursor == null || !isFinite(frame.cursor)) ? Infinity : frame.cursor;
   const γ      = frame.rules.decay_gamma;
   const floor  = frame.rules.edge_weight_floor;
@@ -143,7 +150,7 @@ const computeProjection = (log, frame) => {
     const f = find(e.from), t = find(e.to);
     const fS = merged.get(f)?.sightings || 1;
     const tS = merged.get(t)?.sightings || 1;
-    let w = Math.log(1 + fS) + Math.log(1 + tS);
+    let w = (Math.log(1 + fS) + Math.log(1 + tS)) * (e.coupling ?? 1);
     if (isFinite(cursor) && e.sentIdx != null) {
       const dist = Math.abs(cursor - e.sentIdx);
       w *= Math.pow(γ, dist);
