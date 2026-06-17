@@ -1,0 +1,85 @@
+// The audit view. One row per turn; click to expand the verbatim record.
+// The whole point of the audit is to show what actually happened — so
+// don't summarize. Show the prompt, show the raw output, show the bindings.
+
+export const renderAuditTurn = (root, turn) => {
+  // Replace existing row if we've seen this turn before; otherwise prepend.
+  const existing = root.querySelector(`.turn[data-id="${turn.id}"]`);
+  const el = renderRow(turn);
+  if (existing) existing.replaceWith(el);
+  else if (root.firstChild) root.insertBefore(el, root.firstChild);
+  else root.appendChild(el);
+};
+
+export const renderEmptyAudit = (root) => {
+  root.innerHTML = '<div class="empty">Run a turn to see the trail.</div>';
+};
+
+export const exportAudit = (audit) => {
+  const blob = new Blob([audit.exportJSONL()], { type: 'application/jsonl' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `eoreader4-audit-${Date.now()}.jsonl`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+const renderRow = (turn) => {
+  const el = document.createElement('div');
+  el.className = 'turn';
+  el.dataset.id = turn.id;
+  const route = turn.route || 'in flight';
+  const dur   = turn.durationMs != null ? `${turn.durationMs}ms` : '';
+  el.innerHTML = `
+    <div class="q">
+      <span>${escapeHtml(turn.question)}</span>
+      <span class="route">${route} ${dur}</span>
+    </div>
+    <div class="body"></div>
+  `;
+  const q    = el.querySelector('.q');
+  const body = el.querySelector('.body');
+  q.addEventListener('click', () => el.classList.toggle('open'));
+
+  for (const s of turn.steps) {
+    const line = document.createElement('div');
+    line.className = 'step';
+    line.innerHTML =
+      `<span class="name">${escapeHtml(s.name)}</span>` +
+      `<span class="ms">+${s.t}ms</span>` +
+      `<span class="data">${escapeHtml(stringify(s.data))}</span>`;
+    body.appendChild(line);
+  }
+  if (turn.prompt) {
+    body.insertAdjacentHTML('beforeend',
+      `<div class="label">prompt</div><div class="raw">${escapeHtml(turn.prompt)}</div>`);
+  }
+  if (turn.rawOutput) {
+    body.insertAdjacentHTML('beforeend',
+      `<div class="label">raw output</div><div class="raw">${escapeHtml(turn.rawOutput)}</div>`);
+  }
+  if (turn.bound && turn.bound.length) {
+    body.insertAdjacentHTML('beforeend',
+      `<div class="label">bound</div><div class="raw">${escapeHtml(stringify(turn.bound, 2))}</div>`);
+  }
+  if (turn.vetoes && turn.vetoes.length) {
+    body.insertAdjacentHTML('beforeend',
+      `<div class="label">vetoes</div><div class="raw">${escapeHtml(stringify(turn.vetoes, 2))}</div>`);
+  }
+  return el;
+};
+
+const stringify = (x, indent) => {
+  try {
+    return JSON.stringify(x, null, indent);
+  } catch {
+    return String(x);
+  }
+};
+
+const escapeHtml = (s) =>
+  String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
