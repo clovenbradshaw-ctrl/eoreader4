@@ -24,12 +24,19 @@ export const renderEmptyAudit = (root) => {
 };
 
 export const exportAudit = (audit) => {
-  const blob = new Blob([audit.exportJSONL()], { type: 'application/jsonl' });
+  const text = audit.exportJSONL();
+  if (!text) return;            // nothing run yet — don't hand back an empty file
+  const blob = new Blob([text], { type: 'application/x-ndjson' });
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href = url;
   a.download = `eoreader4-audit-${Date.now()}.jsonl`;
+  // The anchor must be IN the document for the click to start a download in
+  // Firefox/Safari — a detached node only works in Chromium. Append, click, remove.
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
