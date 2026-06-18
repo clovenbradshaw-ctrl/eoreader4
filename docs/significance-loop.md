@@ -128,11 +128,17 @@ Event shapes (`enact/loop.js`):
   γ-decayed semantic prior — so frames restructure on the turns the γ-mass reader
   misses. The loop, frames, strain, cross-layer testing, and arrow of time are
   **unchanged**; only `read` got deeper. Under the hash organ it falls back to the
-  skeleton (the firewall). **Calibration seam:** the meaning surprise lives on a
-  different scale than γ-mass (sentence cosines cluster higher), so the confirm band
-  and thresholds are calibrated *per reader* against goldens with the live embedder
-  — the sandbox can't reach the model weights, so the constants here are the
-  skeleton's; the meaning reader's are a tuning pass once it runs on real text.
+  skeleton (the firewall). **Calibration (done, on real embeddings):** the meaning
+  surprise (1 − cos) lives far above the γ-mass band — on real all-MiniLM
+  embeddings of Austen the median is ≈ 0.59, where the skeleton's 0.25 would make
+  every line strain. So the meaning reader **self-calibrates its confirm band to
+  the median** of the text's own surprise (a *normal step* in this meaning space;
+  half the lines confirm), and its REC thresholds default to the meaning scale
+  (`MEANING_THRESHOLDS`), measured on the worked corpus. The result, validated on
+  1296 real sentences: the γ-mass skeleton reads turbulently (a proposition REC
+  every ~7 lines, non-converging) while the calibrated meaning reader reads calmly
+  and **converges** (every ~108 lines, no thrash) — the turbulence was the thin
+  signal, and meaning-distance settles it. Both still overridable per `read`.
   Downward influence is still thin: the cross-layer EVA records the high being held
   or strained by the low, but the high does not yet *re-weight* the low's surprise —
   the next deepening, meaning-distance against the frame's own terms.

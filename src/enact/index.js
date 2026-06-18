@@ -67,34 +67,57 @@ export const enactedReadingTo = (doc, cursor, opts) => {
   return { ...fold, stats: loopStats(events), events, reader: 'cheap' };
 };
 
+// The meaning reader's REC thresholds, on its own scale. The meaning surprise
+// (1 − cos) lives far above the γ-mass band, so the skeleton's 1.5/4 would fire on
+// every line; these are measured against the worked corpus (Pride and Prejudice,
+// real all-MiniLM embeddings) to a converging, non-thrashing reading — the
+// document frame restructuring on the order of once per few chapters. Measured,
+// per reader, overridable (§11).
+export const MEANING_THRESHOLDS = Object.freeze({ proposition: 5, document: 16 });
+
 // The DEEP reading — the same fold, driven by the meaning reader instead of the
 // γ-mass skeleton (§11). When the embedder measures meaning, the surprise is the
-// prediction error in the centroids' space, so frames restructure on semantic
-// turns the cheap reader is blind to. Async (embedding is async); the meaning log
-// is built once per (doc, embedder) and cached, so subsequent cursor folds are
-// the same cheap replay. Under the hash organ it falls back to the cheap reader —
+// prediction error in meaning space, so frames restructure on semantic turns the
+// cheap reader is blind to. Async (embedding is async); the per-clause embeddings
+// are built once per (doc, embedder) and cached, so subsequent cursor folds only
+// re-run the cheap loop. Under the hash organ it falls back to the cheap reader —
 // callers can always await this and get an honest result either way.
-const MEANING_LOGS = new WeakMap();   // doc → Map<embedderId, events>
-export const enactedReadingMeaning = async (doc, cursor, { embedder, ...opts } = {}) => {
-  if (!embedder?.measuresMeaning) return enactedReadingTo(doc, cursor, opts);   // firewall → skeleton
+const MEANING_READS = new WeakMap();   // doc → Map<embedderId, { surprise, terms } | null>
+export const enactedReadingMeaning = async (doc, cursor, { embedder, confirmBand, thresholds, ...opts } = {}) => {
+  const fallback = () => enactedReadingTo(doc, cursor, { confirmBand, thresholds, ...opts });
+  if (!embedder?.measuresMeaning) return fallback();           // firewall → skeleton
 
-  let perDoc = MEANING_LOGS.get(doc);
-  if (!perDoc) { perDoc = new Map(); MEANING_LOGS.set(doc, perDoc); }
-  let events = perDoc.get(embedder.id);
-  if (!events) {
-    const mr = await buildMeaningRead(doc, embedder, {
-      termsAt: (c) => readingAt(doc, c).predicted?.figures || [],
-    });
-    if (!mr) return enactedReadingTo(doc, cursor, opts);       // could not measure → skeleton
-    const units = doc.units || doc.sentences || [];
-    const loop = createEnactedLoop({
-      read: (c) => ({ surprise: mr.surprise[c], terms: mr.terms[c] }),
-      ...opts,
-    });
-    if (units.length) loop.runTo(units.length - 1);
-    events = loop.events;
-    perDoc.set(embedder.id, events);
+  let perDoc = MEANING_READS.get(doc);
+  if (!perDoc) { perDoc = new Map(); MEANING_READS.set(doc, perDoc); }
+  let mr = perDoc.get(embedder.id);
+  if (mr === undefined) {
+    mr = await buildMeaningRead(doc, embedder, { termsAt: (c) => readingAt(doc, c).predicted?.figures || [] });
+    perDoc.set(embedder.id, mr);                               // cache the embeddings (incl. a null result)
   }
-  const fold = replayFrames(events, cursor);
-  return { ...fold, stats: loopStats(events), events, reader: 'meaning' };
+  if (!mr) return fallback();                                  // could not measure → skeleton
+
+  // Self-calibrate the confirm band to a "normal step" in THIS text's meaning
+  // space — the median surprise — because the 1 − cos scale is text- and
+  // embedder-dependent and far above the γ-mass band (sentence cosines cluster).
+  // Half the lines confirm, half strain, the same balance the γ-mass band struck
+  // at 0.25. Thresholds default to the meaning scale, calibrated on the corpus.
+  const band = confirmBand ?? medianOf(mr.surprise);
+  const units = doc.units || doc.sentences || [];
+  const loop = createEnactedLoop({
+    read: (c) => ({ surprise: mr.surprise[c], terms: mr.terms[c] }),
+    confirmBand: band,
+    thresholds: thresholds ?? MEANING_THRESHOLDS,
+    ...opts,
+  });
+  if (units.length) loop.runTo(units.length - 1);
+  const fold = replayFrames(loop.events, cursor);
+  return { ...fold, stats: loopStats(loop.events), events: loop.events, reader: 'meaning', confirmBand: round3(band) };
 };
+
+const medianOf = (xs) => {
+  if (!xs?.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+const round3 = (x) => Math.round(x * 1000) / 1000;
