@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createCorefField } from '../src/parse/coref.js';
+import { scanDescriptors } from '../src/parse/relations.js';
+import { parseText } from '../src/parse/index.js';
 import { areDisjoint } from '../src/read/relation-types.js';
 
 // The standing-descriptor channel, at the FIELD layer. These exercise the
@@ -101,4 +103,40 @@ test('a named owner is sticky and beats a later pronoun-guessed owner', () => {
   f.noteDescriptor('sister', 130, 'klaus-wrong');                    // a later pronoun guess must not overwrite
   // The owner-distinctness guard still keys on the sticky named owner.
   assert.equal(f.unifyDescriptor('sister', 'gregor-samsa', 140, { compatible: true }), null);
+});
+
+// ---------------------------------------------------------------------------
+// Extraction half (a): role epithets without adjacent names → HELD descriptors.
+
+test('scanDescriptors reads non-apposition role epithets, skipping apposition and plurals', () => {
+  assert.deepEqual(scanDescriptors('His sister had left food.'),
+    [{ roleKey: 'sister', owner: { kind: 'pron', pron: 'his' } }]);
+  assert.deepEqual(scanDescriptors("Gregor's sister was kind."),
+    [{ roleKey: 'sister', owner: { kind: 'name', name: 'Gregor' } }]);
+  assert.deepEqual(scanDescriptors('his sister Grete left.'), []);      // apposition → kinship CON path
+  assert.deepEqual(scanDescriptors('his sister, Grete, left.'), []);    // comma apposition too
+  assert.deepEqual(scanDescriptors('his sisters argued.'), []);         // plural is not a single role
+  assert.deepEqual(scanDescriptors('The fear of God.'), []);            // not a role term
+});
+
+test('the pipeline records a held descriptor with a sticky named owner, depositing on no name', () => {
+  // No apposition anywhere — the Metamorphosis pattern in miniature.
+  const doc = parseText(
+    "Gregor Samsa woke. His sister had left food. Gregor worried. Gregor's sister was kind. Grete entered. Grete cooked.",
+    { docId: 'm' });
+  const dr = doc.corefField.descriptorState('sister');
+  assert.equal(dr.ownerId, 'gregor-samsa');     // "his" resolved under the margin guard, then
+  assert.equal(dr.ownerNamed, true);            // "Gregor's sister" made it sticky/authoritative
+  assert.equal(dr.bound, null, 'extraction holds the role — it does not bind a name (that is the trigger)');
+  // The §8 line: a held descriptor deposits into NO name's channel.
+  const grete = doc.corefField.field(5).find(c => c.id === 'grete');
+  assert.equal(grete.conversational, 0, 'nothing was deposited onto Grete — binding is phase (b)');
+});
+
+test('the Frame-A margin guard withholds an ambiguous pronoun owner', () => {
+  // Two referents equally hot when "his sister" fires → no unambiguous winner.
+  const doc = parseText('Gregor Samsa spoke. Klaus Berg spoke. His sister waited.', { docId: 'a' });
+  const dr = doc.corefField.descriptorState('sister');
+  assert.ok(dr, 'the role is still recorded as held');
+  assert.equal(dr.ownerId, null, 'a wrong-but-weak owner is worse than none — held without an owner');
 });

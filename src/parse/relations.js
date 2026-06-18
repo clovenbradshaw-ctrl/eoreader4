@@ -164,6 +164,37 @@ const kinshipEdges = (sentence, admission, coref) => {
   return out;
 };
 
+// Standing-description scan — the third coref channel's extraction half. A role
+// epithet with NO adjacent name is a STANDING DESCRIPTION, not an apposition:
+// "his sister", "Gregor's sister" — but NEVER "his sister Grete" / "his sister,
+// Grete", which are apposition the kinship CON path already binds. The owner is
+// reported, never resolved here: a NAME owner is authoritative; a PRONOUN owner
+// is a guess the caller resolves under a margin guard. Reuses the KIN lexicon.
+// This deposits nothing on its own — the pipeline turns each sighting into a held
+// descriptor; binding a name to the role is the trigger's job, not this scan's.
+const DESC_NAME_RE = new RegExp(String.raw`\b([A-Z][a-zA-Z]+)['’]s\s+(${KIN})\b`, 'gi');
+const DESC_PRON_RE = new RegExp(String.raw`\b(his|her|their|its)\s+(${KIN})\b`, 'gi');
+
+export const scanDescriptors = (sentence) => {
+  const s = String(sentence || '');
+  // Apposition iff the role is immediately followed (after optional comma/space)
+  // by a capitalised name — that case belongs to the kinship CON path, not here.
+  const isApposition = (endIdx) => /^[,\s]+[A-Z][a-z]/.test(s.slice(endIdx));
+  const out = [];
+  let m;
+  const reN = new RegExp(DESC_NAME_RE.source, 'gi');
+  while ((m = reN.exec(s)) !== null) {
+    if (isApposition(m.index + m[0].length)) continue;
+    out.push({ roleKey: m[2].toLowerCase(), owner: { kind: 'name', name: m[1] } });
+  }
+  const reP = new RegExp(DESC_PRON_RE.source, 'gi');
+  while ((m = reP.exec(s)) !== null) {
+    if (isApposition(m.index + m[0].length)) continue;
+    out.push({ roleKey: m[2].toLowerCase(), owner: { kind: 'pron', pron: m[1].toLowerCase() } });
+  }
+  return out;
+};
+
 export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // Speech / copula / modifier classification comes from the conventions ledger
   // when one is supplied (its seed ∪ Pass-0 learned), falling back to the seeds.

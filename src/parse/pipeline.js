@@ -15,11 +15,16 @@ import { createLog }            from '../core/log.js';
 import { segmentSentences }     from './sentences.js';
 import { isChrome }             from './chrome.js';
 import { createEntityAdmission }from './entities.js';
-import { parseRelations }       from './relations.js';
+import { parseRelations, scanDescriptors } from './relations.js';
 import { argumentSpanSeg }      from './proposition.js';
 import { createCorefField }     from './coref.js';
 import { tok }                  from './tokenize.js';
 import { createConventions, induceAttributionVerbs } from '../conventions/index.js';
+
+// A pronoun-resolved descriptor owner ("his sister") is taken only when the prior
+// field's top candidate outweighs the runner-up by this ratio — an unambiguous
+// winner. Below it the descriptor is held with no owner, never a confident guess.
+const DESC_OWNER_MARGIN = 2;
 
 export const createParser = ({
   languageModules    = {},
@@ -118,6 +123,23 @@ export const createParser = ({
       };
       const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier };
       for (const rel of parseRelations(sent, admission, coref, relOpts)) candidates.push({ rel, sentIdx });
+
+      // Standing descriptors — the third coref channel (extraction half). A role
+      // epithet with no adjacent name ("his sister", "Gregor's sister") is a HELD
+      // role: it deposits into NO name's channel here. A named owner is sticky and
+      // authoritative; a pronoun owner is taken only when it is the unambiguous
+      // winner of the PRIOR field (the Frame-A margin guard — a wrong-but-weak
+      // owner is worse than none). Binding a name to the role is the trigger's job.
+      for (const desc of scanDescriptors(sent)) {
+        let ownerId = null, named = false;
+        if (desc.owner.kind === 'name' && admission.isAdmitted(desc.owner.name)) {
+          ownerId = admission.idOf(desc.owner.name); named = true;
+        } else if (desc.owner.kind === 'pron') {
+          const [top, second] = priorField;
+          if (top && (!second || top.w >= DESC_OWNER_MARGIN * second.w)) ownerId = top.id;
+        }
+        corefField.noteDescriptor(desc.roleKey, sentIdx, ownerId, { named });
+      }
     });
 
     // Move 3 — the relation recurrence gate (ReVerb's lexical constraint). A real
@@ -166,6 +188,7 @@ export const createParser = ({
       // regions; the operators, log, graph and reading levels are unchanged.
       units: sentences,
       modality: 'text',
+      corefField,    // the referent field, incl. held standing descriptors (inspection)
       state, // exposed for inspection; not for outside mutation
     };
   };

@@ -175,9 +175,16 @@ export const createCorefField = ({
     return !!me && !!top && me.id === top.id && me.w >= floor;
   };
 
+  // Read a held descriptor's state (owner, accumulated mass, bound name) — a
+  // frozen copy for inspection and for the trigger's by-elimination reasoning.
+  const descriptorState = (roleKey) => {
+    const d = descriptors.get(roleKey);
+    return d ? Object.freeze({ ...d }) : null;
+  };
+
   return {
     note, noteConversational, reinforce,
-    noteDescriptor, unifyDescriptor,        // the standing-descriptor channel
+    noteDescriptor, unifyDescriptor, descriptorState,  // the standing-descriptor channel
     field, fieldGrounded, survivesSubtraction,
   };
 };
