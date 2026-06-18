@@ -53,6 +53,22 @@ test('the meaning reader RECs on a turn the γ-mass reader misses', async () => 
     'the meaning reader restructures on a sense-turn the γ-mass reader is blind to');
 });
 
+// The calibration: the meaning surprise lives far above the γ-mass band, so the
+// reader self-calibrates its confirm band to the median — "a normal step in this
+// text's meaning" — not the skeleton's 0.25 (validated on real embeddings: a novel
+// reads turbulently at 0.25, calmly and convergently at its median ≈ 0.6).
+test('the meaning reader self-calibrates its confirm band to the median surprise', async () => {
+  const vecOf = (t) => (sea(t) ? new Float32Array([0, 1]) : new Float32Array([1, 0]));
+  const doc = parseText('A calm day. A calm day. A calm day. A ship sailed. The ship sank. The ship burned.', { docId: 'b' });
+  const mr = await buildMeaningRead(doc, stub(vecOf));
+  const s = [...mr.surprise].sort((a, b) => a - b);
+  const med = s.length % 2 ? s[s.length >> 1] : (s[(s.length >> 1) - 1] + s[s.length >> 1]) / 2;
+  const deep = await enactedReadingMeaning(doc, doc.sentences.length - 1, { embedder: stub(vecOf) });
+  assert.ok(Math.abs(deep.confirmBand - Math.round(med * 1000) / 1000) < 0.002,
+    `band self-calibrated to the median ${med}, got ${deep.confirmBand}`);
+  assert.notEqual(deep.confirmBand, 0.25, 'not the γ-mass band');
+});
+
 // enactedReadingMeaning degrades honestly: a non-measuring embedder → the skeleton.
 test('enactedReadingMeaning falls back to the cheap reader under the hash organ', async () => {
   const doc = parseText('Anna walked. Anna walked. Anna ran. Anna ran.', { docId: 'f' });

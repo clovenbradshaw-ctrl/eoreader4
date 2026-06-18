@@ -18,27 +18,19 @@
 //     owner to the named relative through the kin term.
 
 import { scanEntities } from './entities.js';
+import { SEED_COPULA, SEED_MODIFIER, SEED_SPEECH } from '../conventions/index.js';
 
-const COPULAR = new Set(['is', 'are', 'was', 'were', 'be', 'been']);
-
-const SPEECH = new Set([
-  'said', 'says', 'say', 'asked', 'asks', 'replied', 'replies', 'told', 'tells',
-  'cried', 'cries', 'shouted', 'whispered', 'muttered', 'answered', 'answers',
-  'called', 'calls', 'exclaimed', 'declared', 'added', 'continued', 'thought',
-  'thinks', 'wondered', 'murmured', 'repeated', 'insisted', 'remarked',
-  'observed', 'screamed', 'begged', 'urged', 'warned', 'promised', 'admitted',
-  'confessed', 'announced', 'wrote', 'writes',
-]);
-
-// Leading adverbs / auxiliaries to step over when locating the head verb.
-// Copulas are deliberately absent — they are their own (DEF) branch.
-const SKIP = new Set([
-  'then', 'now', 'also', 'just', 'once', 'soon', 'suddenly', 'slowly', 'quietly',
-  'gently', 'again', 'still', 'only', 'even', 'simply', 'quickly', 'immediately',
-  'finally', 'however', 'never', 'always', 'often', 'already', 'almost', 'nearly',
-  'had', 'has', 'have', 'having', 'would', 'could', 'will', 'shall', 'should',
-  'did', 'does', 'do', 'not', 'must', 'might', 'may', 'can',
-]);
+// The verb-classification word-lists live in the conventions ledger (the home for
+// the language-specific stuff), seeded and learnable. The parser holds NO list of
+// its own: it takes predicates, defaulting to the ledger's seeds so a standalone
+// call (the edge-grounding veto) still works. The pipeline hands it the live
+// conventions, so a document's learned dialect flows straight in.
+const COPULA_SEED   = new Set(SEED_COPULA);     // is/am/was/… → DEF, never a relation
+const SPEECH_SEED   = new Set(SEED_SPEECH);     // said/asked/… → SIG
+const MODIFIER_SEED = new Set(SEED_MODIFIER);   // adverbs/intensifiers/auxiliaries to step over
+const defIsCopula   = (w) => COPULA_SEED.has(w);
+const defIsSpeech   = (w) => SPEECH_SEED.has(w);
+const defIsModifier = (w) => MODIFIER_SEED.has(w);
 
 const SUBJECT_PRONOUN = new Set(['He', 'She', 'They', 'We', 'It', 'I', 'You']);
 
@@ -49,6 +41,7 @@ const NOT_HEAD = new Set([
   'by', 'of', 'in', 'on', 'at', 'to', 'from', 'with', 'for', 'as', 'than', 'about',
   'and', 'but', 'or', 'nor', 'so', 'because', 'although', 'while', 'if', 'unless',
   'a', 'an', 'the', 'his', 'her', 'their', 'its', 'this', 'these', 'those',
+  'my', 'your', 'our', 'mine', 'yours', 'ours',
 ]);
 
 const KIN = '(?:father|mother|sister|brother|son|daughter|wife|husband|parents|' +
@@ -105,17 +98,23 @@ const coupling = (subj) =>
 // object spans back into the sentence (the logged argument-span SEG, §3). The
 // existing fields (verb, rest, copular) are unchanged, so the edge-grounding
 // veto's reuse of this scan is unaffected.
-export const headVerb = (text) => {
+export const headVerb = (text, { isCopula = defIsCopula, isModifier = defIsModifier } = {}) => {
   let rest = text.replace(/^[\s,]+/, '');
   let consumed = text.length - rest.length;             // chars of `text` walked past
-  for (let guard = 0; guard < 4; guard++) {
+  // The verb guard, ReVerb's relation-phrase constraint by hand: step over the
+  // adverbs/intensifiers/auxiliaries (the modifier list), route a copula to its
+  // own DEF branch, and reject a preposition/relative as a head. What remains is
+  // verb-headed — or, if we only ever found modifiers, nothing, and that clause is
+  // no relation. The guard limit is generous because a clause can stack several
+  // modifiers ("had not really quite walked").
+  for (let guard = 0; guard < 6; guard++) {
     const m = rest.match(/^([A-Za-z][a-zA-Z'’]*)\b/);
     if (!m) return null;
     const w = m[1].toLowerCase();
     const at = consumed;                                // verb token start in `text`
     const restStart = at + m[0].length;                 // post-verb text start in `text`
-    if (COPULAR.has(w)) return { verb: w, rest: rest.slice(m[0].length), copular: true, at, restStart };
-    if (SKIP.has(w)) {
+    if (isCopula(w)) return { verb: w, rest: rest.slice(m[0].length), copular: true, at, restStart };
+    if (isModifier(w)) {
       const sliced  = rest.slice(m[0].length);
       const trimmed = sliced.replace(/^[\s,]+/, '');
       consumed += m[0].length + (sliced.length - trimmed.length);
@@ -166,16 +165,17 @@ const kinshipEdges = (sentence, admission, coref) => {
 };
 
 export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
-  // Speech classification comes from the learned conventions ledger when one
-  // is supplied (Pass 0 induction), falling back to the built-in seed set.
-  const isSpeech = opts.isSpeech || ((v) => SPEECH.has(v));
+  // Speech / copula / modifier classification comes from the conventions ledger
+  // when one is supplied (its seed ∪ Pass-0 learned), falling back to the seeds.
+  const isSpeech = opts.isSpeech || defIsSpeech;
+  const verbOpts = { isCopula: opts.isCopula || defIsCopula, isModifier: opts.isModifier || defIsModifier };
   const out = [];
   const s = sentence.trim();
 
   const subj = leadingSubject(s, admission, coref);
   if (subj && subj.id) {
     const after = s.slice(subj.end);
-    const head = headVerb(after);
+    const head = headVerb(after, verbOpts);
     const w = coupling(subj);
     if (head && head.copular) {
       const pred = head.rest.replace(/^[\s,]+/, '').replace(/[.!?]+\s*$/, '').trim();

@@ -12,3 +12,4 @@ export { createPhasepostClassifier, perceptionDeposit, DEFAULT_FLOORS,
          createCellAdjacency, ADJACENCY_FLOOR } from './phasepost.js';
 export { BANDS, BAND_OPERATORS, bandOf, partitionCells, isDesert, isMisfireCell } from './bands.js';
 export { loadCentroids, CENTROID_SCHEMA } from './centroids.js';
+export { bandPull, bandCentroids } from './bandpull.js';
