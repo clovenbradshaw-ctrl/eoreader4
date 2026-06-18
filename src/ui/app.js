@@ -221,8 +221,13 @@ els.backend.addEventListener('change', () => {
   ensureModel().catch(() => { /* status already reflects failure */ });
 });
 
-// Audit: live-render on every step / finish.
-STATE.audit.subscribe((turn) => renderAuditTurn(els.auditView, turn));
+// Audit: live-render on every step / finish. Export stays disabled until there
+// is at least one turn, so the button never hands back an empty file.
+els.exportBtn.disabled = true;
+STATE.audit.subscribe((turn) => {
+  renderAuditTurn(els.auditView, turn);
+  els.exportBtn.disabled = false;
+});
 els.exportBtn.addEventListener('click', () => exportAudit(STATE.audit));
 renderEmptyAudit(els.auditView);
 
