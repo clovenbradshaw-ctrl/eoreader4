@@ -5,14 +5,18 @@
 // them requires embedding it in that SAME space (see model/embed.js). The
 // bundle is fetched once and cached in IndexedDB; a warm load reuses it.
 //
-// HONEST DEFAULT: this repository does not ship verified centroid vectors. The
-// per-cell exemplars that would build them live in an unfetchable Drive folder
-// (the registry's own data_source says so), and their construction grain —
-// single-verb (lexical) vs verb-in-clause — must be verified before the
-// vectors can be trusted (§10). Until a verified bundle is dropped at the URL
-// below, loadCentroids returns null, the classifier holds at no-commit, and the
-// boot animation reports the geometric reader as unavailable. That is the
-// correct state, not a failure to paper over.
+// INSTALLED: data/centroids-27.json ships a VERIFIED clause-grain bundle, built
+// by scripts/build-centroids.mjs from the lexical-analysis project's archetypes
+// (mean-pooled top-100 exemplars per cell; that script's header carries the full
+// provenance — source repo and commit, the OP(Stance, Site) → OP_Stance_Site
+// rewrite, and the ALT→DEF / SUP→EVA operator rename). The construction grain is
+// verified as clause: the exemplars are full clauses, not lexical single-verbs,
+// so the classifier embeds the clause and the cosine is measured in-space (§10).
+//
+// It still degrades, never fails: if the bundle is ever absent or malformed,
+// loadCentroids returns null, the classifier holds at no-commit, and the boot
+// animation reports the geometric reader as unavailable — the honest state, not
+// a fake checkmark papered over a missing instrument.
 
 // The shape a verified bundle must take. Documented here so one can be dropped
 // in without reading the loader. Construction grain is first-class: the
