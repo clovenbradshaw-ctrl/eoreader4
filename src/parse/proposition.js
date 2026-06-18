@@ -52,6 +52,7 @@ export const argumentSpanSeg = (args, sentIdx, {
   subject: args.subject,
   verb: args.verb,
   object: args.object,
+  relation: args.relation,   // the subject…object stretch — the span the Pattern points to
 });
 
 // positionElements — §4 Step C, the structural half. Assign the elements to the
@@ -77,11 +78,17 @@ export const positionElements = (args, { op = args?.op || 'CON' } = {}) => {
   });
   // Ground holds the grounded existents that actually resolved to a referent.
   const ground = [args?.subject, args?.object].filter((e) => e && e.id);
+  // The Pattern element is the relation across the field: it carries the verbatim
+  // relation SPAN (subject…object, text + offsets) so a renderer points it back to
+  // the original content, and the bond `op` (the band the held cell will sit in).
+  const relation = args?.relation
+    ? { text: args.relation.text, start: args.relation.start, end: args.relation.end }
+    : (args?.verb?.text ? { text: args.verb.text } : null);
   return Object.freeze({
     ground:  Object.freeze({ ...held('Ground'),  elements: Object.freeze(ground) }),
     figure:  Object.freeze({ ...held('Figure'),  elements: Object.freeze([args?.verb].filter(Boolean)) }),
     pattern: Object.freeze({ ...held('Pattern'),
-                             elements: Object.freeze([{ relation: args?.verb?.text ?? null, op }]) }),
+                             elements: Object.freeze([{ relation: relation?.text ?? null, span: relation, op }]) }),
     assigned_by: 'structure',   // the positions are grammar; geometry only names the cells
   });
 };
@@ -93,5 +100,8 @@ export const positionElements = (args, { op = args?.op || 'CON' } = {}) => {
 export const argumentSpansHold = (seg, sentence) => {
   if (!seg || seg.kind !== 'argspan' || typeof sentence !== 'string') return false;
   const ok = (sp) => !sp || sentence.slice(sp.start, sp.end) === sp.text;
-  return ok(seg.subject) && ok(seg.verb) && ok(seg.object);
+  // The relation span walks back too — a Pattern that points to original content is
+  // only honest if its offsets still slice to the stored stretch. Tolerant of an
+  // older seg without one (ok(undefined) is true), so the check is back-compatible.
+  return ok(seg.subject) && ok(seg.verb) && ok(seg.object) && ok(seg.relation);
 };

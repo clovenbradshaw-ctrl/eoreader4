@@ -64,10 +64,28 @@ test('positionElements assigns by structure and holds the cells at no-commit', (
     'subject and object are the grounded existents (Ground)');
   assert.equal(p.figure.elements[0].text, 'greeted', 'the verb is the act foregrounded (Figure)');
   assert.equal(p.pattern.elements[0].op, 'CON', 'the relation is the bond (Pattern)');
+  // The Pattern points at a verbatim span of the original line — the subject…object
+  // stretch — not a synthesized label. Its offsets slice back to the stored text.
+  const span = p.pattern.elements[0].span;
+  assert.equal(p.pattern.elements[0].relation, 'Grete Vale greeted Gregor Pike', 'the verbatim relation span');
+  assert.equal(doc.sentences[seg.sentIdx].slice(span.start, span.end), span.text, 'the span slices back to the line');
   // The lane: every cell is held at no-commit — geometry names them only when live.
   for (const pos of [p.ground, p.figure, p.pattern]) {
     assert.equal(pos.cell, null, 'cell-naming is meaning-only — no-commit under the hash organ');
   }
+});
+
+// §3 — the relation span is a first-class argument span: verbatim, with offsets, and
+// it walks back to the line by the same witness chain the other three spans do.
+test('the relation span is logged verbatim and walks back to the line', () => {
+  const doc = parseText('Grete Vale greeted Gregor Pike.', { docId: 'p' });
+  const seg = argspans(doc)[0];
+  const sentence = doc.sentences[seg.sentIdx];
+  assert.ok(seg.relation, 'the SEG carries the relation span');
+  assert.equal(sentence.slice(seg.relation.start, seg.relation.end), 'Grete Vale greeted Gregor Pike');
+  assert.ok(argumentSpansHold(seg, sentence), 'the relation span holds with the others');
+  // Tamper with the relation offset and the chain no longer holds.
+  assert.ok(!argumentSpansHold({ ...seg, relation: { ...seg.relation, end: seg.relation.end + 3 } }, sentence));
 });
 
 // §8 — speech routes to SIG and still logs its argument spans.
