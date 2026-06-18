@@ -55,11 +55,13 @@ the cursor, `confidence` is the extractor's — defeasible and re-perceivable.
   against the three grain bands for its three cells. Unchanged; it lives in
   `classify/` and holds at no-commit until MiniLM is live.
 - **Step C — element positioning.** `positionElements(args)` assigns the elements
-  to Ground / Figure / Pattern **structurally**: subject and object are the
-  grounded existents (Ground), the verb is the act foregrounded (Figure), the
-  S-V-O relation is the bond (Pattern). The **cell** within each position is named
-  by geometry (centroid argmax in the band) — meaning-only, held at no-commit
-  today.
+  to Ground / Figure / Pattern by an **information-structure** reading of the clause:
+  the **subject is the given** — it sets the terms the clause is predicated of — so it
+  is the Ground; the **object is the new** element picked out and tested against those
+  terms, so it is the Figure; the **verb is the relation** that binds them, the
+  recurring type, so it is the Pattern. Each position then points at one verbatim
+  span. The **cell** within each position is a separate, operator-grain measurement
+  (centroid argmax in the band) — meaning-only, held at no-commit today.
 
 ## The discipline — position is structure, cell is measurement
 
@@ -67,8 +69,8 @@ the cursor, `confidence` is the extractor's — defeasible and re-perceivable.
 > Geometry only **names** the cell and breaks ties. Geometry never reassigns a
 > position that the grammar set.
 
-If the grammar says the verb is the figure, the embedder names *which* figure; it
-does not decide the verb is the ground because it scored higher there.
+If the grammar says the verb is the pattern, the embedder names *which* pattern cell;
+it does not move the verb to the ground because it scored higher there.
 `positionElements` cannot cross the lane — it contains no geometry to overrule the
 grammar; it delivers the positions filled by elements and leaves every cell
 `null`. Under a dark embedder the layer therefore still delivers the three
@@ -98,3 +100,14 @@ structural and logging half is payable today.
   S-V-O) is the open construction-grain question from the phasepost spec; the
   unit-is-the-proposition principle pushes toward the relation in context. Verify
   against the centroid exemplars when the reader is live.
+- **Role positions are not the operator-grain bands.** The Ground / Figure / Pattern
+  *positions* above are an information-structure reading (given / new / relation) of
+  the clause's grammar; the Ground / Figure / Pattern *bands* in `classify/bands.js`
+  are the operator partition the 27 cells live in (Ground = NUL/INS, Figure =
+  SEG/DEF/SIG/EVA, Pattern = CON/SYN/REC). They share three names over two different
+  axes. They coincide at Ground (the subject is an INS existent) and at Pattern for a
+  bond verb (a relating verb is a CON); they diverge at Figure — the object is an
+  existent, not an act. This is a projection of one axis onto grammar, untested
+  against the centroid exemplars; when the meaning reader is live the cell it names is
+  the grain measurement, not the role element. (`positionElements` reports
+  `assigned_by: 'information-structure'` to mark which axis it speaks.)

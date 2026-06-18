@@ -336,8 +336,9 @@ comments on gates that were on.
   `SEG kind:'argspan'` event *before* the bond, with offsets back into the
   sentence, so a CON walks back to the text its endpoints were read from (the
   witness chain no longer stops at the bond). `positionElements` fills Ground /
-  Figure / Pattern structurally — subject·object → Ground, verb → Figure,
-  relation → Pattern — holding the cells at no-commit until the meaning reader
+  Figure / Pattern by information structure — subject (given) → Ground, object
+  (new) → Figure, verb (relation) → Pattern, a role axis distinct from the
+  operator-grain bands — holding the cells at no-commit until the meaning reader
   names them. See [`docs/proposition-addressing.md`](docs/proposition-addressing.md).
 - **The fold is the consciousness** — existence + structure + significance
   folded into the reading the model receives (was a verbatim span dump the

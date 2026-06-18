@@ -115,31 +115,25 @@ const describe = (e, name) => {
 };
 
 // The argument-span SEG (§3): the subject / verb / object spans the SVO parse read
-// out of the clause, with the structural Ground / Figure / Pattern positions filled
-// by elements (positionElements, §4 Step C). Each position shows its ELEMENT — a
-// verbatim span of the original line — and says the cell is held at no-commit, the
-// honest state until the meaning reader is live.
-//
-// The Pattern is the S-V-O *relation* (the bond across the field, §4/§5), so it
-// points at the verbatim relation SPAN — the subject…object stretch of the original
-// sentence, clickable back to its line, the same kind of content Ground (the
-// existents) and Figure (the act) show. It is NOT the bond operator: CON/SIG is the
-// band the held Pattern cell will be measured in, it has its own row below, and it is
-// never a committed cell. Printing the operator inside Pattern⟨…⟩ read as if the cell
-// had been named CON — contradicting the "cells held" beside it — which it has not.
+// out of the clause, positioned into Ground / Figure / Pattern by information
+// structure (positionElements, §4 Step C). Each position points at one verbatim span
+// of the original line — the subject is the given (Ground), the object is the new
+// (Figure), the verb is the relation (Pattern) — rendered as a citation that jumps to
+// where it was read. The "cells" are the operator-grain bands, a separate axis, held
+// at no-commit until the meaning reader is live — which is what "cells held" says.
 // Exported so the serialisation is unit-testable without a DOM.
 export const argspanDesc = (e) => {
   const esc = escapeHtml;
-  const p = positionElements(e, { op: e.depicts });
-  const g = p.ground.elements.map(x => `“${esc(x.text)}”`).join(', ') || '—';
-  // The relation span the Pattern points to — verbatim text the parse cut from the
-  // line, made a citation so a click jumps to the original content it was read from.
-  const relText = p.pattern.elements[0]?.relation ?? e.verb?.text ?? '';
-  const rel = e.sentIdx != null
-    ? `<span class="log-cite" data-idx="${e.sentIdx}">“${esc(relText)}”</span>`
-    : `“${esc(relText)}”`;
+  const p = positionElements(e);
+  // Each element points back to its span — a click jumps to the line it was read from.
+  const cite = (sp) => sp && sp.text != null
+    ? (e.sentIdx != null
+        ? `<span class="log-cite" data-idx="${e.sentIdx}">“${esc(sp.text)}”</span>`
+        : `“${esc(sp.text)}”`)
+    : '—';
+  const cells = (pos) => pos.elements.map(cite).join(', ') || '—';
   return `subj “${esc(e.subject?.text)}” · <em>${esc(e.verb?.text)}</em> · obj “${esc(e.object?.text)}” ` +
-    `<span class="log-w">Ground⟨${g}⟩ Figure⟨“${esc(e.verb?.text)}”⟩ Pattern⟨${rel}⟩ · cells held</span>`;
+    `<span class="log-w">Ground⟨${cells(p.ground)}⟩ Figure⟨${cells(p.figure)}⟩ Pattern⟨${cells(p.pattern)}⟩ · cells held</span>`;
 };
 
 const weight = (e) => (e.w != null && e.w < 1) ? ` <span class="log-w">coupling ${e.w}</span>` : '';

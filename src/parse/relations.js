@@ -194,13 +194,8 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
       for (const obj of objectEntities(head.rest, admission, subj.id)) {
         const oStart = vEnd + obj.start, oEnd = vEnd + obj.end;
         const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: obj.id };
-        // The relation span — the whole subject…object stretch the bond reads across,
-        // verbatim with offsets like the other three, so the Pattern position can
-        // point back to the original content (the bond across the field) rather than
-        // a synthesized label. Self-verifying by the same slice the others use.
-        const relation = { text: s.slice(subj.start, oEnd), start: subj.start, end: oEnd };
         out.push({ op, src: subj.id, tgt: obj.id, via: head.verb, ...w,
-                   args: { subject, verb, object, relation, op } });
+                   args: { subject, verb, object, op } });
       }
     }
   }
