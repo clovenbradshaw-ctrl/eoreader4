@@ -2,3 +2,4 @@
 
 export { runTurn } from './pipeline.js';
 export { stages }  from './stages.js';
+export { buildFeed } from './feed.js';

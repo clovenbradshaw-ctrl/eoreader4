@@ -21,6 +21,7 @@ import { renderUserMessage, createThinkingMessage,
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
 import { renderGraph } from './graph-view.js';
 import { renderLog } from './log-view.js';
+import { mountFeed } from './feed-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 
 const STATE = {
@@ -42,6 +43,7 @@ const els = {
   docView:   document.getElementById('doc-view'),
   graphView: document.getElementById('graph-view'),
   logView:   document.getElementById('log-view'),
+  feedView:  document.getElementById('feed-view'),
   docTabs:   document.getElementById('doc-tabs'),
   messages:  document.getElementById('messages'),
   composer:  document.getElementById('composer'),
@@ -144,6 +146,7 @@ const setTab = (name) => {
   els.docView.hidden   = name !== 'text';
   els.graphView.hidden = name !== 'graph';
   els.logView.hidden   = name !== 'log';
+  els.feedView.hidden  = name !== 'feed';
   els.dropzone.style.display = name === 'text' ? '' : 'none';
   if (name === 'graph') STATE.graph?.reheat?.();
 };
@@ -272,6 +275,15 @@ document.addEventListener('click', (e) => {
 // Empty placeholders until a document is loaded.
 STATE.graph = renderGraph(null, els.graphView, { onSelectSentence: selectSentence });
 renderLog(null, els.logView, { onSelectSentence: selectSentence });
+
+// The feed view: write a message, see the graph around its terms (nested holons,
+// unclipped) and the exact prompt the model would be fed. Mounted once; it reads
+// the live document and embedder through getters and never calls the model.
+mountFeed(els.feedView, {
+  getDoc:      () => STATE.doc,
+  getEmbedder: () => STATE.embedder,
+  onSelectSentence: selectSentence,
+});
 
 // Boot: kick the selected model now so first message is instant.
 ensureModel().catch(() => { /* status already reflects failure */ });
