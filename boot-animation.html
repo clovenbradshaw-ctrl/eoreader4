@@ -5,29 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>eoreader4 · initialization animation</title>
   <style>
-    /* The EO aesthetic: white ground, system monospace, 1px borders, no
-       shadows, no gradients. This page hosts the SAME mountBootAnimation the
-       app boots with — driven here by scripted state so every terminal state
-       (live, and both honest degrades) is visible without a real download. */
+    /* The EO aesthetic: dark ground (matching the app), system monospace, 1px
+       borders, no shadows, no gradients. This page hosts the SAME
+       mountBootAnimation the app boots with — driven here by scripted state so
+       every terminal state (live, and both honest degrades) is visible without
+       a real download. */
     html, body { height: 100%; }
     body {
-      margin: 0; background: #f4f4f4; color: #111;
+      margin: 0; background: #0b0b0d; color: #e4e4e7;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     main { max-width: 40rem; margin: 0 auto; padding: 2.5rem 1.25rem; }
     h1 { font-size: 1rem; font-weight: 600; letter-spacing: .02em; }
-    p { font-size: .82rem; line-height: 1.6; color: #333; }
+    p { font-size: .82rem; line-height: 1.6; color: #a1a1aa; }
     .triad { display: flex; gap: 1rem; font-size: .72rem; margin: 1rem 0; }
     .triad span { display: flex; align-items: center; gap: .35rem; }
-    .sw { width: .8rem; height: .8rem; border: 1px solid #111; display: inline-block; }
-    .sw.g { background: #0a7; } .sw.s { background: #64c; } .sw.r { background: #b22; } .sw.o { background: #a80; }
+    .sw { width: .8rem; height: .8rem; border: 1px solid #3f3f46; display: inline-block; }
+    .sw.g { background: #6ee7b7; } .sw.s { background: #c4b5fd; } .sw.r { background: #fca5a5; } .sw.o { background: #fbbf24; }
     .controls { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.25rem 0; }
     button {
       appearance: none; font: inherit; font-size: .76rem; cursor: pointer; border-radius: 0;
-      background: #fff; color: #111; border: 1px solid #111; padding: .4rem .7rem;
+      background: #151518; color: #e4e4e7; border: 1px solid #3f3f46; padding: .4rem .7rem;
     }
-    button:hover { background: #ebebeb; }
-    code { background: #fff; border: 1px solid #ddd; padding: .05rem .25rem; font-size: .78rem; }
+    button:hover { background: #26262b; }
+    code { background: #151518; border: 1px solid #3f3f46; padding: .05rem .25rem; font-size: .78rem; }
   </style>
 </head>
 <body>
@@ -46,7 +47,7 @@
       <span><i class="sw r"></i> Significance</span>
       <span><i class="sw o"></i> signal</span>
     </div>
-    <p>The card mounts top-right (as it does in the app). Replay a scenario:</p>
+    <p>The card mounts bottom-right (as it does in the app). Replay a scenario:</p>
     <div class="controls">
       <button data-scenario="live">live (instruments + centroids online)</button>
       <button data-scenario="no-centroids">degrade · centroids not installed</button>

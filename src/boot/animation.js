@@ -7,20 +7,22 @@
 // online. Below them the five stages report the granular truth.
 //
 // It blocks nothing — the chat is usable from the first stage; this is a corner
-// card, not a gate. It resolves to the TRUE state: if instruments fail it ends
-// on a stated degraded state (geometric reader unavailable, holding at
+// card, not a gate. It sits bottom-right, clear of the header controls, and
+// minimizes to a small pill. It resolves to the TRUE state: if instruments fail
+// it ends on a stated degraded state (geometric reader unavailable, holding at
 // no-commit), never a spinner that hides the failure, never a fake checkmark.
 // It is idempotent with the cache: a warm load runs once, fast, and confirms.
 //
-// Aesthetic, fixed: white ground, system monospace, 1px borders, no shadows, no
-// gradients. Triad accents — green #0a7, violet #64c, red #b22, ochre #a80.
+// Aesthetic: it matches the host app's dark surface (the product is dark),
+// system monospace, 1px borders, no shadows, no gradients. Triad accents —
+// emerald (Existence), violet (Structure), rose (Significance), amber (signal).
 
 const STYLE_ID = 'eo-boot-style';
 
 const CSS = `
-.eo-boot{position:fixed;top:12px;right:12px;z-index:9999;
-  --eo-ink:#111;--eo-line:#111;--eo-mut:#666;--eo-paper:#fff;
-  --eo-existence:#0a7;--eo-structure:#64c;--eo-significance:#b22;--eo-signal:#a80;
+.eo-boot{position:fixed;bottom:12px;right:12px;z-index:9999;
+  --eo-ink:#e4e4e7;--eo-line:#3f3f46;--eo-mut:#a1a1aa;--eo-paper:#151518;
+  --eo-existence:#6ee7b7;--eo-structure:#c4b5fd;--eo-significance:#fca5a5;--eo-signal:#fbbf24;
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--eo-ink);}
 .eo-boot *{box-sizing:border-box;}
 .eo-boot-card{width:264px;background:var(--eo-paper);border:1px solid var(--eo-line);}
@@ -32,7 +34,7 @@ const CSS = `
 .eo-boot-min{appearance:none;background:var(--eo-paper);color:var(--eo-ink);
   border:1px solid var(--eo-line);font:inherit;font-size:.7rem;line-height:1;
   padding:.05rem .35rem;cursor:pointer;border-radius:0;}
-.eo-boot-min:hover{background:#f0f0f0;}
+.eo-boot-min:hover{background:#26262b;}
 .eo-boot-bands{display:flex;gap:.35rem;padding:.55rem;}
 .eo-band{flex:1;border:1px solid var(--eo-line);}
 .eo-band-label{font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;
