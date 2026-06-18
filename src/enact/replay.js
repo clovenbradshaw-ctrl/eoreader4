@@ -12,7 +12,7 @@
 // order is all the fold needs — the order is the reading's arrow of time, and any
 // sorted or grouped view would destroy exactly the temporal structure being read.
 
-import { sameTerms } from './frame.js';
+import { sameTerms, DEFAULT_STRAIN_LEAK } from './frame.js';
 
 const round = (x) => Math.round(x * 1000) / 1000;
 
@@ -29,12 +29,22 @@ export const replayFrames = (events, cursor = Infinity) => {
     if (e.op === 'DEF') {
       // A frame is established (initial, or installed by a REC). Strain resets,
       // because strain is measured against THIS frame from here forward.
-      frames.set(e.layer, { ...e.frame, strain: 0 });
+      frames.set(e.layer, {
+        ...e.frame, strain: 0,
+        leak: e.frame?.leak ?? DEFAULT_STRAIN_LEAK,
+        strainCursor: e.cursor,
+      });
     } else if (e.op === 'EVA') {
       // A particular tested against a frame adds its strain delta to that frame's
-      // accumulator — including a cross-layer EVA, which adds to the higher frame.
+      // LEAKY accumulator — the standing strain forgets at `leak` per cursor before
+      // this delta accrues, exactly as the live loop did (loop.js), so the fold
+      // reconstitutes the same reading. Includes the cross-layer EVA (higher frame).
       const f = frames.get(e.frameLayer);
-      if (f) f.strain = round(f.strain + (e.strainDelta || 0));
+      if (f) {
+        const dt = Math.max(0, e.cursor - f.strainCursor);
+        f.strain = round(f.strain * Math.pow(f.leak, dt) + (e.strainDelta || 0));
+        f.strainCursor = e.cursor;
+      }
     } else if (e.op === 'REC') {
       recs.push({
         layer: e.layer, cursor: e.cursor,
