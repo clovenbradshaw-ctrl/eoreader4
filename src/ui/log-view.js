@@ -116,15 +116,24 @@ const describe = (e, name) => {
 
 // The argument-span SEG (§3): the subject / verb / object spans the SVO parse read
 // out of the clause, with the structural Ground / Figure / Pattern positions filled
-// by elements (positionElements, §4 Step C). The cells are held at no-commit — the
-// geometric naming is meaning-only and waits on the reader — so the row shows the
-// positions filled but says the cells are held, which is the honest state today.
-const argspanDesc = (e) => {
+// by elements (positionElements, §4 Step C). Each position shows its ELEMENT — the
+// span grammar put there — and says the cell is held at no-commit, the honest state
+// until the meaning reader is live.
+//
+// The Pattern is the S-V-O *relation* (the bond across the field, §4/§5), so it
+// serialises as the directed arrow —verb→, the same kind of content the other two
+// positions show — NOT the bond operator. CON/SIG is the operator the bond feeds:
+// it is the band the held Pattern cell will be measured in, it has its own row
+// below, and it is never a committed cell. Printing it inside Pattern⟨…⟩ read as if
+// the cell had been named CON — contradicting the "cells held" beside it — which it
+// has not. Exported so the serialisation is unit-testable without a DOM.
+export const argspanDesc = (e) => {
   const esc = escapeHtml;
   const p = positionElements(e, { op: e.depicts });
   const g = p.ground.elements.map(x => `“${esc(x.text)}”`).join(', ') || '—';
+  const rel = e.verb?.text ? `—${esc(e.verb.text)}→` : '—';
   return `subj “${esc(e.subject?.text)}” · <em>${esc(e.verb?.text)}</em> · obj “${esc(e.object?.text)}” ` +
-    `<span class="log-w">Ground⟨${g}⟩ Figure⟨“${esc(e.verb?.text)}”⟩ Pattern⟨${esc(e.depicts)}⟩ · cells held</span>`;
+    `<span class="log-w">Ground⟨${g}⟩ Figure⟨“${esc(e.verb?.text)}”⟩ Pattern⟨${rel}⟩ · cells held</span>`;
 };
 
 const weight = (e) => (e.w != null && e.w < 1) ? ` <span class="log-w">coupling ${e.w}</span>` : '';
