@@ -24,11 +24,13 @@
 // THE THROTTLE is surprise (§3, §6). Each EVA carries the per-particular
 // divergence between what the frame predicted and what the line delivered. A
 // confirming EVA (low surprise) holds the frame and adds nothing — assimilation,
-// the frame absorbs. A straining EVA accumulates. REC fires when the running sum
-// breaks the frame's threshold — never on a single anomaly; accommodation, the
-// frame restructures. This is the same surprise that warms the activation field;
-// here it drives restructuring, and its rate over read time is the reading's
-// effort — a quiet stable reading or a turbulent hard one.
+// the frame absorbs. A straining EVA accumulates into a LEAKY sum. A frame breaks
+// two ways: the running sum crossing threshold — a sustained GRIND, accommodation
+// (Leibniz); or a single EVA above an IMPULSE threshold — an overwhelming SHOCK
+// that restructures on impact (Newton), the fast path the integral alone cannot
+// model. This is the same surprise that warms the activation field; here it drives
+// restructuring, and its rate over read time is the reading's effort — a quiet
+// stable reading or a turbulent hard one.
 //
 // THE DISCIPLINE (§7). The cross-layer EVA tests a frame; it does not author one.
 // A lower particular can strain the document frame until the document layer fires
@@ -63,6 +65,14 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
 // Above it the excess accrues toward accommodation. The knob that sets where
 // holding ends and accumulating begins.
 export const DEFAULT_CONFIRM_BAND = 0.25;
+
+// THE IMPULSE threshold (Newton, §3/§6). A single EVA at or above this surprise
+// breaks the frame on impact — a fast path distinct from accumulated strain, one
+// anomaly so large the frame cannot hold it even once. Set near the top of the
+// normalised surprise range and ABOVE any sustained-strain level, so a grind
+// accumulates through the leaky sum while only a genuine shock restructures on its
+// own. The integral measures erosion; the impulse catches the hammer-blow. Tunable.
+export const DEFAULT_IMPULSE = 0.95;
 
 // Calibrate the confirm band and the layer thresholds to THIS reader's scale.
 //
@@ -114,6 +124,7 @@ export const createEnactedLoop = ({
   thresholds = DEFAULT_THRESHOLDS,
   confirmBand = DEFAULT_CONFIRM_BAND,
   strainLeak = DEFAULT_STRAIN_LEAK,  // strain's per-cursor retention — the leaky integrator (frame.js)
+  impulseThreshold = DEFAULT_IMPULSE,// a single EVA at/above this breaks the frame on impact (Newton)
   read,                              // (cursor) => { surprise ∈ [0,1], terms } — the cheap γ-mass signal
 } = {}) => {
   if (typeof read !== 'function') {
@@ -198,13 +209,14 @@ export const createEnactedLoop = ({
   // installs the new frame via a DEF that cites this REC (§3, §8). The entry
   // mirrors eoreader3's RULES_LEDGER op:'REC' with target/action, extended with the
   // strain sum and the forcing EVAs (§9) — this IS the enacted-REC ledger.
-  const rec = (layer, cursor, terms) => {
+  const rec = (layer, cursor, terms, trigger = 'accumulation') => {
     const old = live.get(layer);
     const forcedBy = sinceSet.get(layer).slice();
     const recEv = emit({
       op: 'REC',
       target: layer, action: 'restructure',   // RULES_LEDGER shape, borrowed (§9)
       layer, cursor,
+      trigger,                                 // 'accumulation' (grind) | 'impulse' (shock) — §3/§6
       from: snapshotFrame(old),
       strainSum: round(old.strain),
       forcedBy,
@@ -234,7 +246,12 @@ export const createEnactedLoop = ({
     for (const layer of orderedLayers) {
       if (!live.has(layer)) { def(layer, cursor, terms, 'initial'); continue; }
       const frame = eva(layer, cursor, s, cursor);
-      if (frame.strain >= frame.threshold) rec(layer, cursor, terms);
+      // Two ways a frame breaks. IMPULSE (Newton): a single surprise so large it
+      // restructures on impact — the fast path the integral cannot model, checked
+      // first because a shock should not wait on accumulation. ACCUMULATION
+      // (Leibniz): the leaky strain sum crossing threshold — a sustained grind.
+      if (s >= impulseThreshold) rec(layer, cursor, terms, 'impulse');
+      else if (frame.strain >= frame.threshold) rec(layer, cursor, terms, 'accumulation');
     }
     return { cursor, surprise: round(s) };
   };

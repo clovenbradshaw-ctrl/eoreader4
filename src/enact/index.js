@@ -22,7 +22,7 @@ import { createEnactedLoop, calibrateReader } from './loop.js';
 import { replayFrames, loopStats } from './replay.js';
 import { buildMeaningRead } from './meaning.js';
 
-export { createEnactedLoop, calibrateReader, DEFAULT_THRESHOLDS, DEFAULT_CONFIRM_BAND } from './loop.js';
+export { createEnactedLoop, calibrateReader, DEFAULT_THRESHOLDS, DEFAULT_CONFIRM_BAND, DEFAULT_IMPULSE } from './loop.js';
 export { replayFrames, loopStats } from './replay.js';
 export { createFrame, snapshotFrame, sameTerms, DEFAULT_STRAIN_LEAK } from './frame.js';
 export { isEnacted, isDepicted, assertSingleRegister } from './register.js';

@@ -37,16 +37,28 @@ test('confirming EVA holds the frame; straining EVA accumulates', () => {
   assert.ok(propEvas[1].strainDelta > 0, 'a straining EVA accumulates');
 });
 
-// §3, §6 — REC fires on accumulated strain, never on a single anomaly.
-test('REC fires on accumulated strain, not a single anomaly', () => {
-  const once = createEnactedLoop({ read: fromArray([0, 0.99]) });
-  once.runTo(1);
-  assert.equal(ops(once.events, 'REC').length, 0, 'one anomaly does not restructure');
+// §3, §6 — a frame breaks two ways: a sustained GRIND (accumulation, Leibniz) or a
+// single overwhelming SHOCK (impulse, Newton). A moderate one-off does neither.
+test('REC fires on a grind OR a shock — but not on a moderate one-off', () => {
+  // a single MODERATE anomaly (above band, below impulse): neither accumulates
+  // enough nor shocks — the frame holds.
+  const mild = createEnactedLoop({ read: fromArray([0, 0.5]) });
+  mild.runTo(1);
+  assert.equal(ops(mild.events, 'REC').length, 0, 'a moderate one-off does not restructure');
 
-  const sustained = createEnactedLoop({ read: fromArray([0, 0.9, 0.9, 0.9, 0.9]) });
-  sustained.runTo(4);
-  const recs = ops(sustained.events, 'REC').filter(r => r.layer === 'proposition');
+  // a single OVERWHELMING anomaly: breaks on impact, no accumulation needed (Newton).
+  const shock = createEnactedLoop({ read: fromArray([0, 0.99]) });
+  shock.runTo(1);
+  const shockRecs = ops(shock.events, 'REC').filter(r => r.layer === 'proposition');
+  assert.ok(shockRecs.length >= 1, 'a single overwhelming anomaly breaks the frame on impact');
+  assert.equal(shockRecs[0].trigger, 'impulse', 'and it is tagged an impulse, not accumulation');
+
+  // a sustained GRIND of moderate anomalies: the leaky running sum breaks it (Leibniz).
+  const grind = createEnactedLoop({ read: fromArray([0, 0.9, 0.9, 0.9, 0.9]) });
+  grind.runTo(4);
+  const recs = ops(grind.events, 'REC').filter(r => r.layer === 'proposition');
   assert.ok(recs.length >= 1, 'the running sum eventually breaks the frame');
+  assert.equal(recs[0].trigger, 'accumulation', 'by accumulation, not a single shock');
   assert.ok(recs[0].strainSum >= DEFAULT_THRESHOLDS.proposition, 'REC carries the strain sum at firing');
   assert.ok(recs[0].forcedBy.length >= 2, 'REC references the EVAs that forced it');
 });
