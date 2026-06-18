@@ -5,6 +5,8 @@
 // is never warmed for it. This is the single largest UX win on cold start.
 
 import { tok } from '../parse/tokenize.js';
+import { projectGraph } from '../core/project.js';
+import { typeOf, areDisjoint } from '../read/relation-types.js';
 
 export const answerMath = (question) => {
   const m = String(question || '').match(/(-?\d+(?:\.\d+)?)\s*([+\-*/x])\s*(-?\d+(?:\.\d+)?)/);
@@ -23,9 +25,70 @@ export const answerMath = (question) => {
   return { route: 'math', text: `${a} ${op} ${b} = ${v}`, sources: [] };
 };
 
+// A relational confirm question — "is grete his mother?" — types its relation and
+// resolves its subject, or returns null (not a relation the algebra knows, or a
+// subject the document never admitted). The OBJECT ("his") is not resolved here;
+// it is recovered as the owner of whichever document edge already gives the
+// subject a role, so the conflict is checked on a real pair, never an invented one.
+const confirmClaim = (doc, q) => {
+  const m = q.match(/^\s*(?:is|are|was|were)\s+([A-Za-z][a-z]+)\s+(?:his|her|their|the)?\s*([a-z]+)\b/i);
+  if (!m) return null;
+  const subj = resolveEntityId(doc, m[1]);
+  const rel  = m[2].toLowerCase();
+  if (!subj || !typeOf(rel)) return null;          // only relations the algebra knows
+  return { subj, rel };
+};
+
+const labelOf = (doc, id) => (doc.admission?.labelOf && doc.admission.labelOf(id)) || id;
+
 export const answerConfirm = (doc, question) => {
   const q = String(question || '').trim();
   if (!/^(is|are|was|were|does|do|did)\s+/i.test(q)) return null;
+
+  // ── relational confirm: consult the graph BEFORE token overlap (the t8 fix) ──
+  // The token-overlap fallback below would rubber-stamp "is grete his mother?" as
+  // "Yes." on the mere co-occurrence of the words — it never types the relation.
+  // For a typed relation we consult the reading instead, and the rubber-stamp is
+  // dead at the route, not flagged after the fact.
+  const claim = confirmClaim(doc, q);
+  if (claim) {
+    const graph = projectGraph(doc.log);
+    const rep   = graph.representative || ((id) => id);
+    const subj  = rep(claim.subj);
+    const claimType = typeOf(claim.rel);
+
+    // Kinship/social CON edges are logged owner → relative, so the relation
+    // describes the `to` node. The questioned subject is that relative, so its
+    // role edges are the typed edges pointing AT it. (This is the direction the
+    // edge actually carries; matching `from` would miss every kinship bond.)
+    const incident = (graph.edges || []).filter(e => rep(e.to) === subj && typeOf(e.via));
+
+    // Disjoint axiom on the same pair → refuse, citing the witnessing edge.
+    const conflict = incident.find(e => areDisjoint(claim.rel, e.via));
+    if (conflict) {
+      const owner = labelOf(doc, rep(conflict.from));
+      const role  = String(conflict.via).replace(/-of$/, '');
+      return {
+        route: 'confirm',
+        text: `No — the document has ${labelOf(doc, subj)} as ${owner ? `${owner}'s ` : ''}${role}` +
+              `${conflict.sentIdx != null ? ` [s${conflict.sentIdx}]` : ''}, which rules that out.`,
+        sources: conflict.sentIdx != null ? [conflict.sentIdx] : [],
+      };
+    }
+    // Same primitive on the same relative → witnessed → confirm with the edge cite.
+    const support = incident.find(e => typeOf(e.via).type === claimType.type);
+    if (support) {
+      return {
+        route: 'confirm',
+        text: `Yes${support.sentIdx != null ? ` [s${support.sentIdx}]` : ''}.`,
+        sources: support.sentIdx != null ? [support.sentIdx] : [],
+      };
+    }
+    // Typed relation, no role edge either way → don't rubber-stamp; say so plainly.
+    return { route: 'confirm', text: 'The document does not say.', sources: [] };
+  }
+
+  // ── non-relational confirm: the existing token-overlap path, unchanged ──
   const qTokens = tok(q);
   if (qTokens.length === 0) return null;
   let best = null;

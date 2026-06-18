@@ -7,3 +7,4 @@ export { MODES, DOMAINS, GRAINS, OPERATORS, isOperator,
 export { createLog, isLog } from './log.js';
 export { eoAddressOfEvent, eoNotation } from './address.js';
 export { projectGraph, projectionStats, DEFAULT_PROJECTION_RULES } from './project.js';
+export { VERDICTS } from './verdicts.js';

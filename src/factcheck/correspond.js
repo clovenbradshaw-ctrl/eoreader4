@@ -22,16 +22,13 @@
 
 import { segmentSentences }       from '../parse/sentences.js';
 import { parseRelations, headVerb } from '../parse/relations.js';
+import { checkRelationConflict }   from '../read/relation-types.js';
 
-// A boolean is wrong here: absence has more than one cause and the causes are
-// not the same verdict (§3). Contradicted is a hard refusal; unsupported is a
-// strip-or-flag; indeterminate is held, the no-commit discipline at the verdict.
-export const VERDICTS = Object.freeze({
-  CORROBORATED:  'corroborated',
-  UNSUPPORTED:   'unsupported',
-  CONTRADICTED:  'contradicted',
-  INDETERMINATE: 'indeterminate',
-});
+// The four-way verdict vocabulary now lives in core (a leaf both factcheck and
+// read import down into — see core/verdicts.js). Re-exported here so the holon's
+// public surface (factcheck/index.js → VERDICTS) is unchanged.
+import { VERDICTS } from '../core/verdicts.js';
+export { VERDICTS };
 
 const GAMMA = 0.7;   // the same γ kernel the graph and the field run on
 
@@ -155,6 +152,16 @@ const voidDenial = async ({ src, tgt, talkerCell }, { graph, classifier, adj }) 
 //                    unwitnessed. Stripped or flagged.
 export const checkClaim = async (claim, { doc, graph, classifier, adjacency } = {}) => {
   if (!claim?.resolved) return result(VERDICTS.INDETERMINATE, { reason: 'unresolved-endpoints' });
+
+  // The symbolic relation algebra runs BEFORE the classifier gate, because it is
+  // embedder-free: a disjoint axiom (sister ⟂ mother on the same pair) or a
+  // functional-slot clash is a verdict the geometry cannot see and should not
+  // need to. So it fires even under the hash organ, where every geometric verdict
+  // degrades to indeterminate. Untyped relations return null here and fall
+  // through to the geometric path unchanged.
+  const algebra = checkRelationConflict(graph, claim);
+  if (algebra) return result(algebra.verdict, { reason: algebra.reason, citation: algebra.citation || null });
+
   if (!classifier)      return result(VERDICTS.INDETERMINATE, { reason: 'no-classifier' });
 
   const tp = await patternCell(classifier, claim.sentence, claim.via);
