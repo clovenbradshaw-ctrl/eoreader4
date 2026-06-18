@@ -72,6 +72,11 @@ export const createParser = ({
     // coupling. Nothing is committed — the weight carries the uncertainty.
     const corefField = createCorefField();
 
+    // Candidate relations are collected here and emitted AFTER the pass, so each
+    // can be weighed by how often its verb recurs across the whole document (the
+    // recurrence gate, move 3). INS/SYN still emit inline, in reading order.
+    const candidates = [];
+
     sentences.forEach((sent, sentIdx) => {
       // Chrome-ness is a weight: the mechanical score plus an optional nudge
       // (a mini-LLM's chrome probability) decides whether the line is held.
@@ -112,21 +117,41 @@ export const createParser = ({
         resolve: () => priorField[0]?.id ?? null,
       };
       const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier };
-      for (const rel of parseRelations(sent, admission, coref, relOpts)) {
-        // Argument-span extraction is now its own logged event (§3). When the SVO
-        // emitter read subject/verb/object spans, write them as a clause-level SEG
-        // *before* the bond, and stamp the bond with the SEG's seq so a CON walks
-        // back through the argument spans to the verbatim text. The spans are the
-        // parse; the bond is its result — both auditable now, not only the result.
-        const { args, ...edge } = rel;
-        if (args) {
-          const seg = log.append(argumentSpanSeg(args, sentIdx));
-          log.append({ ...edge, sentIdx, argspan: seg.seq });
-        } else {
-          log.append({ ...edge, sentIdx });
-        }
-      }
+      for (const rel of parseRelations(sent, admission, coref, relOpts)) candidates.push({ rel, sentIdx });
     });
+
+    // Move 3 — the relation recurrence gate (ReVerb's lexical constraint). A real
+    // relation recurs; a verb seen once is suspect. We gate relations the way the
+    // referent table gates entities — by recurrence — but HOLD WEAK rather than
+    // drop, because many one-off verbs are real (walked, made, told): the
+    // uncertainty rides along as reduced coupling, the same physics the pronoun
+    // field already uses. A recurrent verb is learned into the conventions ledger
+    // (a 'relation' REC), so the document's own relation vocabulary joins what it
+    // taught the reader.
+    const viaCount = new Map();
+    for (const { rel } of candidates)
+      if (rel.op === 'CON' || rel.op === 'SIG') viaCount.set(rel.via, (viaCount.get(rel.via) || 0) + 1);
+    for (const [via, n] of viaCount) if (via && n >= 2) conventions.learn('relation', via, n);
+
+    for (const { rel, sentIdx } of candidates) {
+      const { args, ...edge } = rel;
+      // The recurrence coupling: a one-off relation verb is held weak (×0.5),
+      // compounding with any pronoun coupling already on the edge. A bond on a
+      // recurrent verb keeps full coupling. The argument-span SEG is still written
+      // before the bond and cited by it, so a CON walks back to the text (§3).
+      if (edge.op === 'CON' || edge.op === 'SIG') {
+        const recurrent = (viaCount.get(edge.via) || 1) >= 2;
+        const base = edge.w == null ? 1 : edge.w;          // existing (pronoun) coupling
+        const w = Math.round(base * (recurrent ? 1 : 0.5) * 1000) / 1000;
+        if (w < 1) edge.w = w; else delete edge.w;         // sub-unit coupling rides along
+      }
+      if (args) {
+        const seg = log.append(argumentSpanSeg(args, sentIdx));
+        log.append({ ...edge, sentIdx, argspan: seg.seq });
+      } else {
+        log.append({ ...edge, sentIdx });
+      }
+    }
 
     const tokensBySentence = sentences.map(s => new Set(tok(s)));
 

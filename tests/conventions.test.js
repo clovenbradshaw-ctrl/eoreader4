@@ -45,6 +45,20 @@ test('the verb guard skips modifiers and routes copulas to DEF', () => {
   assert.equal(headVerb(' by the window', opts), null, 'a preposition is not a head — no bond');
 });
 
+// Move 3 — the recurrence gate: a recurrent verb is trusted (full coupling) and
+// learned into the ledger; a one-off is held weak, not dropped (recall preserved).
+test('the recurrence gate trusts recurrent verbs and holds one-offs weak', () => {
+  const doc = parseText('Anna Stone met Bob Vale. Anna Stone met Bob Vale. Anna Stone praised Bob Vale.', { docId: 'r' });
+  const edges = doc.log.events.filter(e => e.op === 'CON');
+  const met = edges.find(e => e.via === 'met');
+  const praised = edges.find(e => e.via === 'praised');
+  assert.ok(met && (met.w == null || met.w > 0.5), 'a recurrent verb keeps full coupling');
+  assert.ok(praised && praised.w != null && praised.w <= 0.5, 'a one-off verb is held weak, not dropped');
+  const rels = doc.conventions.exportJSONL().split('\n').map(s => JSON.parse(s)).filter(l => l.kind === 'relation');
+  assert.ok(rels.some(r => r.token === 'met'), 'the recurrent verb is learned into the ledger');
+  assert.ok(!rels.some(r => r.token === 'praised'), 'the one-off is not learned');
+});
+
 // End to end: a copular/modifier-led clause yields no CON edge.
 test('parseText emits no copula/modifier bonds', () => {
   const doc = parseText('Lydia Bennet is here. Lydia Bennet is here. Kitty Bennet much rather Lydia Bennet.', { docId: 'g' });
