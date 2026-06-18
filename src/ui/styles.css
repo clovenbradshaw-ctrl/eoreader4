@@ -410,6 +410,19 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 .rl1 .rl-body { color: #c7ccd6; font-style: italic; }
 .rl-summary { color: #a1a1aa; margin-top: .25rem; font-size: .72rem; }
 
+/* The enacted loop — the reading's own frames, strain and restructurings as of
+   the cursor. Ochre tag: the fourth accent past the green/violet/red triad. */
+.rl4 .rl-tag { color: #fbbf24; }
+.rl4 .rl-body { display: flex; flex-direction: column; gap: .25rem; }
+.en-frame { display: flex; align-items: center; gap: .5rem; }
+.en-layer {
+  flex-shrink: 0; width: 5.4rem; color: #fcd34d; font-family: ui-monospace, monospace;
+  font-size: .66rem; text-transform: uppercase; letter-spacing: .05em;
+}
+.en-terms { flex: 1; color: #d4d4d8; font-size: .72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.en-strain { margin-left: 0; }
+.en-strain i { background: linear-gradient(90deg,#fcd34d,#fbbf24,#fca5a5); }
+
 /* EO operator chips */
 .op {
   display: inline-block; font-family: ui-monospace, monospace; font-size: .66rem;
