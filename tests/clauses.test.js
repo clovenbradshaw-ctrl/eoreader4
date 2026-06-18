@@ -64,6 +64,19 @@ test('a mid-sentence subject now bonds — the carve limit is lifted', () => {
   assert.equal(greteBond.tgt, 'door');
 });
 
+test('a lowercase clause-head pronoun resolves — Move 1\'s two halves, wired', () => {
+  // Clause splitting yields lowercase-initial clauses ("…, and he opened…"); the
+  // capitalised-only pronoun match dropped every one, so the split produced clauses
+  // its own resolver could not read. Case-insensitive now: the split-off "he"
+  // resolves through the prior field to the protagonist and bonds.
+  const doc = parseText(
+    'Gregor Samsa woke. Gregor Samsa crawled, and he opened the door.',
+    { docId: 'lowercase-pron' });
+  const bond = cons(doc).find(e => e.via === 'opened' && e.tgt === 'door');
+  assert.ok(bond, 'the lowercase second-clause pronoun "he" now resolves and bonds');
+  assert.equal(bond.src, 'gregor-samsa', 'it resolves through the coref field to Gregor');
+});
+
 // ---------------------------------------------------------------------------
 // Move 2 — the NP referent object slot.
 
