@@ -35,6 +35,13 @@ export const createParser = ({
   // with the typing bridge's areDisjoint. Parse never imports the algebra; the
   // default asserts no conflict, so a bare parse has no descriptor exclusivity.
   rolesConflict      = undefined,
+  // The coref field's tuning — the CONFINEMENT WINDOW. The reach over which a
+  // pronoun resolves (`maxDist`) and a standing role epithet can still bind a name
+  // (`descMaxDist`, `descGamma`). INJECTED so a harness can sweep it without the
+  // parser knowing why: too wide and wrong-owner relations bind, too narrow and the
+  // long-range descriptor (a sibling named long after its epithet) never reaches.
+  // The default is the coref field's own (a bare parse is unchanged).
+  corefOpts          = undefined,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -80,7 +87,7 @@ export const createParser = ({
     // referent trace; a subject pronoun reads the field *as it stood before
     // this sentence* and the strongest candidate's weight becomes the bond's
     // coupling. Nothing is committed — the weight carries the uncertainty.
-    const corefField = createCorefField(rolesConflict ? { rolesConflict } : {});
+    const corefField = createCorefField({ ...corefOpts, ...(rolesConflict ? { rolesConflict } : {}) });
     // Derived descriptor edges (owner --role--> bearer) accumulate here and are
     // logged after the candidate relations — they are the trigger's output, marked
     // `derived` so the graph and the edge-grounding veto read them as defeasible.

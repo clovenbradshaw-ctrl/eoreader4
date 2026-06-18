@@ -6,13 +6,17 @@ import { parseText }    from '../parse/index.js';
 import { projectGraph } from '../core/index.js';
 import { areDisjoint }  from '../read/relation-types.js';
 
-export const ingestText = async (file) => {
+export const ingestText = async (file, opts = {}) => {
   const text  = typeof file === 'string' ? file : await file.text();
   const name  = typeof file === 'string' ? `doc-${Date.now()}` : (file.name || `doc-${Date.now()}`);
   // Inject the role-conflict predicate here, the one layer allowed to see both
   // holons: parse stays a leaf, and the standing-descriptor trigger consults the
-  // typing bridge's algebra (sister ⟂ mother) without ever importing it.
-  const doc   = parseText(text, { docId: name, rolesConflict: areDisjoint });
+  // typing bridge's algebra (sister ⟂ mother) without ever importing it. The
+  // sentinel is the CHARGE/VALENCE force: `rolesConflict: false` turns it OFF, so a
+  // harness can confirm the forbidden-relation gate trips when exclusivity is gone.
+  const rolesConflict = opts.rolesConflict === false ? () => false
+    : (typeof opts.rolesConflict === 'function' ? opts.rolesConflict : areDisjoint);
+  const doc   = parseText(text, { docId: name, rolesConflict, corefOpts: opts.corefOpts });
 
   // The graph is a fold of the log. Expose it as a frame-parameterised
   // projection so the UI can re-weight around a reading cursor (γ decay)
