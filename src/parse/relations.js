@@ -18,6 +18,7 @@
 //     owner to the named relative through the kin term.
 
 import { scanEntities } from './entities.js';
+import { segmentClauses } from './clauses.js';
 import { SEED_COPULA, SEED_MODIFIER, SEED_SPEECH } from '../conventions/index.js';
 
 // The verb-classification word-lists live in the conventions ledger (the home for
@@ -59,12 +60,12 @@ const KIN_RE = new RegExp(
 // the strongest candidate, carrying that candidate's weight as the bond's
 // coupling so the uncertainty rides along instead of being thrown away.
 //
-// KNOWN CARVE LIMIT (do not patch here): subjects are found only at the
-// sentence head — a leading pronoun or a sentence-initial name. Mid-clause
-// subjects ("Video shows Topps approaching") never reach the field, so their
-// bonds never fire. This is the §8 segmentation failure, not a coref bug; it
-// belongs to the SEG-first rework. Patching subject-finding here too would
-// scatter the fix across two places and make that rework harder.
+// This resolves the subject at the head of whatever span it is handed. The old
+// carve limit — subjects found only at the SENTENCE head, so a mid-sentence subject
+// ("…, and Grete opened the door") never reached the field — is lifted upstream now:
+// parseRelations runs this PER CLAUSE (segmentClauses, the SEG-first rework), so a
+// mid-sentence subject arrives here as a clause-initial one. This function stays a
+// pure head-resolver and holds NO segmentation of its own — the split is one module.
 const leadingSubject = (sentence, admission, coref) => {
   const pn = sentence.match(/^\s*(He|She|They|We|It|I|You)\b/);
   if (pn) {
@@ -143,6 +144,106 @@ const objectEntities = (text, admission, excludeId) => {
   return out;
 };
 
+// ── Move 2: the noun-phrase object slot ────────────────────────────────────
+// The object endpoint is no longer only an admitted name. The HEAD noun of the
+// post-verb NP ("the room", "his back", "the chief clerk", "an apple") becomes a
+// REFERENT endpoint — a lowercased lemma node tagged `np`, never an admitted figure
+// (admission stays the gate for figures; this never invents one). Two guards keep it
+// from manufacturing junk: a light POS/stoplist here (function words, pronouns,
+// bleached nouns, bare adverbs are not heads), and the recurrence gate in the
+// pipeline (a once-seen referent rides as weak coupling, never dropped). This is what
+// fills the graph with the propositions a novella actually holds — a man alone in a
+// room with a door and a chair — that the name-to-name rule could never reach.
+const NP_PREP = new Set([
+  'over', 'under', 'into', 'onto', 'across', 'through', 'toward', 'towards', 'at',
+  'to', 'on', 'in', 'behind', 'beside', 'below', 'above', 'near', 'past', 'around',
+  'round', 'up', 'down', 'off', 'against', 'upon', 'within', 'from', 'by', 'of',
+  'with', 'for', 'about', 'before', 'after',
+]);
+const NP_DET = new Set([
+  'the', 'a', 'an', 'this', 'that', 'these', 'those', 'his', 'her', 'their', 'its',
+  'my', 'your', 'our', 'some', 'any', 'no', 'each', 'every', 'another', 'one', 'all', 'both',
+]);
+// Closed-class and bleached tokens that cannot be an NP head — pronouns, the
+// determiner/preposition set, conjunctions, wh-words, light "nouns" that name no
+// referent (thing/way/time/day…), and adverbs of time/place/degree that sit at a
+// clause tail and would otherwise read as a noun.
+const NP_NON_HEAD = new Set([
+  ...NP_DET, ...NP_PREP,
+  'and', 'but', 'or', 'nor', 'so', 'yet', 'as', 'than', 'then', 'if', 'because',
+  'he', 'she', 'it', 'they', 'we', 'i', 'you', 'him', 'them', 'us', 'me', 'who',
+  'whom', 'whose', 'which', 'what', 'where', 'when', 'why', 'how', 'here', 'there',
+  'not', 'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being',
+  'thing', 'things', 'way', 'ways', 'time', 'times', 'day', 'days', 'moment', 'while',
+  'part', 'lot', 'kind', 'sort', 'bit', 'deal', 'course', 'something', 'nothing',
+  'anything', 'everything', 'someone', 'anyone', 'everyone', 'ones', 'order', 'sense', 'fact',
+  'later', 'earlier', 'soon', 'ago', 'away', 'again', 'together', 'onward', 'forward',
+  'backward', 'meanwhile', 'afterward', 'afterwards', 'today', 'tonight', 'tomorrow',
+  'yesterday', 'now', 'once', 'too', 'enough', 'indeed', 'perhaps',
+]);
+// Tokens that END the object NP run — a coordinator, a subordinator, or a relative.
+const NP_BOUNDARY = new Set([
+  'and', 'but', 'or', 'nor', 'so', 'yet', 'while', 'when', 'where', 'because',
+  'although', 'though', 'since', 'after', 'before', 'until', 'unless', 'who', 'which',
+  'that', 'as', 'than',
+]);
+// Particles and directional adverbs that follow a verb but name no referent
+// ("looked OUT", "showed it OFF"). Distinct from NP_PREP because they take no object.
+const NP_PARTICLE = new Set([
+  'out', 'away', 'aside', 'apart', 'along', 'ahead', 'aback', 'aboard', 'forward',
+  'backward', 'upward', 'downward', 'inward', 'outward', 'onward', 'indoors', 'outdoors',
+  'abroad', 'overboard', 'here', 'there', 'everywhere', 'anywhere', 'nowhere', 'somewhere',
+]);
+// A reflexive is the verb's own subject, not a new referent ("found HIMSELF").
+const NP_REFLEX = new Set([
+  'himself', 'herself', 'itself', 'themselves', 'myself', 'yourself', 'ourselves', 'oneself',
+]);
+const isAdverbLy   = (lw) => lw.length > 4 && lw.endsWith('ly');
+const isParticiple = (lw) => lw.length > 4 && (lw.endsWith('ing') || lw.endsWith('ed'));
+
+// The light NP-head extractor: the head of the FIRST object NP after the verb, or
+// null. The object NP lives in the IMMEDIATE post-verb segment — bounded at the first
+// clause punctuation so a comma-spliced trailing clause cannot bleed into the head.
+// One leading preposition is stepped over (motion/spatial objects sit after one:
+// "crawled OVER the wall"), then the run is walked to its head — the LAST content
+// token ("the chief CLERK", "a LADY fitted out"), preferring a true noun over a
+// participle so "a lady fitted out" heads on `lady`, not `fitted`. Names, particles,
+// reflexives, -ly adverbs and verbs are never heads, so the figure path owns names and
+// the channel manufactures no junk. `guards` carries the live copula/modifier/speech
+// predicates. Defeasible: a mis-head rides as a once-seen, recurrence-weakened node.
+const npObject = (rest, guards) => {
+  const seg = String(rest).split(/[,;:.!?…—–()"]/)[0];
+  const toks = [];
+  const re = /[A-Za-z][A-Za-z'’]*/g;
+  let m;
+  while ((m = re.exec(seg)) !== null)
+    toks.push({ w: m[0], lw: m[0].toLowerCase(), start: m.index, end: m.index + m[0].length });
+  if (!toks.length) return null;
+
+  const isVerbish = (lw) => guards.isCopula(lw) || guards.isModifier(lw) || guards.isSpeech(lw);
+  const stops = (t) => NP_BOUNDARY.has(t.lw) || NP_PREP.has(t.lw) || NP_REFLEX.has(t.lw) || isVerbish(t.lw);
+  let i = NP_PREP.has(toks[0].lw) ? 1 : 0;     // step over one leading preposition
+  const run = [];
+  for (; i < toks.length && run.length < 5; i++) {
+    const t = toks[i];
+    if (run.length > 0 && stops(t)) break;
+    run.push(t);
+  }
+  const eligible = (t, allowParticiple) => {
+    if (/^[A-Z]/.test(t.w)) return false;       // a name → figure path owns it
+    if (NP_NON_HEAD.has(t.lw) || NP_PARTICLE.has(t.lw) || NP_REFLEX.has(t.lw)) return false;
+    if (isVerbish(t.lw) || isAdverbLy(t.lw) || t.lw.length < 2) return false;
+    if (!allowParticiple && isParticiple(t.lw)) return false;   // prefer a true-noun head
+    return true;
+  };
+  // Pass 1 prefers a non-participle head; pass 2 falls back to allow -ed/-ing so real
+  // nouns (bed, morning, ceiling) still ride.
+  for (const allow of [false, true])
+    for (let k = run.length - 1; k >= 0; k--)
+      if (eligible(run[k], allow)) return { lemma: run[k].lw, start: run[k].start, end: run[k].end };
+  return null;
+};
+
 const kinshipEdges = (sentence, admission, coref) => {
   const out = [];
   const re = new RegExp(KIN_RE.source, KIN_RE.flags);
@@ -200,32 +301,60 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // when one is supplied (its seed ∪ Pass-0 learned), falling back to the seeds.
   const isSpeech = opts.isSpeech || defIsSpeech;
   const verbOpts = { isCopula: opts.isCopula || defIsCopula, isModifier: opts.isModifier || defIsModifier };
+  const npGuards = { isSpeech, isCopula: verbOpts.isCopula, isModifier: verbOpts.isModifier };
+  // The NP referent object slot (move 2) is ON for the page (the pipeline asks for
+  // referents) and OFF for the talker-claim veto (correspond.js): an unanchored
+  // common noun is an UNRESOLVED endpoint there, not a node — the veto grounds only
+  // against document figures. So an undefined opt keeps the old name-only behaviour.
+  const wantReferents = !!opts.referents;
   const out = [];
   const s = sentence.trim();
 
-  const subj = leadingSubject(s, admission, coref);
-  if (subj && subj.id) {
-    const after = s.slice(subj.end);
-    const head = headVerb(after, verbOpts);
+  // Move 1 — run the SVO scan PER CLAUSE, not once per sentence. A clause-initial
+  // subject is reachable where a sentence-initial one was not (the carve-limit fix);
+  // each clause carries its offset so the argument-span SEG still walks back to `s`.
+  for (const clause of segmentClauses(s)) {
+    const base = clause.offset;                       // clause-relative offset → `s`
+    const subj = leadingSubject(clause.text, admission, coref);
+    if (!subj || !subj.id) continue;
+    const after = clause.text.slice(subj.end);
+    const head  = headVerb(after, verbOpts);
+    if (!head) continue;
     const w = coupling(subj);
-    if (head && head.copular) {
+    if (head.copular) {
       const pred = head.rest.replace(/^[\s,]+/, '').replace(/[.!?]+\s*$/, '').trim();
       if (pred) out.push({ op: 'DEF', id: subj.id, key: 'predicate', value: pred, ...w });
-    } else if (head) {
-      const op = isSpeech(head.verb) ? 'SIG' : 'CON';
-      // The argument spans, with offsets back into `s` (which equals
-      // doc.sentences[sentIdx] — segmentSentences trims), each carrying its
-      // verbatim text so the walk is self-verifying. The pipeline emits these as
-      // a logged clause-level SEG before the bond, so a CON is walkable back to
-      // the text its endpoints were read from (§3). Carried on the rel as `args`;
-      // the pipeline strips it from the edge event after emitting the SEG.
-      const vStart = subj.end + head.at, vEnd = subj.end + head.restStart;
-      const subject = { text: subj.text, start: subj.start, end: subj.end, id: subj.id };
-      const verb    = { text: s.slice(vStart, vEnd), start: vStart, end: vEnd };
-      for (const obj of objectEntities(head.rest, admission, subj.id)) {
-        const oStart = vEnd + obj.start, oEnd = vEnd + obj.end;
-        const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: obj.id };
-        out.push({ op, src: subj.id, tgt: obj.id, via: head.verb, ...w,
+      continue;
+    }
+    const op = isSpeech(head.verb) ? 'SIG' : 'CON';
+    // The argument spans, with offsets back into `s` (which equals
+    // doc.sentences[sentIdx] — segmentSentences trims), each carrying its verbatim
+    // text so the walk is self-verifying. The pipeline emits these as a logged
+    // clause-level SEG before the bond, so a CON is walkable back to the text its
+    // endpoints were read from (§3). Carried on the rel as `args`; the pipeline
+    // strips it from the edge event after emitting the SEG.
+    const vStart = base + subj.end + head.at, vEnd = base + subj.end + head.restStart;
+    const subject  = { text: subj.text, start: base + subj.start, end: base + subj.end, id: subj.id };
+    const verb     = { text: s.slice(vStart, vEnd), start: vStart, end: vEnd };
+    const restBase = vEnd;                            // head.rest begins here in `s`
+
+    let bonded = false;
+    for (const obj of objectEntities(head.rest, admission, subj.id)) {
+      const oStart = restBase + obj.start, oEnd = restBase + obj.end;
+      const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: obj.id };
+      out.push({ op, src: subj.id, tgt: obj.id, via: head.verb, ...w, args: { subject, verb, object, op } });
+      bonded = true;
+    }
+    // The NP referent object — only when the page asks for referents, and only when
+    // a named patient did not already bond this clause (a figure is never shadowed by
+    // an incidental noun). The endpoint is the lemma id, tagged `np` so the fold and
+    // the pipeline read it as a referent, never a figure.
+    if (wantReferents && !bonded) {
+      const np = npObject(head.rest, npGuards);
+      if (np) {
+        const oStart = restBase + np.start, oEnd = restBase + np.end;
+        const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: np.lemma };
+        out.push({ op, src: subj.id, tgt: np.lemma, via: head.verb, tgtKind: 'np', ...w,
                    args: { subject, verb, object, op } });
       }
     }
