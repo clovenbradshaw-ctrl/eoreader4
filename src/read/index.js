@@ -15,3 +15,7 @@ export { readingAt } from './reading.js';
 export { surfFold } from './surf.js';
 export { predictNext } from './predict.js';
 export { siteRoles, markSites, siteIndices } from './site.js';
+export {
+  PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,
+  relationPrior, areDisjoint, functionalClash, checkRelationConflict,
+} from './relation-types.js';

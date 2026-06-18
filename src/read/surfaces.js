@@ -11,6 +11,7 @@
 // verbatim spans. Nothing here calls a model; the reading is mechanical.
 
 import { readingAt } from './reading.js';
+import { typeOf } from './relation-types.js';
 
 // Level 1 — raw existence. The spans as they are, in source order.
 export const existenceSurface = (_doc, spans) =>
@@ -34,7 +35,12 @@ export const structureSurface = (doc, idxs) => {
     switch (e.op) {
       case 'INS': figures.set(e.id, (figures.get(e.id) || 0) + 1); break;
       case 'CON':
-      case 'SIG': relations.push({ op: e.op, src: name(e.src), tgt: name(e.tgt), via: e.via, idx: e.sentIdx }); break;
+      // The relation carries both the surface verb (`via`, what the talker reads
+      // as the arrow label) and its primitive `type` when the typing bridge knows
+      // the noun (sister → sibling, captain → leads) — null when it doesn't. The
+      // type is the projection the relation algebra reasons over; the surface
+      // string stays untouched for the notes register.
+      case 'SIG': relations.push({ op: e.op, src: name(e.src), tgt: name(e.tgt), via: e.via, type: typeOf(e.via)?.type || null, idx: e.sentIdx }); break;
       case 'SYN': if (e.kind === 'merge') merges.push({ from: name(e.from), to: name(e.to), idx: e.sentIdx }); break;
       case 'SEG': if (e.kind === 'retract') splits.push({ refSeq: e.refSeq, idx: e.sentIdx }); break;
     }
