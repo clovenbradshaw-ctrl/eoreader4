@@ -223,11 +223,14 @@ reader's frames as of that cursor; the same referent under a frame at two ages i
 two readings. `loopStats` surfaces the REC rate so a stable reading, a turbulent
 one, and a thrash are distinguishable.
 
-The deep, meaning-distance version waits on MiniLM; what ships now is the
-**mechanical skeleton** on the cheap γ-mass surprise that already runs over the
-whole document — deepening with no shape change once the meaning reader is live.
-See [`docs/significance-loop.md`](docs/significance-loop.md); it surfaces as a
-fourth strip in reading mode.
+Two reads, one loop. The **skeleton** runs on the cheap γ-mass surprise over the
+whole document; the **meaning reader** (`enactedReadingMeaning`) drives the *same*
+loop with prediction error in the centroids' space, so frames restructure on
+sense-turns the γ-mass reader is blind to — and falls back to the skeleton under
+the hash organ. The loop never changed; only `read` got deeper, exactly as the
+design promised. See [`docs/significance-loop.md`](docs/significance-loop.md); it
+surfaces as a fourth strip in reading mode that deepens to *semantic surprise* when
+the geometric reader is live.
 
 ## The nine operators
 
@@ -329,6 +332,13 @@ comments on gates that were on.
 - **Graph extraction** — coreference as a weighted field, speech→SIG /
   copular→DEF / transitive→CON classification, kinship apposition, multi-word
   names, name-containment SYN, `INS`-per-sighting so mass is real.
+- **Proposition addressing** — the SVO parse logs its **argument spans** as a
+  `SEG kind:'argspan'` event *before* the bond, with offsets back into the
+  sentence, so a CON walks back to the text its endpoints were read from (the
+  witness chain no longer stops at the bond). `positionElements` fills Ground /
+  Figure / Pattern structurally — subject·object → Ground, verb → Figure,
+  relation → Pattern — holding the cells at no-commit until the meaning reader
+  names them. See [`docs/proposition-addressing.md`](docs/proposition-addressing.md).
 - **The fold is the consciousness** — existence + structure + significance
   folded into the reading the model receives (was a verbatim span dump the
   `prompt` stage didn't even use).

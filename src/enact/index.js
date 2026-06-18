@@ -20,11 +20,13 @@
 import { readingAt } from '../read/index.js';
 import { createEnactedLoop } from './loop.js';
 import { replayFrames, loopStats } from './replay.js';
+import { buildMeaningRead } from './meaning.js';
 
 export { createEnactedLoop, DEFAULT_THRESHOLDS, DEFAULT_CONFIRM_BAND } from './loop.js';
 export { replayFrames, loopStats } from './replay.js';
 export { createFrame, snapshotFrame, sameTerms } from './frame.js';
 export { isEnacted, isDepicted, assertSingleRegister } from './register.js';
+export { buildMeaningRead } from './meaning.js';
 
 // The cheap surprise provider — the mechanical γ-mass surprise over the field, the
 // only strain honestly computable until the meaning reader is live (§11). The terms
@@ -62,5 +64,37 @@ const enactedLogOf = (doc, opts) => {
 export const enactedReadingTo = (doc, cursor, opts) => {
   const events = enactedLogOf(doc, opts);
   const fold = replayFrames(events, cursor);
-  return { ...fold, stats: loopStats(events), events };
+  return { ...fold, stats: loopStats(events), events, reader: 'cheap' };
+};
+
+// The DEEP reading — the same fold, driven by the meaning reader instead of the
+// γ-mass skeleton (§11). When the embedder measures meaning, the surprise is the
+// prediction error in the centroids' space, so frames restructure on semantic
+// turns the cheap reader is blind to. Async (embedding is async); the meaning log
+// is built once per (doc, embedder) and cached, so subsequent cursor folds are
+// the same cheap replay. Under the hash organ it falls back to the cheap reader —
+// callers can always await this and get an honest result either way.
+const MEANING_LOGS = new WeakMap();   // doc → Map<embedderId, events>
+export const enactedReadingMeaning = async (doc, cursor, { embedder, ...opts } = {}) => {
+  if (!embedder?.measuresMeaning) return enactedReadingTo(doc, cursor, opts);   // firewall → skeleton
+
+  let perDoc = MEANING_LOGS.get(doc);
+  if (!perDoc) { perDoc = new Map(); MEANING_LOGS.set(doc, perDoc); }
+  let events = perDoc.get(embedder.id);
+  if (!events) {
+    const mr = await buildMeaningRead(doc, embedder, {
+      termsAt: (c) => readingAt(doc, c).predicted?.figures || [],
+    });
+    if (!mr) return enactedReadingTo(doc, cursor, opts);       // could not measure → skeleton
+    const units = doc.units || doc.sentences || [];
+    const loop = createEnactedLoop({
+      read: (c) => ({ surprise: mr.surprise[c], terms: mr.terms[c] }),
+      ...opts,
+    });
+    if (units.length) loop.runTo(units.length - 1);
+    events = loop.events;
+    perDoc.set(embedder.id, events);
+  }
+  const fold = replayFrames(events, cursor);
+  return { ...fold, stats: loopStats(events), events, reader: 'meaning' };
 };

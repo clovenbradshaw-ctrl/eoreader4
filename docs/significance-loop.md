@@ -99,7 +99,13 @@ const { frames, recs } = replayFrames(loop.events, cursor);   // the fold to a c
 const stats = loopStats(loop.events);            // REC rate, convergence, thrash
 
 // Wired to the real cheap surprise (read/readingAt) and memoised per doc:
-const reading = enactedReadingTo(doc, cursor);   // { frames, recs, stats, events }
+const reading = enactedReadingTo(doc, cursor);   // { frames, recs, stats, events, reader:'cheap' }
+
+// The DEEP read — the SAME loop, driven by the meaning reader (§11). Async; the
+// surprise is prediction error in the centroids' space, so frames restructure on
+// sense-turns the γ-mass reader is blind to. Falls back to the cheap reader under
+// the hash organ (the firewall), so a caller can always await it:
+const deep = await enactedReadingMeaning(doc, cursor, { embedder });  // reader:'meaning' | 'cheap'
 ```
 
 Event shapes (`enact/loop.js`):
@@ -112,16 +118,24 @@ Event shapes (`enact/loop.js`):
 
 ## Honest seams
 
-- **MiniLM governs the depth.** The rich cross-layer surprise — the kind that
-  distinguishes a frame *breaking* from a word merely being *unusual* — needs
-  meaning-distance, which needs the geometric reader. With the embedder degenerate
-  the only strain computable honestly is the mechanical γ-mass surprise over the
-  field — real but thin. **This holon is the skeleton built on that cheap
-  surprise.** It runs over the whole document, costs nothing, and deepens with *no
-  shape change* once the meaning reader is live — only a richer `read`. Downward
-  influence in particular is thin today: the cross-layer EVA records the high being
-  held or strained by the low, but the high does not yet *re-weight* the low's
-  surprise. That waits on meaning-distance against the frame's terms.
+- **MiniLM governs the depth — and the deep read is now built.** The rich surprise
+  that distinguishes a frame *breaking* from a word merely being *unusual* needs
+  meaning-distance. The skeleton (`enactedReadingTo`) runs on the mechanical γ-mass
+  surprise — real but thin, blind to a sense-turn that introduces no new figure.
+  The **meaning reader** (`meaning.js` / `enactedReadingMeaning`) is the richer
+  `read` the design promised: with the geometric organ live, the surprise is the
+  prediction error in the centroids' space — how far each clause sits from the
+  γ-decayed semantic prior — so frames restructure on the turns the γ-mass reader
+  misses. The loop, frames, strain, cross-layer testing, and arrow of time are
+  **unchanged**; only `read` got deeper. Under the hash organ it falls back to the
+  skeleton (the firewall). **Calibration seam:** the meaning surprise lives on a
+  different scale than γ-mass (sentence cosines cluster higher), so the confirm band
+  and thresholds are calibrated *per reader* against goldens with the live embedder
+  — the sandbox can't reach the model weights, so the constants here are the
+  skeleton's; the meaning reader's are a tuning pass once it runs on real text.
+  Downward influence is still thin: the cross-layer EVA records the high being held
+  or strained by the low, but the high does not yet *re-weight* the low's surprise —
+  the next deepening, meaning-distance against the frame's own terms.
 - **The REC threshold is tuning** — the assimilation/accommodation balance, the
   size of Lakatos's protective belt. Too low and the frame thrashes (RECs on every
   anomaly); too high and the frame never breaks. Set against goldens, measured per
@@ -130,9 +144,15 @@ Event shapes (`enact/loop.js`):
 - **Convergence is the success condition.** The spiral should converge, RECs
   growing rarer as a frame stabilises (the eigenform). A text the reading cannot
   settle is a real finding, not a failure to suppress. `loopStats` surfaces the
-  REC rate over read time so a stable reading and a turbulent one are
-  distinguishable, and a thrash (RECs oscillating between two frames) is visible as
-  the threshold error it is.
+  REC rate, the distinct-frame count, and the alternation count over read time so a
+  stable reading and a turbulent one are distinguishable. A **thrash** is genuine
+  oscillation — the frame flipping back repeatedly while exploring only a handful of
+  distinct frames (≥2 alternations *and* low diversity) — the threshold-too-low
+  error. It is **not** a rich reading that revisits a recurring cast once over a
+  long arc: measured on a whole novel, the reading is turbulent (hundreds of RECs)
+  but with almost-all-distinct frames, which is honest work under a thin prior, not
+  a thrash. The single-A→B→A test mislabelled that turbulence; the detector now
+  requires repeated oscillation at low diversity.
 
 ## Where it surfaces
 
@@ -140,4 +160,7 @@ Reading mode (the graph view's cursor) shows the enacted loop as a fourth strip
 beneath existence / structure / (depicted) significance: per layer, the terms the
 frame stands on, a strain bar filling toward the layer's REC threshold, and the
 restructuring count — the protective belt filling, and giving way, as you step the
-arrow through the document.
+arrow through the document. The strip shows the γ-mass fold instantly; when the
+geometric reader is live (and the document is short enough to embed responsively)
+it **deepens to the meaning reader** asynchronously, relabelled *semantic surprise*
+— the same strip, driven by meaning-distance instead of figure-mass.

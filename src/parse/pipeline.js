@@ -16,6 +16,7 @@ import { segmentSentences }     from './sentences.js';
 import { isChrome }             from './chrome.js';
 import { createEntityAdmission }from './entities.js';
 import { parseRelations }       from './relations.js';
+import { argumentSpanSeg }      from './proposition.js';
 import { createCorefField }     from './coref.js';
 import { tok }                  from './tokenize.js';
 import { createConventions, induceAttributionVerbs } from '../conventions/index.js';
@@ -106,7 +107,18 @@ export const createParser = ({
         resolve: () => priorField[0]?.id ?? null,
       };
       for (const rel of parseRelations(sent, admission, coref, { isSpeech })) {
-        log.append({ ...rel, sentIdx });
+        // Argument-span extraction is now its own logged event (§3). When the SVO
+        // emitter read subject/verb/object spans, write them as a clause-level SEG
+        // *before* the bond, and stamp the bond with the SEG's seq so a CON walks
+        // back through the argument spans to the verbatim text. The spans are the
+        // parse; the bond is its result — both auditable now, not only the result.
+        const { args, ...edge } = rel;
+        if (args) {
+          const seg = log.append(argumentSpanSeg(args, sentIdx));
+          log.append({ ...edge, sentIdx, argspan: seg.seq });
+        } else {
+          log.append({ ...edge, sentIdx });
+        }
       }
     });
 

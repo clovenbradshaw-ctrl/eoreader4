@@ -73,16 +73,24 @@ export const loopStats = (events) => {
     // Converging: the gaps between RECs are growing — restructuring is getting
     // rarer as the frame stabilises. Needs at least two gaps to read a trend.
     const converging = gaps.length >= 2 && gaps[gaps.length - 1] >= gaps[0];
-    // Thrash: an installed term-set returns the one from two installs back while
-    // differing from the one between — A → B → A, the frame oscillating, not
-    // settling. The detector of a threshold set too low.
-    let thrash = false;
+    // Thrash is genuine OSCILLATION — the frame flipping back to a frame it just
+    // left, repeatedly, while exploring only a handful of distinct frames. It is
+    // NOT a rich reading that revisits a recurring cast once over a long arc: a
+    // single A → B → A is coincidence, not thrash. So require repeated
+    // alternations AND low diversity. (Measured: Pride and Prejudice reads
+    // turbulently — many RECs — but with ~70 distinct document frames over 76
+    // restructurings and one stray A → B → A. That is genuine turbulence, the
+    // reading working hard on a dense text under a thin prior, not a threshold set
+    // too low; the old single-A→B→A test mislabelled it as thrash. The thin γ-mass
+    // surprise is what keeps it turbulent — that calms with the meaning reader, §11,
+    // not by retuning a threshold against a false alarm.)
+    let alternations = 0;
     for (let i = 2; i < seq.length; i++) {
-      if (sameTerms(seq[i].terms, seq[i - 2].terms) && !sameTerms(seq[i].terms, seq[i - 1].terms)) {
-        thrash = true; break;
-      }
+      if (sameTerms(seq[i].terms, seq[i - 2].terms) && !sameTerms(seq[i].terms, seq[i - 1].terms)) alternations++;
     }
-    out[layer] = { recs: cursors.length, cursors, gaps, converging, thrash };
+    const distinctFrames = new Set(seq.map(s => [...new Set(s.terms)].sort().join(''))).size;
+    const thrash = seq.length >= 4 && alternations >= 2 && distinctFrames <= Math.ceil(seq.length / 2);
+    out[layer] = { recs: cursors.length, cursors, gaps, converging, thrash, alternations, distinctFrames };
   }
   return out;
 };
