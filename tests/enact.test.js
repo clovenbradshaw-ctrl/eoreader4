@@ -51,6 +51,31 @@ test('REC fires on accumulated strain, not a single anomaly', () => {
   assert.ok(recs[0].forcedBy.length >= 2, 'REC references the EVAs that forced it');
 });
 
+// THE LEAK — strain is a leaky integral, so a frame breaks on a CLUSTER of anomaly
+// (a crisis), not on a lifetime total. The same number of anomalies, clustered vs
+// spread, are opposite events: the cluster breaks the frame; the spread leaks away.
+test('the leak — a cluster breaks the frame; the same anomalies spread out do not', () => {
+  // three consecutive shocks — they accumulate faster than they leak → REC.
+  const cluster = createEnactedLoop({ read: fromArray([0, 0.9, 0.9, 0.9]) });
+  cluster.runTo(3);
+  assert.ok(ops(cluster.events, 'REC').some(r => r.layer === 'proposition'),
+    'a burst of anomaly breaks the frame');
+
+  // three shocks of identical size, spaced six confirming clauses apart — each leaks
+  // most of the way to zero before the next lands → the frame absorbs them all.
+  const spaced = [0, 0.9, 0, 0, 0, 0, 0, 0.9, 0, 0, 0, 0, 0, 0.9];
+  const grind = createEnactedLoop({ read: fromArray(spaced) });
+  grind.runTo(spaced.length - 1);
+  assert.equal(ops(grind.events, 'REC').filter(r => r.layer === 'proposition').length, 0,
+    'the same anomalies, spread out, never break the frame — document length stops setting the break');
+
+  // and with no leak (λ=1) the spread DOES break it — proving the leak is the cause.
+  const undamped = createEnactedLoop({ read: fromArray(spaced), strainLeak: 1 });
+  undamped.runTo(spaced.length - 1);
+  assert.ok(ops(undamped.events, 'REC').some(r => r.layer === 'proposition'),
+    'without the leak the lifetime sum breaks it — the leak is what makes it a crisis detector');
+});
+
 // §4, §11 — the higher layer holds harder: document RECs are rarer.
 test('the higher layer holds harder — document RECs are rarer than proposition', () => {
   const surprises = Array.from({ length: 30 }, (_, i) => (i === 0 ? 0 : 0.9));

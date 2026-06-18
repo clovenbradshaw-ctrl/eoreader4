@@ -45,7 +45,7 @@
 // defaults it to readingAt's γ-mass surprise). When the meaning reader is live the
 // same machinery deepens with no shape change — only a richer `read`.
 
-import { createFrame, snapshotFrame } from './frame.js';
+import { createFrame, snapshotFrame, DEFAULT_STRAIN_LEAK } from './frame.js';
 
 // Higher layers hold harder. A document frame should be harder to break than a
 // proposition frame — its threshold is the size of its protective belt (Lakatos,
@@ -113,6 +113,7 @@ export const createEnactedLoop = ({
   layers = ['proposition', 'document'],
   thresholds = DEFAULT_THRESHOLDS,
   confirmBand = DEFAULT_CONFIRM_BAND,
+  strainLeak = DEFAULT_STRAIN_LEAK,  // strain's per-cursor retention — the leaky integrator (frame.js)
   read,                              // (cursor) => { surprise ∈ [0,1], terms } — the cheap γ-mass signal
 } = {}) => {
   if (typeof read !== 'function') {
@@ -143,7 +144,7 @@ export const createEnactedLoop = ({
   // carries the EVAs or REC that produced it). Resets the EVA accumulator for the
   // layer, because strain is measured against THIS frame from here forward.
   const def = (layer, cursor, terms, producedBy) => {
-    const frame = createFrame({ layer, cursor, terms, threshold: thresholdOf(layer) });
+    const frame = createFrame({ layer, cursor, terms, threshold: thresholdOf(layer), leak: strainLeak });
     live.set(layer, frame);
     sinceSet.set(layer, []);
     emit({ op: 'DEF', layer, cursor, frame: snapshotFrame(frame), producedBy });
@@ -169,9 +170,17 @@ export const createEnactedLoop = ({
     if (frame.cursor > cursor) {
       throw new Error(`enacted EVA tested a FUTURE frame: ${layer}@${frame.cursor} vs particular@${cursor} (§5)`);
     }
+    // THE LEAK (§5, applied to the integral). Standing strain forgets at `leak` per
+    // cursor of read-time BEFORE this EVA accrues — a leaky integrator. The frame
+    // therefore breaks on a temporal CLUSTER of anomaly (a crisis), never on the
+    // document's lifetime total; spaced anomalies leak away between hits. This is the
+    // arrow of time the loop already enforces for frames, now enforced for strain.
+    const dt = Math.max(0, cursor - frame.strainCursor);
+    frame.strain *= Math.pow(frame.leak, dt);
+    frame.strainCursor = cursor;
     const verdict = surprise < confirmBand ? 'confirm' : 'strain';
     const strainDelta = Math.max(0, surprise - confirmBand);
-    frame.strain += strainDelta;
+    frame.strain = round(frame.strain + strainDelta);
     const ev = emit({
       op: 'EVA',
       testLayer: base, frameLayer: layer, frameCursor: frame.cursor,
