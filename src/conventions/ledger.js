@@ -61,6 +61,62 @@ export const SEED_MODIFIER = Object.freeze([
   'did', 'does', 'do', 'not', 'must', 'might', 'may', 'can',
 ]);
 
+// The relation-type vocabulary (move 3): the open verb on a bond → a small CLOSED
+// set of predicate types, the comparable grouping key the graph pivot reads next.
+// `speech` is the attribution register (already → SIG), so it is not duplicated here;
+// the rest are seeded and, like every register, learnable later. Typing is ADDITIVE:
+// a verb outside the table is honestly untyped (relationType → null) and its bond
+// still stands — never a drop, so recall is unchanged. The boilerplate the acceptance
+// names (`day`, `he`, `probably`) never reaches here: it is stepped over as a modifier
+// or fails the recurrence gate before it can be a relation.
+export const SEED_RELATION_TYPES = Object.freeze({
+  motion: ['crawled', 'crawl', 'crawls', 'crawling', 'ran', 'run', 'runs', 'running',
+    'walked', 'walk', 'walks', 'walking', 'jumped', 'jump', 'climbed', 'climb', 'rushed',
+    'rush', 'fled', 'flee', 'moved', 'move', 'moves', 'turned', 'turn', 'rose', 'rise',
+    'fell', 'fall', 'came', 'come', 'comes', 'went', 'go', 'goes', 'entered', 'enter',
+    'left', 'leave', 'leaves', 'approached', 'approach', 'crept', 'creep', 'slipped',
+    'slip', 'flew', 'fly', 'dragged', 'drag', 'pushed', 'push', 'pulled', 'pull',
+    'rolled', 'roll', 'marched', 'march', 'stepped', 'step', 'hurried', 'hurry',
+    'wandered', 'wander', 'followed', 'follow', 'chased', 'chase', 'escaped', 'escape',
+    'returned', 'return', 'arrived', 'arrive', 'departed', 'depart'],
+  perception: ['saw', 'see', 'sees', 'seeing', 'looked', 'look', 'looks', 'looking',
+    'watched', 'watch', 'watches', 'heard', 'hear', 'hears', 'noticed', 'notice',
+    'observed', 'observe', 'stared', 'stare', 'glanced', 'glance', 'felt', 'feel',
+    'feels', 'smelled', 'smell', 'gazed', 'gaze', 'beheld', 'behold', 'spotted', 'spot',
+    'glimpsed', 'glimpse', 'sensed', 'sense'],
+  possession: ['held', 'hold', 'holds', 'holding', 'carried', 'carry', 'carries',
+    'owned', 'own', 'owns', 'kept', 'keep', 'keeps', 'grasped', 'grasp', 'grabbed',
+    'grab', 'seized', 'seize', 'clutched', 'clutch', 'gripped', 'grip', 'took', 'take',
+    'takes', 'brought', 'bring', 'wore', 'wear', 'wears', 'possessed', 'possess', 'bore',
+    'bears', 'dropped', 'drop'],
+  spatial: ['stood', 'stand', 'stands', 'standing', 'sat', 'sit', 'sits', 'sitting',
+    'lay', 'lie', 'lies', 'lying', 'hung', 'hang', 'hangs', 'lived', 'live', 'lives',
+    'remained', 'remain', 'rested', 'rest', 'perched', 'perch', 'leaned', 'lean',
+    'leant', 'filled', 'fill', 'covered', 'cover'],
+  affect: ['feared', 'fear', 'fears', 'loved', 'love', 'loves', 'hated', 'hate', 'hates',
+    'liked', 'like', 'likes', 'wanted', 'want', 'wants', 'hoped', 'hope', 'hopes',
+    'wished', 'wish', 'dreaded', 'dread', 'enjoyed', 'enjoy', 'missed', 'miss', 'trusted',
+    'trust', 'admired', 'admire', 'envied', 'envy', 'pitied', 'pity', 'needed', 'need'],
+  communication: ['wrote', 'write', 'writes', 'called', 'call', 'calls', 'signalled',
+    'signaled', 'signal', 'greeted', 'greet', 'greets', 'nodded', 'nod', 'waved', 'wave',
+    'beckoned', 'beckon', 'summoned', 'summon', 'knocked', 'knock'],
+  // Kinship / social role bonds (via = the kin noun on a kinship CON or a derived
+  // descriptor edge). The fine sibling/parent split stays the read-layer bridge's
+  // job; here it is the coarse bucket the graph groups on.
+  kinship: ['father', 'mother', 'sister', 'brother', 'son', 'daughter', 'wife',
+    'husband', 'parents', 'parent', 'uncle', 'aunt', 'cousin', 'nephew', 'niece',
+    'grandfather', 'grandmother', 'sibling', 'child', 'spouse', 'dad', 'mom', 'friend',
+    'master', 'servant', 'boss', 'chief', 'partner', 'neighbour', 'neighbor',
+    'colleague', 'lover', 'fiance', 'fiancee'],
+});
+
+// token → bucket, built once. The attribution register supplies `speech` at lookup
+// time (so a document's LEARNED speech verbs type as speech too), so it is not folded
+// in here; the first writer wins on any incidental overlap.
+const RELATION_TYPE = new Map();
+for (const [bucket, toks] of Object.entries(SEED_RELATION_TYPES))
+  for (const t of toks) if (!RELATION_TYPE.has(t)) RELATION_TYPE.set(t, bucket);
+
 const SEEDS = {
   'attribution-verb': SEED_SPEECH,
   'abbreviation': SEED_ABBREVIATIONS,
@@ -94,6 +150,15 @@ export const createConventions = () => {
     isAbbreviation: (v) => has('abbreviation', v),
     isCopula: (v) => has('copula', v),
     isModifier: (v) => has('modifier', v),
+    // Type a relation predicate to its closed-vocab bucket (move 3), or null when it
+    // is outside the table — additive, never a drop. Speech is read live from the
+    // attribution register so a learned speech verb types as `speech` too.
+    relationType: (v) => {
+      const t = norm(v);
+      if (!t) return null;
+      if (has('attribution-verb', t)) return 'speech';
+      return RELATION_TYPE.get(t) || null;
+    },
     weightOf: (v) => reg['attribution-verb'].get(norm(v)) || 0,
     get rules() { return rules; },
     get attribution() { return reg['attribution-verb']; },

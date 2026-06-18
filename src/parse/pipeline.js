@@ -130,7 +130,8 @@ export const createParser = ({
         field:   () => priorField,
         resolve: () => priorField[0]?.id ?? null,
       };
-      const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier };
+      const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier,
+                        referents: true };   // open the NP object slot for the page (move 2)
       for (const rel of parseRelations(sent, admission, coref, relOpts)) candidates.push({ rel, sentIdx });
 
       // Standing descriptors — the third coref channel (extraction half). A role
@@ -168,8 +169,12 @@ export const createParser = ({
     // (a 'relation' REC), so the document's own relation vocabulary joins what it
     // taught the reader.
     const viaCount = new Map();
+    const nounCount = new Map();   // NP-referent head → document-wide occurrences
     for (const { rel } of candidates)
-      if (rel.op === 'CON' || rel.op === 'SIG') viaCount.set(rel.via, (viaCount.get(rel.via) || 0) + 1);
+      if (rel.op === 'CON' || rel.op === 'SIG') {
+        viaCount.set(rel.via, (viaCount.get(rel.via) || 0) + 1);
+        if (rel.tgtKind === 'np') nounCount.set(rel.tgt, (nounCount.get(rel.tgt) || 0) + 1);
+      }
     for (const [via, n] of viaCount) if (via && n >= 2) conventions.learn('relation', via, n);
 
     for (const { rel, sentIdx } of candidates) {
@@ -180,9 +185,20 @@ export const createParser = ({
       // before the bond and cited by it, so a CON walks back to the text (§3).
       if (edge.op === 'CON' || edge.op === 'SIG') {
         const recurrent = (viaCount.get(edge.via) || 1) >= 2;
+        let factor = recurrent ? 1 : 0.5;
+        // An NP referent rides the SAME recurrence gate as the verb and the figure: a
+        // common noun seen once across the document is held weak, never dropped — the
+        // uncertainty rides as reduced coupling, the physics the pronoun field uses.
+        if (edge.tgtKind === 'np' && (nounCount.get(edge.tgt) || 1) < 2) factor *= 0.5;
         const base = edge.w == null ? 1 : edge.w;          // existing (pronoun) coupling
-        const w = Math.round(base * (recurrent ? 1 : 0.5) * 1000) / 1000;
+        const w = Math.round(base * factor * 1000) / 1000;
         if (w < 1) edge.w = w; else delete edge.w;         // sub-unit coupling rides along
+        // Type the predicate (move 3): the raw verb stays as `via` (the citation and
+        // the talker's arrow label); the closed-vocab type rides beside it as
+        // `relType`, the comparable grouping key. Additive — an untyped real verb
+        // keeps no relType and still projects.
+        const relType = conventions.relationType(edge.via);
+        if (relType) edge.relType = relType;
       }
       if (args) {
         const seg = log.append(argumentSpanSeg(args, sentIdx));
@@ -196,7 +212,10 @@ export const createParser = ({
     // `derived: true` so the projection and the edge-grounding veto treat them as
     // defeasible (e.g. they never satisfy the functional-axiom's witnessed-filler
     // requirement) — the apposition-free binding, held as a weak, citable bond.
-    for (const e of derivedEdges) log.append(e);
+    for (const e of derivedEdges) {
+      const relType = conventions.relationType(e.via);   // a role via → 'kinship'
+      log.append(relType ? { ...e, relType } : e);
+    }
 
     const tokensBySentence = sentences.map(s => new Set(tok(s)));
 
