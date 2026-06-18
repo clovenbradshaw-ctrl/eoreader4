@@ -16,6 +16,8 @@
 // reads events *at* the cursor; the scalar surprise is the mean surprisal in
 // bits of what the line did under the prior the reading had built.
 
+import { CONVERSATIONAL_CAP } from '../converse/index.js';
+
 const GAMMA = 0.7;     // recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
 
@@ -56,23 +58,25 @@ export const readingAt = (doc, cursor, opts = {}) => {
 
   const name = (id) => label.get(id) || id;
 
-  // Model-expectation seam — default off, and it must stay a NON-injection.
-  // The surprise computed here is the Existence-terrain witness: surprisal over
-  // the γ-mass prior, pure counts and decay, no model. A model's expectation is
-  // a different witness (meaning-terrain); adding it into this prior would be
-  // the model deciding salience — the witness-decides violation. Fold-safe
-  // shape: the model deposits its expectation as a Given event, and the
-  // LLM-embedding surprise (read/predict.js) co-deposits as its own
-  // meaning-terrain observation; the fold reads both and keeps their divergence
-  // as signal rather than merging them to one scalar. The block below is the
-  // wrong door (a direct write to the prior), kept inert until that deposition
-  // path exists (after the SEG rework). Then watch the divergence: if it never
-  // changes a reading, the terrains weren't separable and the merge was right —
-  // the same empty-cell test as the √2 conjecture.
+  // expect — the model-adds-mass-to-the-prior door (§6), redrawn as a
+  // DEPOSITION, not the injection it was drafted as. The talker does not write
+  // the prior directly; its expectation enters as TAGGED, CAPPED conversational
+  // mass, kept separable from the γ-mass prior so the fold can discount the echo
+  // (the subtract-and-check, converse holon). It warms the prediction of who
+  // acts next; capped at the model reader's ceiling, it can never dominate a
+  // grounding reader, and surprise still reads the line against a prior the
+  // talker cannot manufacture past that cap.
+  const convPrior = new Map();   // id → tagged conversational expectation mass
+  let conversationalPrior = 0;
   if (typeof opts.expect === 'function') {
     for (const id of [...priorMass.keys()]) {
-      const boost = Number(opts.expect(id, label.get(id))) || 0;
-      if (boost > 0) priorMass.set(id, priorMass.get(id) + boost);
+      const raw   = Number(opts.expect(id, label.get(id))) || 0;
+      const boost = Math.min(CONVERSATIONAL_CAP, Math.max(0, raw));   // capped, never raw
+      if (boost > 0) {
+        convPrior.set(id, boost);
+        conversationalPrior += boost;
+        priorMass.set(id, priorMass.get(id) + boost);
+      }
     }
   }
 
@@ -146,6 +150,9 @@ export const readingAt = (doc, cursor, opts = {}) => {
     surprisalBits: round(surprisal),
     held,
     summary,
+    // Tagged conversational warmth folded into the prior this turn (0 when the
+    // expect door wasn't used). Separable, so the fold can subtract the echo.
+    conversationalPrior: round(conversationalPrior),
   };
 };
 

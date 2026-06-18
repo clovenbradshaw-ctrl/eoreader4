@@ -9,6 +9,7 @@
 
 export {
   existenceSurface, structureSurface, significanceSurface, consciousness,
+  serializeNotes,
 } from './surfaces.js';
 export { readingAt } from './reading.js';
 export { predictNext } from './predict.js';

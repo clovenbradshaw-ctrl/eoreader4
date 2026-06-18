@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eoreader4 · initialization animation</title>
+  <style>
+    /* The EO aesthetic: dark ground (matching the app), system monospace, 1px
+       borders, no shadows, no gradients. This page hosts the SAME
+       mountBootAnimation the app boots with — driven here by scripted state so
+       every terminal state (live, and both honest degrades) is visible without
+       a real download. */
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: #0b0b0d; color: #e4e4e7;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    main { max-width: 40rem; margin: 0 auto; padding: 2.5rem 1.25rem; }
+    h1 { font-size: 1rem; font-weight: 600; letter-spacing: .02em; }
+    p { font-size: .82rem; line-height: 1.6; color: #a1a1aa; }
+    .triad { display: flex; gap: 1rem; font-size: .72rem; margin: 1rem 0; }
+    .triad span { display: flex; align-items: center; gap: .35rem; }
+    .sw { width: .8rem; height: .8rem; border: 1px solid #3f3f46; display: inline-block; }
+    .sw.g { background: #6ee7b7; } .sw.s { background: #c4b5fd; } .sw.r { background: #fca5a5; } .sw.o { background: #fbbf24; }
+    .controls { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1.25rem 0; }
+    button {
+      appearance: none; font: inherit; font-size: .76rem; cursor: pointer; border-radius: 0;
+      background: #151518; color: #e4e4e7; border: 1px solid #3f3f46; padding: .4rem .7rem;
+    }
+    button:hover { background: #26262b; }
+    code { background: #151518; border: 1px solid #3f3f46; padding: .05rem .25rem; font-size: .78rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>eoreader4 — initialization animation</h1>
+    <p>The boot is the reader assembling its perception apparatus. The three
+    elements are the three grain positions a phasepost fills at once — Ground,
+    Figure, Pattern — filling as the one instrument that serves all three comes
+    online. The five stages report the granular truth, and the boot resolves to
+    the <em>real</em> state of the geometric reader: live, or unavailable and
+    holding at no-commit. Never a spinner that hides a failure; never a fake
+    checkmark.</p>
+    <div class="triad">
+      <span><i class="sw g"></i> Existence</span>
+      <span><i class="sw s"></i> Structure</span>
+      <span><i class="sw r"></i> Significance</span>
+      <span><i class="sw o"></i> signal</span>
+    </div>
+    <p>The card mounts bottom-right (as it does in the app). Replay a scenario:</p>
+    <div class="controls">
+      <button data-scenario="live">live (instruments + centroids online)</button>
+      <button data-scenario="no-centroids">degrade · centroids not installed</button>
+      <button data-scenario="hash">degrade · hash organ (no MiniLM)</button>
+    </div>
+    <p>This page imports the production <code>mountBootAnimation</code> from
+    <code>src/boot/animation.js</code> verbatim and feeds it a scripted installer
+    (same <code>{ STAGES, subscribe }</code> shape), so what you see is the real
+    component, not a mockup. In the app the same animation subscribes to the real
+    installer, which warms MiniLM and loads the centroid bundle.</p>
+  </main>
+
+  <script type="module">
+    import { mountBootAnimation } from './src/boot/animation.js';
+
+    const STAGES = ['clearing', 'instruments', 'centroids', 'warming', 'ready'];
+    const blank = () => ({
+      stages: Object.fromEntries(STAGES.map(s => [s, 'pending'])),
+      progress: 0, geometricReader: 'assembling', detail: 'assembling the perception apparatus…',
+    });
+
+    // A scripted installer: the animation only reads STAGES and subscribes, so a
+    // fake that emits snapshots exercises it exactly as the real one does.
+    const scriptedInstaller = () => {
+      const subs = new Set();
+      let state = blank();
+      return {
+        STAGES,
+        subscribe(cb) { subs.add(cb); cb(state); return () => subs.delete(cb); },
+        push(patch) { state = { ...state, ...patch, stages: { ...state.stages, ...(patch.stages || {}) } }; for (const cb of subs) cb(state); },
+      };
+    };
+
+    const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+    const SCRIPTS = {
+      async live(inst) {
+        inst.push({ stages: { clearing: 'active' } }); await wait(350);
+        inst.push({ stages: { clearing: 'done', instruments: 'active' } });
+        for (const p of [0.18, 0.46, 0.78, 1]) { inst.push({ progress: p }); await wait(280); }
+        inst.push({ stages: { instruments: 'done', centroids: 'active' } }); await wait(420);
+        inst.push({ stages: { centroids: 'done', warming: 'active' } }); await wait(500);
+        inst.push({ stages: { warming: 'done', ready: 'done' }, geometricReader: 'live',
+          detail: 'geometric reader: live · measuring against 27 centroids' });
+      },
+      async 'no-centroids'(inst) {
+        inst.push({ stages: { clearing: 'active' } }); await wait(350);
+        inst.push({ stages: { clearing: 'done', instruments: 'active' } });
+        for (const p of [0.3, 0.7, 1]) { inst.push({ progress: p }); await wait(280); }
+        inst.push({ stages: { instruments: 'done', centroids: 'active' } }); await wait(450);
+        inst.push({ stages: { centroids: 'failed', warming: 'skipped', ready: 'done' }, geometricReader: 'unavailable',
+          detail: 'geometric reader: unavailable — verified centroids are not installed; classification holding at no-commit' });
+      },
+      async hash(inst) {
+        inst.push({ stages: { clearing: 'active' } }); await wait(350);
+        inst.push({ stages: { clearing: 'done', instruments: 'skipped', centroids: 'active' } }); await wait(450);
+        inst.push({ stages: { centroids: 'done', warming: 'skipped', ready: 'done' }, geometricReader: 'unavailable',
+          detail: 'geometric reader: unavailable — the embedder is the hash organ, not MiniLM; classification holding at no-commit' });
+      },
+    };
+
+    let current = null;
+    const play = async (scenario) => {
+      current?.destroy();
+      const inst = scriptedInstaller();
+      current = mountBootAnimation(document.body, inst, { autoMinDelayMs: 4000 });
+      await SCRIPTS[scenario](inst);
+    };
+
+    for (const btn of document.querySelectorAll('button[data-scenario]'))
+      btn.addEventListener('click', () => play(btn.dataset.scenario));
+
+    play('live');
+  </script>
+</body>
+</html>

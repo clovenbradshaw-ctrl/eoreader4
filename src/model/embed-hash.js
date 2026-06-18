@@ -22,6 +22,14 @@ export const createHashEmbedder = () => {
   const cache = new Map();
   return {
     id: 'hash-embed',
+    // The no-commit guard: this is the hash organ, not MiniLM. Its vectors live
+    // in spelling space, so a cosine here is a (rough) bag-of-words overlap, not
+    // a meaning-distance. The phasepost classifier reads this flag and holds
+    // every position at no-commit rather than let spelling masquerade as
+    // meaning. A verb classified by spelling is the hardcoded list with extra
+    // steps — exactly what measurement-not-choice exists to avoid.
+    measuresMeaning: false,
+    organ: 'hash',
     isWarm: () => true,
     async warm() { /* always warm */ },
     async embed(text) {

@@ -32,6 +32,26 @@ export const VETOES = [
     refuses: true,
     message: 'No claim could be tied to a source sentence.',
   },
+  // The edge-grounding checks — the LINK-shaped sibling of `unbound`. `unbound`
+  // catches a claim with no node-level witness; these catch a claimed RELATION
+  // with no edge-level witness, the shape the invented-location lie wore. They
+  // read the four-way verdict the factcheck holon computed (`ctx.edgeVerdicts`)
+  // and stay inert when no fact-check ran. The split is the journalism: a claim
+  // the document DENIES is refused; a claim the document is merely silent on is
+  // flagged. Under the hash organ every relational verdict is indeterminate, so
+  // neither fires — the honest inert state until the meaning reader is wired.
+  {
+    id: 'edge-contradicted',
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(v => v.verdict === 'contradicted'),
+    refuses: true,
+    message: 'A claimed relation is denied by the document reading.',
+  },
+  {
+    id: 'edge-unsupported',
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(v => v.verdict === 'unsupported'),
+    refuses: false, // flag-only; the claim rides, marked unwitnessed
+    message: 'A claimed relation has no witness in the document reading.',
+  },
   {
     id: 'low-coverage',
     test: ({ bound }) => {

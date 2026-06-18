@@ -132,11 +132,16 @@ hard-coded true; a convention is whatever the text keeps doing.
 | `conventions` | `createConventions()` (REC ledger) · `induceAttributionVerbs` | nothing  |
 | `parse`       | `createParser(opts)` · `parseText(text, opts)` → doc (text adapter) | `core`, `conventions` |
 | `read`        | `existence/structure/significance` surfaces · `consciousness` · `readingAt` | nothing |
+| `enact`       | `createEnactedLoop` · `enactedReadingTo` · `replayFrames` · `loopStats` (the enacted DEF·EVA·REC loop) | `read` |
 | `retrieve`    | `retrieveHybrid(doc, q, embedder)`                            | `core`, `parse` |
 | `fold`        | `foldNote(spans, {doc, cursor})` · `impressionQuery`         | `read`     |
 | `ground`      | `bindCitations(draft, spans)` · `runVetoes`                   | `core`, `parse` |
 | `answer`      | `tryMechanical(doc, q)`                                       | `core`, `parse` |
 | `model`       | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
+| `classify`    | `createPhasepostClassifier({cells, centroids, embedder})`     | `core`     |
+| `boot`        | `bootGeometricReader(root, {embedder})` · `createInstaller`   | `classify`, `model` |
+| `converse`    | `conversationalEvent` · `depositConversational` · `commitSurvives` · `corefPerception` | nothing |
+| `factcheck`   | `factCheck({prose, doc, graph, classifier})` · `corroborateCoref` (edge-grounding veto) | `core`, `parse`, `classify`, `converse` |
 | `audit`       | `createAuditLog()`                                            | nothing    |
 | `turn`        | `runTurn({question, doc, model, embedder, auditLog})` (reduce)| all above  |
 | `ingest`      | `ingestText(file)` · `ingestImage(detections)` → doc          | `parse`, `core` |
@@ -144,6 +149,85 @@ hard-coded true; a convention is whatever the text keeps doing.
 
 Each holon's `index.js` is its only entrance. No file imports the internals
 of another. The rule is a discipline enforced by inspection, not by tooling.
+
+## Phasepost perception — the geometric reader
+
+A proposition fills three grain positions at once — **Ground / Figure /
+Pattern** — and the cell each fills is *measured*, not chosen: the `classify`
+holon scores the proposition against the 27 cell centroids partitioned into
+three bands and reads off the address. Measurement is real only in the
+centroids' space, so the embedder carries a `measuresMeaning` guard — true on
+MiniLM, false on the hash organ — and under hash the classifier **holds every
+position at no-commit** rather than let spelling masquerade as meaning. The
+`boot` holon installs the instrument (idempotent, cached, non-blocking,
+degrading) behind an initialization animation that resolves to the *true* state
+of the reader — live, or unavailable and holding at no-commit. See
+[`docs/phasepost.md`](docs/phasepost.md); the animation runs in isolation at
+[`boot-animation.html`](boot-animation.html).
+
+The talker is wired as the **weakest reader**: its turns enter the activation
+field as conversational-provenance depositions (tagged, capped, decaying),
+witnessed by the talker, so they warm the field and orient the next turn but can
+never be cited as document provenance, originate a committed reading, or type a
+relation. A fold-time subtract-and-check refuses any reading that leans on that
+warmth. See [`docs/conversational-provenance.md`](docs/conversational-provenance.md).
+
+On the way back, the **edge-grounding veto** (`factcheck`) holds the talker to
+the graph it spoke from. It parses the talker's prose with the same SVO parser
+the page uses, resolves the endpoints through the **document** referent table
+(never the talker's own coreference), types each relation to its cell, and
+compares each claimed edge to the document reading — yielding one of four
+verdicts: *corroborated* (and earns the document edge's citation), *unsupported*
+(flag), *contradicted* by a VOID or opposing edge (refuse), or *indeterminate*
+(held). `unbound` catches a claim with no node-witness; this catches a claimed
+*relation* with no edge-witness — the shape the invented-location lie wore. The
+talker's coref strength returns as a **proposal**: it may tip a merge, but a
+grounding reader must second it before the merge commits. See
+[`docs/edge-grounding.md`](docs/edge-grounding.md).
+
+Those arrows are also what the talker is **handed**. The prompt feeds the fold —
+the document **notes** (plain-language arrows over the folded graph) *plus* the
+verbatim **excerpts** — never raw spans alone, the discard that let the model fill
+the gaps between sentences with invented tokens. The surface discipline runs the
+whole prompt: the notes are arrows in words (`sister --tends--> Gregor`), never
+operator codes, cell names, sentence indices, or citation tokens, and orientation
+is the *filename*, type, and length — never a title, author, or genre, because
+recognition replaces reading. The notes register feeds the prompt on the way out
+and the edge-grounding veto reads it on the way back: one object, two directions.
+See [`docs/prompt-assembly.md`](docs/prompt-assembly.md).
+
+## The significance loop — the enacted DEF · EVA · REC
+
+The phasepost is the **depicted** loop: a perception of what a clause *reports*,
+timeless and recomputable. Beside it runs the **enacted** loop (`enact/`) — the
+reading's *own* act of establishing its terms, testing its particulars, and
+restructuring its frame, in read time. This is the significance engine, the thing
+eoreader3 had in feel; the two loops are tagged apart and never conflated in the
+log (`kind:'phasepost'` vs `register:'enacted'`).
+
+A **frame** is the terms the reading holds at a layer, carrying a **strain**
+accumulator and a **REC threshold**. **DEF** sets the frame; **EVA** tests each
+particular against it (verdict *confirm* or *strain*, the surprise its magnitude);
+**REC** restructures the frame when accumulated strain breaks the threshold —
+never on a single anomaly. Surprise is the throttle: a confirming EVA holds, a
+straining EVA accumulates, the frame RECs at threshold.
+
+The layers are a system, not a stack. A proposition particular can **cross
+layers** to test the document frame; lower particulars accumulate as EVAs against
+the higher frame until it breaks, and only the higher layer's *own* REC
+restructures it. The **arrow of time** keeps this from being circular: every EVA
+tests the frame *as of the cursor*, never a future frame — cross-layer influence is
+legal because it is cross-layer **and backward in time**. The **fold**
+(`replayFrames`) replays the enacted events to a cursor and reconstitutes the
+reader's frames as of that cursor; the same referent under a frame at two ages is
+two readings. `loopStats` surfaces the REC rate so a stable reading, a turbulent
+one, and a thrash are distinguishable.
+
+The deep, meaning-distance version waits on MiniLM; what ships now is the
+**mechanical skeleton** on the cheap γ-mass surprise that already runs over the
+whole document — deepening with no shape change once the meaning reader is live.
+See [`docs/significance-loop.md`](docs/significance-loop.md); it surfaces as a
+fourth strip in reading mode.
 
 ## The nine operators
 
@@ -248,8 +332,11 @@ comments on gates that were on.
 - **The fold is the consciousness** — existence + structure + significance
   folded into the reading the model receives (was a verbatim span dump the
   `prompt` stage didn't even use).
-- **The grounded prompt** — spans (verbatim, trusted) → reading (the fold,
-  "usually right") → question last, the order that worked on small models.
+- **The grounded prompt** — the fold's **notes** (plain-language arrows over the
+  graph) *plus* the verbatim **excerpts**, under a recognition-free orientation
+  (filename, type, length), question first for the small-model exchange. Notes and
+  excerpts from the same cursor; no codes, indices, or citation tokens reach the
+  talker. See [`docs/prompt-assembly.md`](docs/prompt-assembly.md).
 - **Reading mode** — predict (REC) / evaluate (EVA) / surprise (surprisal in
   bits), EO-tagged, surfaced as you step a cursor through the document.
 - **The graph view** — see and explore the graph with a cursor; nodes are

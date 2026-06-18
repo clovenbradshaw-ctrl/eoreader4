@@ -93,7 +93,10 @@ const coupling = (subj) =>
 
 // Step over leading adverbs/auxiliaries to the head verb. Returns the verb
 // (lowercased) and the remaining text, or null if no verb-like token follows.
-const headVerb = (text) => {
+// Exported so the edge-grounding veto can reuse the SAME head-verb scan the page
+// uses to tell a relational talker sentence (whose endpoints may not resolve)
+// from a non-relational one — the SVO clause parser, pointed at the talker.
+export const headVerb = (text) => {
   let rest = text.replace(/^[\s,]+/, '');
   for (let guard = 0; guard < 4; guard++) {
     const m = rest.match(/^([A-Za-z][a-zA-Z'’]*)\b/);

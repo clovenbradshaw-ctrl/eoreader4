@@ -38,22 +38,24 @@ test('structure surface reports the figures a window turns on', () => {
   assert.ok(s.figures.some(f => f.id === 'gregor-pike'));
 });
 
-test('the consciousness folds three levels into a cited reading', () => {
+test('the consciousness folds three levels into the arrows, indices held off the talker', () => {
   const doc = parseText('Alice met Bob. Alice met Bob. Alice trusted Bob.', { docId: 'c' });
   const spans = [0, 1, 2].map(idx => ({ idx, text: doc.sentences[idx], score: 1 }));
   const c = consciousness(doc, spans, 1);
   assert.ok(c.text.length > 0);
-  assert.match(c.text, /Alice/);
-  assert.match(c.text, /\[s\d\]/, 'citations preserved for binding');
-  assert.deepEqual(c.sources, [0, 1, 2]);
+  assert.match(c.text, /Alice --\S+--> Bob/, 'the structured reading is plain-language arrows');
+  assert.doesNotMatch(c.text, /\[s\d\]/, 'the talker never sees a sentence index (§3)');
+  assert.doesNotMatch(c.text, /\bCON\b|\bSIG\b|centers on/, 'no operator codes, no count headline');
+  assert.deepEqual(c.sources, [0, 1, 2], 'indices live on sources, the binder’s channel');
   assert.ok(c.levels.existence && c.levels.structure && c.levels.significance);
 });
 
-test('foldNote without a doc condenses the spans (a fold, not a copy)', () => {
+test('foldNote without a doc condenses the spans (a fold, not a copy), no indices in view', () => {
   const spans = [{ idx: 0, text: 'A short line.' }, { idx: 1, text: 'Another.' }];
   const note = foldNote(spans);
-  assert.match(note.text, /\[s0\]/);
-  assert.deepEqual(note.sources, [0, 1]);
+  assert.match(note.text, /A short line\./);
+  assert.doesNotMatch(note.text, /\[s\d\]/, 'the talker reads prose, not [sN] tags (§3)');
+  assert.deepEqual(note.sources, [0, 1], 'the index lives on sources, the binder’s channel');
 });
 
 test('every token is available for the graph — entities are the persistent subset', () => {
