@@ -12,6 +12,12 @@
 // This is the SAME partition core/address.js infers from the operator
 // (INS/NUL → Ground; CON/SYN/REC → Pattern; the rest → Figure), named here as
 // the three reading positions the classifier measures against.
+//
+// These are the operator-GRAIN bands — the axis the 27 cells partition on. They are
+// NOT the structural role positions in parse/positionElements, which read the clause
+// by information structure (subject = given → Ground, object = new → Figure, verb =
+// relation → Pattern). The two share these three names over two different axes; see
+// docs/proposition-addressing.md ("Role positions are not the operator-grain bands").
 
 import { OPERATORS, GRAINS } from '../core/index.js';
 

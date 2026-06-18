@@ -54,16 +54,17 @@ test('an argument span is a sub-clause stretch, not the whole sentence', () => {
   assert.ok(seg.object.end - seg.object.start < len, 'the argument span is shorter than the retrieval unit');
 });
 
-// §4 Step C, §5, §8 — positioning is structural; cells are held at no-commit.
-test('positionElements assigns by structure and holds the cells at no-commit', () => {
+// §4 Step C, §5, §8 — positioning is the information-structure role reading; the
+// operator-grain cells are a separate axis, held at no-commit.
+test('positionElements maps subject→Ground, object→Figure, verb→Pattern', () => {
   const doc = parseText('Grete Vale greeted Gregor Pike.', { docId: 'p' });
   const seg = argspans(doc)[0];
-  const p = positionElements(seg, { op: seg.depicts });
-  assert.equal(p.assigned_by, 'structure', 'the positions are grammar, not measurement');
-  assert.deepEqual(p.ground.elements.map(e => e.id), ['grete-vale', 'gregor-pike'],
-    'subject and object are the grounded existents (Ground)');
-  assert.equal(p.figure.elements[0].text, 'greeted', 'the verb is the act foregrounded (Figure)');
-  assert.equal(p.pattern.elements[0].op, 'CON', 'the relation is the bond (Pattern)');
+  const p = positionElements(seg);
+  assert.equal(p.assigned_by, 'information-structure', 'role under given/new/relation, not measurement');
+  assert.deepEqual(p.ground.elements.map(e => e.id), ['grete-vale'], 'the subject is the given (Ground)');
+  assert.deepEqual(p.figure.elements.map(e => e.id), ['gregor-pike'],
+    'the object is the new, picked out and tested (Figure)');
+  assert.equal(p.pattern.elements[0].text, 'greeted', 'the verb is the relation that binds them (Pattern)');
   // The lane: every cell is held at no-commit — geometry names them only when live.
   for (const pos of [p.ground, p.figure, p.pattern]) {
     assert.equal(pos.cell, null, 'cell-naming is meaning-only — no-commit under the hash organ');

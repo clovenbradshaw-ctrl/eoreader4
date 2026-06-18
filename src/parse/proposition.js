@@ -55,34 +55,46 @@ export const argumentSpanSeg = (args, sentIdx, {
 });
 
 // positionElements — §4 Step C, the structural half. Assign the elements to the
-// Ground / Figure / Pattern positions by GRAMMAR, not measurement: the subject and
-// object are the grounded existents (Ground); the verb is the act foregrounded
-// (Figure); the subject-verb-object relation is the bond (Pattern). The cell within
-// each position is named by GEOMETRY — a centroid argmax in the band the depicted
-// operator belongs to (Ground = NUL/INS, Figure = SEG/DEF/SIG/EVA, Pattern =
-// CON/SYN/REC; classify/bands). Cell-naming is meaning-only, so it holds at
-// no-commit until the meaning reader is live (§5, §9).
+// Ground / Figure / Pattern positions by an INFORMATION-STRUCTURE reading of the
+// clause (§4C), not by measurement: the SUBJECT is the given — it sets the terms the
+// clause is predicated of — so it is the Ground; the OBJECT is the new element picked
+// out and tested against those terms, so it is the Figure; the VERB is the relation
+// that binds them, the recurring type, so it is the Pattern. Each position then points
+// at one verbatim span of the line.
+//
+// THE TWO AXES (§5). These role positions are NOT the operator-grain bands the
+// classifier measures the 27 cells in (Ground = NUL/INS, Figure = SEG/DEF/SIG/EVA,
+// Pattern = CON/SYN/REC; classify/bands). They share three names over two different
+// axes — a role reading (given / new / relation) projected onto grammar, over the
+// grain axis (how zoomed-in a referent is). They coincide at Ground (the subject is
+// an INS existent) and at Pattern for a bond verb (a relating verb is a CON); they
+// part company at Figure — the object is an existent, not an act. That divergence is
+// the grain caveat, kept as an honest seam, not smoothed over. The cell within each
+// position is still named by GEOMETRY, meaning-only, held at no-commit today.
 //
 // THE LANE (§5, §8). Structure assigns the position; geometry only names the cell
-// and breaks ties. Geometry never reassigns a position that the grammar set — if
-// the grammar says the verb is the figure, the embedder names *which* figure; it
-// does not decide the verb is the ground because it scored higher there. This
-// function delivers the positions filled by elements and never names a cell, so
-// the lane cannot be crossed here: there is no geometry in it to overrule grammar.
-export const positionElements = (args, { op = args?.op || 'CON' } = {}) => {
+// and breaks ties. Geometry never reassigns a position that the grammar set — if the
+// grammar says the verb is the pattern, the embedder names *which* pattern cell; it
+// does not move the verb to the ground because it scored higher there. This function
+// delivers the positions filled by elements and never names a cell, so the lane
+// cannot be crossed here: there is no geometry in it to overrule grammar.
+export const positionElements = (args) => {
   const held = (position) => ({
     position,
     cell: null,                                      // named by geometry when live
     reason: 'meaning-only — held at no-commit (§5, §9)',
   });
-  // Ground holds the grounded existents that actually resolved to a referent.
-  const ground = [args?.subject, args?.object].filter((e) => e && e.id);
+  // Ground ← subject (the given), Figure ← object (the new): the resolved existents
+  // in their information-structure roles. Pattern ← verb (the relation), a span with
+  // no referent id of its own.
+  const given = [args?.subject].filter((e) => e && e.id);
+  const newer = [args?.object].filter((e) => e && e.id);
+  const verb  = [args?.verb].filter(Boolean);
   return Object.freeze({
-    ground:  Object.freeze({ ...held('Ground'),  elements: Object.freeze(ground) }),
-    figure:  Object.freeze({ ...held('Figure'),  elements: Object.freeze([args?.verb].filter(Boolean)) }),
-    pattern: Object.freeze({ ...held('Pattern'),
-                             elements: Object.freeze([{ relation: args?.verb?.text ?? null, op }]) }),
-    assigned_by: 'structure',   // the positions are grammar; geometry only names the cells
+    ground:  Object.freeze({ ...held('Ground'),  elements: Object.freeze(given) }),
+    figure:  Object.freeze({ ...held('Figure'),  elements: Object.freeze(newer) }),
+    pattern: Object.freeze({ ...held('Pattern'), elements: Object.freeze(verb) }),
+    assigned_by: 'information-structure',   // role under given/new/relation, not grain
   });
 };
 
