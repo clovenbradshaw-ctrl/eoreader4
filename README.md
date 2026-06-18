@@ -432,6 +432,14 @@ comments on gates that were on.
   below admitted, approaching the meaning in passes rather than one verdict. One
   button exports the **full** log as JSONL (every event, in seq order — the
   source of truth in full, not the grouped view), so a reading can be replayed.
+- **The Feed tab** — write a message and see *what the model would be fed*,
+  before it is ever sent. It runs the turn's assembling stages without the model
+  (`turn/feed.js`: route · converse · retrieve · fold · prompt) and shows two
+  things: the **graph around the message's terms as nested holons** — every
+  figure and bond the window activated, each traced to its line, *unclipped*
+  (not the visible graph's 40-figure, γ-faded view) — and the **model feed
+  itself**: the notes (arrows, capped as the prompt caps them), the verbatim
+  excerpts, and the whole prompt text. The model is never called.
 
 ## Run
 

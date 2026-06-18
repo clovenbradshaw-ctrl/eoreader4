@@ -294,7 +294,7 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 }
 .tab:hover { background: #232328; color: #e4e4e7; }
 .tab.active { background: #1d2030; color: #93c5fd; border-color: #1e3a8a; }
-#doc-view[hidden], #graph-view[hidden], #log-view[hidden] { display: none; }
+#doc-view[hidden], #graph-view[hidden], #log-view[hidden], #feed-view[hidden] { display: none; }
 
 /* Site-role units in the text view — held back from grounding */
 #doc-view .sentence.site { opacity: .4; }
@@ -331,6 +331,78 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
   color: #a5b4fc; border: 1px solid #312e81; background: #14132b;
   border-radius: 4px; padding: .02rem .3rem; cursor: help; letter-spacing: .02em;
 }
+
+/* Feed view — the graph around a message's terms + the prompt it would build */
+.feed-wrap { display: flex; flex-direction: column; gap: .6rem; height: 100%; }
+.feed-form { display: flex; gap: .4rem; }
+.feed-input {
+  flex: 1; background: #18181b; color: #e4e4e7; border: 1px solid #27272a;
+  border-radius: 6px; padding: .35rem .55rem; font: inherit; font-size: .8rem;
+}
+.feed-input:focus { outline: none; border-color: #1e3a8a; }
+.feed-results { overflow-y: auto; display: flex; flex-direction: column; gap: .6rem; }
+.feed-empty { color: #52525b; font-style: italic; font-size: .82rem; padding: .8rem 0; line-height: 1.5; }
+
+.feed-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.feed-msg { font-size: .85rem; color: #e4e4e7; font-weight: 600; word-break: break-word; }
+.feed-route { font-size: .7rem; color: #71717a; flex-shrink: 0; }
+.feed-route-tag {
+  font-family: ui-monospace, monospace; color: #93c5fd;
+  border: 1px solid #1e3a8a; background: #11203a; border-radius: 4px; padding: .02rem .3rem;
+}
+.feed-route-tag.chat { color: #a1a1aa; border-color: #3f3f46; background: #1f1f23; }
+
+.feed-section-head {
+  font-size: .72rem; color: #a1a1aa; text-transform: uppercase; letter-spacing: .04em;
+  margin-bottom: .35rem;
+}
+
+/* The holon tree — document ▸ figure ▸ bond, nested and collapsible */
+.feed-tree { display: flex; flex-direction: column; gap: .25rem; }
+.holon > summary {
+  cursor: pointer; font-size: .76rem; padding: .12rem 0; list-style: none;
+  display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap;
+}
+.holon > summary::-webkit-details-marker { display: none; }
+.holon > summary::before { content: '▸'; color: #52525b; font-size: .7rem; }
+.holon[open] > summary::before { content: '▾'; }
+.holon-doc { border: 1px solid #27272a; border-radius: 6px; padding: .35rem .5rem; }
+.holon-fig { margin: .15rem 0 .15rem .8rem; border-left: 1px solid #27272a; padding-left: .55rem; }
+.holon-kind { font-size: .66rem; color: #71717a; text-transform: uppercase; letter-spacing: .04em; }
+.holon-label { color: #e4e4e7; }
+.holon-meta, .holon-count { color: #71717a; font-size: .7rem; font-family: ui-monospace, monospace; }
+.holon-bond, .holon-def {
+  display: flex; align-items: baseline; gap: .4rem; flex-wrap: wrap;
+  font-size: .73rem; margin: .12rem 0 .12rem 1.4rem; line-height: 1.45;
+}
+.holon-arrow { color: #c4b5fd; font-family: ui-monospace, monospace; font-size: .7rem; }
+.holon-line {
+  flex-basis: 100%; color: #a1a1aa; font-size: .7rem; font-style: italic;
+  border-left: 2px solid #27272a; padding-left: .5rem; margin-left: .2rem;
+}
+.holon-cite {
+  color: #60a5fa; cursor: pointer; font-family: ui-monospace, monospace;
+  font-size: .66rem; flex-shrink: 0;
+}
+.holon-cite:hover, .feed-span-cite:hover { text-decoration: underline; }
+
+/* The model feed — notes, excerpts, the whole prompt */
+.feed-subhead { margin: .5rem 0 .25rem; display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+.feed-subhead-t { font-size: .74rem; color: #d4d4d8; }
+.feed-subhead-n { font-size: .68rem; color: #71717a; font-style: italic; }
+.feed-pre {
+  white-space: pre-wrap; word-break: break-word; margin: 0;
+  background: #131316; border: 1px solid #27272a; border-radius: 6px;
+  padding: .5rem .6rem; font-family: ui-monospace, monospace; font-size: .72rem;
+  color: #d4d4d8; line-height: 1.5;
+}
+.feed-note { color: #52525b; font-style: italic; font-size: .74rem; padding: .15rem 0; }
+.feed-spans { display: flex; flex-direction: column; gap: .25rem; }
+.feed-span { display: flex; align-items: baseline; gap: .45rem; font-size: .73rem; line-height: 1.45; }
+.feed-span-cite { color: #60a5fa; cursor: pointer; font-family: ui-monospace, monospace; font-size: .68rem; flex-shrink: 0; }
+.feed-span-tag { color: #fbbf24; font-family: ui-monospace, monospace; font-size: .66rem; flex-shrink: 0; }
+.feed-span-text { color: #d4d4d8; word-break: break-word; }
+.feed-prompt > summary { cursor: pointer; font-size: .72rem; color: #a1a1aa; padding: .2rem 0; }
 
 /* Predictive-coding line in reading mode */
 .rl-pred {
