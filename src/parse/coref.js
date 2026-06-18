@@ -28,8 +28,27 @@ export const createCorefField = ({
   gamma = 0.7, maxDist = 8,
   convGamma = gamma,            // conversational warmth decays at least as fast
   convCap = CONVERSATIONAL_CAP, // and never deposits above the model reader's cap
+  descGamma = 0.97,             // standing descriptions decay ~glacially
+  descMaxDist = 400,            // a role can be reactivated discourse-wide
+  // Whether two role keys conflict on one bearer ("sister" vs "mother"). INJECTED,
+  // never hardcoded: coref must not KNOW the algebra, only consult it. The default
+  // asserts no conflicts (a leaf claims no knowledge it wasn't handed); the wiring
+  // layer — which is allowed to see both holons — passes one backed by the typing
+  // bridge's areDisjoint, so the conflict knowledge lives in exactly one place.
+  rolesConflict = () => false,
 } = {}) => {
   const traces = new Map(); // id → { lastIdx, grounded, conversational }
+  // descriptors: roleKey ("sister") → { ownerId|null, lastIdx, mass, bound:id|null }
+  // A THIRD channel — standing descriptions. A descriptor ("his sister") is
+  // neither a pronoun (fleeting, maxDist:8) nor a name (grounded). It names a
+  // ROLE, persists across the whole discourse, and only later (Metamorphosis
+  // s189) does the bearer get a proper name (Grete). It must outlive the γ kernel
+  // — 8 sentences cannot bridge a 118-sentence epithet→name gap — so descriptors
+  // retain on a slow kernel and resolve by ROLE continuity, never by recency.
+  // They deposit CONVERSATIONAL mass only: a descriptor witnesses a *role*, not a
+  // span; it can warm a bond, never clear the commit floor (§8 subtract-and-check
+  // stays intact — descriptor mass lives in the channel the fold strips).
+  const descriptors = new Map();
 
   // Decay both channels to `sentIdx`, then return the trace for a fresh deposit.
   const touch = (id, sentIdx) => {
@@ -56,6 +75,61 @@ export const createCorefField = ({
   // mass directly; it deposits a capped, tagged conversational mention. This is
   // the witness-does-not-decide rule holding at the field.
   const reinforce = (id, w, sentIdx) => noteConversational(id, sentIdx ?? 0, w);
+
+  // --- descriptor channel -------------------------------------------------
+  // Record a standing-description sighting: a role term ("sister"/"mother"),
+  // optionally with a resolved owner ("Gregor's sister" → ownerId gregor-samsa;
+  // "his sister" → ownerId = field(sentIdx)[0] ONLY if it cleared a margin, the
+  // caller's Frame-A guard). Mass accumulates on the role's own slow kernel.
+  const noteDescriptor = (roleKey, sentIdx, ownerId = null, { named = false } = {}) => {
+    const dr = descriptors.get(roleKey)
+      || { ownerId: null, ownerNamed: false, lastIdx: sentIdx, mass: 0, bound: null };
+    const d = Math.max(0, sentIdx - dr.lastIdx);
+    dr.mass = dr.mass * Math.pow(descGamma, d) + 1;
+    dr.lastIdx = sentIdx;
+    // A NAMED owner ("Gregor's sister") is authoritative and sticky; a pronoun-
+    // resolved owner ("his sister") is a guess that fills the slot only while no
+    // name has claimed it, and never overwrites a name — regardless of order
+    // (the pronoun epithet appears 51 sentences before the named one).
+    if (ownerId && (named || !dr.ownerNamed)) {
+      dr.ownerId = ownerId;
+      if (named) dr.ownerNamed = true;
+    }
+    descriptors.set(roleKey, dr);
+    // Already bound to a name → keep depositing warmth onto that referent so the
+    // role's recurrences keep the bearer salient.
+    if (dr.bound) noteConversational(dr.bound, sentIdx, convCap * 0.5);
+  };
+
+  // Unify a descriptor with a later-introduced NAME by ROLE, not recency. Returns
+  // the bond {id, w, via} or null. Guarded against false-merge:
+  //  - candidate role/gender must be COMPATIBLE with the role term (caller-decided)
+  //  - candidate must be DISTINCT from the descriptor's owner (can't be one's own sister)
+  //  - the role must not be STALE beyond descMaxDist (a lapsed epithet does not bind)
+  //  - role EXCLUSIVITY: a name already bearing a role this one conflicts with
+  //    (rolesConflict) cannot take it — Mrs Samsa, already the 'mother', is refused
+  //    'sister'. This is what separates two same-gender referents (the live Grete /
+  //    Mrs Samsa case) without any gender channel: role + distinctness suffice.
+  //  - binds at conversational tier, defeasible — the fold can subtract and re-check.
+  //
+  // ASSUMES ONE BEARER PER ROLE: a role already bound to a different name refuses a
+  // second. Correct for Metamorphosis (one sister, one mother) but WRONG for a text
+  // with two siblings ("his brother" × 2). That is a real limit, left as a caveat,
+  // not solved here — a multi-bearer role needs an instance model the field lacks.
+  const unifyDescriptor = (roleKey, nameId, sentIdx, { compatible = true } = {}) => {
+    const dr = descriptors.get(roleKey);
+    if (!dr || !compatible) return null;
+    if (dr.ownerId && dr.ownerId === nameId) return null;          // can't be your own sister
+    if (sentIdx - dr.lastIdx > descMaxDist) return null;           // role too stale to bind
+    if (dr.bound && dr.bound !== nameId) return null;              // one bearer per role (caveat above)
+    for (const [rk, d] of descriptors)                            // role exclusivity, predicate-injected
+      if (d.bound === nameId && rk !== roleKey && rolesConflict(roleKey, rk)) return null;
+    dr.bound = nameId;
+    const decayed = dr.mass * Math.pow(descGamma, Math.max(0, sentIdx - dr.lastIdx));
+    const w = Math.min(convCap, convCap * Math.tanh(decayed / 4));  // accumulated standing → warmth
+    noteConversational(nameId, sentIdx, w);
+    return { id: nameId, w, via: `descriptor:${roleKey}` };
+  };
 
   // Read the field at a position, weighting each candidate by `pick(g, c)` over
   // its decayed grounded (g) and conversational (c) mass; normalised, hottest
@@ -101,5 +175,9 @@ export const createCorefField = ({
     return !!me && !!top && me.id === top.id && me.w >= floor;
   };
 
-  return { note, noteConversational, reinforce, field, fieldGrounded, survivesSubtraction };
+  return {
+    note, noteConversational, reinforce,
+    noteDescriptor, unifyDescriptor,        // the standing-descriptor channel
+    field, fieldGrounded, survivesSubtraction,
+  };
 };
