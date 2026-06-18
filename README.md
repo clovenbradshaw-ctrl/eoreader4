@@ -223,11 +223,14 @@ reader's frames as of that cursor; the same referent under a frame at two ages i
 two readings. `loopStats` surfaces the REC rate so a stable reading, a turbulent
 one, and a thrash are distinguishable.
 
-The deep, meaning-distance version waits on MiniLM; what ships now is the
-**mechanical skeleton** on the cheap γ-mass surprise that already runs over the
-whole document — deepening with no shape change once the meaning reader is live.
-See [`docs/significance-loop.md`](docs/significance-loop.md); it surfaces as a
-fourth strip in reading mode.
+Two reads, one loop. The **skeleton** runs on the cheap γ-mass surprise over the
+whole document; the **meaning reader** (`enactedReadingMeaning`) drives the *same*
+loop with prediction error in the centroids' space, so frames restructure on
+sense-turns the γ-mass reader is blind to — and falls back to the skeleton under
+the hash organ. The loop never changed; only `read` got deeper, exactly as the
+design promised. See [`docs/significance-loop.md`](docs/significance-loop.md); it
+surfaces as a fourth strip in reading mode that deepens to *semantic surprise* when
+the geometric reader is live.
 
 ## The nine operators
 

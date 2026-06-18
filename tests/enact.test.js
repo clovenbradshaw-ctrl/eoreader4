@@ -152,25 +152,23 @@ test('the event shapes carry the §8 fields and the RULES_LEDGER shape', () => {
   assert.ok(lines.find(l => l.op === 'REC').strainSum != null, 'the ledger exports the strain sum');
 });
 
-// §11 — convergence reporting: a thrash is visible as the threshold error it is.
-test('loopStats flags a thrash — RECs oscillating between two frames', () => {
-  const oscillate = [
-    { op: 'DEF', layer: 'proposition', cursor: 0, producedBy: 'initial', frame: { terms: ['A'] } },
-    { op: 'REC', layer: 'proposition', cursor: 3 },
-    { op: 'DEF', layer: 'proposition', cursor: 3, producedBy: { rec: 1 }, frame: { terms: ['B'] } },
-    { op: 'REC', layer: 'proposition', cursor: 6 },
-    { op: 'DEF', layer: 'proposition', cursor: 6, producedBy: { rec: 3 }, frame: { terms: ['A'] } },
-  ];
-  assert.equal(loopStats(oscillate).proposition.thrash, true, 'A → B → A is a thrash');
+// §11 — convergence reporting: genuine oscillation is a thrash; a rich arc that
+// revisits a recurring cast once is NOT (the false alarm a single A→B→A would
+// raise, measured against the worked corpus and fixed here).
+test('loopStats flags genuine oscillation as thrash, not a rich arc', () => {
+  // Build a layer's install sequence (initial DEF, then a REC+DEF per term-set).
+  const installs = (...termSets) => termSets.flatMap((terms, i) => [
+    ...(i ? [{ op: 'REC', layer: 'l', cursor: i * 3 }] : []),
+    { op: 'DEF', layer: 'l', cursor: i * 3, producedBy: i ? { rec: 1 } : 'initial', frame: { terms } },
+  ]);
 
-  const settle = [
-    { op: 'DEF', layer: 'proposition', cursor: 0, producedBy: 'initial', frame: { terms: ['A'] } },
-    { op: 'REC', layer: 'proposition', cursor: 3 },
-    { op: 'DEF', layer: 'proposition', cursor: 3, producedBy: { rec: 1 }, frame: { terms: ['B'] } },
-    { op: 'REC', layer: 'proposition', cursor: 6 },
-    { op: 'DEF', layer: 'proposition', cursor: 6, producedBy: { rec: 3 }, frame: { terms: ['C'] } },
-  ];
-  assert.equal(loopStats(settle).proposition.thrash, false, 'A → B → C is a settling');
+  // A → B → A → B: the frame flips back repeatedly, exploring only two frames.
+  assert.equal(loopStats(installs(['A'], ['B'], ['A'], ['B'])).l.thrash, true, 'genuine oscillation');
+  // A → B → C → D → E: a settling/wandering reading, every frame distinct.
+  assert.equal(loopStats(installs(['A'], ['B'], ['C'], ['D'], ['E'])).l.thrash, false, 'a rich arc');
+  // A → B → C → A → D: a recurring cast touched once over a long arc — not thrash
+  // (this is exactly what the old single-A→B→A detector mislabelled).
+  assert.equal(loopStats(installs(['A'], ['B'], ['C'], ['A'], ['D'])).l.thrash, false, 'one recurrence is not thrash');
 });
 
 // The live wiring: the skeleton runs over a real document on the cheap surprise.

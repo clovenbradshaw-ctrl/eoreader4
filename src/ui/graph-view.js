@@ -15,14 +15,14 @@
 // whether the pane is visible or hidden when first built.
 
 import { readingAt, structureSurface, predictNext } from '../read/index.js';
-import { enactedReadingTo } from '../enact/index.js';
+import { enactedReadingTo, enactedReadingMeaning } from '../enact/index.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const W = 600, H = 460, CX = W / 2, CY = H / 2;
 const CAP = 40;          // most-sighted entities to draw
 const GAMMA = 0.7;       // matches DEFAULT_PROJECTION_RULES.decay_gamma
 
-export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder } = {}) => {
+export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder, geometricEmbedder, isGeometricLive } = {}) => {
   root.innerHTML = '';
   if (!doc || typeof doc.projectGraph !== 'function') {
     root.innerHTML = `<div class="graph-empty">No document yet — load one and its graph appears here.</div>`;
@@ -250,6 +250,10 @@ export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder } 
       `<div class="rl rl4"><span class="rl-tag">enacted loop</span>` +
         `<span class="rl-body">${enactedStrip(enactedReadingTo(doc, cur))}</span></div>`;
 
+    // The cheap (γ-mass) fold is shown above instantly; deepen it to the meaning
+    // reader when the geometric organ is live and the doc is short enough to embed.
+    maybeDeepen(cur);
+
     // Predictive coding: ask the model to read the past and predict the next
     // line, then measure the embedding distance to what actually comes. Async,
     // so it fills in after the instant mechanical pass. Skipped during play.
@@ -344,6 +348,31 @@ export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder } 
       ? `<div class="rl-summary">thrash: ${escapeHtml(thrashing.join(', '))} — threshold too low (§11)</div>`
       : '';
     return rows.join('') + note;
+  };
+
+  // Deepen the enacted strip from the γ-mass skeleton to the meaning reader: the
+  // surprise becomes prediction error in the centroids' space, so frames
+  // restructure on sense-turns the cheap reader is blind to (§11). Only when the
+  // geometric organ is live, and only for documents short enough to embed
+  // responsively — a long doc holds at the skeleton rather than block reading on
+  // thousands of embeddings. The cheap strip is already on screen; this replaces
+  // it when the (cached, async) meaning fold resolves. Stale folds are dropped.
+  let enactReq = 0;
+  const MEANING_MAX = 400;
+  const maybeDeepen = (cur) => {
+    if (!geometricEmbedder?.measuresMeaning || !(isGeometricLive && isGeometricLive())) return;
+    if (S > MEANING_MAX) return;
+    const body = panel.querySelector('.rl4 .rl-body');
+    if (!body) return;
+    body.insertAdjacentHTML('beforeend', `<div class="rl-summary en-deepening">meaning reader: deepening…</div>`);
+    const req = ++enactReq;
+    enactedReadingMeaning(doc, cur, { embedder: geometricEmbedder }).then((deep) => {
+      if (req !== enactReq) return;                              // cursor moved on
+      const b = panel.querySelector('.rl4 .rl-body');
+      if (!b) return;
+      if (!deep || deep.reader !== 'meaning') { b.querySelector('.en-deepening')?.remove(); return; }
+      b.innerHTML = enactedStrip(deep) + `<div class="rl-summary">meaning reader · semantic surprise</div>`;
+    }).catch(() => { panel.querySelector('.en-deepening')?.remove(); });
   };
 
   // ---- hover / select / drag ----------------------------------------------

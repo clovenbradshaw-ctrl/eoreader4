@@ -103,6 +103,11 @@ const ingest = async (file) => {
     onSelectSentence: selectSentence,
     getModel: () => STATE.model,
     embedder: STATE.embedder,
+    // The MiniLM organ + a liveness probe: reading mode deepens the enacted loop
+    // to meaning-distance surprise when the geometric reader is live (else holds
+    // at the γ-mass skeleton). Separate from STATE.embedder (the hash organ).
+    geometricEmbedder: STATE.geometricEmbedder,
+    isGeometricLive: () => STATE.geometric?.installer?.getState?.().geometricReader === 'live',
   });
   renderLog(doc, els.logView, { onSelectSentence: selectSentence });
   const t1 = performance.now();
@@ -269,6 +274,8 @@ ensureModel().catch(() => { /* status already reflects failure */ });
 // is usable throughout, and the classifier holds at no-commit until (and unless)
 // MiniLM and verified centroids both come online. Kept apart from STATE.embedder
 // (the hash organ the retrieval path uses) so this changes nothing below it.
-STATE.geometric = bootGeometricReader(document.body, { embedder: createMiniLMEmbedder() });
+const geometricEmbedder = createMiniLMEmbedder();
+STATE.geometricEmbedder = geometricEmbedder;   // reused by reading mode's meaning fold
+STATE.geometric = bootGeometricReader(document.body, { embedder: geometricEmbedder });
 
 window.STATE = STATE; // for in-browser inspection
