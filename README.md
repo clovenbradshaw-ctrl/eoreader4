@@ -139,7 +139,8 @@ hard-coded true; a convention is whatever the text keeps doing.
 | `model`       | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
 | `classify`    | `createPhasepostClassifier({cells, centroids, embedder})`     | `core`     |
 | `boot`        | `bootGeometricReader(root, {embedder})` · `createInstaller`   | `classify`, `model` |
-| `converse`    | `conversationalEvent` · `depositConversational` · `commitSurvives` | nothing |
+| `converse`    | `conversationalEvent` · `depositConversational` · `commitSurvives` · `corefPerception` | nothing |
+| `factcheck`   | `factCheck({prose, doc, graph, classifier})` · `corroborateCoref` (edge-grounding veto) | `core`, `parse`, `classify`, `converse` |
 | `audit`       | `createAuditLog()`                                            | nothing    |
 | `turn`        | `runTurn({question, doc, model, embedder, auditLog})` (reduce)| all above  |
 | `ingest`      | `ingestText(file)` · `ingestImage(detections)` → doc          | `parse`, `core` |
@@ -169,6 +170,30 @@ witnessed by the talker, so they warm the field and orient the next turn but can
 never be cited as document provenance, originate a committed reading, or type a
 relation. A fold-time subtract-and-check refuses any reading that leans on that
 warmth. See [`docs/conversational-provenance.md`](docs/conversational-provenance.md).
+
+On the way back, the **edge-grounding veto** (`factcheck`) holds the talker to
+the graph it spoke from. It parses the talker's prose with the same SVO parser
+the page uses, resolves the endpoints through the **document** referent table
+(never the talker's own coreference), types each relation to its cell, and
+compares each claimed edge to the document reading — yielding one of four
+verdicts: *corroborated* (and earns the document edge's citation), *unsupported*
+(flag), *contradicted* by a VOID or opposing edge (refuse), or *indeterminate*
+(held). `unbound` catches a claim with no node-witness; this catches a claimed
+*relation* with no edge-witness — the shape the invented-location lie wore. The
+talker's coref strength returns as a **proposal**: it may tip a merge, but a
+grounding reader must second it before the merge commits. See
+[`docs/edge-grounding.md`](docs/edge-grounding.md).
+
+Those arrows are also what the talker is **handed**. The prompt feeds the fold —
+the document **notes** (plain-language arrows over the folded graph) *plus* the
+verbatim **excerpts** — never raw spans alone, the discard that let the model fill
+the gaps between sentences with invented tokens. The surface discipline runs the
+whole prompt: the notes are arrows in words (`sister --tends--> Gregor`), never
+operator codes, cell names, sentence indices, or citation tokens, and orientation
+is the *filename*, type, and length — never a title, author, or genre, because
+recognition replaces reading. The notes register feeds the prompt on the way out
+and the edge-grounding veto reads it on the way back: one object, two directions.
+See [`docs/prompt-assembly.md`](docs/prompt-assembly.md).
 
 ## The nine operators
 
@@ -273,8 +298,11 @@ comments on gates that were on.
 - **The fold is the consciousness** — existence + structure + significance
   folded into the reading the model receives (was a verbatim span dump the
   `prompt` stage didn't even use).
-- **The grounded prompt** — spans (verbatim, trusted) → reading (the fold,
-  "usually right") → question last, the order that worked on small models.
+- **The grounded prompt** — the fold's **notes** (plain-language arrows over the
+  graph) *plus* the verbatim **excerpts**, under a recognition-free orientation
+  (filename, type, length), question first for the small-model exchange. Notes and
+  excerpts from the same cursor; no codes, indices, or citation tokens reach the
+  talker. See [`docs/prompt-assembly.md`](docs/prompt-assembly.md).
 - **Reading mode** — predict (REC) / evaluate (EVA) / surprise (surprisal in
   bits), EO-tagged, surfaced as you step a cursor through the document.
 - **The graph view** — see and explore the graph with a cursor; nodes are

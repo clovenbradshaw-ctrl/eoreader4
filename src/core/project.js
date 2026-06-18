@@ -64,6 +64,7 @@ const computeProjection = (log, frame) => {
   const events    = log.snapshot();
   const entities  = new Map();
   const edges     = [];
+  const voidsRaw  = [];
   const parent    = new Map();
   const retracted = new Set();
 
@@ -82,6 +83,21 @@ const computeProjection = (log, frame) => {
 
   for (const e of events) {
     if (retracted.has(e.seq)) continue;
+    // A carved absence — the document witnessing that a relation slot is VOID
+    // (the four VOID emitters; an explicit_void note `A --rel--> [void]`, or a
+    // DEF to VOID). It is content, not silence: the edge-grounding veto compares
+    // a talker claim against it for the CONTRADICTED verdict, the libel-grade
+    // catch (edge-grounding §3/§10). Kept out of the edge/entity passes — a void
+    // is the absence of a tie, not a tie. Endpoints canonicalised after merge.
+    if (e.kind === 'void') {
+      voidsRaw.push({
+        node: e.node ?? (e.src && e.src !== '[void]' ? e.src : e.tgt),
+        rel: e.rel ?? e.via ?? null,
+        sentIdx: e.sentIdx ?? null,
+        seq: e.seq,
+      });
+      continue;
+    }
     switch (e.op) {
       case 'INS': {
         const ent = entities.get(e.id) || {
@@ -158,9 +174,18 @@ const computeProjection = (log, frame) => {
     if (w >= floor) edgesOut.push({ ...e, from: f, to: t, weight: w });
   }
 
+  // Canonicalise void endpoints through the same union-find the edges use, so a
+  // carved absence on a merged referent matches a claim about any of its aliases.
+  const voids = voidsRaw.map(v => Object.freeze({ ...v, node: find(v.node) }));
+
   return Object.freeze({
     entities: merged,
     edges: edgesOut,
+    voids: Object.freeze(voids),
+    // Canonicalise any id to its merged referent — the binding of record the
+    // edge-grounding veto resolves a talker claim's endpoints against, so a claim
+    // about an alias lands on the same node its edges do (edge-grounding §5).
+    representative: (id) => find(id),
     frame: Object.freeze({ ...frame }),
     rev: events.length,
   });

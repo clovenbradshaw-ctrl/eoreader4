@@ -44,6 +44,14 @@ export const DEFAULT_FLOORS = Object.freeze({
   Pattern: 0.05,  // CON/SYN/REC — CON and SYN carry attested mass
 });
 
+// Cell adjacency floor — the cosine two cell CENTROIDS must clear to count as
+// "the same or adjacent" relation (the edge-grounding correspondence, §4). It is
+// read off the centroid geometry, never declared by hand; a too-loose floor
+// passes "owns" against "holds", a too-tight one strips "lives in" against
+// "located-in". Tune it against the worked-example goldens — a measured
+// threshold, not a constant (§10).
+export const ADJACENCY_FLOOR = 0.6;
+
 const cosine = (a, b) => {
   let dot = 0, na = 0, nb = 0;
   const n = Math.min(a.length, b.length);
@@ -105,6 +113,33 @@ const measureBand = (qVec, bandCells, vectors, floor) => {
 };
 
 const round = (x) => Math.round(x * 1000) / 1000;
+
+// The cell-adjacency instrument. Relation correspondence is geometric, not
+// string (§4): "lives in" and "located-in" must read as near, "lives in" and
+// "owns" as far — and that nearness lives between the two cells' CENTROIDS, not
+// their labels. So adjacency is the cosine between two cell centroid vectors,
+// thresholded by the measured floor. Same key is trivially adjacent. A cell with
+// no centroid, or the hash organ (no in-space vectors at all), cannot be
+// measured — adjacent() returns null and the caller HOLDS, never guessing off
+// spelling. This is the same firewall the classifier runs, applied to the
+// comparison of two cells rather than the typing of one.
+export const createCellAdjacency = (vectors) => {
+  const has = !!(vectors && Object.keys(vectors).length);
+  const cosineOf = (a, b) => {
+    const va = vectors?.[a], vb = vectors?.[b];
+    if (!va || !vb) return null;
+    return round(cosine(va, vb));
+  };
+  return Object.freeze({
+    measurable: () => has,
+    cosine: cosineOf,
+    adjacent: (a, b, floor = ADJACENCY_FLOOR) => {
+      if (a && b && a === b) return true;       // a cell corresponds to itself
+      const c = cosineOf(a, b);
+      return c == null ? null : c >= floor;     // null → cannot measure → hold
+    },
+  });
+};
 
 // Build the geometric reader from a cells registry, a centroid bundle, and an
 // injected embedder. `centroids` is { meta:{ model, construction, dim }, vectors:{ key: number[] } }
@@ -173,6 +208,10 @@ export const createPhasepostClassifier = ({ cells, centroids, embedder, floors =
     isLive: () => live,
     construction,
     bands,
+    // The cell-adjacency instrument, bound to this reader's centroids — so the
+    // edge-grounding veto compares two relation cells in the SAME space the
+    // classifier typed them in. Inert (unmeasurable) under the hash organ.
+    adjacency: createCellAdjacency(vectors),
     // The geometric reader's coupling on a deposit is the measured confidence,
     // never a fixed prior — confidence flows up from the margin, it does not
     // flow down from fluency. (The model reader, by contrast, is capped at 0.6.)
