@@ -18,39 +18,49 @@
 // live (§11).
 
 import { readingAt } from '../read/index.js';
-import { createEnactedLoop } from './loop.js';
+import { createEnactedLoop, calibrateReader } from './loop.js';
 import { replayFrames, loopStats } from './replay.js';
 import { buildMeaningRead } from './meaning.js';
 
-export { createEnactedLoop, DEFAULT_THRESHOLDS, DEFAULT_CONFIRM_BAND } from './loop.js';
+export { createEnactedLoop, calibrateReader, DEFAULT_THRESHOLDS, DEFAULT_CONFIRM_BAND } from './loop.js';
 export { replayFrames, loopStats } from './replay.js';
 export { createFrame, snapshotFrame, sameTerms } from './frame.js';
 export { isEnacted, isDepicted, assertSingleRegister } from './register.js';
 export { buildMeaningRead } from './meaning.js';
 
-// The cheap surprise provider — the mechanical γ-mass surprise over the field, the
-// only strain honestly computable until the meaning reader is live (§11). The terms
-// are the figures the reading predicts are in play at the cursor: a real,
-// mechanical term-set the frame stands on, re-read whenever a frame is set, so a
-// document frame (re-read only on its rare RECs) stays older and stickier than a
-// proposition frame — which is why the same referent reads differently at two ages
-// of the loop.
-const cheapRead = (doc) => (cursor) => {
-  const r = readingAt(doc, cursor);
-  return { surprise: r.surprise, terms: r.predicted?.figures || [] };
-};
+// The cheap surprise provider — now the BAYESIAN γ-mass surprise over the field
+// (docs/bayesian-surprise.md), the only strain honestly computable until the meaning
+// reader is live (§11). It rides `bayes` (the significance channel), not `surprise`
+// (novelty), so a frame breaks on a genuine restructuring of the reading rather than
+// on an inert improbability. The terms are the figures the reading predicts are in
+// play at the cursor: a real, mechanical term-set the frame stands on, re-read
+// whenever a frame is set, so a document frame (re-read only on its rare RECs) stays
+// older and stickier than a proposition frame — which is why the same referent reads
+// differently at two ages of the loop.
 
 // Build the full enacted log for a doc once, in generation order, and cache it. The
 // log is append-only and the arrow runs forward, so the whole-document log is the
 // superset of every cursor's reading; the fold (replayFrames) reconstitutes any
 // cursor from it. Same discipline as projectGraph's memo — keyed by the doc, which
 // is immutable post-parse — so the loop is run once, not per cursor move.
+//
+// The readings are computed once over the whole document, both to drive the loop and
+// to CALIBRATE the band + thresholds to this text's `bayes` scale (calibrateReader):
+// `bayes` clusters far below the old surprisal band, so without the fit the frame
+// goes numb. A caller's explicit confirmBand/thresholds (opts) always win.
 const LOGS = new WeakMap();
 const enactedLogOf = (doc, opts) => {
   const cached = LOGS.get(doc);
   if (cached && !opts) return cached;
   const units = doc.units || doc.sentences || [];
-  const loop = createEnactedLoop({ read: cheapRead(doc), ...(opts || {}) });
+  const readings = units.map((_, c) => readingAt(doc, c));
+  const cal = calibrateReader(readings.map(r => r.bayes));
+  const loop = createEnactedLoop({
+    read: (c) => ({ surprise: readings[c]?.bayes ?? 0, terms: readings[c]?.predicted?.figures || [] }),
+    confirmBand: cal.confirmBand,
+    thresholds: cal.thresholds,
+    ...(opts || {}),                  // an explicit band/thresholds overrides the fit
+  });
   if (units.length) loop.runTo(units.length - 1);
   if (!opts) LOGS.set(doc, loop.events);
   return loop.events;

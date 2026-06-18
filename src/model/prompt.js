@@ -30,8 +30,20 @@
 // label — the index the talker no longer sees.
 export const EXCERPTS_HEADER = 'Excerpts from the document:';
 
-// A default cap on the reply, kept modest for a small in-browser model.
-export const DEFAULT_BUDGET = Object.freeze({ sentences: 3 });
+// NO default length prescription. The earlier contract carried a sentence cap, which
+// a small model read as the TASK, not a ceiling — "summarize" came back as a literal
+// three-sentence stub. The real bound is max_tokens, set per task by the intent pass
+// (turn/intent.js). The empty budget means "say nothing about length"; a caller may
+// still pass an explicit { sentences } / { chars } budget to re-impose a cap for one
+// turn. See docs/prompt-assembly.md.
+export const DEFAULT_BUDGET = Object.freeze({});
+
+// The summary degeneracy guard — FAITHFULNESS, not length. Rides only on a summary
+// task (turn/intent.js). A small model handed a "summarize" turn tends to reword a
+// single excerpt as the whole answer; this asks it to draw the excerpts together.
+export const SUMMARY_GUARD =
+  'They want a summary: say what the document is about in your own words, drawing the ' +
+  'excerpts together — never reword a single excerpt as the whole answer.';
 
 export const SYSTEM_GROUND = `You answer using only the material provided — the document and the conversation.
 - The EXCERPTS are verbatim from the document. Treat them as fact; if anything conflicts, the excerpt wins.
@@ -40,7 +52,7 @@ export const SYSTEM_GROUND = `You answer using only the material provided — th
 - Do not use outside knowledge, and do not recognise the work — read only what is here. Do not invent names, places, or facts.
 - Write plain prose. Do not echo the arrows or write codes, indices, or citation tags like [s0]; the structure is yours to read, the citations are added for you.`;
 
-export const SYSTEM_CHAT = `You are a brief, accurate assistant. Two sentences max unless asked otherwise.`;
+export const SYSTEM_CHAT = `You are a brief, accurate assistant. Answer using only what has been said in this conversation.`;
 
 // Orientation WITHOUT recognition. Filename, type, length — never the title the
 // document metadata may carry, never the author, never the genre.
@@ -68,19 +80,25 @@ export const buildGroundedMessages = ({
   spans = [],
   notes = '',
   orientation = '',
+  task = 'answer',
   budget = DEFAULT_BUDGET,
   conversation = {},
-  lastReply = '',
 } = {}) => {
   const blocks = [];
 
   if (orientation) blocks.push(`You are reading ${orientation}. Read what is here; do not name or place the work.`);
 
-  blocks.push(`Here is the chat with the user:\nUser: ${question}${lastReply ? `\nYou: ${lastReply}` : ''}`);
+  blocks.push(`Here is the chat with the user:\nUser: ${question}`);
 
+  // The summary guard rides on a summary task only — faithfulness, not length.
+  if (task === 'summary') blocks.push(SUMMARY_GUARD);
+
+  // No length line by default (budget empty); a caller may re-impose a cap for a turn.
   const budgetStr = budgetLine(budget);
   if (budgetStr) blocks.push(budgetStr);
 
+  // The conversation slots — now POPULATED by the session fold (docs/session-fold.md):
+  // the surfed recap of older turns as notes, the recent verbatim window as past turns.
   if (conversation.notes)
     blocks.push(`Notes about our conversation before this:\n${conversation.notes}`);
   if (conversation.pastTurns?.length)
@@ -95,9 +113,15 @@ export const buildGroundedMessages = ({
   ];
 };
 
-export const buildChatMessages = ({ question, history = [] }) => {
+// The chat (no-doc) path: a chat model wants turns as turns, so the recent verbatim
+// window rides as real {role,content} message history and the surfed recap folds into
+// the system message (docs/session-fold.md).
+export const buildChatMessages = ({ question, history = [], notes = '' } = {}) => {
+  const system = notes
+    ? `${SYSTEM_CHAT}\n\nNotes about our conversation before this:\n${notes}`
+    : SYSTEM_CHAT;
   return [
-    { role: 'system', content: SYSTEM_CHAT },
+    { role: 'system', content: system },
     ...history,
     { role: 'user',   content: question },
   ];

@@ -32,12 +32,11 @@ labels, no headline, no tags.
 You are [filename · type · length. No recognition.]
 Here is the chat with the user:
 User: [latest user message]
-You: [your last reply]
-Reply in at most N sentences.
+[They want a summary: … — the degeneracy guard, on a summary task only]
 Notes about our conversation before this:
-[the session-register fold — plain-language arrows of what was said]
+[the session-register fold — the surfed recap of older turns]
 Relevant parts of our past conversation:
-[activated past-conversation spans]
+[the recent verbatim window, the activated past turns]
 Notes from the document:
 sister --tends--> Gregor
 Topps --slammed--> man
@@ -45,6 +44,18 @@ fire --originated-in--> room4
 Excerpts from the document:
 [the relevant retrieved spans, verbatim]
 ```
+
+There is **no length prescription**. The earlier contract carried "Reply in at
+most N sentences," which a small model read as the task, not a ceiling — and
+"summarize" came back as a literal three-sentence stub. The real bound is
+`max_tokens`, set per task by the intent pass (see "The task register" below); the
+prompt says nothing about length and lets the answer be as long as the material
+wants. A caller may still pass an explicit `{ sentences }` / `{ chars }` budget to
+re-impose a cap for one turn, but none is imposed by default.
+
+The conversation slots are now **populated** — by the session fold (session-fold.md):
+the recent verbatim window rides as past-conversation spans, the surfed recap of
+older turns as conversation notes.
 
 Two scopes, two registers each. The **conversation** scope gives notes (the
 session-register fold) and excerpts (the activated past turns). The **document**
@@ -56,12 +67,32 @@ honest. Slots with no content are simply omitted.
 | Slot | Source | Register |
 |---|---|---|
 | orientation | filename, type, length. No author, title, or genre. | recognition-free |
-| user / you | the live exchange | the turn |
-| reply budget | the route / turn config | a cap on the reply |
-| conversation notes | the session-register fold | plain-language arrows of what was said |
-| past-conversation spans | the activated conversation field | verbatim prior turns |
+| user | the live exchange | the turn |
+| summary guard | the intent pass, summary task only | faithfulness, not length |
+| conversation notes | the session fold's surfed recap of older turns | the gist of what was said |
+| past-conversation spans | the session fold's recent verbatim window | verbatim prior turns |
 | document notes | `serializeNotes` over the folded graph | plain-language arrows, the structured reading |
-| document excerpts | retrieval | verbatim spans, the grounding |
+| document excerpts | retrieval ++ the surfer's stops | verbatim spans, the grounding |
+
+## The task register (`src/turn/intent.js`)
+
+The turn's **task** is read off the question mechanically — the same cheap regex
+pass as the smalltalk and math answerers, no model. It sets two things: the prompt
+register (does the summary degeneracy guard ride?) and the token ceiling — the
+real length bound.
+
+| task | matched by | `max_tokens` |
+|---|---|---|
+| summary | summari{se,ze}, tl;dr, recap, gist, "what is this about" | 512 |
+| list | list, enumerate, "what are the…", "name every…" | 448 |
+| explain | explain, why, how, "walk me through", "in detail" | 448 |
+| answer (default) | everything else | 384 |
+
+The budget stays empty (no sentence line) for every task; it exists only so a
+caller can re-impose a hard cap deliberately. The summary task adds one line — the
+degeneracy guard ("say what the document is about in your own words, drawing the
+excerpts together — never reword a single excerpt as the whole answer") — which is
+faithfulness, not length.
 
 ## The surface discipline (§3) — the whole prompt, not half of it
 

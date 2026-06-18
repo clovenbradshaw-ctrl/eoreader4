@@ -64,6 +64,51 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
 // holding ends and accumulating begins.
 export const DEFAULT_CONFIRM_BAND = 0.25;
 
+// Calibrate the confirm band and the layer thresholds to THIS reader's scale.
+//
+// The skeleton's defaults (0.25 band, 1.5/4.0 thresholds) were measured on the
+// SURPRISAL scale. The loop now rides Bayesian surprise (docs/bayesian-surprise.md),
+// which clusters far below it — most lines under 0.1 — so on `bayes` the frame goes
+// numb: strain never accumulates, no REC ever fires. The fix is the move the meaning
+// reader already makes — fit the scale to the text:
+//
+//   band      = median surprise            (half the lines confirm, half strain)
+//   step      = mean excess over the band  (the typical accommodation per line)
+//   threshold = { proposition: 3·step, document: 8·step }
+//
+// Adaptive, scale-free, per reader. The 8:3 ratio preserves "the higher layer holds
+// harder" (document RECs ~3× rarer) under any rescaling — the same ratio as the
+// static 4.0:1.5 defaults. Falls back to the static defaults when the distribution
+// is too thin to fit (fewer than a handful of lines, or no excess to measure).
+export const calibrateReader = (surprises, {
+  layers = ['proposition', 'document'],
+  perLayerSteps = { proposition: 3, document: 8 },
+  defaults = DEFAULT_THRESHOLDS,
+  defaultBand = DEFAULT_CONFIRM_BAND,
+} = {}) => {
+  const xs = (surprises || []).filter(x => Number.isFinite(x));
+  if (xs.length < 4) return { confirmBand: defaultBand, thresholds: { ...defaults }, fitted: false };
+
+  const band = medianOf(xs);
+  const excess = xs.map(x => Math.max(0, x - band)).filter(e => e > 0);
+  const step = excess.length ? excess.reduce((s, e) => s + e, 0) / excess.length : 0;
+  if (step <= 0) return { confirmBand: defaultBand, thresholds: { ...defaults }, fitted: false };
+
+  const thresholds = {};
+  for (const layer of layers) {
+    const k = perLayerSteps[layer] ?? perLayerSteps.proposition ?? 3;
+    thresholds[layer] = k * step;
+  }
+  return { confirmBand: band, thresholds, fitted: true, band: round(band), step: round(step) };
+};
+
+const medianOf = (xs) => {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
 export const createEnactedLoop = ({
   layers = ['proposition', 'document'],
   thresholds = DEFAULT_THRESHOLDS,

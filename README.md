@@ -61,9 +61,10 @@ and baked into the code here:
 ```
 any modality ─adapter─▶ append-only event log ─project─▶ graph
    (text · image)            │  (nine operators)
-                             ├─▶ retrieve ─▶ fold ─▶ prompt ─▶ llm ─▶ bind ─▶ veto ─▶ answer
-                             │        (the fold = the consciousness)            │
-                             └─▶ audit ── (projection of the stages.reduce fold) ┘
+                             ├─▶ route ─▶ converse ─▶ retrieve ─▶ fold ─▶ prompt ─▶ llm ─▶ bind ─▶ veto ─▶ answer
+                             │   (intent)  (session    │      (the surfer +       │
+                             │              fold)      │       the consciousness) │
+                             └─▶ audit ────── (projection of the stages.reduce fold) ──────────────────────┘
 ```
 
 The append-only log is the single source of truth. The graph is a fold of
@@ -88,12 +89,20 @@ mechanical "consciousness" queries behind the scenes to ground the talker.
 |-------|--------|-----------|------|
 | **1 · existence** | Existence | NUL SIG INS | **counting measure** — cardinality of presence; token-set overlap (`hits/qLen`). |
 | **2 · structure** | Structure | SEG CON SYN | **graph linear algebra** — a union-find quotient over a weighted adjacency; edge weight bilinear in endpoint log-mass under a γ-decay kernel along the reading line. |
-| **3 · significance** | Interpretation | DEF EVA REC | **probability + information** — a prior over "who acts next" (the integral fold of γ-mass), an expectation (prediction), and a **surprisal** (−log₂p) when the next line lands (its differential). |
+| **3 · significance** | Interpretation | DEF EVA REC | **probability + information** — a prior over "who acts next" (the integral fold of γ-mass), an expectation (prediction), and two surprise channels when the next line lands: **surprisal** (−log₂p, *novelty*) and **Bayesian surprise** (D_KL posterior‖prior over the figure field, *significance* — what the reading rode). |
 
 The **integral fold** accumulates (∫) the reading up to the cursor; **surprise**
 is its differential — the residual between what the fold predicted and the
-increment the next line actually delivered. The `read` holon exposes all three
-surfaces and the `consciousness` that folds them into the note the model reads.
+increment the next line actually delivered. There are two surprise channels:
+**surprisal** (−log p, *novelty* — the audit, the UI %) and **Bayesian surprise**
+(D_KL posterior‖prior over the figure field, *significance* — how far belief
+moved). The reading follows the second: surprisal chases TV-snow (maximally
+improbable, inert); Bayesian surprise arrests only where the line *rewrote* the
+reading (see [`docs/bayesian-surprise.md`](docs/bayesian-surprise.md)). The `read`
+holon exposes all three surfaces, the `consciousness` that folds them into the note
+the model reads, and the **surfer** ([`docs/surfing-the-fold.md`](docs/surfing-the-fold.md))
+that steps down the Bayesian-surprise gradient to take the significance reading where
+the field is steepest — a measurement, not a router's choice.
 
 ## It is all physics, not decisions
 
@@ -131,8 +140,8 @@ hard-coded true; a convention is whatever the text keeps doing.
 | `core`        | log · address · operators · project (memoized, rules in frame) | nothing  |
 | `conventions` | `createConventions()` (REC ledger) · `induceAttributionVerbs` | nothing  |
 | `parse`       | `createParser(opts)` · `parseText(text, opts)` → doc (text adapter) | `core`, `conventions` |
-| `read`        | `existence/structure/significance` surfaces · `consciousness` · `readingAt` | nothing |
-| `enact`       | `createEnactedLoop` · `enactedReadingTo` · `replayFrames` · `loopStats` (the enacted DEF·EVA·REC loop) | `read` |
+| `read`        | `existence/structure/significance` surfaces · `consciousness` · `readingAt` (two surprise channels) · `surfFold` (the surfer) | `enact/loop` (frame axis) |
+| `enact`       | `createEnactedLoop` · `calibrateReader` · `enactedReadingTo` · `replayFrames` · `loopStats` (the enacted DEF·EVA·REC loop) | `read` |
 | `retrieve`    | `retrieveHybrid(doc, q, embedder)`                            | `core`, `parse` |
 | `fold`        | `foldNote(spans, {doc, cursor})` · `impressionQuery`         | `read`     |
 | `ground`      | `bindCitations(draft, spans)` · `runVetoes`                   | `core`, `parse` |
@@ -140,10 +149,10 @@ hard-coded true; a convention is whatever the text keeps doing.
 | `model`       | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
 | `classify`    | `createPhasepostClassifier({cells, centroids, embedder})`     | `core`     |
 | `boot`        | `bootGeometricReader(root, {embedder})` · `createInstaller`   | `classify`, `model` |
-| `converse`    | `conversationalEvent` · `depositConversational` · `commitSurvives` · `corefPerception` | nothing |
+| `converse`    | `conversationalEvent` · `depositConversational` · `commitSurvives` · `corefPerception` · `foldConversation` (the session fold) | nothing |
 | `factcheck`   | `factCheck({prose, doc, graph, classifier})` · `corroborateCoref` (edge-grounding veto) | `core`, `parse`, `classify`, `converse` |
 | `audit`       | `createAuditLog()`                                            | nothing    |
-| `turn`        | `runTurn({question, doc, model, embedder, auditLog})` (reduce)| all above  |
+| `turn`        | `runTurn({question, doc, model, embedder, auditLog, history})` (reduce) · `taskOf` (intent) | all above  |
 | `ingest`      | `ingestText(file)` · `ingestImage(detections)` → doc          | `parse`, `core` |
 | `ui`          | DOM presentation + graph view / reading cursor               | `turn`, `read`, `audit` |
 
@@ -210,7 +219,13 @@ accumulator and a **REC threshold**. **DEF** sets the frame; **EVA** tests each
 particular against it (verdict *confirm* or *strain*, the surprise its magnitude);
 **REC** restructures the frame when accumulated strain breaks the threshold —
 never on a single anomaly. Surprise is the throttle: a confirming EVA holds, a
-straining EVA accumulates, the frame RECs at threshold.
+straining EVA accumulates, the frame RECs at threshold. The throttle reads
+**Bayesian** surprise (not surprisal), so a frame breaks on a genuine
+restructuring of the reading rather than on an inert improbability — and because
+that scalar clusters far below the old band, the confirm band and thresholds are
+**calibrated to the text** (`calibrateReader`): the band is the median step, each
+threshold a count of typical straining lines. Without the fit the frame would go
+numb (see [`docs/bayesian-surprise.md`](docs/bayesian-surprise.md)).
 
 The layers are a system, not a stack. A proposition particular can **cross
 layers** to test the document frame; lower particulars accumulate as EVAs against
@@ -223,14 +238,46 @@ reader's frames as of that cursor; the same referent under a frame at two ages i
 two readings. `loopStats` surfaces the REC rate so a stable reading, a turbulent
 one, and a thrash are distinguishable.
 
-Two reads, one loop. The **skeleton** runs on the cheap γ-mass surprise over the
-whole document; the **meaning reader** (`enactedReadingMeaning`) drives the *same*
+Two reads, one loop. The **skeleton** runs on the cheap γ-mass *Bayesian* surprise
+over the whole document (calibrated per text); the **meaning reader**
+(`enactedReadingMeaning`) drives the *same*
 loop with prediction error in the centroids' space, so frames restructure on
 sense-turns the γ-mass reader is blind to — and falls back to the skeleton under
 the hash organ. The loop never changed; only `read` got deeper, exactly as the
 design promised. See [`docs/significance-loop.md`](docs/significance-loop.md); it
 surfaces as a fourth strip in reading mode that deepens to *semantic surprise* when
 the geometric reader is live.
+
+## The surfer, the session fold, the task register
+
+Three moves replace three lingering *choices* with measurements or mechanics, all on
+the same spine.
+
+**The surfer — a surfer with no pilot.** The fold used to read significance at one
+fixed cursor, the top retrieval hit: a router-style choice. `surfFold` replaces it. It
+does not ask where to look; it reads a field the reading already maintains and steps
+down its gradient. **Focus** is the warmest figure (γ-mass argmax); the **cursor**
+arrests on the peaks of Bayesian surprise; the **frame** axis is the same enacted loop,
+run over the reach. The significance reading is taken at the **peak** the surf reached,
+and any high-significance line retrieval missed is folded into the spans — read by the
+consciousness *and* bindable as a citation. Deterministic and replayable; the audit
+records the path. See [`docs/surfing-the-fold.md`](docs/surfing-the-fold.md).
+
+**The session fold — feeding the conversation back.** The prompt contract always had
+conversation slots; nothing populated them, so the talker answered every turn cold.
+`foldConversation` fills them, handing the talker the same two registers it gets for the
+document: the recent turns **verbatim**, and a **surfed fold** of everything older. The
+fold is surfed, not truncated — older turns run through the same cursor axis (per-turn
+content-add as the surprise), so only the turns where the conversation *moved* are kept,
+each tagged with its absolute index for mechanical recall. The `converse` stage sits
+right after `route`. See [`docs/session-fold.md`](docs/session-fold.md).
+
+**The task register — length is `max_tokens`, not a sentence.** The old prompt carried
+"Reply in at most N sentences," which a small model read as the task, not a ceiling —
+"summarize" came back as a three-sentence stub. The `route` stage now reads the turn's
+**task** off the question mechanically (summary / list / explain / answer), which sets
+the real bound (`max_tokens`) and, on a summary task only, a faithfulness guard — never
+a length line. See [`docs/prompt-assembly.md`](docs/prompt-assembly.md).
 
 ## The nine operators
 
@@ -342,6 +389,20 @@ comments on gates that were on.
 - **The fold is the consciousness** — existence + structure + significance
   folded into the reading the model receives (was a verbatim span dump the
   `prompt` stage didn't even use).
+- **Bayesian surprise** — the Level-3 significance channel is now D_KL(posterior‖prior)
+  over the figure field (how far belief *moved*), beside surprisal (how *improbable*);
+  the reading rides the first, so it arrests on reveals, not on TV-snow. The enacted
+  loop's band and thresholds are **calibrated per text** (`calibrateReader`). See
+  [`docs/bayesian-surprise.md`](docs/bayesian-surprise.md).
+- **The surfer** — `surfFold` replaces the fixed-cursor choice with a measurement: it
+  steps down the Bayesian-surprise gradient to the peak, folding in high-significance
+  lines retrieval missed (citable). See [`docs/surfing-the-fold.md`](docs/surfing-the-fold.md).
+- **The session fold** — `foldConversation` populates the long-empty conversation slots
+  with the recent turns verbatim plus a surfed recap of older movers, indexed for recall.
+  See [`docs/session-fold.md`](docs/session-fold.md).
+- **The task register** — `route` reads the turn's task (summary / list / explain /
+  answer) to set `max_tokens` (the real length bound) and a summary faithfulness guard;
+  the prompt no longer prescribes a sentence count. See [`docs/prompt-assembly.md`](docs/prompt-assembly.md).
 - **The grounded prompt** — the fold's **notes** (plain-language arrows over the
   graph) *plus* the verbatim **excerpts**, under a recognition-free orientation
   (filename, type, length), question first for the small-model exchange. Notes and

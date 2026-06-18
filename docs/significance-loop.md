@@ -42,6 +42,16 @@ over read time is the reading's effort (a quiet stable reading, or a turbulent
 hard one). This is the same surprise that warms the activation field: divergence
 where the prediction failed.
 
+The throttle now reads **Bayesian** surprise — `D_KL(posterior ‖ prior)` over the
+figure field — not surprisal, so a frame breaks on a genuine restructuring of the
+reading rather than on an inert improbability (bayesian-surprise.md). That scalar
+clusters far below the surprisal-era band, so the cheap reader's confirm band and
+layer thresholds are **calibrated to the text** (`calibrateReader`): the band is
+the median step, each threshold a count of typical straining lines (3 vs 8, so the
+document holds harder). Without the calibration the frame would never accumulate
+past the old `1.5 / 4.0` and would go numb. The skeleton's static defaults below
+are the fallback; the live reader fits the scale.
+
 ## Cross-layer influence
 
 An EVA does not have to test a particular against the frame at its own layer. The

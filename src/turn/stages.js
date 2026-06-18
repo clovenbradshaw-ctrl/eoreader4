@@ -11,6 +11,9 @@
 import { answerSmalltalk, answerMath, answerConfirm, answerWho } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
+import { surfFold }         from '../read/index.js';
+import { foldConversation } from '../converse/index.js';
+import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';
 import { bindCitations, renderBound } from '../ground/bind.js';
 import { runVetoes }        from '../ground/veto.js';
@@ -34,12 +37,30 @@ export const stages = {
     const math = answerMath(ctx.question);
     if (math) return short(math);
 
+    // Not a mechanical short-circuit → a real turn. Read the TASK register
+    // (intent.js): the prompt register (summary guard) and the token ceiling — the
+    // real length bound. The mechanical paths above need neither.
     if (ctx.doc) {
       const mech = answerConfirm(ctx.doc, ctx.question) || answerWho(ctx.doc, ctx.question);
       if (mech) return short(mech);
-      return { ...ctx, route: 'grounded' };
+      return { ...ctx, route: 'grounded', ...taskOf(ctx.question) };
     }
-    return { ...ctx, route: 'chat' };
+    return { ...ctx, route: 'chat', ...taskOf(ctx.question) };
+  },
+
+  // The session fold — the conversation's own two registers, mirroring the document
+  // (docs/session-fold.md). Runs for both grounded and chat turns, independent of the
+  // document; the mechanical short-circuits terminate at `route` and never reach it.
+  // The recent turns ride verbatim; everything older is surfed into a recap.
+  async converse(ctx) {
+    const conv = foldConversation(ctx.history || []);
+    return {
+      ...ctx,
+      conversation:   { notes: conv.notes, pastTurns: conv.pastTurns },
+      recentMessages: conv.recentMessages,
+      lastReply:      conv.lastReply,
+      convStats:      conv.stats,
+    };
   },
 
   // Hybrid retrieval. Skipped entirely when there's no document — chat mode
@@ -54,14 +75,31 @@ export const stages = {
     return { ...ctx, spans };
   },
 
-  // Fold the spans into a single note the model can read — the reading. With
-  // a doc this is the consciousness: existence + structure + significance,
-  // read around the best-scoring span as the cursor.
+  // Fold the spans into a single note the model can read — the reading. With a doc
+  // this is the consciousness: existence + structure + significance. The cursor is no
+  // longer blindly the top lexical hit — the SURFER (docs/surfing-the-fold.md) is
+  // seeded at that anchor and steps down the Bayesian-surprise gradient to the PEAK,
+  // where the significance reading is taken. Any high-significance line retrieval
+  // missed is folded in as a citable span (via:'surf', its index real), so it is both
+  // read by the consciousness and bindable.
   async fold(ctx) {
     if (!ctx.spans?.length) return { ...ctx, note: null };
-    const cursor = ctx.spans[0]?.idx ?? null;
-    const note = foldNote(ctx.spans, { doc: ctx.doc, cursor });
-    return { ...ctx, note };
+    const anchor = ctx.spans[0]?.idx ?? 0;
+    const surf   = ctx.doc ? surfFold(ctx.doc, anchor) : null;
+
+    let spans = ctx.spans;
+    if (surf) {
+      const units = ctx.doc.units || ctx.doc.sentences || [];
+      const have  = new Set(spans.map(s => s.idx));
+      const surfed = surf.stops
+        .filter(idx => !have.has(idx) && units[idx] != null)
+        .map(idx => ({ idx, text: units[idx], score: 0, via: 'surf' }));
+      if (surfed.length) spans = [...spans, ...surfed];
+    }
+
+    const cursor = surf ? surf.peak : anchor;
+    const note   = foldNote(spans, { doc: ctx.doc, cursor });
+    return { ...ctx, spans, note, surf };
   },
 
   // Build messages. Grounded when we have spans; plain chat when we don't.
@@ -76,11 +114,15 @@ export const stages = {
           spans:        ctx.spans,
           notes:        ctx.note?.text || '',
           orientation:  orientationOf(ctx.doc),
-          budget:       ctx.budget,             // route/turn config; defaults inside
-          conversation: ctx.conversation || {}, // session fold + past turns (seam)
-          lastReply:    ctx.lastReply || '',
+          task:         ctx.task,               // the summary guard rides on a summary task
+          budget:       ctx.budget,             // none by default; a caller may impose one
+          conversation: ctx.conversation || {}, // session fold: notes + verbatim window
         })
-      : buildChatMessages({ question: ctx.question });
+      : buildChatMessages({
+          question: ctx.question,
+          history:  ctx.recentMessages || [],   // a chat model wants turns as turns
+          notes:    ctx.conversation?.notes || '',
+        });
     return {
       ...ctx,
       messages,
@@ -88,10 +130,12 @@ export const stages = {
     };
   },
 
-  // The model. Verbatim raw output is captured in `rawOutput` for audit.
+  // The model. The token ceiling is the task register's max_tokens (the real length
+  // bound) — not a fixed 256. Verbatim raw output is captured in `rawOutput` for audit.
   async llm(ctx) {
-    const raw = await ctx.model.phrase(ctx.messages, { maxTokens: 256 });
-    return { ...ctx, rawOutput: raw };
+    const maxTokens = ctx.maxTokens || 384;
+    const raw = await ctx.model.phrase(ctx.messages, { maxTokens });
+    return { ...ctx, rawOutput: raw, maxTokens };
   },
 
   // Mechanical citation binding. The model never wrote [sN]; we do.
