@@ -429,7 +429,9 @@ comments on gates that were on.
   document actually says next.
 - **The Log tab** shows the append-only event log the graph is a fold of,
   grouped into the recursive levels of reading — each pass reads what the one
-  below admitted, approaching the meaning in passes rather than one verdict.
+  below admitted, approaching the meaning in passes rather than one verdict. One
+  button exports the **full** log as JSONL (every event, in seq order — the
+  source of truth in full, not the grouped view), so a reading can be replayed.
 
 ## Run
 

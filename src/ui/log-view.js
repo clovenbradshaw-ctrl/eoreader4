@@ -44,10 +44,17 @@ export const renderLog = (doc, root, { onSelectSentence } = {}) => {
   const head = document.createElement('div');
   head.className = 'log-head';
   head.innerHTML =
-    `<div class="log-title">${events.length} events — the graph is a fold of this log</div>` +
+    `<div class="log-head-top">` +
+      `<div class="log-title">${events.length} events — the graph is a fold of this log</div>` +
+      `<button type="button" class="small log-export"${events.length ? '' : ' disabled'}>Export JSONL</button>` +
+    `</div>` +
     `<div class="log-sub">each level reads what the one below admitted, approaching the meaning in passes</div>` +
     `<div class="log-sub">every row carries its address — <span class="log-addr">operator(Site, Stance)</span> — read live, never stored</div>`;
   root.appendChild(head);
+  // The button hands back the *whole* log — every event, in seq order — not the
+  // level-grouped subset rendered below (which filters to the operators each
+  // level reads). The log is the single source of truth; the export is it, in full.
+  head.querySelector('.log-export')?.addEventListener('click', () => exportLog(doc));
 
   for (const lvl of LEVELS) {
     const evs = events.filter(lvl.match);
@@ -69,6 +76,49 @@ export const renderLog = (doc, root, { onSelectSentence } = {}) => {
     if (a && onSelectSentence) onSelectSentence(parseInt(a.dataset.idx, 10));
   });
 };
+
+// Serialise the FULL reading log as JSONL — one sealed event per line, in append
+// (seq) order. This is the whole log, not the levelled view above: that view
+// groups by reading level and shows only the operators each level reads, so it is
+// a lossy projection. The export is the source of truth verbatim, so a reading
+// can be replayed or audited downstream with nothing dropped. Pure and DOM-free,
+// so it is unit-testable; resilient per line so one bad event can't sink the file.
+export const serializeLog = (doc) => {
+  const log = doc?.log;
+  if (!log) return '';
+  const events = log.events || log.snapshot?.() || [];
+  return events.map((e) => {
+    try {
+      return JSON.stringify(e);
+    } catch (err) {
+      // One un-serialisable event (e.g. a circular ref reached a payload) must
+      // not sink the whole export — emit a minimal valid line that still holds
+      // its place in the stream by seq.
+      return JSON.stringify({ seq: e?.seq, op: e?.op, export_error: String(err?.message || err) });
+    }
+  }).join('\n');
+};
+
+// Hand the full log back as a downloadable JSONL file. Mirrors exportAudit: the
+// anchor must be IN the document for Firefox/Safari to start the download.
+export const exportLog = (doc) => {
+  const text = serializeLog(doc);
+  if (!text) return;            // nothing read yet — don't hand back an empty file
+  const blob = new Blob([text], { type: 'application/x-ndjson' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `eoreader4-log-${slug(doc?.docId)}-${Date.now()}.jsonl`;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+
+// docId is the source filename (or a doc-<ts> stub) — keep it filename-safe.
+const slug = (s) =>
+  String(s || 'doc').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'doc';
 
 const opOf = (e) => (e.op === 'DEF' && e.key === 'role') ? 'SEG' : e.op;
 

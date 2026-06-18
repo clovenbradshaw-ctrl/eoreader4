@@ -302,6 +302,7 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 
 /* Log view — the event stream the graph is a fold of */
 .log-head { margin-bottom: .6rem; }
+.log-head-top { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
 .log-title { font-size: .82rem; color: #e4e4e7; }
 .log-sub { font-size: .72rem; color: #71717a; font-style: italic; }
 .log-level { margin-bottom: .7rem; }
