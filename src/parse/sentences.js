@@ -10,30 +10,28 @@
 // meaning reader spikes on it, the graph mis-bonds). ! and ? are unambiguous and
 // always cut.
 //
-// The REC — learning THIS document's abbreviations rather than a fixed list, the
-// way Pass 0 learns its attribution verbs — is the natural extension and is noted
-// in the conventions ledger's territory; the seed list below is the DEF it starts
-// from.
+// The abbreviation list itself lives in the conventions ledger (the home for the
+// language-specific stuff), seeded as a DEF and learnable as a REC. The splitter
+// holds none of its own: it takes an `isAbbreviation` predicate, defaulting to the
+// ledger's seed so a standalone call still works. The pipeline hands it the live
+// conventions, so a document's learned abbreviations flow straight in.
 
-const ABBR = new Set([
-  'mr', 'mrs', 'ms', 'dr', 'st', 'mt', 'messrs', 'mme', 'mlle',
-  'prof', 'rev', 'hon', 'capt', 'col', 'gen', 'sgt', 'lt', 'cmdr', 'sr', 'jr',
-  'esq', 'co', 'inc', 'ltd', 'no', 'vol', 'pp', 'rd', 'ave', 'fig',
-  'vs', 'etc', 'al', 'eg', 'ie', 'cf', 'viz',
-  'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'sept', 'oct', 'nov', 'dec',
-]);
+import { SEED_ABBREVIATIONS } from '../conventions/index.js';
+
+const SEED_ABBR = new Set(SEED_ABBREVIATIONS);
+const defaultIsAbbreviation = (w) => SEED_ABBR.has(String(w).toLowerCase());
 
 // Is the period that ends `buf` an abbreviation/initial, not a sentence boundary?
 // Reads the word immediately before the period. A single capital is an initial
-// (J. R. R.); a known abbreviation marks a title or contraction.
-const abbreviates = (buf) => {
+// (J. R. R.); a known abbreviation (from the ledger) marks a title or contraction.
+const abbreviates = (buf, isAbbreviation) => {
   const m = buf.slice(0, -1).match(/([A-Za-z]+)$/);
   if (!m) return false;
   const w = m[1];
-  return /^[A-Z]$/.test(w) || ABBR.has(w.toLowerCase());
+  return /^[A-Z]$/.test(w) || isAbbreviation(w);
 };
 
-export const segmentSentences = (text) => {
+export const segmentSentences = (text, { isAbbreviation = defaultIsAbbreviation } = {}) => {
   const t = String(text || '').replace(/\r\n?/g, '\n');
   if (!t.trim()) return [];
   const out = [];
@@ -47,7 +45,7 @@ export const segmentSentences = (text) => {
       const next = p[i + 1] || '';
       if (/[.!?]/.test(ch) && (next === '' || /\s/.test(next))) {
         // The EVA: a '.' that abbreviates is not a boundary — withhold the cut.
-        if (ch === '.' && abbreviates(buf)) continue;
+        if (ch === '.' && abbreviates(buf, isAbbreviation)) continue;
         const s = buf.trim();
         if (s) out.push(s);
         buf = '';

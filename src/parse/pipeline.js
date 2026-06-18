@@ -34,9 +34,14 @@ export const createParser = ({
   };
 
   const parse = (text, { docId } = {}) => {
-    const log       = createLog({ docId });
-    const sentences = segmentSentences(text);
-    const admission = createEntityAdmission();
+    const log         = createLog({ docId });
+    // Conventions first — the home for the language-specific stuff. The splitter
+    // reads its abbreviation list from the ledger, so segmentation already honours
+    // "Mr. Darcy" before a single word is classified, and the relation parser
+    // reads its copula/modifier/speech lists from the same place.
+    const conventions = createConventions();
+    const sentences   = segmentSentences(text, { isAbbreviation: conventions.isAbbreviation });
+    const admission   = createEntityAdmission();
 
     // Transcript detection — the handler is injected, not imported.
     if (transcriptHandler && transcriptHandler.detect && transcriptHandler.detect(text)) {
@@ -54,7 +59,7 @@ export const createParser = ({
     // Pass 0 — learn the document's conventions before reading it. Induced
     // attribution verbs become REC entries in the ledger and are written into
     // the log, so how *this* text marks speech biases every later sentence.
-    const conventions = createConventions();
+    // (The conventions ledger was created above, before segmentation.)
     for (const { token, count } of induceAttributionVerbs(sentences)) {
       conventions.learnAttribution(token, count);
     }
@@ -106,7 +111,8 @@ export const createParser = ({
         field:   () => priorField,
         resolve: () => priorField[0]?.id ?? null,
       };
-      for (const rel of parseRelations(sent, admission, coref, { isSpeech })) {
+      const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier };
+      for (const rel of parseRelations(sent, admission, coref, relOpts)) {
         // Argument-span extraction is now its own logged event (§3). When the SVO
         // emitter read subject/verb/object spans, write them as a clause-level SEG
         // *before* the bond, and stamp the bond with the SEG's seq so a CON walks
