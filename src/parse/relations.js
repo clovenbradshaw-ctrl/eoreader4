@@ -77,13 +77,15 @@ const leadingSubject = (sentence, admission, coref) => {
   if (pn) {
     const cands = coref?.field ? coref.field() : [];
     const top = cands[0];
-    return { id: top?.id ?? null, end: pn[0].length, kind: 'pronoun', w: top?.w ?? 0 };
+    const start = pn[0].length - pn[1].length;     // the pronoun's offset past any lead
+    return { id: top?.id ?? null, start, end: pn[0].length, text: pn[1], kind: 'pronoun', w: top?.w ?? 0 };
   }
   // Otherwise the first capitalised phrase, if it is an admitted entity.
   const ents = scanEntities(sentence);
   const first = ents.find(e => e.start <= 1); // sentence-initial
   if (first && admission.isAdmitted(first.label)) {
-    return { id: admission.idOf(first.label), end: first.end, kind: 'name', w: 1 };
+    return { id: admission.idOf(first.label), start: first.start, end: first.end,
+             text: sentence.slice(first.start, first.end), kind: 'name', w: 1 };
   }
   return null;
 };
@@ -98,31 +100,48 @@ const coupling = (subj) =>
 // Exported so the edge-grounding veto can reuse the SAME head-verb scan the page
 // uses to tell a relational talker sentence (whose endpoints may not resolve)
 // from a non-relational one — the SVO clause parser, pointed at the talker.
+// `at` is the verb token's start offset in `text`; `restStart` is where the
+// post-verb remainder begins in `text`. Both let the caller place the verb and
+// object spans back into the sentence (the logged argument-span SEG, §3). The
+// existing fields (verb, rest, copular) are unchanged, so the edge-grounding
+// veto's reuse of this scan is unaffected.
 export const headVerb = (text) => {
   let rest = text.replace(/^[\s,]+/, '');
+  let consumed = text.length - rest.length;             // chars of `text` walked past
   for (let guard = 0; guard < 4; guard++) {
     const m = rest.match(/^([A-Za-z][a-zA-Z'’]*)\b/);
     if (!m) return null;
     const w = m[1].toLowerCase();
-    if (COPULAR.has(w)) return { verb: w, rest: rest.slice(m[0].length), copular: true };
-    if (SKIP.has(w)) { rest = rest.slice(m[0].length).replace(/^[\s,]+/, ''); continue; }
+    const at = consumed;                                // verb token start in `text`
+    const restStart = at + m[0].length;                 // post-verb text start in `text`
+    if (COPULAR.has(w)) return { verb: w, rest: rest.slice(m[0].length), copular: true, at, restStart };
+    if (SKIP.has(w)) {
+      const sliced  = rest.slice(m[0].length);
+      const trimmed = sliced.replace(/^[\s,]+/, '');
+      consumed += m[0].length + (sliced.length - trimmed.length);
+      rest = trimmed;
+      continue;
+    }
     if (NOT_HEAD.has(w)) return null;   // a preposition/relative pronoun is not a verb
-    return { verb: w, rest: rest.slice(m[0].length), copular: false };
+    return { verb: w, rest: rest.slice(m[0].length), copular: false, at, restStart };
   }
   return null;
 };
 
+// Each admitted object, with its offsets within `text` so the caller can place
+// the object span back into the sentence. (Was ids only — the spans were computed
+// and thrown away, the v1 gap this spec closes.)
 const objectEntities = (text, admission, excludeId) => {
-  const ids = [];
+  const out = [];
   const seen = new Set([excludeId]);
   for (const e of scanEntities(text)) {
     if (!admission.isAdmitted(e.label)) continue;
     const id = admission.idOf(e.label);
     if (seen.has(id)) continue;
     seen.add(id);
-    ids.push(id);
+    out.push({ id, label: e.label, start: e.start, end: e.end });
   }
-  return ids;
+  return out;
 };
 
 const kinshipEdges = (sentence, admission, coref) => {
@@ -163,8 +182,20 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
       if (pred) out.push({ op: 'DEF', id: subj.id, key: 'predicate', value: pred, ...w });
     } else if (head) {
       const op = isSpeech(head.verb) ? 'SIG' : 'CON';
-      for (const objId of objectEntities(head.rest, admission, subj.id)) {
-        out.push({ op, src: subj.id, tgt: objId, via: head.verb, ...w });
+      // The argument spans, with offsets back into `s` (which equals
+      // doc.sentences[sentIdx] — segmentSentences trims), each carrying its
+      // verbatim text so the walk is self-verifying. The pipeline emits these as
+      // a logged clause-level SEG before the bond, so a CON is walkable back to
+      // the text its endpoints were read from (§3). Carried on the rel as `args`;
+      // the pipeline strips it from the edge event after emitting the SEG.
+      const vStart = subj.end + head.at, vEnd = subj.end + head.restStart;
+      const subject = { text: subj.text, start: subj.start, end: subj.end, id: subj.id };
+      const verb    = { text: s.slice(vStart, vEnd), start: vStart, end: vEnd };
+      for (const obj of objectEntities(head.rest, admission, subj.id)) {
+        const oStart = vEnd + obj.start, oEnd = vEnd + obj.end;
+        const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: obj.id };
+        out.push({ op, src: subj.id, tgt: obj.id, via: head.verb, ...w,
+                   args: { subject, verb, object, op } });
       }
     }
   }

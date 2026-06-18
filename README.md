@@ -329,6 +329,13 @@ comments on gates that were on.
 - **Graph extraction** — coreference as a weighted field, speech→SIG /
   copular→DEF / transitive→CON classification, kinship apposition, multi-word
   names, name-containment SYN, `INS`-per-sighting so mass is real.
+- **Proposition addressing** — the SVO parse logs its **argument spans** as a
+  `SEG kind:'argspan'` event *before* the bond, with offsets back into the
+  sentence, so a CON walks back to the text its endpoints were read from (the
+  witness chain no longer stops at the bond). `positionElements` fills Ground /
+  Figure / Pattern structurally — subject·object → Ground, verb → Figure,
+  relation → Pattern — holding the cells at no-commit until the meaning reader
+  names them. See [`docs/proposition-addressing.md`](docs/proposition-addressing.md).
 - **The fold is the consciousness** — existence + structure + significance
   folded into the reading the model receives (was a verbatim span dump the
   `prompt` stage didn't even use).

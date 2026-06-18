@@ -16,6 +16,7 @@
 // "the spec is the notation" literal: every line is a point on the EO cube.
 
 import { eoNotation, eoAddressOfEvent } from '../core/index.js';
+import { positionElements } from '../parse/index.js';
 
 const LEVELS = [
   { key: 'p0', name: 'Pass 0 · conventions', note: 'what this document taught the reader',
@@ -108,9 +109,22 @@ const describe = (e, name) => {
     case 'DEF': return e.key === 'role'
       ? `${esc(e.id)} → role: ${esc(e.value)}`
       : `${esc(name(e.id))}: ${esc(e.value)}`;
-    case 'SEG': return `retract #${e.refSeq}`;
+    case 'SEG': return e.kind === 'argspan' ? argspanDesc(e) : `retract #${e.refSeq}`;
     default:    return esc(JSON.stringify(e));
   }
+};
+
+// The argument-span SEG (§3): the subject / verb / object spans the SVO parse read
+// out of the clause, with the structural Ground / Figure / Pattern positions filled
+// by elements (positionElements, §4 Step C). The cells are held at no-commit — the
+// geometric naming is meaning-only and waits on the reader — so the row shows the
+// positions filled but says the cells are held, which is the honest state today.
+const argspanDesc = (e) => {
+  const esc = escapeHtml;
+  const p = positionElements(e, { op: e.depicts });
+  const g = p.ground.elements.map(x => `“${esc(x.text)}”`).join(', ') || '—';
+  return `subj “${esc(e.subject?.text)}” · <em>${esc(e.verb?.text)}</em> · obj “${esc(e.object?.text)}” ` +
+    `<span class="log-w">Ground⟨${g}⟩ Figure⟨“${esc(e.verb?.text)}”⟩ Pattern⟨${esc(e.depicts)}⟩ · cells held</span>`;
 };
 
 const weight = (e) => (e.w != null && e.w < 1) ? ` <span class="log-w">coupling ${e.w}</span>` : '';
