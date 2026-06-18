@@ -44,9 +44,12 @@ recommended sub-assemblies, now realised as modules:
 | `parse` — extractEoGraph + per-sentence emitters | `src/parse/` |
 | `retrieve` — retrieve, retrieveScope, hybrid | `src/retrieve/` |
 | `fold` — folds, impression, terrains | `src/fold/` |
+| `read` — the three reading levels, the surfer | `src/read/` (incl. `surf.js`) |
+| `enact` — the significance loop, reader calibration | `src/enact/` |
+| `converse` — conversational provenance, the session fold | `src/converse/` (incl. `history.js`) |
 | `answer` — mechanical answerers | `src/answer/` |
 | `ground` — bindCitations + veto battery | `src/ground/` |
-| `runGroundedScope → named pipeline` | `src/turn/stages.js` (and `pipeline.js`) |
+| `runGroundedScope → named pipeline` | `src/turn/stages.js` (and `pipeline.js`, `intent.js`) |
 
 The modules eoreader3 already did right — `shape.js`, `composition.js`,
 `addressee.js`, `compute.js` — were the template: pure, dependency-injected,

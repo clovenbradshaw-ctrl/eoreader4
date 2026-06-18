@@ -12,5 +12,6 @@ export {
   serializeNotes,
 } from './surfaces.js';
 export { readingAt } from './reading.js';
+export { surfFold } from './surf.js';
 export { predictNext } from './predict.js';
 export { siteRoles, markSites, siteIndices } from './site.js';

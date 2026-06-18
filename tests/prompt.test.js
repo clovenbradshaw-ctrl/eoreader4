@@ -41,7 +41,7 @@ test('serializeNotes renders plain-language arrows, never codes or indices', () 
 // ---------------------------------------------------------------------------
 // The contract: notes PLUS excerpts, two registers (§2).
 
-test('the grounded prompt feeds notes plus excerpts, the orientation, and the budget', () => {
+test('the grounded prompt feeds notes plus excerpts and the orientation — no default length line', () => {
   const spans = [
     { idx: 3, text: 'Topps slammed the man to the ground.' },
     { idx: 7, text: 'The fire started in room four.' },
@@ -57,10 +57,30 @@ test('the grounded prompt feeds notes plus excerpts, the orientation, and the bu
   assert.match(user.content, /sister --tends--> Gregor/);
   assert.match(user.content, new RegExp(EXCERPTS_HEADER));
   assert.match(user.content, /Topps slammed the man to the ground\./);
-  // the live exchange, orientation (no recognition), and the reply budget
+  // the live exchange and orientation (no recognition)
   assert.match(user.content, /User: what happened\?/);
   assert.match(user.content, /You are reading pg5200\.txt/);
-  assert.match(user.content, /Reply in at most 3 sentences\./);
+  // NO length prescription by default — max_tokens is the real bound (the task register)
+  assert.doesNotMatch(user.content, /Reply in at most/);
+});
+
+// The task register, in the prompt: no length line by default, a summary guard on a
+// summary task only, and an explicit caller budget still honoured (docs/prompt-assembly.md).
+test('no length prescription by default; an explicit budget re-imposes one for a turn', () => {
+  const spans = [{ idx: 0, text: 'x' }];
+  const [, plain] = buildGroundedMessages({ question: 'q', spans });
+  assert.doesNotMatch(plain.content, /Reply in at most/, 'no default sentence cap — max_tokens is the bound');
+  const [, capped] = buildGroundedMessages({ question: 'q', spans, budget: { sentences: 2 } });
+  assert.match(capped.content, /Reply in at most 2 sentences\./, 'a caller may still impose a cap');
+});
+
+test('the summary degeneracy guard rides on a summary task only — faithfulness, not length', () => {
+  const spans = [{ idx: 0, text: 'x' }];
+  const [, sum] = buildGroundedMessages({ question: 'summarize this', spans, task: 'summary' });
+  assert.match(sum.content, /drawing the excerpts together/, 'the guard rides on a summary task');
+  assert.doesNotMatch(sum.content, /at most \d+ sentence/, 'the guard is faithfulness, not a length cap');
+  const [, ans] = buildGroundedMessages({ question: 'what happened', spans, task: 'answer' });
+  assert.doesNotMatch(ans.content, /drawing the excerpts together/, 'not on a default answer task');
 });
 
 test('the surface discipline holds across the whole prompt: no indices, codes, or citation tags', () => {

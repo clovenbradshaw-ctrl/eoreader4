@@ -57,6 +57,16 @@ Reading forward is prediction and surprise.
   expected costs few bits; a brand-new figure against a concentrated prior costs
   many. The opening cannot be surprising — there is no prior yet.
 
+**Two channels — surprisal is not the one to follow.** Surprisal answers "how
+improbable," which is the wrong invariant for where a reading's attention goes:
+TV-snow is maximally improbable yet inert. Alongside it the reader now computes
+**Bayesian surprise** — `D_KL(posterior ‖ prior)` over the figure field, how far
+the distribution over *who-matters* moved when the line landed. That is the
+significance channel the surfer's cursor and the enacted loop ride; surprisal
+stays as the named *novelty* channel. The full account — the newcomer's velocity,
+the protention reserve, why the opening is zero, and the per-text calibration the
+new scale needs — is in **bayesian-surprise.md**.
+
 Every surprise is tagged by the operator that fired: `INS` (a figure enters),
 `CON`/`SIG` (a new bond), `DEF` (a new assertion), `SEG` (the focus resplits off
 the expected figures). `REC` records what the reader expected; `EVA` records how

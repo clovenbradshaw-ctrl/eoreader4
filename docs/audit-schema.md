@@ -13,16 +13,19 @@ button exports the entire ring buffer as JSONL.
   "startedAt": 1718636400000,
   "finishedAt": 1718636400512,
   "durationMs": 512,
-  "route": "grounded",   // or 'math', 'who', 'confirm', 'chat', 'error'
+  "route": "grounded",   // or 'math', 'who', 'confirm', 'chat', 'smalltalk', 'error'
   "steps": [
-    { "name": "route",    "t": 0,   "data": { "ms": 0, "route": "grounded" } },
-    { "name": "retrieve", "t": 4,   "data": { "ms": 4, "n": 6, "top": 0.71 } },
-    { "name": "fold",     "t": 5,   "data": { "ms": 0, "noteLen": 412 } },
-    { "name": "prompt",   "t": 5,   "data": { "ms": 0, "promptLen": 540 } },
-    { "name": "llm",      "t": 480, "data": { "ms": 475, "outputLen": 132 } },
-    { "name": "bind",     "t": 488, "data": { "ms": 8, "claims": 2, "cited": 2 } },
-    { "name": "veto",     "t": 490, "data": { "ms": 1, "fired": [], "refused": false } },
-    { "name": "settle",   "t": 511, "data": { "ms": 0 } }
+    { "name": "route",    "t": 0,   "data": { "ms": 0, "route": "grounded", "task": "summary" } },
+    { "name": "converse", "t": 1,   "data": { "ms": 1, "recent": 4, "folded": 6, "notesLen": 210 } },
+    { "name": "retrieve", "t": 5,   "data": { "ms": 4, "n": 6, "top": 0.71 } },
+    { "name": "fold",     "t": 6,   "data": { "ms": 1, "noteLen": 412,
+                                              "surf": { "anchor": 12, "peak": 17, "stops": [12,14,17],
+                                                        "focus": "Gregor", "recs": [17], "rode": "bayesian-figure" } } },
+    { "name": "prompt",   "t": 6,   "data": { "ms": 0, "promptLen": 540 } },
+    { "name": "llm",      "t": 481, "data": { "ms": 475, "outputLen": 132, "maxTokens": 512 } },
+    { "name": "bind",     "t": 489, "data": { "ms": 8, "claims": 2, "cited": 2 } },
+    { "name": "veto",     "t": 491, "data": { "ms": 1, "fired": [], "refused": false } },
+    { "name": "settle",   "t": 512, "data": { "ms": 0 } }
   ],
   "prompt":     "system: …\n\nuser: Spans:\n[s2] …\n[s7] …\n\nQuestion: …",
   "rawOutput":  "Alice said the meeting would start at noon. Bob agreed.",

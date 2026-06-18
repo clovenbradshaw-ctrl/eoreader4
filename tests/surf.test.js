@@ -1,0 +1,98 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { parseText } from '../src/parse/index.js';
+import { surfFold, readingAt } from '../src/read/index.js';
+import { stages } from '../src/turn/stages.js';
+import { runTurn } from '../src/turn/pipeline.js';
+import { createAuditLog } from '../src/audit/index.js';
+import { createHashEmbedder } from '../src/model/embed-hash.js';
+import '../src/model/echo.js';
+import { createModel } from '../src/model/interface.js';
+
+// docs/surfing-the-fold.md — the surfer reads a field the reading already maintains
+// and steps down its gradient. Nothing is selected; every axis is read off physics.
+
+const STORY = 'Grete Vale entered. Grete sat. Grete read. Gregor Pike arrived. ' +
+              'Gregor coughed. Gregor waited. Otto Stein knocked. Otto left. ' +
+              'Otto returned. Mara Cole spoke. Mara left.';
+
+test('surfFold returns the documented shape and rides the bayesian-figure field', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  const surf = surfFold(doc, 1);
+  for (const k of ['anchor', 'stops', 'peak', 'focus', 'field', 'recCursors', 'rode']) {
+    assert.ok(k in surf, `surf has ${k}`);
+  }
+  assert.equal(surf.rode, 'bayesian-figure');
+  assert.ok(Array.isArray(surf.stops) && surf.stops.length > 0);
+});
+
+test('the anchor is always a stop; every REC cursor is always a stop', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  const surf = surfFold(doc, 1);
+  assert.ok(surf.stops.includes(surf.anchor), 'retrieval set the surfer down at the anchor');
+  for (const c of surf.recCursors) {
+    assert.ok(surf.stops.includes(c), `a frame broke at ${c}, so it is a stop`);
+  }
+});
+
+test('the peak is the steepest stop — where the significance reading is taken', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  const surf = surfFold(doc, 1);
+  const bayesAt = (c) => readingAt(doc, c).bayes;
+  for (const c of surf.stops) {
+    assert.ok(bayesAt(surf.peak) >= bayesAt(c), `peak ${surf.peak} is at least as steep as stop ${c}`);
+  }
+});
+
+test('the field trace covers the reach with warmth, surprise, and novelty per cursor', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  const surf = surfFold(doc, 5, { behind: 2, ahead: 3 });
+  const idxs = surf.field.map(f => f.idx);
+  assert.deepEqual(idxs, [3, 4, 5, 6, 7, 8], 'a little behind, mostly ahead');
+  for (const f of surf.field) {
+    assert.ok('focus' in f && typeof f.bayes === 'number' && typeof f.surprisalBits === 'number');
+  }
+});
+
+test('the surf is deterministic — same document, same anchor, same path', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  assert.equal(JSON.stringify(surfFold(doc, 1)), JSON.stringify(surfFold(doc, 1)));
+});
+
+test('an empty document surfs to a safe empty result', () => {
+  const surf = surfFold({ sentences: [] }, 0);
+  assert.deepEqual(surf.stops, []);
+  assert.equal(surf.rode, 'bayesian-figure');
+});
+
+// The fold stage uses the surfer: the significance reading is taken at the peak, and
+// any high-significance line retrieval missed is folded in as a citable span.
+test('the fold stage folds surfed stops retrieval missed into the spans (via surf, citable)', async () => {
+  const doc = parseText(STORY, { docId: 's' });
+  // Retrieval gave only the first line; the surfer should pull in later movers.
+  const ctx = { doc, spans: [{ idx: 0, text: doc.sentences[0], score: 1 }] };
+  const out = await stages.fold(ctx);
+
+  assert.ok(out.surf && out.surf.rode === 'bayesian-figure', 'the surf rides on the context');
+  const surfed = out.spans.filter(s => s.via === 'surf');
+  assert.ok(surfed.length > 0, 'lines retrieval missed are folded in');
+  assert.ok(surfed.every(s => Number.isInteger(s.idx) && doc.sentences[s.idx] === s.text),
+    'each surfed span has a real index + verbatim text, so it is bindable');
+  assert.ok(out.note && out.note.text, 'the consciousness folded a note');
+});
+
+test('the audit records the surf path (anchor, peak, stops, focus, recs, rode)', async () => {
+  const doc = parseText(STORY, { docId: 's' });
+  doc.sentenceEmbeddings = async (e) => Promise.all(doc.sentences.map(s => e.embed(s)));
+  const model = createModel('echo'); await model.load();
+  const audit = createAuditLog();
+  await runTurn({ question: 'what happens to Otto?', doc, model, embedder: createHashEmbedder(), auditLog: audit });
+
+  const fold = audit.turns[0].steps.find(s => s.name === 'fold');
+  assert.ok(fold?.data?.surf, 'the fold step carries the surf telemetry');
+  const surf = fold.data.surf;
+  assert.equal(surf.rode, 'bayesian-figure');
+  assert.ok(Array.isArray(surf.stops) && surf.stops.includes(surf.anchor));
+  assert.ok(Number.isInteger(surf.peak));
+});

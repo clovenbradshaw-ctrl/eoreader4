@@ -32,6 +32,7 @@ const STATE = {
   loadingBackend: null,  // promise of the in-flight model load, if any
   graph:     null,       // graph-view controller for the current doc
   activeTab: 'text',
+  history:   [],         // the running transcript, fed back each turn (the session fold)
 };
 
 const els = {
@@ -176,6 +177,7 @@ const send = async () => {
     model:    STATE.model,
     embedder: STATE.embedder,
     auditLog: STATE.audit,
+    history:  STATE.history,    // the prior transcript — the session fold reads it
     onStep:   (name, ctx, data) => updateThinking(thinking, name, data, ctx),
   });
   const ms = Math.round(performance.now() - t0);
@@ -184,6 +186,11 @@ const send = async () => {
     route: result.turn.route, ms, flags: result.flags,
   });
   if (result.sources?.length) highlightSources(els.docView, result.sources);
+
+  // Append the completed exchange so the next turn's session fold can read it back.
+  STATE.history.push({ role: 'user', content: question });
+  STATE.history.push({ role: 'assistant', content: result.answer || '' });
+
   els.send.disabled = false;
 };
 

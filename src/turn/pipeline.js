@@ -14,18 +14,23 @@
 
 import { stages } from './stages.js';
 
+// route → converse → retrieve → fold → prompt → llm → bind → veto → settle.
+// `converse` (the session fold) sits right after `route`, before retrieval — it runs
+// for both grounded and chat turns and is independent of the document. The mechanical
+// short-circuits (smalltalk, math, who, confirm) terminate at `route` and never reach
+// it; they need no history.
 const PIPELINE = [
-  'route', 'retrieve', 'fold', 'prompt', 'llm', 'bind', 'veto', 'settle',
+  'route', 'converse', 'retrieve', 'fold', 'prompt', 'llm', 'bind', 'veto', 'settle',
 ];
 
-export const runTurn = async ({ question, doc, model, embedder, auditLog, onStep }) => {
+export const runTurn = async ({ question, doc, model, embedder, auditLog, onStep, history = [] }) => {
   const turn      = auditLog.turn(question);
   const stepFan   = (name, ctx, ms) => {
     const data = summarize(name, ctx, ms);
     turn.step(name, data);
     onStep?.(name, ctx, data);
   };
-  const ctx0      = { question, doc, model, embedder };
+  const ctx0      = { question, doc, model, embedder, history };
 
   try {
     const ctx = await PIPELINE.reduce(
@@ -75,11 +80,17 @@ const nowMs = () =>
 const summarize = (name, ctx, ms) => {
   const base = { ms: Math.round(ms) };
   switch (name) {
-    case 'route':    return { ...base, route: ctx.route };
+    case 'route':    return { ...base, route: ctx.route, task: ctx.task };
+    case 'converse': return { ...base, recent: ctx.convStats?.recent || 0,
+                              folded: ctx.convStats?.folded || 0, notesLen: ctx.convStats?.notesLen || 0 };
     case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0 };
-    case 'fold':     return { ...base, noteLen: ctx.note?.text?.length || 0 };
+    case 'fold':     return { ...base, noteLen: ctx.note?.text?.length || 0,
+                              surf: ctx.surf ? {
+                                anchor: ctx.surf.anchor, peak: ctx.surf.peak, stops: ctx.surf.stops,
+                                focus:  ctx.surf.focus,  recs: ctx.surf.recCursors, rode: ctx.surf.rode,
+                              } : null };
     case 'prompt':   return { ...base, promptLen: ctx.promptText?.length || 0 };
-    case 'llm':      return { ...base, outputLen: ctx.rawOutput?.length || 0 };
+    case 'llm':      return { ...base, outputLen: ctx.rawOutput?.length || 0, maxTokens: ctx.maxTokens };
     case 'bind':     return { ...base,
                               claims: ctx.bound?.length || 0,
                               cited:  ctx.bound?.filter(b => b.citation).length || 0 };

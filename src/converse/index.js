@@ -13,3 +13,7 @@ export {
   conversationalEvent, witnessOf, isCitableAsDocument,
   depositConversational, commitSurvives, corefPerception,
 } from './provenance.js';
+
+// The session-register fold — the conversation's own two registers (verbatim window
+// + surfed recap), mirroring the document fold. (docs/session-fold.md)
+export { foldConversation } from './history.js';

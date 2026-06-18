@@ -120,6 +120,50 @@ export const readingAt = (doc, cursor, opts = {}) => {
   const surprisal = n ? bits / n : 0;          // mean bits per surprising event
   const surprise  = 1 - Math.pow(2, -surprisal); // squashed to [0,1)
 
+  // --- Bayesian surprise (the SIGNIFICANCE channel). -----------------------
+  // Surprisal answers "how improbable"; that is the wrong invariant for where a
+  // reading's attention goes — TV-snow is maximally improbable yet moves no belief
+  // (Itti & Baldi, NIPS 2005). Bayesian surprise answers "how far the reading's
+  // belief MOVED": D_KL(posterior ‖ prior) over the figure field. The posterior is
+  // the prior advanced one step — every incumbent decays by γ, every INS at this
+  // line deposits γ⁰ = 1 — taken over the common support plus a fixed reserve atom
+  // (NOVELTY) that keeps a newcomer finite (no infinite name-snow shock) and makes
+  // the opening fall to exactly zero on its own. See docs/bayesian-surprise.md.
+  const deposit = new Map();
+  for (const id of insAt) deposit.set(id, (deposit.get(id) || 0) + 1);
+  const support   = new Set([...priorMass.keys(), ...deposit.keys()]);
+  const newcomers = [...deposit.keys()].filter(id => !priorMass.has(id));
+  // A newcomer is measured against its SHARE of the reserve — co-entrants split it,
+  // so the reserve is never multiply-counted (a single newcomer gets all of pNovel).
+  const newShare  = newcomers.length ? pNovel / newcomers.length : 0;
+
+  const postMass = new Map();
+  let sumPost = 0;
+  for (const id of support) {
+    const m1 = GAMMA * (priorMass.get(id) || 0) + (deposit.get(id) || 0); // m′ = γ·m + deposits
+    postMass.set(id, m1);
+    sumPost += m1;
+  }
+  const denomPost = sumPost + NOVELTY;
+  const priorW = (id) => (priorMass.has(id) ? priorMass.get(id) : newShare);
+  let sumW = NOVELTY;
+  for (const id of support) sumW += priorW(id);
+
+  let bayesBits = 0;
+  for (const id of support) {
+    const pPost = postMass.get(id) / denomPost;
+    if (pPost <= 0) continue;
+    bayesBits += pPost * Math.log2(pPost / (priorW(id) / sumW));
+  }
+  // The reserve atom (protention) — present in both prior and posterior, the term
+  // that keeps the KL defined (absolute continuity) on every newcomer.
+  {
+    const pPost = NOVELTY / denomPost;
+    if (pPost > 0) bayesBits += pPost * Math.log2(pPost / (NOVELTY / sumW));
+  }
+  bayesBits = Math.max(0, bayesBits);          // KL ≥ 0 (clamp float noise)
+  const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
+
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
   const surprises = [];
   for (const id of newFigIds) surprises.push({ op: 'INS', text: `${name(id)} enters`, idx: at });
@@ -146,8 +190,14 @@ export const readingAt = (doc, cursor, opts = {}) => {
     predicted: { op: 'REC', figures: predFigures.map(name), bonds: predBonds },
     evaluation: { op: 'EVA', held, surprise, bits: round(surprisal) },
     surprises,
+    // Two channels (docs/bayesian-surprise.md). `surprise`/`surprisalBits` is the
+    // NOVELTY channel (−log p) — the audit/trace, the UI %, the note gate. `bayes`/
+    // `bayesBits` is the SIGNIFICANCE channel (D_KL) — what the surfer's cursor and
+    // the enacted loop ride. They disagree where it is diagnostic.
     surprise,
     surprisalBits: round(surprisal),
+    bayes,
+    bayesBits: round(bayesBits),
     held,
     summary,
     // Tagged conversational warmth folded into the prior this turn (0 when the
