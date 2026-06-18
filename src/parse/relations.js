@@ -67,7 +67,11 @@ const KIN_RE = new RegExp(
 // mid-sentence subject arrives here as a clause-initial one. This function stays a
 // pure head-resolver and holds NO segmentation of its own — the split is one module.
 const leadingSubject = (sentence, admission, coref) => {
-  const pn = sentence.match(/^\s*(He|She|They|We|It|I|You)\b/);
+  // Case-INSENSITIVE: clause segmentation yields lowercase-initial clauses
+  // ("…, and he turned" → "he turned"), so a clause-head subject pronoun is as
+  // often lower- as upper-case. The capitalised-only match dropped every split-off
+  // pronoun subject — the half of Move 1 that was never wired to the clause splitter.
+  const pn = sentence.match(/^\s*(he|she|they|we|it|i|you)\b/i);
   if (pn) {
     const cands = coref?.field ? coref.field() : [];
     const top = cands[0];
