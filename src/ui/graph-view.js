@@ -15,6 +15,7 @@
 // whether the pane is visible or hidden when first built.
 
 import { readingAt, structureSurface, predictNext } from '../read/index.js';
+import { enactedReadingTo } from '../enact/index.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const W = 600, H = 460, CX = W / 2, CY = H / 2;
@@ -229,6 +230,10 @@ export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder } 
     if (evChips.length === 0) evChips.push(chip('NUL', 'held — no new structure'));
 
     const pct = Math.round(sig.surprise * 100);
+    // The enacted loop, folded to this cursor — the reading's OWN frames (terms,
+    // strain, restructurings) as of here, distinct from the depicted significance
+    // above it. The arrow above reads what the clause REPORTS; this reads what the
+    // reading has DONE establishing and breaking its terms up to this point (§2).
     panel.innerHTML =
       `<div class="rl rl1"><span class="rl-tag">existence</span>` +
         `<span class="rl-body">s${cur}: ${escapeHtml(sig.sentence || '')}</span></div>` +
@@ -241,7 +246,9 @@ export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder } 
           `<span class="surprise-bar"><i style="width:${pct}%"></i></span>` +
           `<div class="rl-summary">${escapeHtml(sig.summary)}</div>` +
           `<div class="rl-pred" hidden></div>` +
-        `</span></div>`;
+        `</span></div>` +
+      `<div class="rl rl4"><span class="rl-tag">enacted loop</span>` +
+        `<span class="rl-body">${enactedStrip(enactedReadingTo(doc, cur))}</span></div>`;
 
     // Predictive coding: ask the model to read the past and predict the next
     // line, then measure the embedding distance to what actually comes. Async,
@@ -308,6 +315,36 @@ export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder } 
   });
 
   const chip = (op, text) => `<span class="op ${op}" title="${op}">${escapeHtml(text)}</span>`;
+
+  // Render the enacted-loop fold at the cursor: one row per layer showing the
+  // terms the frame stands on, a strain bar (Σ surprise toward the layer's REC
+  // threshold), and how many times the frame has restructured up to here. The
+  // strain bar IS the protective belt filling; a REC is the belt giving way. A
+  // thrash (a layer oscillating between two frames) is surfaced as the threshold
+  // error it is, never hidden as turbulence (§11).
+  const enactedStrip = (en) => {
+    const rows = [];
+    for (const layer of en.frames.keys()) {
+      const f = en.frames.get(layer);
+      const ratio = f.threshold ? Math.min(1, f.strain / f.threshold) : 0;
+      const recN = en.stats[layer]?.recs || 0;
+      const terms = (f.terms || []).slice(0, 3).join(', ') || '—';
+      rows.push(
+        `<div class="en-frame">` +
+          `<span class="en-layer">${escapeHtml(layer)}</span>` +
+          `<span class="en-terms" title="terms the frame stands on">${escapeHtml(terms)}</span>` +
+          `<span class="surprise-bar en-strain" title="strain ${f.strain.toFixed(2)} / ${f.threshold} → REC">` +
+            `<i style="width:${Math.round(ratio * 100)}%"></i></span>` +
+          `${chip('REC', `${recN}×`)}` +
+        `</div>`,
+      );
+    }
+    const thrashing = Object.entries(en.stats).filter(([, v]) => v.thrash).map(([l]) => l);
+    const note = thrashing.length
+      ? `<div class="rl-summary">thrash: ${escapeHtml(thrashing.join(', '))} — threshold too low (§11)</div>`
+      : '';
+    return rows.join('') + note;
+  };
 
   // ---- hover / select / drag ----------------------------------------------
   function wireNode(n, g) {
