@@ -76,6 +76,16 @@ export const createCorefField = ({
   // the witness-does-not-decide rule holding at the field.
   const reinforce = (id, w, sentIdx) => noteConversational(id, sentIdx ?? 0, w);
 
+  // Is `id` already bound to a role that CONFLICTS with `roleKey` (rolesConflict)?
+  // The injected predicate is the only place algebra knowledge enters — coref
+  // consults it, never imports it. Used both to guard a unify and to eliminate a
+  // candidate in the by-elimination trigger.
+  const boundToConflicting = (id, roleKey) => {
+    for (const [rk, d] of descriptors)
+      if (d.bound === id && rk !== roleKey && rolesConflict(roleKey, rk)) return true;
+    return false;
+  };
+
   // --- descriptor channel -------------------------------------------------
   // Record a standing-description sighting: a role term ("sister"/"mother"),
   // optionally with a resolved owner ("Gregor's sister" → ownerId gregor-samsa;
@@ -122,13 +132,40 @@ export const createCorefField = ({
     if (dr.ownerId && dr.ownerId === nameId) return null;          // can't be your own sister
     if (sentIdx - dr.lastIdx > descMaxDist) return null;           // role too stale to bind
     if (dr.bound && dr.bound !== nameId) return null;              // one bearer per role (caveat above)
-    for (const [rk, d] of descriptors)                            // role exclusivity, predicate-injected
-      if (d.bound === nameId && rk !== roleKey && rolesConflict(roleKey, rk)) return null;
+    if (boundToConflicting(nameId, roleKey)) return null;          // role exclusivity, predicate-injected
     dr.bound = nameId;
     const decayed = dr.mass * Math.pow(descGamma, Math.max(0, sentIdx - dr.lastIdx));
     const w = Math.min(convCap, convCap * Math.tanh(decayed / 4));  // accumulated standing → warmth
     noteConversational(nameId, sentIdx, w);
     return { id: nameId, w, via: `descriptor:${roleKey}` };
+  };
+
+  // The unify TRIGGER — role-exclusivity BY ELIMINATION, no proximity term. The
+  // live data is decisive: binding "sister" to the field-nearest name picks the
+  // MOTHER 79/82 and Grete 0/82 — proximity is inverted, because the mother
+  // orbits the protagonist's room. So a role binds a name only when (1) the role
+  // has an established NAMED owner ("Gregor's sister"), and (2) exactly ONE
+  // admitted referent compatible with the role is not already bound to a disjoint
+  // role. Mrs Samsa, consumed by `mother`, is eliminated from `sister`; Grete is
+  // what remains. If MORE THAN ONE candidate survives, HOLD — abstain, never
+  // guess (a two-sister text correctly refuses to fabricate). The candidate set
+  // (admitted ids) is supplied by the assembly layer; the fixpoint lets one
+  // binding eliminate a candidate and unblock another in the same sweep.
+  const bindDescriptorsByElimination = (admittedIds, sentIdx) => {
+    const ids = [...new Set(admittedIds)];
+    const bonds = [];
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const [roleKey, dr] of descriptors) {
+        if (dr.bound || !dr.ownerNamed) continue;                  // needs an established named owner
+        const survivors = ids.filter(id => id !== dr.ownerId && !boundToConflicting(id, roleKey));
+        if (survivors.length !== 1) continue;                      // 0 or >1 → hold (abstain)
+        const bond = unifyDescriptor(roleKey, survivors[0], sentIdx, { compatible: true });
+        if (bond) { bonds.push({ ...bond, role: roleKey, owner: dr.ownerId }); changed = true; }
+      }
+    }
+    return bonds;
   };
 
   // Read the field at a position, weighting each candidate by `pick(g, c)` over
@@ -184,7 +221,7 @@ export const createCorefField = ({
 
   return {
     note, noteConversational, reinforce,
-    noteDescriptor, unifyDescriptor, descriptorState,  // the standing-descriptor channel
+    noteDescriptor, unifyDescriptor, bindDescriptorsByElimination, descriptorState,
     field, fieldGrounded, survivesSubtraction,
   };
 };

@@ -128,6 +128,10 @@ const computeProjection = (log, frame) => {
           // a sub-unit weight. The projection measures the field scaled by it;
           // a certain bond has no `w` and couples at 1.
           coupling: e.w == null ? 1 : e.w,
+          // Provenance: a derived edge (e.g. the descriptor trigger's inferred
+          // kinship hop) is defeasible. The edge-grounding veto reads this flag —
+          // a derived filler never satisfies the functional-axiom witness rule.
+          derived: !!e.derived,
         });
         break;
       case 'SYN':

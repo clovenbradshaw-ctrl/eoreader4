@@ -30,6 +30,11 @@ export const createParser = ({
   languageModules    = {},
   transcriptHandler  = null,
   chromeHint         = null,   // optional (sentence) → score nudge toward chrome
+  // The role-conflict predicate for the standing-descriptor trigger. INJECTED by
+  // the assembly layer (ingest), which is allowed to see both holons and backs it
+  // with the typing bridge's areDisjoint. Parse never imports the algebra; the
+  // default asserts no conflict, so a bare parse has no descriptor exclusivity.
+  rolesConflict      = undefined,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -75,7 +80,11 @@ export const createParser = ({
     // referent trace; a subject pronoun reads the field *as it stood before
     // this sentence* and the strongest candidate's weight becomes the bond's
     // coupling. Nothing is committed — the weight carries the uncertainty.
-    const corefField = createCorefField();
+    const corefField = createCorefField(rolesConflict ? { rolesConflict } : {});
+    // Derived descriptor edges (owner --role--> bearer) accumulate here and are
+    // logged after the candidate relations — they are the trigger's output, marked
+    // `derived` so the graph and the edge-grounding veto read them as defeasible.
+    const derivedEdges = [];
 
     // Candidate relations are collected here and emitted AFTER the pass, so each
     // can be weighed by how often its verb recurs across the whole document (the
@@ -140,6 +149,14 @@ export const createParser = ({
         }
         corefField.noteDescriptor(desc.roleKey, sentIdx, ownerId, { named });
       }
+
+      // The unify trigger (phase b): once this sentence's admissions and
+      // descriptors are folded in, bind any role whose bearer is now uniquely
+      // determined by elimination. Each binding becomes a derived owner→bearer
+      // edge (e.g. Gregor --sister--> Grete), typed downstream as the sibling
+      // primitive — the apposition-free hop the channel exists to recover.
+      for (const b of corefField.bindDescriptorsByElimination([...admission.admitted.values()], sentIdx))
+        derivedEdges.push({ op: 'CON', src: b.owner, tgt: b.id, via: b.role, sentIdx, w: b.w, derived: true });
     });
 
     // Move 3 — the relation recurrence gate (ReVerb's lexical constraint). A real
@@ -174,6 +191,12 @@ export const createParser = ({
         log.append({ ...edge, sentIdx });
       }
     }
+
+    // The derived descriptor edges, after the witnessed candidates. They carry
+    // `derived: true` so the projection and the edge-grounding veto treat them as
+    // defeasible (e.g. they never satisfy the functional-axiom's witnessed-filler
+    // requirement) — the apposition-free binding, held as a weak, citable bond.
+    for (const e of derivedEdges) log.append(e);
 
     const tokensBySentence = sentences.map(s => new Set(tok(s)));
 

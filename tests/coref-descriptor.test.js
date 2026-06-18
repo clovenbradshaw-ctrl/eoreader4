@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { createCorefField } from '../src/parse/coref.js';
 import { scanDescriptors } from '../src/parse/relations.js';
 import { parseText } from '../src/parse/index.js';
-import { areDisjoint } from '../src/read/relation-types.js';
+import { projectGraph } from '../src/core/index.js';
+import { areDisjoint, typeOf } from '../src/read/relation-types.js';
 
 // The standing-descriptor channel, at the FIELD layer. These exercise the
 // mechanism the pipeline wiring will drive: a role epithet ("his sister")
@@ -119,18 +120,19 @@ test('scanDescriptors reads non-apposition role epithets, skipping apposition an
   assert.deepEqual(scanDescriptors('The fear of God.'), []);            // not a role term
 });
 
-test('the pipeline records a held descriptor with a sticky named owner, depositing on no name', () => {
-  // No apposition anywhere — the Metamorphosis pattern in miniature.
+test('extraction records a held descriptor with a sticky named owner, binding no name on its own', () => {
+  // No apposition, and no other admitted referent for the trigger to bind to —
+  // so the role stays HELD: extraction's job ends at the held descriptor.
   const doc = parseText(
-    "Gregor Samsa woke. His sister had left food. Gregor worried. Gregor's sister was kind. Grete entered. Grete cooked.",
+    "Gregor Samsa woke. Gregor dressed. Gregor paced. His sister had left food. Gregor's sister was kind.",
     { docId: 'm' });
   const dr = doc.corefField.descriptorState('sister');
   assert.equal(dr.ownerId, 'gregor-samsa');     // "his" resolved under the margin guard, then
   assert.equal(dr.ownerNamed, true);            // "Gregor's sister" made it sticky/authoritative
-  assert.equal(dr.bound, null, 'extraction holds the role — it does not bind a name (that is the trigger)');
+  assert.equal(dr.bound, null, 'no admitted bearer candidate → extraction holds, binds nothing');
   // The §8 line: a held descriptor deposits into NO name's channel.
-  const grete = doc.corefField.field(5).find(c => c.id === 'grete');
-  assert.equal(grete.conversational, 0, 'nothing was deposited onto Grete — binding is phase (b)');
+  const gs = doc.corefField.field(4).find(c => c.id === 'gregor-samsa');
+  assert.equal(gs.conversational, 0, 'nothing was deposited onto any name');
 });
 
 test('the Frame-A margin guard withholds an ambiguous pronoun owner', () => {
@@ -139,4 +141,39 @@ test('the Frame-A margin guard withholds an ambiguous pronoun owner', () => {
   const dr = doc.corefField.descriptorState('sister');
   assert.ok(dr, 'the role is still recorded as held');
   assert.equal(dr.ownerId, null, 'a wrong-but-weak owner is worse than none — held without an owner');
+});
+
+// ---------------------------------------------------------------------------
+// The trigger (b): role-exclusivity by elimination, end to end, no adjacency.
+
+// "his sister"/"Gregor's sister" and "Grete" never adjacent; the mother is
+// established first and, being disjoint, eliminates Mrs Samsa from "sister".
+const META =
+  'Gregor Samsa woke. Gregor dressed. Gregor worked. His sister had gone. ' +
+  "Gregor's mother wept. Mrs Samsa waited. Grete returned. Grete cooked. Gregor's sister smiled.";
+
+test('the trigger binds Grete to sister by elimination — a sibling edge emerges with no adjacency', () => {
+  const doc = parseText(META, { docId: 'meta', rolesConflict: areDisjoint });
+  // Mrs Samsa is consumed by `mother` first (sole candidate before Grete arrives)…
+  assert.equal(doc.corefField.descriptorState('mother').bound, 'mrs-samsa');
+  // …which eliminates her from `sister`, leaving Grete as the only survivor.
+  assert.equal(doc.corefField.descriptorState('sister').bound, 'grete');
+
+  const g = projectGraph(doc.log);
+  const sib = g.edges.find(e => typeOf(e.via)?.type === 'sibling'
+    && [e.from, e.to].includes('grete') && [e.from, e.to].includes('gregor-samsa'));
+  assert.ok(sib, 'a Grete↔Gregor sibling edge emerges, bound across the epithet→name gap');
+  assert.equal(sib.derived, true, 'and it is marked derived — defeasible, conversational-coupled');
+  // Mrs Samsa is never bound to sister — the false merge the channel guards against.
+  assert.ok(!g.edges.some(e => typeOf(e.via)?.type === 'sibling' && [e.from, e.to].includes('mrs-samsa')));
+});
+
+test('without the injected predicate the trigger abstains rather than fabricate', () => {
+  const doc = parseText(META, { docId: 'meta2' });   // no rolesConflict → default no-conflict
+  // The mother still binds (Mrs Samsa is the sole candidate before Grete arrives)…
+  assert.equal(doc.corefField.descriptorState('mother').bound, 'mrs-samsa');
+  // …but with no conflict knowledge, sister sees TWO unbound candidates → holds.
+  assert.equal(doc.corefField.descriptorState('sister').bound, null);
+  const g = projectGraph(doc.log);
+  assert.ok(!g.edges.some(e => typeOf(e.via)?.type === 'sibling'), 'no sibling edge is fabricated');
 });

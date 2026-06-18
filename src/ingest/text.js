@@ -4,11 +4,15 @@
 
 import { parseText }    from '../parse/index.js';
 import { projectGraph } from '../core/index.js';
+import { areDisjoint }  from '../read/relation-types.js';
 
 export const ingestText = async (file) => {
   const text  = typeof file === 'string' ? file : await file.text();
   const name  = typeof file === 'string' ? `doc-${Date.now()}` : (file.name || `doc-${Date.now()}`);
-  const doc   = parseText(text, { docId: name });
+  // Inject the role-conflict predicate here, the one layer allowed to see both
+  // holons: parse stays a leaf, and the standing-descriptor trigger consults the
+  // typing bridge's algebra (sister ⟂ mother) without ever importing it.
+  const doc   = parseText(text, { docId: name, rolesConflict: areDisjoint });
 
   // The graph is a fold of the log. Expose it as a frame-parameterised
   // projection so the UI can re-weight around a reading cursor (γ decay)
