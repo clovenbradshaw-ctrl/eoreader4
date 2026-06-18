@@ -11,7 +11,7 @@
 import { answerSmalltalk, answerMath, answerConfirm, answerWho } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
-import { buildGroundedMessages, buildChatMessages } from '../model/prompt.js';
+import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';
 import { bindCitations, renderBound } from '../ground/bind.js';
 import { runVetoes }        from '../ground/veto.js';
 
@@ -65,10 +65,21 @@ export const stages = {
   },
 
   // Build messages. Grounded when we have spans; plain chat when we don't.
-  // The reading (fold note) rides alongside the verbatim spans.
+  // The talker is fed the FOLD (the document notes) PLUS the verbatim excerpts —
+  // never spans alone. The fold's output, which the audit used to record and then
+  // discard, now reaches the prompt. Notes and excerpts are built from the same
+  // spans/cursor upstream, so the structured reading and the verbatim cohere (§6).
   async prompt(ctx) {
     const messages = ctx.spans?.length
-      ? buildGroundedMessages({ question: ctx.question, spans: ctx.spans, note: ctx.note })
+      ? buildGroundedMessages({
+          question:     ctx.question,
+          spans:        ctx.spans,
+          notes:        ctx.note?.text || '',
+          orientation:  orientationOf(ctx.doc),
+          budget:       ctx.budget,             // route/turn config; defaults inside
+          conversation: ctx.conversation || {}, // session fold + past turns (seam)
+          lastReply:    ctx.lastReply || '',
+        })
       : buildChatMessages({ question: ctx.question });
     return {
       ...ctx,
@@ -113,4 +124,18 @@ export const stages = {
   async settle(ctx) {
     return ctx;
   },
+};
+
+// Orientation WITHOUT recognition (§3): the talker is handed the FILENAME, the
+// type, and the length — never the title the document metadata may carry, never
+// the author or genre. We read the filename off `docId` (the ingest sets it from
+// the file name) and never off any extracted title.
+const orientationOf = (doc) => {
+  if (!doc) return '';
+  const units = doc.units || doc.sentences || [];
+  return orientationLine({
+    filename: doc.docId || 'the document',
+    type:     doc.modality === 'image' ? 'image' : 'text',
+    length:   units.length,
+  });
 };

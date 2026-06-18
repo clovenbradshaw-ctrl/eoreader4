@@ -20,7 +20,10 @@ export const foldNote = (spans, opts = {}) => {
     if (c && c.text) return { text: c.text, sources, levels: c.levels };
   }
 
-  const text = ordered.map(s => `[s${s.idx}] ${condense(s.text)}`).join('\n');
+  // No-doc fallback: a condensed, source-ordered digest — still a fold, not a
+  // copy. The index lives on `sources` (the binder's channel), never in the
+  // text: the talker reads prose, not `[sN]` tags (§3).
+  const text = ordered.map(s => condense(s.text)).join('\n');
   return { text, sources };
 };
 

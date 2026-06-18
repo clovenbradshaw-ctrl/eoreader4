@@ -184,6 +184,17 @@ talker's coref strength returns as a **proposal**: it may tip a merge, but a
 grounding reader must second it before the merge commits. See
 [`docs/edge-grounding.md`](docs/edge-grounding.md).
 
+Those arrows are also what the talker is **handed**. The prompt feeds the fold —
+the document **notes** (plain-language arrows over the folded graph) *plus* the
+verbatim **excerpts** — never raw spans alone, the discard that let the model fill
+the gaps between sentences with invented tokens. The surface discipline runs the
+whole prompt: the notes are arrows in words (`sister --tends--> Gregor`), never
+operator codes, cell names, sentence indices, or citation tokens, and orientation
+is the *filename*, type, and length — never a title, author, or genre, because
+recognition replaces reading. The notes register feeds the prompt on the way out
+and the edge-grounding veto reads it on the way back: one object, two directions.
+See [`docs/prompt-assembly.md`](docs/prompt-assembly.md).
+
 ## The nine operators
 
 The vocabulary the whole system speaks (the ACT face of the EO cube):
@@ -287,8 +298,11 @@ comments on gates that were on.
 - **The fold is the consciousness** — existence + structure + significance
   folded into the reading the model receives (was a verbatim span dump the
   `prompt` stage didn't even use).
-- **The grounded prompt** — spans (verbatim, trusted) → reading (the fold,
-  "usually right") → question last, the order that worked on small models.
+- **The grounded prompt** — the fold's **notes** (plain-language arrows over the
+  graph) *plus* the verbatim **excerpts**, under a recognition-free orientation
+  (filename, type, length), question first for the small-model exchange. Notes and
+  excerpts from the same cursor; no codes, indices, or citation tokens reach the
+  talker. See [`docs/prompt-assembly.md`](docs/prompt-assembly.md).
 - **Reading mode** — predict (REC) / evaluate (EVA) / surprise (surprisal in
   bits), EO-tagged, surfaced as you step a cursor through the document.
 - **The graph view** — see and explore the graph with a cursor; nodes are

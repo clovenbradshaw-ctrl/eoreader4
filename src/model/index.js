@@ -6,7 +6,8 @@
 export { registerBackend, availableBackends, createModel } from './interface.js';
 export { createHashEmbedder }   from './embed-hash.js';
 export { createMiniLMEmbedder } from './embed.js';
-export { buildGroundedMessages, buildChatMessages, SYSTEM_GROUND, SYSTEM_CHAT } from './prompt.js';
+export { buildGroundedMessages, buildChatMessages, SYSTEM_GROUND, SYSTEM_CHAT,
+         orientationLine, EXCERPTS_HEADER, DEFAULT_BUDGET } from './prompt.js';
 
 import './echo.js';
 import './wllama.js';

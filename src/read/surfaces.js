@@ -56,7 +56,10 @@ export const structureSurface = (doc, idxs) => {
 export const significanceSurface = (doc, cursor) => readingAt(doc, cursor);
 
 // The consciousness. Query all three surfaces and fold them into a single
-// reading the talker can use, with citations preserved for binding.
+// reading the talker can use. The reading the talker reads is the ARROWS — the
+// structured reading — never the count headline and never the machinery. The
+// source indices live on `sources` (the machine-readable channel the binder
+// re-cites against), never inside the text: the talker never sees s348.
 export const consciousness = (doc, spans, cursor = null) => {
   const existence = existenceSurface(doc, spans);
   const idxs = existence.map(s => s.idx);
@@ -66,33 +69,51 @@ export const consciousness = (doc, spans, cursor = null) => {
   return { text, sources: idxs, levels: { existence, structure, significance } };
 };
 
-const composeNote = (structure, significance) => {
+// The notes register — the arrow serializer over the folded graph. The talker
+// reads a serialized graph in plain language and speaks prose; the mechanics
+// stay grounder-side. So each note is an arrow with a PLAIN-LANGUAGE relation
+// label (tends, holds-with, originated-in, slammed) — never an operator code,
+// never a cell name, never a sentence index, never a citation token, never a
+// referent id. The graph's specific relation (the verb on the edge) overrides
+// any generic; a relation with no verb falls back to the generic `linked-to`.
+// This is the document-notes slot of the prompt, AND the same register the
+// edge-grounding veto checks the talker's sentences against — one object, two
+// directions.
+export const serializeNotes = (structure, { max = 8 } = {}) => {
   const lines = [];
-  const { figures, relations, defs } = structure;
-
-  if (figures.length) {
-    const top = figures.slice(0, 3).map(f => f.label);
-    const list = top.length === 1 ? top[0]
-      : top.slice(0, -1).join(', ') + ' and ' + top[top.length - 1];
-    lines.push(`This passage centers on ${list}.`);
+  const seen = new Set();
+  for (const r of (structure?.relations || [])) {
+    const rel = plainRel(r.via);
+    const key = `${r.src.id}|${rel}|${r.tgt.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(`${r.src.label} --${rel}--> ${r.tgt.label}`);
+    if (lines.length >= max) return lines;
   }
-
-  const seenRel = new Set();
-  for (const r of relations) {
-    const key = `${r.src.id}|${r.via}|${r.tgt.id}`;
-    if (seenRel.has(key)) continue;
-    seenRel.add(key);
-    lines.push(`${r.src.label} ${r.via || 'is linked to'} ${r.tgt.label}. [s${r.idx}]`);
-    if (lines.length >= 6) break;
+  for (const d of (structure?.defs || [])) {
+    const key = `def|${d.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(`${d.label}: ${d.value}`);            // a property line, A: fact
+    if (lines.length >= max) return lines;
   }
+  return lines;
+};
 
-  const seenDef = new Set();
-  for (const d of defs) {
-    if (seenDef.has(d.id)) continue;
-    seenDef.add(d.id);
-    lines.push(`${d.label} — ${d.value}. [s${d.idx}]`);
-    if (lines.length >= 8) break;
-  }
+// A relation label the talker may read: the edge's own verb, plain, hyphenated
+// so it reads as one arrow label ("originated in" → "originated-in"). Never a
+// code; the generic stands only when the graph carried no verb.
+const plainRel = (via) => {
+  const v = String(via || '').trim().replace(/[.!?]+$/, '').replace(/\s+/g, '-');
+  return v || 'linked-to';
+};
+
+// Replace the count headline with the arrows (the structured reading), and keep
+// the significance summary when the cursor genuinely moved — plain prose, no
+// machinery. The indices that used to ride in `[sN]` tags are gone from the
+// talker's view by design (§3); they remain on `sources`.
+const composeNote = (structure, significance) => {
+  const lines = serializeNotes(structure, { max: 8 });
 
   if (significance && significance.surprise >= 0.2 && significance.summary) {
     lines.push(significance.summary);
