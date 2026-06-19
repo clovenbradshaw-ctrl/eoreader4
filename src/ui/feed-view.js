@@ -94,6 +94,20 @@ export const renderFeed = (root, feed, { message = '', onSelectSentence } = {}) 
       ? 'No document graph — this is the chat feed (no excerpts, no arrows).'
       : 'No figures in the window this message activated.'));
   }
+  // When the message NAMED a referent, the graph is centred on that referent —
+  // everything tied to its identity, coreference collapsed — not the figures the
+  // retrieval window drifted across. Say so, naming it canonically, so the
+  // centring is legible and not mistaken for the window.
+  const focusIds = feed?.focus || [];
+  if (focusIds.length) {
+    const labelOf = feed?.doc?.admission?.labelOf;
+    const labels = focusIds.map(id => (labelOf && labelOf(id)) || id);
+    tree.insertBefore(
+      noteEl(`centred on the referent ${labels.join(', ')} — everything tied to it, coreference collapsed`),
+      tree.firstChild,
+    );
+  }
+
   const sig = feed?.note?.levels?.significance;
   if (sig && sig.surprise >= 0.2 && sig.summary) {
     tree.appendChild(noteEl(`significance: ${sig.summary}`));

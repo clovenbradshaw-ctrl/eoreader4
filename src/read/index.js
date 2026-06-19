@@ -8,8 +8,8 @@
 //   readingAt            significance at a single cursor (UI reading mode)
 
 export {
-  existenceSurface, structureSurface, significanceSurface, consciousness,
-  serializeNotes,
+  existenceSurface, structureSurface, figureSurface, namedReferents,
+  significanceSurface, consciousness, serializeNotes,
 } from './surfaces.js';
 export { readingAt } from './reading.js';
 export { surfFold } from './surf.js';

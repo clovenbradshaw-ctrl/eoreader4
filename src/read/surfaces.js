@@ -12,6 +12,13 @@
 
 import { readingAt } from './reading.js';
 import { typeOf } from './relation-types.js';
+import { projectGraph } from '../core/index.js';
+import { tok } from '../parse/tokenize.js';
+
+// A focus referent's neighbourhood is bounded so a hub figure (the protagonist,
+// hundreds of bonds) stays a readable graph rather than a dump — the strongest
+// bonds by salience, the rest left off. The notes register caps tighter still (8).
+const FOCUS_MAX_BONDS = 60;
 
 // Level 1 — raw existence. The spans as they are, in source order.
 export const existenceSurface = (_doc, spans) =>
@@ -58,6 +65,93 @@ export const structureSurface = (doc, idxs) => {
   return { figures: rankedFigures, relations, defs, merges, splits };
 };
 
+// The named referents a message activates — the figures it explicitly calls by
+// name. The message "Grete" NAMES the Grete referent; that referent is the centre
+// the reading should turn on, not whatever window the retrieval+surf happened to
+// drift across. A referent is nothing but an identity here — the projection's
+// representative root, an opaque id the union-find collapses every surface form
+// onto ("Gregor"/"Samsa"/"Mr Samsa" → one id, "his sister"/"Gregor's sister" →
+// Grete's id). The display name is layered on top (admission.labelOf), never the
+// identity itself. Matching is against the ADMITTED figures only — never an
+// arbitrary noun — so a sentence cannot fuzz its way onto a figure it never named.
+export const namedReferents = (doc, question) => {
+  if (!doc?.admission?.admitted || !doc.log) return [];
+  const qset = new Set(tok(question));
+  if (qset.size === 0) return [];
+  const rep = projectGraph(doc.log).representative || ((id) => id);
+  const ids = new Set();
+  for (const [label, id] of doc.admission.admitted) {
+    const lt = tok(label);                       // a label matches only if every
+    if (lt.length && lt.every((t) => qset.has(t))) ids.add(rep(id));  // word is named
+  }
+  return [...ids];
+};
+
+// Level 2, CENTRED ON A REFERENT. structureSurface reads the figures a *window*
+// turns on; this reads the figures a NAMED referent turns on — its incident bonds
+// across the whole projection, coreference collapsed, strongest first. When the
+// message says "Grete", the structured reading is everything tied to the Grete
+// referent (including the bonds it wears under another surface form, "Gregor's
+// sister"), not whatever the retrieval window wandered into. The identity is the
+// projection root (`rep`); the display name is resolved separately and canonically
+// (admission.labelOf first — the naming authority — then the merged entity label,
+// then the bare id). Same shape as structureSurface, so the notes serializer and
+// the holon tree consume it unchanged. Ranked by the projection's own edge
+// salience (endpoint mass × coupling); the neighbourhood is bounded so a hub
+// referent stays a readable graph, never a dump.
+export const figureSurface = (doc, focusIds, { max = FOCUS_MAX_BONDS } = {}) => {
+  const empty = { figures: [], relations: [], defs: [], merges: [], splits: [] };
+  if (!doc?.log || !focusIds?.length) return empty;
+  const graph = projectGraph(doc.log);            // whole-document view: no γ-fade
+  const rep   = graph.representative || ((id) => id);
+  const focus = new Set(focusIds.map(rep));
+  if (focus.size === 0) return empty;
+
+  const labelOf = (id) =>
+    doc.admission?.labelOf?.(id) || graph.entities.get(id)?.label || id;
+  const name = (id) => ({ id: rep(id), label: labelOf(rep(id)) });
+
+  // Incident bonds, coref-collapsed and deduped to the strongest witness of each
+  // (src, via, tgt). A self-loop on the merged referent is dropped.
+  const best = new Map();
+  for (const e of graph.edges) {
+    const f = rep(e.from), t = rep(e.to);
+    if (f === t) continue;
+    if (!focus.has(f) && !focus.has(t)) continue;
+    const key  = `${f}|${e.via}|${t}`;
+    const prev = best.get(key);
+    if (!prev || (e.weight || 0) > (prev.weight || 0)) best.set(key, e);
+  }
+  const ranked = [...best.values()]
+    .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+    .slice(0, max);
+  const relations = ranked.map((e) => ({
+    op:  e.kind === 'sig' ? 'SIG' : 'CON',
+    src: name(e.from), tgt: name(e.to),
+    via: e.via, type: typeOf(e.via)?.type || null, idx: e.sentIdx,
+  }));
+
+  // Figures: the focus referents first (the centre), then the neighbours they bond
+  // to, in salience order (the relations are already ranked). Counts are the merged
+  // sighting totals, so the ×N badge reflects real prominence, not window hits.
+  const order = [];
+  const place = (id) => { if (!order.includes(id)) order.push(id); };
+  for (const id of focus) place(id);
+  for (const r of relations) { place(r.src.id); place(r.tgt.id); }
+  const figures = order.map((id) => ({
+    id, label: labelOf(id), count: graph.entities.get(id)?.sightings || 0,
+  }));
+
+  // Standing properties (DEF predicates) of the focus referents only.
+  const defs = [];
+  for (const e of snapshot(doc)) {
+    if (e.op === 'DEF' && e.key === 'predicate' && focus.has(rep(e.id))) {
+      defs.push({ id: rep(e.id), label: labelOf(rep(e.id)), value: e.value, idx: e.sentIdx });
+    }
+  }
+  return { figures, relations, defs, merges: [], splits: [] };
+};
+
 // Level 3 — significance. Prediction + surprise at the reading cursor.
 export const significanceSurface = (doc, cursor) => readingAt(doc, cursor);
 
@@ -66,10 +160,18 @@ export const significanceSurface = (doc, cursor) => readingAt(doc, cursor);
 // structured reading — never the count headline and never the machinery. The
 // source indices live on `sources` (the machine-readable channel the binder
 // re-cites against), never inside the text: the talker never sees s348.
-export const consciousness = (doc, spans, cursor = null) => {
+export const consciousness = (doc, spans, cursor = null, focus = []) => {
   const existence = existenceSurface(doc, spans);
   const idxs = existence.map(s => s.idx);
-  const structure = structureSurface(doc, idxs);
+  // When the message NAMES a referent, the structured reading turns on THAT
+  // referent — everything tied to it, coreference collapsed — not just the figures
+  // the retrieval window drifted across (the window can surf off into a neighbour's
+  // surprise peak, flooding the notes with someone else's bonds). Fall back to the
+  // window structure when the message named no figure, or the named one carries no
+  // bonds, so a non-name query reads exactly as before.
+  const windowStruct = structureSurface(doc, idxs);
+  const focusStruct  = focus?.length ? figureSurface(doc, focus) : null;
+  const structure = (focusStruct && focusStruct.relations.length) ? focusStruct : windowStruct;
   const significance = cursor == null ? null : significanceSurface(doc, cursor);
   const text = composeNote(structure, significance);
   return { text, sources: idxs, levels: { existence, structure, significance } };

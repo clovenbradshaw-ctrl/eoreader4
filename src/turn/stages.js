@@ -11,7 +11,7 @@
 import { answerSmalltalk, answerMath, answerConfirm, answerRelation, answerWho } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold }         from '../read/index.js';
+import { surfFold, namedReferents } from '../read/index.js';
 import { foldConversation } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';
@@ -100,8 +100,12 @@ export const stages = {
     }
 
     const cursor = surf ? surf.peak : anchor;
-    const note   = foldNote(spans, { doc: ctx.doc, cursor });
-    return { ...ctx, spans, note, surf };
+    // The referents the message named (if any). When it names one, the fold centres
+    // the structured reading on that referent — everything tied to it, coref
+    // collapsed — instead of the figures the surfed window happened to cross.
+    const focus  = ctx.doc ? namedReferents(ctx.doc, ctx.question) : [];
+    const note   = foldNote(spans, { doc: ctx.doc, cursor, focus });
+    return { ...ctx, spans, note, surf, focus };
   },
 
   // Build messages. Grounded when we have spans; plain chat when we don't.

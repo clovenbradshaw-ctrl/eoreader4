@@ -16,7 +16,11 @@ export const foldNote = (spans, opts = {}) => {
 
   const doc = opts.doc;
   if (doc && doc.log) {
-    const c = consciousness(doc, ordered, opts.cursor ?? null);
+    // `focus` is the referents the message named (read/namedReferents). When
+    // present, the consciousness centres the structured reading on them rather
+    // than on the retrieval window — everything tied to the referent, not whatever
+    // the window drifted across.
+    const c = consciousness(doc, ordered, opts.cursor ?? null, opts.focus || []);
     if (c && c.text) return { text: c.text, sources, levels: c.levels };
   }
 
