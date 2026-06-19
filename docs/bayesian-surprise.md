@@ -23,18 +23,33 @@ follows is the divergence between belief *before* and belief *after* the data:
 
 — how much the line *rewrote* the reading, not how unlikely it was.
 
-## The figure field is the distribution
+## The proposition field is the distribution
 
-The reading already maintains a distribution over *who matters*: the γ-mass
-field, `P(id) = mass(id) / Z`, with a fixed `NOVELTY` reserve atom holding
-probability for an as-yet-unseen figure (`reading.js`). Bayesian surprise is the
-KL between this field before and after a line is folded in.
+The reading maintains a distribution not just over *who is on stage* but over
+*what it takes to be the case* — the **proposition field** (`priorProp` in
+`reading.js`). Its atoms are:
+
+- **participants** — every figure, and every referent a figure acts on (the
+  object of a bond: `the floor`, `the picture`, `the window`);
+- **propositions** — the `src|via|tgt` triple a `CON`/`SIG` edge carries (the
+  event/relation itself);
+- **predicates** — the `id|value` a `DEF` carries.
+
+`P(atom) = mass(atom) / Z`, with a fixed `NOVELTY` reserve atom holding
+probability for an as-yet-unseen atom. Bayesian surprise is the KL between this
+field before and after a line is folded in. Because the field carries the
+propositions, an **event on a standing figure moves belief** — the festering
+wound, the disowning — not only a change of cast. (Earlier this field was figure
+`INS` only; significance then meant "the cast shifted," and the reading was blind
+to every event that introduced no new name — the metamorphosis itself scoring
+zero. Widening the field to the proposition is what fixed that.)
 
 The posterior is the prior advanced one step. Each incumbent decays by γ; each
-`INS` at the line deposits γ⁰ = 1:
+atom delivered at the line (a participant, a proposition, a predicate) deposits
+γ⁰ = 1:
 
 ```
-m′(id) = γ · m(id) + (INS deposits at this line)
+m′(atom) = γ · m(atom) + (deposits at this line)
 ```
 
 | | mass before | deposit | mass after |
@@ -119,15 +134,22 @@ distribution is too thin to fit.
 
 ## The seam
 
-This is **figure-level** Bayesian surprise: distributional shift over *who* is
-present. It is real and modelless today — it is shift over figures, not
-edit-distance over tokens, so it no longer rides spelling. What still waits on the
-geometric reader is the **edge** level: a new bond between two already-warm
-figures barely moves the figure distribution while moving the relational structure
-a lot. Typing that edge is the meaning reader's job (`enact/meaning.js`), which
-measures divergence in embedding space rather than over the figure field. Same
-machinery, richer field — the surfer and the loop ride `bayes` now and deepen with
-no shape change once MiniLM is live.
+This is **proposition-level** Bayesian surprise: distributional shift over what
+the reading takes to be the case — participants, the propositions among them, and
+predicates. It is real and modelless today — shift over a structured field, not
+edit-distance over tokens, so it no longer rides spelling, and (unlike the
+figure-only version it replaced) a new bond or predication on a warm figure now
+moves it.
+
+Two seams remain, both for the geometric reader. **Sense distance**: a line that
+restructures *meaning* while depositing no new proposition atom — a re-description,
+an irony, a metaphor — still moves the field little; measuring that is
+divergence in embedding space, the meaning reader's job (`enact/meaning.js`).
+**Unparsed events**: a proposition the extractor never logged (no admitted
+subject — "the father hurled apples at Gregor," where *father* is not a figure)
+cannot enter a field built from the log; that is a parse-recall limit upstream,
+not a surprise-measure limit. Same machinery, richer field — the surfer and the
+loop ride `bayes` now and deepen with no shape change once MiniLM is live.
 
 ## Where it lives
 

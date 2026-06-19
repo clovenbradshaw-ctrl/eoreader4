@@ -22,20 +22,40 @@ test('segmentSentences splits on ?.!', () => {
   assert.equal(out.length, 3);
 });
 
-test('two-sighting admission: candidate then admit', () => {
+test('admission by gravity: an argument-position name admits on first sighting', () => {
+  // A referent earns admission by behaving like one. "Cainan begat Mahalaleel":
+  // Cainan is the subject, Mahalaleel the object of a predication — both have
+  // referential gravity at once, no second sighting required.
   const a = createEntityAdmission();
-  const r1 = a.observe('Alice walked.');
-  assert.equal(r1[0].status, 'candidate');
-  const r2 = a.observe('Then Alice ran.');
-  const aliceObs = r2.find(o => o.label === 'Alice');
-  assert.equal(aliceObs.status, 'admit');
+  const r = a.observe('Cainan begat Mahalaleel.');
+  assert.equal(r.find(o => o.label === 'Cainan').status, 'admit');
+  assert.equal(r.find(o => o.label === 'Mahalaleel').status, 'admit');
 });
 
-test('parseText emits INS only after a second sighting', () => {
-  const doc = parseText('Alice walked. Then Alice ran.', { docId: 'd1' });
-  const inss = doc.log.filter(e => e.op === 'INS' && e.id === 'alice');
-  assert.equal(inss.length, 1);
-  assert.equal(inss[0].label, 'Alice');
+test('admission by gravity: a clause-opener (incl. archaic KJV) never becomes a figure', () => {
+  // "Behold" is a conventions `starter` — stripped before admission, like "Then" or
+  // "He". The old count rule admitted it on the second sighting; now it is never
+  // even a candidate, however often it recurs.
+  const a = createEntityAdmission();
+  a.observe('Behold, a wonder appeared.');
+  a.observe('Behold, another sign came.');
+  assert.ok(!a.isAdmitted('Behold'), 'an archaic clause-opener is not a referent');
+});
+
+test('parseText emits INS from the first sighting when the name has gravity', () => {
+  const doc = parseText('Cainan begat Mahalaleel.', { docId: 'd1' });
+  const ids = doc.log.filter(e => e.op === 'INS').map(e => e.id);
+  assert.ok(ids.includes('cainan'), 'the subject is admitted and INS\'d at once');
+  assert.ok(ids.includes('mahalaleel'), 'the object too — a name spoken once still anchors the proposition');
+});
+
+test('admission by gravity: a prepositional object (a recipient) admits on first sighting', () => {
+  // "unto Noah" — Noah is the object of a preposition, a participant in the
+  // proposition, so it has gravity at once. The word-classes (preposition, function,
+  // role) are read from the conventions ledger, not held in the parser.
+  const a = createEntityAdmission();
+  const r = a.observe('The Lord spake unto Noah that day.');
+  assert.equal(r.find(o => o.label === 'Noah').status, 'admit');
 });
 
 test('parseText emits DEF for copular sentences on admitted entities', () => {

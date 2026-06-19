@@ -13,6 +13,7 @@
 
 import { createLog }            from '../core/log.js';
 import { segmentSentences }     from './sentences.js';
+import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';
 import { createEntityAdmission }from './entities.js';
 import { parseRelations, scanDescriptors } from './relations.js';
@@ -35,6 +36,18 @@ export const createParser = ({
   // with the typing bridge's areDisjoint. Parse never imports the algebra; the
   // default asserts no conflict, so a bare parse has no descriptor exclusivity.
   rolesConflict      = undefined,
+  // The coref field's tuning — the CONFINEMENT WINDOW. The reach over which a
+  // pronoun resolves (`maxDist`) and a standing role epithet can still bind a name
+  // (`descMaxDist`, `descGamma`). INJECTED so a harness can sweep it without the
+  // parser knowing why: too wide and wrong-owner relations bind, too narrow and the
+  // long-range descriptor (a sibling named long after its epithet) never reaches.
+  // The default is the coref field's own (a bare parse is unchanged).
+  corefOpts          = undefined,
+  // The coherence-strain threshold at which the boundary-induction loop RECs a
+  // punctuation mark into a sentence boundary (parse/boundaries.js). The default is
+  // deliberately conservative (a rare crisis); exposed so a test or a known dialect
+  // can set its own sensitivity. Undefined → the loop's own default.
+  boundaryThreshold  = undefined,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -50,8 +63,23 @@ export const createParser = ({
     // "Mr. Darcy" before a single word is classified, and the relation parser
     // reads its copula/modifier/speech lists from the same place.
     const conventions = createConventions();
-    const sentences   = segmentSentences(text, { isAbbreviation: conventions.isAbbreviation });
-    const admission   = createEntityAdmission();
+    // Before the first cut, let MEANING revise SYNTAX (parse/boundaries.js): the
+    // DEF·EVA·REC coherence loop learns whether THIS document uses ':'/';' as
+    // sentence boundaries — promoting one only when leaving it ignored fuses
+    // propositions into run-on units that will not cohere (the KJV genealogies). The
+    // learned marks are recorded as 'boundary' conventions, exactly as learned
+    // abbreviations are, and flow into the splitter.
+    const { extraBoundaries, recs: boundaryRecs } =
+      induceBoundaries(text, {
+        isAbbreviation: conventions.isAbbreviation,
+        thresholds: boundaryThreshold != null ? { segmentation: boundaryThreshold } : undefined,
+      });
+    for (const r of boundaryRecs) conventions.learn('boundary', r.token, r.fused || 1);
+    const sentences   = segmentSentences(text, { isAbbreviation: conventions.isAbbreviation, extraBoundaries });
+    // Admission reads its language-specific word-classes (starters, prepositions,
+    // role words, function words, auxiliaries) from the same conventions ledger the
+    // splitter and relation parser use — seed ∪ what this document taught.
+    const admission   = createEntityAdmission({ conventions });
 
     // Transcript detection — the handler is injected, not imported.
     if (transcriptHandler && transcriptHandler.detect && transcriptHandler.detect(text)) {
@@ -80,7 +108,7 @@ export const createParser = ({
     // referent trace; a subject pronoun reads the field *as it stood before
     // this sentence* and the strongest candidate's weight becomes the bond's
     // coupling. Nothing is committed — the weight carries the uncertainty.
-    const corefField = createCorefField(rolesConflict ? { rolesConflict } : {});
+    const corefField = createCorefField({ ...corefOpts, ...(rolesConflict ? { rolesConflict } : {}) });
     // Derived descriptor edges (owner --role--> bearer) accumulate here and are
     // logged after the candidate relations — they are the trigger's output, marked
     // `derived` so the graph and the edge-grounding veto read them as defeasible.
@@ -90,6 +118,15 @@ export const createParser = ({
     // can be weighed by how often its verb recurs across the whole document (the
     // recurrence gate, move 3). INS/SYN still emit inline, in reading order.
     const candidates = [];
+
+    // The arrow of time, tracked at instantiation: the LAST INS referent activated,
+    // in reading order. A clause that resolves no subject defaults to it (the
+    // genealogy's "and begat …" continues the patriarch just named, not whatever
+    // has the most accumulated mass). Snapshotted before each line so a subjectless
+    // clause looks strictly backward, and bounded by the activation reach so a
+    // long-dead referent never reaches forward to claim a verb.
+    const INHERIT_REACH = 8;
+    let lastIns = null;                         // { id, sentIdx } in reading order
 
     sentences.forEach((sent, sentIdx) => {
       // Chrome-ness is a weight: the mechanical score plus an optional nudge
@@ -102,8 +139,11 @@ export const createParser = ({
         return;
       }
       // Snapshot the field before this line's own entities are folded in, so
-      // a subject pronoun looks backward for its antecedent.
+      // a subject pronoun looks backward for its antecedent. The last-INS register
+      // is snapshotted the same way — a subjectless clause defaults to the referent
+      // activated before this line, never one this line introduces.
       const priorField = corefField.field(sentIdx);
+      const priorLastIns = lastIns;
 
       for (const obs of admission.observe(sent, sentIdx)) {
         // INS on every sighting (admit and present) so edge weights track how
@@ -111,6 +151,7 @@ export const createParser = ({
         if (obs.status === 'admit' || obs.status === 'present') {
           log.append({ op: 'INS', id: obs.id, label: obs.label, sentIdx });
           corefField.note(obs.id, sentIdx);
+          lastIns = { id: obs.id, sentIdx };       // the arrow of time advances
         }
         // A name-containment alias is a synthesis (SYN): "Gregor" folded into
         // the "Gregor Samsa" referent. Recorded for audit; the ids were
@@ -129,6 +170,15 @@ export const createParser = ({
       const coref = {
         field:   () => priorField,
         resolve: () => priorField[0]?.id ?? null,
+        // The last INS referent activated before this line, for a subjectless
+        // clause to default to — within the activation reach, weight decayed by how
+        // many lines back it was instantiated (the same γ kernel, as coupling).
+        lastIns: () => {
+          if (!priorLastIns) return null;
+          const d = sentIdx - priorLastIns.sentIdx;
+          if (d < 0 || d > INHERIT_REACH) return null;
+          return { id: priorLastIns.id, w: Math.round(Math.pow(0.7, d) * 1000) / 1000 };
+        },
       };
       const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier,
                         referents: true };   // open the NP object slot for the page (move 2)
