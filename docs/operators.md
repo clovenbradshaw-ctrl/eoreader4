@@ -29,6 +29,13 @@ The grain (`Ground`, `Figure`, `Pattern`) is on the event itself or
 inferred from the operator: `INS` and `NUL` default to `Ground`; `REC`,
 `SYN`, `CON` default to `Pattern`; the rest to `Figure`.
 
+The Site and Resolution faces carry their cube names too: `site.terrain`
+(Void / Entity / Kind …) and `resolution.stance` (Clearing / Making …) come
+from `core/cube.js`, which is the authority for the two Object-axis faces and
+the 27 Object-diagonal cells (`DIAGONAL_CELLS`). See **docs/cube.md** for the
+full structure, the diagonal coherence guard, and the SUP→EVA / ALT→DEF
+import-time alias.
+
 ## Concrete examples
 
 | Event | Notation |

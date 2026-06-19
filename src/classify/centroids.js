@@ -32,8 +32,29 @@ export const CENTROID_SCHEMA = Object.freeze({
   vectors: { 'INS_Making_Entity': '[number, … dim]' },
 });
 
+import { aliasCellKey } from '../core/cube.js';
+
 const DEFAULT_URL = new URL('../../data/centroids-27.json', import.meta.url).href;
 const DB = 'eoreader4', STORE = 'centroids';
+
+// Import-time alias (master spec, Edit #3): map a stale-keyed bundle forward to
+// the current vocabulary as it is ingested — SUP→EVA, ALT→DEF on the key prefix.
+// The installed bundle was already renamed at build time, so this is the identity
+// on it; it earns its keep when an OLDER bundle (one still keyed SUP_/ALT_) is
+// dropped in. We alias the corpus forward, never rename the system to the corpus.
+// Idempotent and key-preserving order; collisions (a stale and a current key both
+// mapping to the same target) keep the LAST seen, matching object-literal order.
+const aliasForward = (bundle) => {
+  if (!bundle?.vectors) return bundle;
+  let touched = false;
+  const vectors = {};
+  for (const [key, vec] of Object.entries(bundle.vectors)) {
+    const k = aliasCellKey(key);
+    if (k !== key) touched = true;
+    vectors[k] = vec;
+  }
+  return touched ? { ...bundle, vectors } : bundle;
+};
 
 const hasIDB = () => typeof indexedDB !== 'undefined';
 
@@ -83,7 +104,7 @@ export const loadCentroids = async ({
 } = {}) => {
   if (useCache) {
     const cached = await idbGet(cacheKey);
-    if (isValid(cached)) return Object.freeze({ ...cached, source: 'cache' });
+    if (isValid(cached)) return Object.freeze({ ...aliasForward(cached), source: 'cache' });
   }
   if (!fetchImpl) return null;
   try {
@@ -92,7 +113,7 @@ export const loadCentroids = async ({
     const bundle = await res.json();
     if (!isValid(bundle)) return null;
     if (useCache) await idbPut(cacheKey, bundle);
-    return Object.freeze({ ...bundle, source: 'network' });
+    return Object.freeze({ ...aliasForward(bundle), source: 'network' });
   } catch {
     return null;   // network error, parse error, 404 — all degrade to no-instrument
   }
