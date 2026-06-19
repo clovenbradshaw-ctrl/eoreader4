@@ -20,18 +20,25 @@ import { retrieveLexical } from '../retrieve/index.js';
 
 // The set of a tone's strongest matches (a set, so exact ties — the two octaves
 // of a tone are equally near — are both kept). Empty when it shares nothing.
-const nearestSet = (doc, i) => {
+//
+// `minOverlap` is the one principled place a threshold belongs. At 0 (the default)
+// the rule is pure rank — right for RECOVERY, where any real structure should be
+// found without an arbitrary cut. But pure rank cannot ABSTAIN: it always merges
+// the argmax, however weak, so on noise it hallucinates equivalences (every grain
+// has a nearest grain). Abstention needs a null: pass the noise null's overlap as
+// `minOverlap` and a pair must clear what chance produces before it can merge.
+const nearestSet = (doc, i, minOverlap = 0) => {
   const res = retrieveLexical(doc, doc.spectrumQuery(i), doc.units.length + 1)
-    .filter(r => r.idx !== i && r.score > 0);
+    .filter(r => r.idx !== i && r.score > minOverlap);
   if (!res.length) return { best: 0, set: new Set() };
   const best = res[0].score;
   return { best, set: new Set(res.filter(r => Math.abs(r.score - best) < 1e-9).map(r => r.idx)) };
 };
 
 // The mutual-nearest pairs: i and j where each is among the other's strongest.
-export const mutualNearestPairs = (doc) => {
+export const mutualNearestPairs = (doc, { minOverlap = 0 } = {}) => {
   const n = doc.units.length;
-  const near = Array.from({ length: n }, (_, i) => nearestSet(doc, i));
+  const near = Array.from({ length: n }, (_, i) => nearestSet(doc, i, minOverlap));
   const pairs = [];
   for (let i = 0; i < n; i++) {
     for (const j of near[i].set) {
@@ -44,8 +51,8 @@ export const mutualNearestPairs = (doc) => {
 // Discover the equivalence classes and (by default) commit them: append a SYN
 // merge per mutual-nearest pair to the log, so the engine's projection collapses
 // them itself. Returns the pairs and the classes (each an array of unit indices).
-export const discoverEquivalences = (doc, { emit = true } = {}) => {
-  const pairs = mutualNearestPairs(doc);
+export const discoverEquivalences = (doc, { emit = true, minOverlap = 0 } = {}) => {
+  const pairs = mutualNearestPairs(doc, { minOverlap });
 
   const parent = new Map();
   const find = (x) => { let p = parent.get(x) ?? x; while (p !== (parent.get(p) ?? p)) p = parent.get(p) ?? p; return p; };

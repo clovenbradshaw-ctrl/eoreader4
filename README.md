@@ -101,10 +101,24 @@ frame, one track travelling through time). Its γ-mass towers over the snow, eve
 grain of which is a one-frame flicker — *"the reading does not chase the snow; it
 rides what persists."* (Where snow chance-fakes persistence, **coherence** breaks the
 tie: a shape has extent.) The trajectory is the structure; predicting the next
-position and being surprised when it deviates marks the frame the shape turned. See
+position and being surprised when it deviates marks the frame the shape turned.
+
+Each of these claims is **falsified against**, not just demonstrated
+(`scripts/controls.mjs`): inharmonic partials collapse octave overlap 0.50→0.00,
+shuffling notes leaves the mass-tonic but kills the predictor, shuffling frames
+destroys smooth motion while per-frame coherence survives. And the rarest control,
+**abstention** (`scripts/abstain.mjs`): given only noise — pure static, or
+unstructured spectra — the engine must report *nothing*. It does, but only with a
+null: the pure-rank mutual-nearest merge that gave clean recovery *hallucinates* 51
+equivalences across 40 noise runs, because rank always merges the argmax. Gating the
+merge by the noise null (the one principled threshold, `minOverlap`) refuses every
+spurious merge while still detecting the real octave — and the refusal transfers to
+video (a null-calibrated extent bound holds the false-alarm rate near zero, though
+detection power is honestly lost once static percolates past ~25%). See
 `scripts/extract-music-meaning.mjs`, `scripts/predict-harmonics.mjs`,
 `scripts/discover-harmonics.mjs`, `scripts/emerge-notes.mjs`,
-`scripts/tonal-from-discovery.mjs`, and `scripts/detect-motion.mjs`.
+`scripts/tonal-from-discovery.mjs`, `scripts/detect-motion.mjs`,
+`scripts/controls.mjs`, and `scripts/abstain.mjs`.
 
 ## Three levels of reading — three kinds of math
 
