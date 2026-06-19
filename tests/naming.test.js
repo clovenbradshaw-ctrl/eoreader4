@@ -17,11 +17,13 @@ import { areDisjoint, typeOf } from '../src/read/relation-types.js';
 // ---------------------------------------------------------------------------
 // scanVocatives — direct address, interjections filtered.
 
-test('scanVocatives reads a name before ! or ? as address, skipping interjections', () => {
+test('scanVocatives is a pure orthographic detector — a name before ! or ?', () => {
+  // The interjection question ("Oh God!") is a LEDGER class (conventions.isStarter),
+  // applied downstream in discoverNamings — not baked into this primitive.
   assert.deepEqual(scanVocatives('"Grete!" she then cried.').map(v => v.name), ['Grete']);
   assert.deepEqual(scanVocatives('"Mother?" his sister called.').map(v => v.name), ['Mother']);
-  assert.deepEqual(scanVocatives('"Oh, God!" called his mother.').map(v => v.name), []); // interjection
-  assert.deepEqual(scanVocatives('She left quietly.').map(v => v.name), []);              // no address
+  assert.deepEqual(scanVocatives('"Oh, God!" called his mother.').map(v => v.name), ['God']); // raw; gated later
+  assert.deepEqual(scanVocatives('She left quietly.').map(v => v.name), []);                   // no address
 });
 
 // ---------------------------------------------------------------------------
@@ -89,7 +91,7 @@ test('two names answering one role HOLD (sticky abstention) — the role stays u
 test('discoverNamings returns the guarded proposal in slug space', () => {
   const doc = parseText(NAMED, { docId: 'n5', rolesConflict: areDisjoint });
   const merges = discoverNamings(doc.sentences, {
-    admission: doc.admission, corefField: doc.corefField, rolesConflict: areDisjoint,
+    admission: doc.admission, corefField: doc.corefField, conventions: doc.conventions, rolesConflict: areDisjoint,
   });
   assert.deepEqual(merges, [{ role: 'sister', ownerId: 'gregor-samsa', name: 'grete' }]);
 });

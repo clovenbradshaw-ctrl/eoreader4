@@ -276,7 +276,7 @@ export const createParser = ({
     // cascade, the apposition-free hop the elimination trigger could not bootstrap.
     // Guarded by owner-distinctness, the injected disjointness algebra, and sticky
     // abstention; a role no scene names is left as an UNNAMED referent, not guessed.
-    for (const m of discoverNamings(sentences, { admission, corefField, rolesConflict })) {
+    for (const m of discoverNamings(sentences, { admission, corefField, conventions, rolesConflict })) {
       const roleRef    = `role:${m.role}@${m.ownerId}`;
       const ownerLabel = admission.labelOf(m.ownerId) || m.ownerId;
       const relType    = conventions.relationType(m.role);

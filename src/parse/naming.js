@@ -8,55 +8,68 @@
 // and the narrator attributes the ANSWER to the ROLE, "his sister called". The one
 // addressed by name, answering as the role, IS that role's bearer.
 //
-// The discovery's output is a SYN — an identity join — not a bond. Once the role
-// referent and the name merge, projectGraph's union-find carries the owner→role edge
-// onto the name with no cascade, exactly the way "Gregor" ⊂ "Gregor Samsa" already
-// merges. The guards are an identity join's, not a binder's: owner-distinctness (no
-// one is their own sister), the INJECTED disjointness algebra (a name already the
-// mother cannot also be the sister), and STICKY abstention — two distinct names
-// answering one role is INDETERMINATE, and the role referent is left UNNAMED rather
-// than guessed (the two-sister discipline, surviving the whole pass).
+// THIS MODULE IS A THIN TEXT WITNESS. The engine is universal: it sees only the SYN
+// (the identity join) and the null (abstention) — the SAME operation equivalence.js
+// runs for audio (two tones merge iff each is the other's nearest, abstaining below
+// the noise floor). So the only thing language-specific here is the WITNESS, and its
+// word-classes are NOT ours to hold — they are the conventions ledger's, already
+// seeded and learnable: the attribution register (isAttributionVerb), the starter /
+// interjection register (isStarter), and the kin lexicon (KIN_NOUNS). A Greek or
+// audio corpus brings its own ledger; the merge it feeds is unchanged.
+//
+// The discovery emits a SYN, not a bond: once role referent and name merge,
+// projectGraph's union-find carries the owner→role edge onto the name with no
+// cascade. The guards are an identity join's: owner-distinctness (no one is their own
+// sister), the INJECTED disjointness algebra (a name already the mother cannot also
+// be the sister), and STICKY abstention — two names answering one role is the null,
+// and the role referent is left UNNAMED rather than guessed.
 
-import { scanVocatives } from './relations.js';
+import { scanVocatives, KIN_NOUNS } from './relations.js';
 
-const ROLES = ['sister', 'mother', 'father', 'brother'];
 const REACH = 2;   // a vocative is answered within the next turn or two.
 
-// Attribution of a spoken turn — kept inclusive here (the parse leaf's own seed is
-// tuned for quote attribution, not for "called/cried from the other side").
-const SPEECH = /\b(?:called|cried|said|asked|answered|replied|whispered|shouted|spoke|begged|screamed|murmured|sobbed|wailed|exclaimed)\b/i;
+// The one gate the ledger does not yet carry: a free-capital that survives
+// sentence-initial capitalisation yet names no person ("God", "Christmas"). This is
+// the embedding "feels-like-a-subject" DEF — modality-specific, revisable — kept
+// deliberately tiny. Everything else above is read from conventions.
+const NONPERSON = new Set(['god', 'christmas', 'heaven', 'hell']);
 
-// Non-person free-capitals that name no kin-bearer — a small, revisable stand-in
-// for the embedding "feels-like-a-subject" gate (a DEF the model could later revise:
-// "God"/"Christmas" survive sentence-initial capitalisation but address no person).
-const NONPERSON = new Set(['god', 'christmas', 'heaven', 'hell', 'good', 'lord', 'sir', 'madam', 'samsa']);
+const prevWord = (s, idx) => (s.slice(0, idx).match(/(\w+)\W*$/) || [])[1];
 
 // Discover name↔role identities from naming scenes. Returns SYN proposals
-// { role, ownerId, name } (name and ownerId in admission SLUG space), already
-// guarded. Pure over the parsed sentences + the live admission/coref field.
+// { role, ownerId, name } (slug space), already guarded. Pure over the parsed
+// sentences + the live admission / coref field / conventions ledger.
 export const discoverNamings = (
   sentences,
-  { admission, corefField, rolesConflict = () => false } = {},
+  { admission, corefField, conventions, rolesConflict = () => false } = {},
 ) => {
-  // Owners per role, from the standing descriptors — only an ESTABLISHED NAMED owner
-  // ("Gregor's sister") anchors a discovery; a bare epithet names no relation.
+  const isStarter = conventions?.isStarter ?? (() => false);          // interjection class
+  const isSpeech  = conventions?.isAttributionVerb ?? (() => false);  // attribution register
+
+  // Owners per kin role, from the standing descriptors — only an ESTABLISHED NAMED
+  // owner ("Gregor's sister") anchors a discovery; a bare epithet names no relation.
   const owner = {};
-  for (const r of ROLES) {
-    const d = corefField.descriptorState(r);
-    if (d && d.ownerNamed && d.ownerId) owner[r] = d.ownerId;
+  for (const role of KIN_NOUNS) {
+    const d = corefField.descriptorState(role);
+    if (d && d.ownerNamed && d.ownerId) owner[role] = d.ownerId;
   }
   if (!Object.keys(owner).length) return [];
+  const ROLE_SPEAKER = new RegExp(String.raw`\b(?:his|her|the)\s+(${KIN_NOUNS.join('|')})\b`, 'i');
 
-  // Vocatives (admitted, person-gated) and role-epithet answers (epithet + speech).
+  // Vocatives (admitted, person-gated, non-interjection) and role-epithet answers
+  // (an owned epithet in a sentence the document marks as speech).
   const vocAt = [];   // { i, id }
   const ansAt = [];   // { i, role }
   sentences.forEach((sent, i) => {
-    for (const v of scanVocatives(sent)) {
-      if (NONPERSON.has(v.name.toLowerCase())) continue;
+    const s = String(sent);
+    for (const v of scanVocatives(s)) {
+      const prev = prevWord(s, v.index);
+      if (prev && isStarter(prev)) continue;                  // interjection (ledger: starter)
+      if (NONPERSON.has(v.name.toLowerCase())) continue;      // names no person (embedding DEF)
       if (admission.isAdmitted(v.name)) vocAt.push({ i, id: admission.idOf(v.name) });
     }
-    const m = String(sent).match(/\b(?:his|her|the)\s+(sister|mother|father|brother)\b/i);
-    if (m && owner[m[1].toLowerCase()] && SPEECH.test(sent)) ansAt.push({ i, role: m[1].toLowerCase() });
+    const m = s.match(ROLE_SPEAKER);
+    if (m && owner[m[1].toLowerCase()] && s.split(/\W+/).some(isSpeech)) ansAt.push({ i, role: m[1].toLowerCase() });
   });
 
   // Pair each vocative with the role epithet that ANSWERS it (a later turn, within
@@ -70,8 +83,8 @@ export const discoverNamings = (
     raw.push({ role: ans.role, ownerId: owner[ans.role], name: v.id });
   }
 
-  // Guard the SYN: sticky abstention (≥2 distinct names for a role → hold) and the
-  // injected disjointness algebra (a name already merged into a disjoint role refused).
+  // Guard the SYN: sticky abstention (≥2 distinct names for a role → the null) and
+  // the injected disjointness algebra (a name already merged into a disjoint role).
   const byRole = new Map();
   for (const p of raw) {
     if (!byRole.has(p.role)) byRole.set(p.role, new Map());

@@ -45,9 +45,13 @@ const NOT_HEAD = new Set([
   'my', 'your', 'our', 'mine', 'yours', 'ours',
 ]);
 
-const KIN = '(?:father|mother|sister|brother|son|daughter|wife|husband|parents|' +
-  'uncle|aunt|cousin|nephew|niece|grandfather|grandmother|friend|master|' +
-  'servant|boss|chief|partner|neighbour|neighbor|colleague|lover|fiance|fiancee)';
+const KIN_NOUNS = Object.freeze([
+  'father', 'mother', 'sister', 'brother', 'son', 'daughter', 'wife', 'husband', 'parents',
+  'uncle', 'aunt', 'cousin', 'nephew', 'niece', 'grandfather', 'grandmother', 'friend', 'master',
+  'servant', 'boss', 'chief', 'partner', 'neighbour', 'neighbor', 'colleague', 'lover', 'fiance', 'fiancee',
+]);
+export { KIN_NOUNS };
+const KIN = `(?:${KIN_NOUNS.join('|')})`;
 
 // "Gregor's sister Grete" | "his sister, Grete"
 const KIN_RE = new RegExp(
@@ -314,19 +318,17 @@ export const scanDescriptors = (sentence) => {
 
 // Vocative scan — the naming half of the SYN discovery (parse/naming.js). A bare
 // capitalised name immediately before ! or ? is a DIRECT ADDRESS ("Grete!",
-// "Mother?"); an interjection ("Oh God!", "my Lord!") is not, and is filtered. Like
-// scanDescriptors this reports surface names only — admission and person-hood are
-// the caller's gate. The responder to a name-call is that name: naming.js pairs each
-// vocative with the role epithet that answers it, the apposition-free bridge by
-// which a reader learns "his sister" is Grete (Kafka never writes them adjacent).
-const VOCATIVE_INTERJECTION = /\b(?:oh|o|ah|my|alas|dear|lord|good|well)\s*,?\s*$/i;
+// "Mother?"). This is a pure ORTHOGRAPHIC primitive: whether the word before it is
+// an interjection ("Oh God!") is a LEDGER question (conventions.isStarter), so
+// naming.js applies that class — here we only read the punctuation. Like
+// scanDescriptors this reports surface names only; admission and person-hood are the
+// caller's gate. The responder to a name-call is that name: naming.js pairs each
+// vocative with the role epithet that answers it, the apposition-free bridge by which
+// a reader learns "his sister" is Grete (Kafka never writes them adjacent).
 export const scanVocatives = (sentence) => {
   const s = String(sentence || '');
   const out = [];
-  for (const m of s.matchAll(/\b([A-Z][a-zA-Z]+)\s*[!?]/g)) {
-    if (VOCATIVE_INTERJECTION.test(s.slice(0, m.index))) continue;   // exclamation, not address
-    out.push({ name: m[1], index: m.index });
-  }
+  for (const m of s.matchAll(/\b([A-Z][a-zA-Z]+)\s*[!?]/g)) out.push({ name: m[1], index: m.index });
   return out;
 };
 
