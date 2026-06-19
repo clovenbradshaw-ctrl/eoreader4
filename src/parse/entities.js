@@ -137,18 +137,32 @@ export const createEntityAdmission = ({ conventions } = {}) => {
     mentions.set(id, arr);
   };
 
-  // Name-containment synthesis (SYN): a single-token name that is the head or
-  // tail of an already-admitted 2–3 word name is the same referent ("Gregor"
-  // ⊂ "Gregor Samsa"). This is the high-confidence identity join — distinct
-  // from the soft pronoun field, which never merges. Returns the existing id.
+  // Name-containment synthesis (SYN): a single-token name contained in an already-
+  // admitted 2–3 word name. The WARRANT is split, because containment is not one
+  // thing — this is the mr/mrs-samsa lesson:
+  //
+  //   'head' — the token is the GIVEN NAME (first word): "Gregor" ⊂ "Gregor Samsa".
+  //            A given name individuates, so this is the high-confidence identity
+  //            join: the id is unified here, as it always was.
+  //   'tail' — the token is the SURNAME (last word): "Samsa" ⊂ "Gregor Samsa".
+  //            A surname is SHARED across a family, so the join is THIN. It is NOT
+  //            unified here; it carries the rebutter "a distinct agent bears this
+  //            surname" and the pipeline commits it defeasibly, overturning it the
+  //            moment the surname proves shared (the father acting alone).
+  //
+  // Returns { id, kind, token } (token = the shared single-token side) or null.
   const aliasOf = (label) => {
     const t = label.split(' ');
     for (const [lab, id] of admitted) {
       const lt = lab.split(' ');
-      if (t.length === 1 && lt.length >= 2 && lt.length <= 3 &&
-          (lt[0] === t[0] || lt[lt.length - 1] === t[0])) return id;
-      if (lt.length === 1 && t.length >= 2 && t.length <= 3 &&
-          (t[0] === lt[0] || t[t.length - 1] === lt[0])) return id;
+      if (t.length === 1 && lt.length >= 2 && lt.length <= 3) {
+        if (lt[0] === t[0])             return { id, kind: 'head', token: t[0] };
+        if (lt[lt.length - 1] === t[0]) return { id, kind: 'tail', token: t[0] };
+      }
+      if (lt.length === 1 && t.length >= 2 && t.length <= 3) {
+        if (t[0] === lt[0])             return { id, kind: 'head', token: lt[0] };
+        if (t[t.length - 1] === lt[0])  return { id, kind: 'tail', token: lt[0] };
+      }
     }
     return null;
   };
@@ -186,13 +200,23 @@ export const createEntityAdmission = ({ conventions } = {}) => {
       } else if (g >= GRAVITY_FLOOR) {
         const rawId = idFor(label);
         const alias = aliasOf(label);
-        const id = alias || rawId;
+        // A HEAD (given-name) containment unifies the id here, as it always did. A
+        // TAIL (surname) containment does NOT: the entity keeps its own id, so the
+        // thin merge the pipeline commits can be defeated by a later event without
+        // rewriting this admission — the append-only discipline, applied to identity.
+        const head = alias && alias.kind === 'head';
+        const id = head ? alias.id : rawId;
         admitted.set(label, id);
         // Seed/accumulate mentions under the (possibly shared) referent id;
         // the candidate sighting had no id yet, so the first line is not lost.
         if (!mentions.has(id)) mentions.set(id, []);
         for (const si of (sightSent.get(label) || [])) mentions.get(id).push(si);
-        out.push({ status: 'admit', id, label, aliasOf: alias, rawId });
+        out.push({
+          status: 'admit', id, label, rawId,
+          aliasOf:   alias ? alias.id : null,
+          aliasKind: alias ? alias.kind : null,
+          surname:   alias && alias.kind === 'tail' ? String(alias.token).toLowerCase() : null,
+        });
       } else {
         out.push({ status: 'candidate', label });
       }

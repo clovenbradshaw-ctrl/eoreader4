@@ -12,6 +12,7 @@
 // when state ownership matters for testing.
 
 import { createLog }            from '../core/log.js';
+import { VERDICTS }             from '../core/verdicts.js';
 import { segmentSentences }     from './sentences.js';
 import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';
@@ -129,6 +130,11 @@ export const createParser = ({
     const INHERIT_REACH = 8;
     let lastIns = null;                         // { id, sentIdx } in reading order
 
+    // Defeasible surname (tail) merges accumulate here as they are committed, each
+    // with the seq of its SYN. After the read, the reconciliation fires their
+    // rebutter when the surname proves shared by distinct agents (see below).
+    const surnameMerges = [];
+
     sentences.forEach((sent, sentIdx) => {
       // Chrome-ness is a weight: the mechanical score plus an optional nudge
       // (a mini-LLM's chrome probability) decides whether the line is held.
@@ -154,11 +160,32 @@ export const createParser = ({
           corefField.note(obs.id, sentIdx);
           lastIns = { id: obs.id, sentIdx };       // the arrow of time advances
         }
-        // A name-containment alias is a synthesis (SYN): "Gregor" folded into
-        // the "Gregor Samsa" referent. Recorded for audit; the ids were
-        // already unified at admission, so the projection needs no second merge.
-        if (obs.status === 'admit' && obs.aliasOf && obs.rawId !== obs.id) {
-          log.append({ op: 'SYN', kind: 'alias', from: obs.rawId, to: obs.id, label: obs.label, sentIdx });
+        if (obs.status !== 'admit' || !obs.aliasOf) continue;
+        // A name-containment alias is a synthesis (SYN), and EVA fires AS it is
+        // committed — the write-time evaluation the ingestion log used to lack.
+        if (obs.aliasKind === 'head') {
+          // "Gregor" folded into "Gregor Samsa": the given name individuates, so the
+          // ids were unified at admission and the merge is corroborated on its face.
+          if (obs.rawId !== obs.id) {
+            const syn = log.append({ op: 'SYN', kind: 'alias', from: obs.rawId, to: obs.id,
+                                     label: obs.label, sentIdx, match: 'head', warrant: 'given-name' });
+            log.append({ op: 'EVA', site: 'merge', ref: syn.seq, verdict: VERDICTS.CORROBORATED,
+                         reason: 'given-name-containment', sentIdx });
+          }
+        } else if (obs.aliasKind === 'tail') {
+          // "Samsa" folded into "Gregor Samsa": a surname is shared across a family,
+          // so the merge is THIN. It is a REAL merge (kind:'merge' — the projection
+          // unions it), so a single-Samsa document still folds; but it is committed
+          // DEFEASIBLY, carrying its rebutter, with the write-time EVA held at
+          // indeterminate. The reconciliation after the read overturns it — by an
+          // appended SEG-retract the projection honours — if the surname proves shared.
+          const syn = log.append({ op: 'SYN', kind: 'merge', from: obs.id, to: obs.aliasOf,
+                                   label: obs.label, sentIdx, match: 'tail', surname: obs.surname,
+                                   warrant: 'surname', defeasible: true,
+                                   rebutter: 'distinct-agent-shares-surname' });
+          log.append({ op: 'EVA', site: 'merge', ref: syn.seq, verdict: VERDICTS.INDETERMINATE,
+                       reason: 'surname-containment-thin', surname: obs.surname, sentIdx });
+          surnameMerges.push({ synSeq: syn.seq, surname: obs.surname });
         }
       }
 
@@ -210,6 +237,33 @@ export const createParser = ({
       for (const b of corefField.bindDescriptorsByElimination([...admission.admitted.values()], sentIdx))
         derivedEdges.push({ op: 'CON', src: b.owner, tgt: b.id, via: b.role, sentIdx, w: b.w, derived: true });
     });
+
+    // ── Defeat the thin surname merges whose rebutter has gone live ─────────────
+    // Each tail (surname) SYN above was committed defeasibly, carrying the rebutter
+    // "a distinct agent bears this surname." The rebutter is LIVE when the surname is
+    // borne by ≥2 distinct multi-word names — a family, not an individual (Gregor
+    // Samsa / Mr Samsa / Mrs Samsa). Then the merge is OVERTURNED. Defeat does not
+    // rewind: a SEG-retract is appended to supersede the SYN (the projection drops it
+    // through the same union-find), and a write-time EVA records the contradiction.
+    // A surname unique to one name is left merged — "Samsa" then does pick out the one
+    // Samsa. This is the mr/mrs-samsa fix: the merge that ossified now unmerges.
+    if (surnameMerges.length) {
+      const bearers = new Map();   // surname → Set<label> of the multi-word names bearing it
+      for (const label of admission.admitted.keys()) {
+        const words = label.split(' ');
+        if (words.length < 2) continue;
+        const s = words[words.length - 1].toLowerCase();
+        if (!bearers.has(s)) bearers.set(s, new Set());
+        bearers.get(s).add(label);
+      }
+      for (const m of surnameMerges) {
+        if ((bearers.get(m.surname)?.size || 0) < 2) continue;   // unique surname → the merge stands
+        const seg = log.append({ op: 'SEG', kind: 'retract', refSeq: m.synSeq,
+                                 reason: 'surname-shared-by-distinct-agents', surname: m.surname });
+        log.append({ op: 'EVA', site: 'merge', ref: m.synSeq, verdict: VERDICTS.CONTRADICTED,
+                     reason: 'distinct-agent-shares-surname', surname: m.surname, defeatedBy: seg.seq });
+      }
+    }
 
     // Move 3 — the relation recurrence gate (ReVerb's lexical constraint). A real
     // relation recurs; a verb seen once is suspect. We gate relations the way the
@@ -282,7 +336,12 @@ export const createParser = ({
       const relType    = conventions.relationType(m.role);
       log.append({ op: 'INS', id: roleRef, label: `${ownerLabel}’s ${m.role}`, sentIdx: 0 });
       log.append({ op: 'CON', src: m.ownerId, tgt: roleRef, via: m.role, sentIdx: 0, ...(relType ? { relType } : {}) });
-      log.append({ op: 'SYN', kind: 'merge', from: roleRef, to: m.name, sentIdx: 0 });
+      const syn = log.append({ op: 'SYN', kind: 'merge', from: roleRef, to: m.name, sentIdx: 0 });
+      // EVA at write time: discoverNamings already ran the merge's guards (owner-
+      // distinctness, disjointness, sticky abstention), so the surviving merge is
+      // corroborated by the naming scene as it is committed.
+      log.append({ op: 'EVA', site: 'merge', ref: syn.seq, verdict: VERDICTS.CORROBORATED,
+                   reason: 'naming-scene', role: m.role, sentIdx: 0 });
     }
 
     const tokensBySentence = sentences.map(s => new Set(tok(s)));
