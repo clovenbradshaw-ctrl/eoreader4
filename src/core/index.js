@@ -8,3 +8,7 @@ export { createLog, isLog } from './log.js';
 export { eoAddressOfEvent, eoNotation } from './address.js';
 export { projectGraph, projectionStats, DEFAULT_PROJECTION_RULES } from './project.js';
 export { VERDICTS } from './verdicts.js';
+export { STANCES, TERRAINS, stanceOf, terrainOf, grainOfStance, grainOfTerrain,
+         cellOf, DIAGONAL_CELLS, coherence, isDiagonal,
+         SIGNATURES, signatureOf,
+         OPERATOR_ALIASES, STANCE_ALIASES, aliasOperator, aliasStance, aliasCellKey } from './cube.js';
