@@ -111,11 +111,26 @@ destroys smooth motion while per-frame coherence survives. And the rarest contro
 unstructured spectra — the engine must report *nothing*. It does, but only with a
 null: the pure-rank mutual-nearest merge that gave clean recovery *hallucinates* 51
 equivalences across 40 noise runs, because rank always merges the argmax. Gating the
-merge by the noise null (the one principled threshold, `minOverlap`) refuses every
-spurious merge while still detecting the real octave — and the refusal transfers to
-video (a null-calibrated extent bound holds the false-alarm rate near zero, though
-detection power is honestly lost once static percolates past ~25%). And the
-refusal is no longer silent: it speaks the two operators the cross-modal work
+merge by the noise null refuses every spurious merge while still detecting the real
+octave — and the refusal transfers to video (a null on per-frame extent holds the
+false-alarm rate near zero, though detection power is honestly lost once static
+percolates past ~25%). And the **null is no longer a number you set** — it is one
+the signal computes for you (`scripts/void-boundary.mjs`, `tests/voidnull.test.js`).
+The old constant `minOverlap` is replaced by a threshold the engine derives online
+from its own non-cohering background: a high quantile of what chance produces,
+estimated **leave-one-out** (a real shape never outranks itself), as an
+**extreme value** (the longest-of-many snow chain is a max-of-N, not a typical
+draw), **robust** to a handful of real structures (fit the bulk, cut the outliers at
+the gap), and **causally/streaming** (estimate from the field read so far). The only
+human number left is **alpha**, the tolerated probability of mistaking noise for
+structure — a policy, not an overlap value; the physics computes the boundary that
+delivers it. This is the Born rule for the engine: *the noise gives the odds, the
+reading does the measuring, and nothing becomes something precisely when the
+structure exceeds what nothing would have made.* The boundary is calibrated in
+**both directions** across the gradient — VOID fires on pure noise at every density
+including the decisive 35% snow (the longest chain sits *at* its own null), and SYN
+holds on a real shape from clean down to faint — neither mute nor hallucinating.
+And the refusal is no longer silent: it speaks the two operators the cross-modal work
 never used (`scripts/refusal-trace.mjs`). A structure the field proposes but the
 null rejects is a **NUL** — held, recorded, not transformed; an empty reading is
 a **VOID** — a DEF to VOID asserting "no equivalence / no shape here", which the
@@ -126,7 +141,8 @@ not just an absence of output. See
 `scripts/extract-music-meaning.mjs`, `scripts/predict-harmonics.mjs`,
 `scripts/discover-harmonics.mjs`, `scripts/emerge-notes.mjs`,
 `scripts/tonal-from-discovery.mjs`, `scripts/detect-motion.mjs`,
-`scripts/controls.mjs`, `scripts/abstain.mjs`, and `scripts/refusal-trace.mjs`.
+`scripts/controls.mjs`, `scripts/abstain.mjs`, `scripts/refusal-trace.mjs`, and
+`scripts/void-boundary.mjs`.
 
 ## Three levels of reading — three kinds of math
 

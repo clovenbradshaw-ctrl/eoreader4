@@ -19,6 +19,7 @@ export {
 } from './sequence.js';
 export { mutualNearestPairs, discoverEquivalences } from './equivalence.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
+export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
 export { siteRoles, markSites, siteIndices } from './site.js';
 export {
   PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,
