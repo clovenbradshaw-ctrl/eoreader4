@@ -209,7 +209,7 @@ hard-coded true; a convention is whatever the text keeps doing.
 | `enact`       | `createEnactedLoop` · `calibrateReader` · `enactedReadingTo` · `replayFrames` · `loopStats` (the enacted DEF·EVA·REC loop) | `read` |
 | `retrieve`    | `retrieveHybrid(doc, q, embedder)`                            | `core`, `parse` |
 | `fold`        | `foldNote(spans, {doc, cursor})` · `impressionQuery`         | `read`     |
-| `ground`      | `bindCitations(draft, spans)` · `runVetoes`                   | `core`, `parse` |
+| `ground`      | `bindCitations(draft, spans, {doc, cursor})` · `runVetoes`    | `core`, `parse`, `factcheck` |
 | `answer`      | `tryMechanical(doc, q)`                                       | `core`, `parse` |
 | `model`       | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
 | `classify`    | `createPhasepostClassifier({cells, centroids, embedder})`     | `core`     |

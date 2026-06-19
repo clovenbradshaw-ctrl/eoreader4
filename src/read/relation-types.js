@@ -70,6 +70,10 @@ export const typeOf = (surfaceNoun) => {
 
 export const isFunctional = (noun) => !!typeOf(noun)?.functional;
 export const isSymmetric  = (noun) => !!typeOf(noun)?.symmetric;
+// The calibrated typing confidence for a surface noun (1 when untyped — an
+// unknown relation is not penalised). Consumed by checkRelationConflict to weigh
+// a contradiction's strength and by the factcheck refusal gate; an untyped noun
+// never reaches either, so the default is inert.
 export const relationPrior = (noun) => typeOf(noun)?.prior ?? 1;
 
 // Are two surface nouns disjoint? Resolve BOTH to primitives, check the
@@ -123,6 +127,13 @@ export const checkRelationConflict = (graph, claim) => {
       return Object.freeze({
         verdict: VERDICTS.CONTRADICTED, reason: 'disjoint-axiom',
         claimRel: noun, docRel: e.via, witnessed: !e.derived,
+        // The likelihood the contradiction is REAL, not a boolean: how confident
+        // the typing of BOTH relations is (relationPrior, calibrated per primitive
+        // — sibling 0.9, parent 0.95, social 0.5). A clash between two near-certain
+        // kin relations is a stronger refusal than one resting on a weakly-typed
+        // noun. The downstream gate (factcheck/correspond.js) reads this; the prior
+        // is no longer declared-but-unread.
+        confidence: relationPrior(noun) * relationPrior(e.via),
         citation: e.sentIdx != null ? `s${e.sentIdx}` : null,
       });
     }
@@ -132,6 +143,7 @@ export const checkRelationConflict = (graph, claim) => {
     if (filled) return Object.freeze({
       verdict: VERDICTS.CONTRADICTED, reason: 'functional-axiom',
       claimRel: noun, existing: rep(filled.to),
+      confidence: relationPrior(noun) * relationPrior(filled.via),
       citation: filled.sentIdx != null ? `s${filled.sentIdx}` : null,
     });
   }

@@ -32,6 +32,23 @@ export { VERDICTS };
 
 const GAMMA = 0.7;   // the same γ kernel the graph and the field run on
 
+// The refusal floor for a symbolic contradiction. A contradiction carries a
+// `confidence` — the joint typing prior of the two relations (read/relation-
+// types.js) — and a HARD, libel-grade refusal is reserved for the confident
+// ones. A contradiction below the floor is real but rests on a weakly-typed
+// relation, so it is surfaced as a flag for a human rather than used to refuse.
+// The floor sits below every current symbolic axiom (kin/spouse joints are
+// 0.81–0.90), so it changes nothing today and arms the gate for lower-prior
+// relations added later. A verdict with no confidence (the geometric VOID path,
+// or a synthetic verdict) is treated as certain — the geometric path is already
+// gated by the embedder, so its contradictions are not the weakly-typed kind.
+export const CONTRADICTION_REFUSE_FLOOR = 0.5;
+
+// Does this verdict clear the bar for a hard refusal? The likelihood gate that
+// replaces the old boolean: contradicted AND confident enough.
+export const contradictionRefuses = (v) =>
+  v?.verdict === VERDICTS.CONTRADICTED && (v.confidence ?? 1) >= CONTRADICTION_REFUSE_FLOOR;
+
 // Reconstruct the DOCUMENT referent field at a cursor from the page's own
 // mention positions (`admission.mentions`: id → sentence indices), decayed by γ.
 // This is the binding of record for a talker claim's endpoints (§5): the SYN
@@ -160,7 +177,10 @@ export const checkClaim = async (claim, { doc, graph, classifier, adjacency } = 
   // degrades to indeterminate. Untyped relations return null here and fall
   // through to the geometric path unchanged.
   const algebra = checkRelationConflict(graph, claim);
-  if (algebra) return result(algebra.verdict, { reason: algebra.reason, citation: algebra.citation || null });
+  if (algebra) return result(algebra.verdict, {
+    reason: algebra.reason, citation: algebra.citation || null,
+    confidence: algebra.confidence ?? null,   // the joint typing prior rides the verdict
+  });
 
   if (!classifier)      return result(VERDICTS.INDETERMINATE, { reason: 'no-classifier' });
 
@@ -224,9 +244,17 @@ export const factCheck = async ({ prose, doc, graph, classifier, adjacency, curs
     contradicted:  checked.filter(c => c.verdict === VERDICTS.CONTRADICTED).length,
     indeterminate: checked.filter(c => c.verdict === VERDICTS.INDETERMINATE).length,
   };
+  // The contradiction veto is a likelihood gate, not a boolean: a contradiction
+  // refuses only when its joint typing confidence clears the floor. A contradiction
+  // that exists but stays under the floor is held back as a flag — reported,
+  // human-checkable, not used to hard-refuse.
+  const refusing = checked.some(contradictionRefuses);
+  const weakContra = counts.contradicted > 0 && !refusing;
+
   const fired = [];
-  if (counts.contradicted) fired.push({ id: 'edge-contradicted', refuses: true,  message: 'A claimed relation is denied by the document reading.' });
-  if (counts.unsupported)  fired.push({ id: 'edge-unsupported',  refuses: false, message: 'A claimed relation has no witness in the document reading.' });
+  if (refusing)            fired.push({ id: 'edge-contradicted',      refuses: true,  message: 'A claimed relation is denied by the document reading.' });
+  else if (weakContra)     fired.push({ id: 'edge-contradicted-weak', refuses: false, message: 'A claimed relation conflicts with the document reading, but the relation typing is too uncertain to refuse on.' });
+  if (counts.unsupported)  fired.push({ id: 'edge-unsupported',       refuses: false, message: 'A claimed relation has no witness in the document reading.' });
 
   return Object.freeze({
     claims: Object.freeze(checked),
@@ -234,10 +262,11 @@ export const factCheck = async ({ prose, doc, graph, classifier, adjacency, curs
     edgeVerdicts: Object.freeze(checked.map(c => Object.freeze({
       sentence: c.sentence, src: c.src, tgt: c.tgt,
       verdict: c.verdict, reason: c.reason, citation: c.citation || null,
+      confidence: c.confidence ?? null,   // the likelihood the gate reads downstream
     }))),
     citations: Object.freeze(checked.filter(c => c.verdict === VERDICTS.CORROBORATED && c.citation).map(c => c.citation)),
     counts,
     fired,
-    refuse: counts.contradicted > 0,
+    refuse: refusing,
   });
 };

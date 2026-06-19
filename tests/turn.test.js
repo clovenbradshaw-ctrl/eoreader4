@@ -155,6 +155,21 @@ test('vetoes flag but never substitute the answer', async () => {
   assert.ok(/zebras/i.test(result.answer));
 });
 
+test('a grounded turn carries the reader’s referential confidence to the result', async () => {
+  const doc = setup('Alice loves apples. Bob hates broccoli.');
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'apples', doc, model, embedder: createHashEmbedder(), auditLog: audit,
+  });
+  // The coref posterior at the answer cursor is no longer discarded — it rides
+  // the turn as a measured confidence (id + concentration), not thrown away.
+  assert.ok(result.referential, 'the turn surfaces a referential confidence');
+  assert.equal(typeof result.referential.concentrated, 'boolean');
+  assert.ok(result.referential.w >= 0 && result.referential.w <= 1);
+});
+
 test('onStep callback fires once per executed stage', async () => {
   const doc = setup('Alice loves apples.');
   const model = createModel('echo');

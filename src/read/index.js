@@ -22,6 +22,7 @@ export { persistentFigures, coherentFigures, motionReading, detectMotion } from 
 export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export { siteRoles, markSites, siteIndices } from './site.js';
+export { referentialConfidence, REFERENT_MARGIN } from './referent.js';
 export {
   PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,
   relationPrior, areDisjoint, functionalClash, checkRelationConflict,

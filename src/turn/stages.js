@@ -11,7 +11,7 @@
 import { answerSmalltalk, answerMath, answerConfirm, answerRelation, answerWho, answerVoid } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold, namedReferents } from '../read/index.js';
+import { surfFold, namedReferents, referentialConfidence } from '../read/index.js';
 import { foldConversation } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';
@@ -105,7 +105,14 @@ export const stages = {
     // collapsed — instead of the figures the surfed window happened to cross.
     const focus  = ctx.doc ? namedReferents(ctx.doc, ctx.question) : [];
     const note   = foldNote(spans, { doc: ctx.doc, cursor, focus });
-    return { ...ctx, spans, note, surf, focus };
+    // The reader's confidence about WHO this passage concerns — read off the
+    // grounded coref posterior at the cursor (the same field the fold rode). No
+    // longer measured and discarded: it rides the turn, and a diffuse field
+    // (no dominant referent) becomes a flag in the veto battery.
+    const referential = ctx.doc?.corefField
+      ? referentialConfidence(ctx.doc.corefField.fieldGrounded(cursor))
+      : null;
+    return { ...ctx, spans, note, surf, focus, referential };
   },
 
   // The answerability gate — is there an answer to give, or is the field VOID?
@@ -178,7 +185,12 @@ export const stages = {
     if (!ctx.spans?.length) {
       return { ...ctx, bound: [], answer: String(ctx.rawOutput || '').trim(), sources: [] };
     }
-    const bound = bindCitations(ctx.rawOutput, ctx.spans);
+    // The binder rides the same reading the fold sat on: the document for idf,
+    // the surfer's peak (the cursor the significance reading was taken at) for
+    // the γ-field tilt. Both are priors — with no doc they flatten and binding
+    // is the old lexical overlap.
+    const cursor = ctx.surf?.peak ?? ctx.spans[0]?.idx ?? 0;
+    const bound = bindCitations(ctx.rawOutput, ctx.spans, { doc: ctx.doc, cursor });
     const answer = renderBound(bound);
     const sources = [...new Set(
       bound.filter(b => b.citation).map(b => parseInt(b.citation.slice(1), 10))
@@ -193,6 +205,7 @@ export const stages = {
     if (!ctx.spans?.length) return { ...ctx, vetoes: [] };
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
+      referential: ctx.referential, task: ctx.task,
     });
     return { ...ctx, vetoes: fired };
   },

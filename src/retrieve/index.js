@@ -2,4 +2,4 @@
 
 export { retrieveLexical }  from './lexical.js';
 export { retrieveSemantic } from './semantic.js';
-export { retrieveHybrid }   from './hybrid.js';
+export { retrieveHybrid, fuseConcordance } from './hybrid.js';

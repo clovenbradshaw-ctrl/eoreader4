@@ -185,6 +185,20 @@ test('the edge-grounding vetoes fire on the four-way verdict and are inert witho
   assert.ok(!inert.fired.some(f => f.id.startsWith('edge-')));
 });
 
+test('the contradiction veto is a likelihood gate: a weakly-typed conflict flags, never refuses', () => {
+  const base = { draft: 'a sentence', question: 'q', bound: [] };
+  // A confident contradiction (or one with no confidence) hard-refuses.
+  const strong = runVetoes({ ...base, edgeVerdicts: [{ verdict: 'contradicted', confidence: 0.9 }] });
+  assert.ok(strong.fired.some(f => f.id === 'edge-contradicted' && f.refuses));
+  assert.equal(strong.refuse, true);
+
+  // A contradiction below the floor surfaces as a flag, and does NOT refuse.
+  const weak = runVetoes({ ...base, edgeVerdicts: [{ verdict: 'contradicted', confidence: 0.2 }] });
+  assert.ok(weak.fired.some(f => f.id === 'edge-contradicted-weak' && !f.refuses));
+  assert.ok(!weak.fired.some(f => f.id === 'edge-contradicted'));
+  assert.equal(weak.refuse, false);
+});
+
 // ---------------------------------------------------------------------------
 // Coreference as proposal (§6): the talker proposes, document-side readers dispose.
 

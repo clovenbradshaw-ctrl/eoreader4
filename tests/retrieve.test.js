@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/pipeline.js';
 import { retrieveLexical } from '../src/retrieve/lexical.js';
-import { retrieveHybrid } from '../src/retrieve/hybrid.js';
+import { retrieveHybrid, fuseConcordance } from '../src/retrieve/hybrid.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 
 const withEmbeddings = (doc) => {
@@ -31,7 +31,7 @@ test('retrieveLexical returns empty on no overlap', () => {
   assert.equal(r.length, 0);
 });
 
-test('retrieveHybrid merges lexical and semantic, max-pooling score', async () => {
+test('retrieveHybrid merges lexical and semantic, fusing by concordance', async () => {
   const doc = withEmbeddings(parseText(
     'Alice loves apples. Bob hates broccoli.', { docId: 'd1' }
   ));
@@ -40,6 +40,21 @@ test('retrieveHybrid merges lexical and semantic, max-pooling score', async () =
   assert.ok(r.length > 0);
   // sentence 0 should be top-ranked (it contains 'apples')
   assert.equal(r[0].idx, 0);
+  // the channels each span drew on are reported, so the fusion is auditable
+  assert.ok(r[0].kind === 'lex+sem' || r[0].kind === 'lex');
+});
+
+test('fuseConcordance rewards agreement — two weak channels beat one strong channel alone', () => {
+  // The property max-pool could not express: concordant evidence compounds.
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≈ ${b}`);
+  assert.ok(fuseConcordance(0.5, 0.5) > 0.5, 'two agreeing weak readers exceed either alone');
+  assert.ok(fuseConcordance(0.5, 0.5) > fuseConcordance(0.6, 0), 'weak agreement can beat a lone stronger reader');
+  // A lone strong channel is preserved; a lone weak one stays weak.
+  near(fuseConcordance(0.9, 0), 0.9);
+  near(fuseConcordance(0.3, 0), 0.3);
+  // Bounded; a negative cosine is no-evidence, never anti-evidence (clamped to 0).
+  near(fuseConcordance(1, 0.42), 1);
+  near(fuseConcordance(0.4, -0.8), 0.4);
 });
 
 test('retrieveLexical respects k', () => {

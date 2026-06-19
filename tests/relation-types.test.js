@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { parseText } from '../src/parse/index.js';
 import { projectGraph } from '../src/core/index.js';
 import { answerConfirm } from '../src/answer/index.js';
-import { factCheck } from '../src/factcheck/index.js';
+import { factCheck, contradictionRefuses, CONTRADICTION_REFUSE_FLOOR } from '../src/factcheck/index.js';
 import {
   typeOf, areDisjoint, functionalClash, isFunctional, isSymmetric,
   checkRelationConflict,
@@ -75,6 +75,32 @@ test('checkRelationConflict contradicts a disjoint axiom on the same pair', () =
   assert.equal(v.verdict, 'contradicted');
   assert.equal(v.reason, 'disjoint-axiom');
   assert.equal(v.citation, 's4');
+});
+
+test('a contradiction carries the joint typing prior, not just a boolean', () => {
+  // sister (sibling, 0.9) on the doc edge vs a claimed mother (parent, 0.95):
+  // the contradiction's confidence is the product of the two calibrated priors.
+  const graph = { representative: (id) => id,
+    edges: [{ from: 'gregor', to: 'grete', via: 'sister', sentIdx: 4 }] };
+  const v = checkRelationConflict(graph, { src: 'gregor', tgt: 'grete', via: 'mother' });
+  assert.ok(Math.abs(v.confidence - 0.95 * 0.9) < 1e-9, 'confidence = parent × sibling prior');
+
+  // A functional clash carries the functional primitive's prior on both sides.
+  const wifeGraph = { representative: (id) => id,
+    edges: [{ from: 'x', to: 'a', via: 'wife', sentIdx: 1 }] };
+  const w = checkRelationConflict(wifeGraph, { src: 'x', tgt: 'b', via: 'wife' });
+  assert.ok(Math.abs(w.confidence - 0.9 * 0.9) < 1e-9, 'confidence = spouse × spouse prior');
+});
+
+test('the refusal gate is a likelihood, not a boolean — confident contradictions refuse, weak ones flag', () => {
+  assert.equal(contradictionRefuses({ verdict: 'contradicted', confidence: 0.9 }), true);
+  assert.equal(contradictionRefuses({ verdict: 'contradicted', confidence: 0.4 }), false);
+  // No confidence → treated as certain (the geometric VOID path is embedder-gated).
+  assert.equal(contradictionRefuses({ verdict: 'contradicted' }), true);
+  // A non-contradiction never refuses, whatever its confidence.
+  assert.equal(contradictionRefuses({ verdict: 'unsupported', confidence: 0.99 }), false);
+  // Every current symbolic kinship axiom clears the floor — no regression.
+  assert.ok(0.9 * 0.95 >= CONTRADICTION_REFUSE_FLOOR);
 });
 
 test('checkRelationConflict defers (null) on untyped or non-conflicting relations', () => {

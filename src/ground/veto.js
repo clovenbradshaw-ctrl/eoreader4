@@ -5,6 +5,23 @@
 // it shows up in the audit's `vetoes` field, and the user can see exactly
 // why an answer was refused or flagged.
 
+import { CONTRADICTION_REFUSE_FLOOR } from '../factcheck/correspond.js';
+
+// How much of a grounded answer must be tied to a source before the coverage
+// veto flags it — a per-task prior, not one flat 0.5. A direct answer should be
+// tightly grounded (most claims cited); a SUMMARY is a synthesis whose connective
+// claims legitimately have no single witnessing sentence, so it tolerates a
+// looser floor; an explanation sits between. The number was a magic constant
+// standing in for exactly this question-type prior. The default (and `answer`)
+// keep the old 0.5, so nothing a direct question did changes.
+export const GROUNDING_FLOOR = Object.freeze({
+  summary: 0.34,
+  explain: 0.40,
+  list:    0.50,
+  answer:  0.50,
+});
+export const groundingFloor = (task) => GROUNDING_FLOOR[task] ?? GROUNDING_FLOOR.answer;
+
 export const VETOES = [
   {
     id: 'empty',
@@ -41,10 +58,24 @@ export const VETOES = [
   // flagged. Under the hash organ every relational verdict is indeterminate, so
   // neither fires — the honest inert state until the meaning reader is wired.
   {
+    // The likelihood gate, mirrored from the factcheck holon: a contradiction
+    // hard-refuses only when its joint typing confidence clears the floor. A
+    // verdict with no confidence is treated as certain (the geometric VOID path,
+    // already embedder-gated), so a bare {verdict:'contradicted'} still refuses.
     id: 'edge-contradicted',
-    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(v => v.verdict === 'contradicted'),
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(
+      v => v.verdict === 'contradicted' && (v.confidence ?? 1) >= CONTRADICTION_REFUSE_FLOOR),
     refuses: true,
     message: 'A claimed relation is denied by the document reading.',
+  },
+  {
+    // A contradiction that exists but rests on a weakly-typed relation: flagged,
+    // not refused — the human is told, the answer rides.
+    id: 'edge-contradicted-weak',
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(
+      v => v.verdict === 'contradicted' && (v.confidence ?? 1) < CONTRADICTION_REFUSE_FLOOR),
+    refuses: false,
+    message: 'A claimed relation conflicts with the document reading, but the relation typing is too uncertain to refuse on.',
   },
   {
     id: 'edge-unsupported',
@@ -53,15 +84,26 @@ export const VETOES = [
     message: 'A claimed relation has no witness in the document reading.',
   },
   {
+    // The reader measured its own referential confidence (read/referent.js): the
+    // concentration of the coref posterior at the answer cursor. A diffuse field —
+    // no figure clearly dominant — means the passage the answer draws on does not
+    // settle who it is about. Flag-only: the answer rides, the uncertainty is no
+    // longer discarded at the last step. Inert when no field was measured.
+    id: 'referent-ambiguous',
+    test: ({ referential }) => !!referential && referential.id != null && !referential.concentrated,
+    refuses: false,
+    message: 'The passage this answer draws on does not settle which figure it is about.',
+  },
+  {
     id: 'low-coverage',
-    test: ({ bound }) => {
+    test: ({ bound, task }) => {
       const total = bound.length;
       if (total === 0) return false;
       const cited = bound.filter(b => b.citation).length;
-      return cited / total < 0.5;
+      return cited / total < groundingFloor(task);
     },
     refuses: false, // flag-only; the cited claims still ride
-    message: 'Fewer than half the claims are tied to a source.',
+    message: 'Fewer of the claims are tied to a source than this kind of question needs.',
   },
 ];
 
