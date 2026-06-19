@@ -16,6 +16,8 @@
 //
 // Pure on the doc; no model.
 
+import { createNoiseFloor } from './voidnull.js';
+
 const trackStats = (doc) => doc.tracks.map(tr => ({
   id: tr.id,
   mass: tr.points.length,                                   // frames survived = the γ-mass fold
@@ -58,14 +60,33 @@ export const motionReading = (doc) => {
   return { trackId: top.id, mass: top.mass, area: top.area, figures: figs, points: pts, steps, peak };
 };
 
-// Abstention as an operator. Given a noise null on per-frame extent, decide
-// whether the best coherent figure is a shape or nothing. If it clears the null
-// it is read as a shape; if not, the candidate is HELD (NUL — proposed by
-// coherence, but not past chance) and the clip is asserted empty (a DEF to VOID
-// on the shape slot). The refusal is recorded in the log, not a silent absence.
-export const detectMotion = (doc, { nullExtent = 0, emit = true } = {}) => {
-  const top = coherentFigures(doc)[0];
-  if (top && top.meanSize > nullExtent) {
+// The VOID boundary on per-frame extent, DERIVED from the clip's own noise. The
+// snow chains — every coherent figure but the candidate — are the void's samples of
+// what chance produces (leave-one-out excludes the proposed shape itself). Read on
+// a LOG scale because percolating static is heavy-tailed: at 35% density the longest
+// chance chain is large not because it is special but because there are many chains
+// and the max of many is large, and the log fit projects that max so the chain sits
+// AT its own null and fires VOID. Grain is one pixel — the retina's own quantum.
+const extentFloor = (figs, alpha) => {
+  const floor = createNoiseFloor({ scale: 'log', alpha, grain: 1, N: figs.length });
+  for (const f of figs.slice(1)) floor.observe(f.meanSize);   // background = the non-top tracks
+  return floor.threshold();
+};
+
+// Abstention as an operator. Decide whether the best coherent figure is a shape or
+// nothing, by the VOID boundary on per-frame extent — `nullExtent` as an explicit
+// constant (back-compat), or DERIVED online from `alpha` (the noise gives the odds;
+// see voidnull.js), or 0 as the cold-start fallback. If the figure clears the null
+// it is read as a shape; if not, the candidate is HELD (NUL — proposed by coherence,
+// but not past chance) and the clip is asserted empty (a DEF to VOID on the shape
+// slot). The refusal is recorded in the log, not a silent absence.
+export const detectMotion = (doc, { nullExtent = null, alpha = null, emit = true } = {}) => {
+  const figs = coherentFigures(doc);
+  const top = figs[0];
+  const bound = nullExtent != null ? nullExtent
+    : alpha != null ? extentFloor(figs, alpha)
+      : 0;
+  if (top && top.meanSize > bound) {
     return { shape: motionReading(doc), voided: false, top };
   }
   if (emit && top) doc.log.append({ op: 'NUL', kind: 'held-shape', id: top.id, meanSize: top.meanSize, sentIdx: 0 });

@@ -17,6 +17,7 @@
 // picked. The category is the output of the operation, not an input to it.
 
 import { retrieveLexical } from '../retrieve/index.js';
+import { createNoiseFloor } from './voidnull.js';
 
 // The set of a tone's strongest matches (a set, so exact ties — the two octaves
 // of a tone are equally near — are both kept). Empty when it shares nothing.
@@ -48,12 +49,50 @@ export const mutualNearestPairs = (doc, { minOverlap = 0 } = {}) => {
   return pairs;
 };
 
+// The overlap quantum: one shared partial out of the query's partials. The finest
+// distinction the overlap reading can draw, hits/qLen, and so the grain the derived
+// null floors on — read from the signal's own front-end, never chosen.
+const overlapGrain = (doc) => 1 / (doc.partialTokens?.[0]?.length || 16);
+
+// The VOID boundary for overlaps, DERIVED from the signal's own noise. Feed the
+// streaming floor every pairwise overlap, in reading order (causal accumulation):
+// these are the also-ran overlaps, the field's samples of what chance produces. A
+// proposed equivalence must beat the max-of-background null those samples imply.
+// The octave overlaps are fed too; leave-one-out plus the bulk fit keep them from
+// poisoning the floor they must clear.
+const overlapFloor = (doc, alpha) => {
+  const n = doc.units.length;
+  const floor = createNoiseFloor({ scale: 'linear', alpha, grain: overlapGrain(doc), N: n });
+  for (let i = 0; i < n; i++) {
+    for (const r of retrieveLexical(doc, doc.spectrumQuery(i), n + 1)) {
+      if (r.idx !== i) floor.observe(r.score);
+    }
+  }
+  return floor;
+};
+
 // Discover the equivalence classes and (by default) commit them: append a SYN
 // merge per mutual-nearest pair to the log, so the engine's projection collapses
 // them itself. Returns the pairs and the classes (each an array of unit indices).
-export const discoverEquivalences = (doc, { emit = true, minOverlap = 0 } = {}) => {
+//
+// The VOID boundary is set one of three ways, in priority order:
+//   • `minOverlap` — an explicit constant (a caller-supplied null; back-compat).
+//   • `alpha` — DERIVE the null online from the signal's own non-cohering overlaps,
+//     at the tolerated false-positive rate `alpha`. The boundary is no longer a
+//     number you set; it is a readout the physics computes (see voidnull.js).
+//   • neither — 0, pure rank: merge the argmax. Right for RECOVERY, and the
+//     cold-start fallback before any null is known.
+export const discoverEquivalences = (doc, { emit = true, minOverlap = null, alpha = null } = {}) => {
   // What the overlap field PROPOSES, by rank alone — the recovery rule.
   const candidates = mutualNearestPairs(doc, { minOverlap: 0 });
+
+  // The per-candidate boundary. Constant when given; derived (leave-one-out,
+  // extreme-value, robust, streaming) when `alpha` is set; 0 otherwise.
+  const floor = (minOverlap == null && alpha != null) ? overlapFloor(doc, alpha) : null;
+  const boundary = (c) =>
+    minOverlap != null ? minOverlap
+      : floor ? floor.threshold({ leaveOut: c.score })
+        : 0;
 
   const parent = new Map();
   const find = (x) => { let p = parent.get(x) ?? x; while (p !== (parent.get(p) ?? p)) p = parent.get(p) ?? p; return p; };
@@ -62,7 +101,7 @@ export const discoverEquivalences = (doc, { emit = true, minOverlap = 0 } = {}) 
   const merged = [];   // cleared the null → SYN, a real equivalence
   const held = [];     // proposed but did not clear the null → NUL, held not structured
   for (const c of candidates) {
-    if (c.score > minOverlap) {
+    if (c.score > boundary(c)) {
       if (emit) doc.log.append({ op: 'SYN', kind: 'merge', from: `n${c.i}`, to: `n${c.j}`, sentIdx: c.j });
       union(c.i, c.j);
       merged.push(c);
