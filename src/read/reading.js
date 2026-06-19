@@ -18,13 +18,21 @@
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
 
-const GAMMA = 0.7;     // recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
+const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
 
 export const readingAt = (doc, cursor, opts = {}) => {
   const units = doc.units || doc.sentences || [];
   const S = units.length;
   const at = Math.max(0, Math.min(S - 1, cursor | 0));
+  // THE HORIZON. The prior is γ-decayed in READING-TIME distance, so γ sets how far
+  // back the reading still feels: at 0.7 the prior is effectively the last ~5–6 lines
+  // (0.7^8 ≈ 0.06) — a tight recency window; a wider γ keeps distant context alive
+  // (0.95^12 ≈ 0.54). It is parametrised so the SAME fixed log can be re-read against a
+  // different horizon — the move-1 question of whether `bayes` even moves with the
+  // horizon (docs/bayesian-surprise.md). Defaults to GAMMA, so a standard reading is
+  // byte-identical; only an explicit opts.gamma shifts the window.
+  const γ = Number.isFinite(opts.gamma) ? opts.gamma : GAMMA;
   const events = typeof doc.log.snapshot === 'function' ? doc.log.snapshot() : (doc.log.events || []);
 
   const label     = new Map(); // id → label
@@ -52,7 +60,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
     }
     if (e.sentIdx == null) continue;
     if (e.sentIdx < at) {
-      const w = Math.pow(GAMMA, at - 1 - e.sentIdx);
+      const w = Math.pow(γ, at - 1 - e.sentIdx);
       if (e.op === 'INS') {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
         priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
@@ -176,7 +184,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   const postMass = new Map();
   let sumPost = 0;
   for (const k of support) {
-    const m1 = GAMMA * (priorProp.get(k) || 0) + (deposit.get(k) || 0); // m′ = γ·m + deposits
+    const m1 = γ * (priorProp.get(k) || 0) + (deposit.get(k) || 0); // m′ = γ·m + deposits
     postMass.set(k, m1);
     sumPost += m1;
   }
