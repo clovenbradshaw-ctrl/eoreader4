@@ -1,10 +1,16 @@
-// Extract meaning from something besides text.
+// The modality-universal SPINE, demonstrated on an image.
 //
-// The spine is modality-universal: `parse` is the text adapter, `ingestImage`
-// is the image one. Both emit the same nine operators onto the same append-only
-// log, so the graph, the three reading levels and the consciousness fold all
-// run unchanged. Here we hand the engine a vision model's detections of a
-// street scene — no characters, no sentences — and read meaning back out.
+// Honesty note: this script does NOT show the engine extracting meaning from an
+// image. The detections below — the labels AND the relations — are supplied,
+// pre-extracted, as if by a vision model. What it shows is that once a modality
+// has been turned into INS/CON/SIG/DEF events, the engine's graph, three reading
+// levels and consciousness fold run over it unchanged: the SPINE is universal.
+// For the engine doing the EXTRACTING from a non-text signal it was not handed
+// the structure of, see `extract-music-meaning.mjs`.
+//
+// `parse` is the text adapter, `ingestImage` the image one; both emit the same
+// nine operators onto the same append-only log. Here we hand the engine a vision
+// model's detections of a street scene and read the folded reading back out.
 
 import { ingestImage } from '../src/ingest/image.js';
 import { consciousness, existenceSurface, structureSurface } from '../src/read/index.js';
