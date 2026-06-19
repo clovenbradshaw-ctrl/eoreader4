@@ -17,6 +17,7 @@
 
 export {
   VERDICTS, documentFieldAt, claimedEdges, checkClaim, factCheck,
+  CONTRADICTION_REFUSE_FLOOR, contradictionRefuses,
 } from './correspond.js';
 export {
   NEARNESS_FLOOR, proposeCoref, geometricSecond, corroborateCoref,

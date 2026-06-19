@@ -5,6 +5,8 @@
 // it shows up in the audit's `vetoes` field, and the user can see exactly
 // why an answer was refused or flagged.
 
+import { CONTRADICTION_REFUSE_FLOOR } from '../factcheck/correspond.js';
+
 export const VETOES = [
   {
     id: 'empty',
@@ -41,10 +43,24 @@ export const VETOES = [
   // flagged. Under the hash organ every relational verdict is indeterminate, so
   // neither fires — the honest inert state until the meaning reader is wired.
   {
+    // The likelihood gate, mirrored from the factcheck holon: a contradiction
+    // hard-refuses only when its joint typing confidence clears the floor. A
+    // verdict with no confidence is treated as certain (the geometric VOID path,
+    // already embedder-gated), so a bare {verdict:'contradicted'} still refuses.
     id: 'edge-contradicted',
-    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(v => v.verdict === 'contradicted'),
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(
+      v => v.verdict === 'contradicted' && (v.confidence ?? 1) >= CONTRADICTION_REFUSE_FLOOR),
     refuses: true,
     message: 'A claimed relation is denied by the document reading.',
+  },
+  {
+    // A contradiction that exists but rests on a weakly-typed relation: flagged,
+    // not refused — the human is told, the answer rides.
+    id: 'edge-contradicted-weak',
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(
+      v => v.verdict === 'contradicted' && (v.confidence ?? 1) < CONTRADICTION_REFUSE_FLOOR),
+    refuses: false,
+    message: 'A claimed relation conflicts with the document reading, but the relation typing is too uncertain to refuse on.',
   },
   {
     id: 'edge-unsupported',
