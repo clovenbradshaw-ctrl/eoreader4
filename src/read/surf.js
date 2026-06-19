@@ -21,6 +21,7 @@
 // no read dependency), so this import stays acyclic.
 
 import { readingAt } from './reading.js';
+import { deriveNull } from './voidnull.js';
 import { createEnactedLoop, calibrateReader } from '../enact/loop.js';
 
 // The reach: a little behind the anchor (to read the frame it sits inside), mostly
@@ -68,15 +69,34 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
       .filter(c => c >= lo && c <= hi).sort((x, y) => x - y);
   } catch { recCursors = []; }
 
-  // The CURSOR axis: arrest on the peaks. The arrest band is calibrated to the reach
-  // (the median), not a fixed floor — `bayes` clusters low, so a constant floor would
-  // arrest nowhere. The anchor is always a stop (retrieval set it down); every REC
-  // cursor is always a stop (a frame broke there); the strongest remaining peaks fill
-  // toward maxStops, never the flat between them.
-  const band = medianOf(reachBayes);
+  // The CURSOR axis: arrest on the peaks. The arrest threshold is calibrated to the reach,
+  // not a fixed floor — `bayes` clusters low, so a constant floor would arrest nowhere.
+  // Default: the reach MEDIAN. With opts.alpha set, it is the DERIVED VOID BOUNDARY
+  // (read/voidnull.js) — a high quantile of the noise null the reach's own non-cohering
+  // bulk throws up by chance: extreme-value (the bar the largest of N chance draws reaches,
+  // so the longest accidental peak is VOID, not a stop), leave-one-out, robust, alpha the
+  // only knob (the hallucination budget). A cursor then arrests only when its bayes BEATS
+  // what this context produces by chance (SYN), and every reach cursor carries its verdict
+  // (SYN/NUL) so a checked-and-empty stretch is a record, not a silence. The threshold is
+  // the context's, computed live — the signal/noise boundary recalibrated to the window the
+  // surf landed in. Default (no alpha) is byte-identical to the median rule. The anchor is
+  // always a stop (retrieval set it down); every REC cursor is always a stop (a frame broke
+  // there); the strongest remaining peaks fill toward maxStops, never the flat between them.
+  const useBoundary = Number.isFinite(opts.alpha);
+  const band = useBoundary ? null : medianOf(reachBayes);
+  let isPeak;
+  if (useBoundary) {
+    for (const f of field) {
+      const nul = deriveNull(reachBayes, { scale: 'linear', alpha: opts.alpha, leaveOut: f.bayes });
+      f.verdict = f.bayes > nul ? 'SYN' : 'NUL';   // beats the noise null → structure; else held
+    }
+    isPeak = (f) => f.verdict === 'SYN';
+  } else {
+    isPeak = (f) => f.bayes > band;
+  }
   const stops = new Set([a, ...recCursors]);
   const peaks = field
-    .filter(f => f.bayes > band && !stops.has(f.idx))
+    .filter(f => isPeak(f) && !stops.has(f.idx))
     .sort((x, y) => y.bayes - x.bayes);
   for (const p of peaks) {
     if (stops.size >= maxStops) break;
@@ -96,7 +116,7 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   let best  = votes.get(focus) || 0;
   for (const [f, v] of votes) if (v > best) { best = v; focus = f; }
 
-  return { anchor: a, stops: stopList, peak, focus, field, recCursors, rode: 'bayesian-figure' };
+  return { anchor: a, stops: stopList, peak, focus, field, recCursors, rode: useBoundary ? 'bayesian-void' : 'bayesian-figure' };
 };
 
 const clampIdx = (x, S) => Math.max(0, Math.min(S - 1, x | 0));

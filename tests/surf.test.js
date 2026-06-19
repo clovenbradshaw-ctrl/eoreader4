@@ -60,6 +60,36 @@ test('the surf is deterministic — same document, same anchor, same path', () =
   assert.equal(JSON.stringify(surfFold(doc, 1)), JSON.stringify(surfFold(doc, 1)));
 });
 
+// The arrest threshold can be the DERIVED VOID BOUNDARY (read/voidnull.js) instead of the
+// reach median: with opts.alpha set, a cursor arrests only when its bayes beats the noise
+// null its own context throws up by chance, and every reach cursor carries a SYN/NUL verdict
+// so absence is a record. The default (no alpha) stays byte-identical — the parallel golden.
+test('opt-in VOID-boundary arrest tags SYN/NUL per cursor; the default median path is unchanged', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  const base = surfFold(doc, 1);
+  const bnd  = surfFold(doc, 1, { alpha: 0.05 });
+
+  // the default path is untouched
+  assert.equal(base.rode, 'bayesian-figure');
+  assert.ok(base.field.every(f => f.verdict === undefined), 'no verdict on the default (median) path');
+
+  // the boundary path labels itself and tags every reach cursor with a verdict
+  assert.equal(bnd.rode, 'bayesian-void');
+  assert.ok(bnd.field.length > 0 && bnd.field.every(f => f.verdict === 'SYN' || f.verdict === 'NUL'),
+    'every reach cursor carries a SYN/NUL verdict against the derived null');
+
+  // the surf contract holds in boundary mode, and only SYN (or the forced anchor/REC) arrests
+  assert.ok(bnd.stops.includes(bnd.anchor), 'the anchor is always a stop');
+  for (const c of bnd.recCursors) assert.ok(bnd.stops.includes(c), `a frame broke at ${c}, so it is a stop`);
+  const forced = new Set([bnd.anchor, ...bnd.recCursors]);
+  for (const c of bnd.stops) {
+    if (forced.has(c)) continue;
+    assert.equal(bnd.field.find(x => x.idx === c)?.verdict, 'SYN', `arrested cursor s${c} beat the null`);
+  }
+  // deterministic, like the default surf
+  assert.equal(JSON.stringify(surfFold(doc, 1, { alpha: 0.05 })), JSON.stringify(bnd));
+});
+
 test('an empty document surfs to a safe empty result', () => {
   const surf = surfFold({ sentences: [] }, 0);
   assert.deepEqual(surf.stops, []);
