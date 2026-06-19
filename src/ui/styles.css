@@ -18,8 +18,6 @@ header {
   flex-shrink: 0;
 }
 header h1 { margin: 0; font-size: 1rem; font-weight: 600; letter-spacing: .02em; }
-header h1.brand { display: flex; align-items: center; }
-header h1.brand img { height: 38px; width: auto; display: block; }
 .status { font-size: .8rem; color: #a1a1aa; }
 .spacer { flex: 1; }
 header select {
