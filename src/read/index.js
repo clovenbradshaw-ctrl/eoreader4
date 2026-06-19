@@ -18,6 +18,7 @@ export {
   unitIdSequence, predictNextUnit, predictiveSequenceReading,
 } from './sequence.js';
 export { mutualNearestPairs, discoverEquivalences } from './equivalence.js';
+export { persistentFigures, coherentFigures, motionReading } from './motion.js';
 export { siteRoles, markSites, siteIndices } from './site.js';
 export {
   PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,

@@ -91,9 +91,20 @@ overtones alone, with no scale, no `mod 12`, and no ratio table. And with no
 *threshold* either: `read/equivalence.js` merges tones that are mutual nearest
 neighbours in overlap (the engine's own `SYN` union-find), so "the same note"
 **emerges** — the four octaves of A collapse to one entity while the fifth stays
-separate — the category being the output of the grouping, never its input. See
+separate — the category being the output of the grouping, never its input.
+
+`ingestFrames` carries the same idea into vision, on raw pixels rather than another
+model's labels. Each frame is a field of lit pixels — TV snow — with a circle moving
+through it; the snow and the circle are the *same* lit pixels, told apart by nothing
+but **contiguity** (the circle is a blob) and **persistence** (it is sighted every
+frame, one track travelling through time). Its γ-mass towers over the snow, every
+grain of which is a one-frame flicker — *"the reading does not chase the snow; it
+rides what persists."* (Where snow chance-fakes persistence, **coherence** breaks the
+tie: a shape has extent.) The trajectory is the structure; predicting the next
+position and being surprised when it deviates marks the frame the shape turned. See
 `scripts/extract-music-meaning.mjs`, `scripts/predict-harmonics.mjs`,
-`scripts/discover-harmonics.mjs`, and `scripts/emerge-notes.mjs`.
+`scripts/discover-harmonics.mjs`, `scripts/emerge-notes.mjs`,
+`scripts/tonal-from-discovery.mjs`, and `scripts/detect-motion.mjs`.
 
 ## Three levels of reading — three kinds of math
 
