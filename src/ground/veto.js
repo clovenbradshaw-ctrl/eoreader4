@@ -7,6 +7,21 @@
 
 import { CONTRADICTION_REFUSE_FLOOR } from '../factcheck/correspond.js';
 
+// How much of a grounded answer must be tied to a source before the coverage
+// veto flags it — a per-task prior, not one flat 0.5. A direct answer should be
+// tightly grounded (most claims cited); a SUMMARY is a synthesis whose connective
+// claims legitimately have no single witnessing sentence, so it tolerates a
+// looser floor; an explanation sits between. The number was a magic constant
+// standing in for exactly this question-type prior. The default (and `answer`)
+// keep the old 0.5, so nothing a direct question did changes.
+export const GROUNDING_FLOOR = Object.freeze({
+  summary: 0.34,
+  explain: 0.40,
+  list:    0.50,
+  answer:  0.50,
+});
+export const groundingFloor = (task) => GROUNDING_FLOOR[task] ?? GROUNDING_FLOOR.answer;
+
 export const VETOES = [
   {
     id: 'empty',
@@ -81,14 +96,14 @@ export const VETOES = [
   },
   {
     id: 'low-coverage',
-    test: ({ bound }) => {
+    test: ({ bound, task }) => {
       const total = bound.length;
       if (total === 0) return false;
       const cited = bound.filter(b => b.citation).length;
-      return cited / total < 0.5;
+      return cited / total < groundingFloor(task);
     },
     refuses: false, // flag-only; the cited claims still ride
-    message: 'Fewer than half the claims are tied to a source.',
+    message: 'Fewer of the claims are tied to a source than this kind of question needs.',
   },
 ];
 

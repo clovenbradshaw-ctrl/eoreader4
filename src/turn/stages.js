@@ -177,7 +177,7 @@ export const stages = {
     if (!ctx.spans?.length) return { ...ctx, vetoes: [] };
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
-      referential: ctx.referential,
+      referential: ctx.referential, task: ctx.task,
     });
     return { ...ctx, vetoes: fired };
   },
