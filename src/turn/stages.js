@@ -17,6 +17,8 @@ import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';
 import { bindCitations, renderBound } from '../ground/bind.js';
 import { runVetoes }        from '../ground/veto.js';
+import { projectGraph }     from '../core/index.js';
+import { factCheck }        from '../factcheck/index.js';
 
 export const stages = {
 
@@ -198,6 +200,34 @@ export const stages = {
     return { ...ctx, bound, answer, sources };
   },
 
+  // Contrast the talker's propositional assertions against the document graph.
+  // (factcheck/correspond.js) We do NOT gate what the model may say — it can answer
+  // from its own memory — because every claimed RELATION is adjudicated here against
+  // the reading the fold built: corroborated (it matches a document edge, and EARNS
+  // that edge's citation), contradicted (a carved VOID or a disjoint axiom denies it
+  // — the libel-grade catch), unsupported (no witness — it rides, flagged),
+  // indeterminate (cannot be measured — held). The verdicts flow into
+  // ctx.edgeVerdicts, which the veto battery already reads. Flag-and-tell: the answer
+  // is never gagged here. The symbolic relation algebra runs embedder-free, so a
+  // disjoint-kinship contradiction fires even under the hash organ; the geometric
+  // verdicts need a live classifier and otherwise degrade to indeterminate (held).
+  // Skipped in chat mode (no doc) and after a measured void (terminate short-circuit).
+  async factcheck(ctx) {
+    if (!ctx.doc || !ctx.rawOutput) return ctx;
+    const cursor = ctx.surf?.peak ?? ctx.spans?.[0]?.idx ?? Infinity;
+    const graph  = projectGraph(ctx.doc.log, { cursor });
+    const fc = await factCheck({
+      prose: ctx.rawOutput, doc: ctx.doc, graph, cursor,
+      classifier: ctx.classifier || null, adjacency: ctx.adjacency || null,
+    });
+    // A claim the GRAPH corroborates earns the cited sentence even when the model
+    // spoke from memory: fold those citations into the answer's sources, de-duped.
+    const earned = (fc.citations || [])
+      .map(c => parseInt(String(c).slice(1), 10)).filter(Number.isFinite);
+    const sources = earned.length ? [...new Set([...(ctx.sources || []), ...earned])] : ctx.sources;
+    return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, sources };
+  },
+
   // Flag-only veto pass. The answer is never substituted — the user sees
   // the model's text with the flags pinned alongside.
   // Without a doc we skip the grounding vetoes entirely.
@@ -206,6 +236,10 @@ export const stages = {
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
       referential: ctx.referential, task: ctx.task,
+      // The edge-grounding verdicts the factcheck stage just deposited — the link-
+      // shaped sibling of the node-level `unbound` check. Without this they were
+      // computed and discarded; now a claim the graph DENIES becomes a flag.
+      edgeVerdicts: ctx.edgeVerdicts,
     });
     return { ...ctx, vetoes: fired };
   },

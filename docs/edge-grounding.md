@@ -25,7 +25,22 @@ asserted a relation the document reading does not contain. That is the right
 thing to catch, and it is all the check can honestly claim to catch: it makes the
 talker faithful to the graph, **not the graph faithful to the world** (§10). The
 graph's faithfulness to the document is upstream — in the SEG, the classifier,
-and the meaning reader.
+the meaning reader, and in **defeasible identity** (`defeasible-identity.md`): if
+the graph collapses the father into the son, this check faithfully adjudicates a
+claim against a lie.
+
+## Wired into the turn (the point of it)
+
+This is **why** we do not gate what the talker may say. The model can answer from
+its own memory; the safety is here, on the way back, where each propositional
+assertion is contrasted against the graph. The check is a live pipeline stage —
+`factcheck` in `turn/stages.js`, between `bind` and `veto` — that deposits the
+per-claim verdicts into `ctx.edgeVerdicts`, which the veto battery reads. It is
+**flag-and-tell**: a contradiction is surfaced as a flag, the model's own words
+still ride; the answer is never substituted. The symbolic relation algebra runs
+embedder-free, so a disjoint-kinship contradiction fires even under the hash
+organ; the geometric verdicts go live when the classifier (MiniLM + centroids)
+comes online, and degrade to indeterminate until then.
 
 ## The procedure (`src/factcheck/correspond.js`)
 

@@ -186,6 +186,11 @@ const send = async () => {
     doc:      STATE.doc,        // may be null — chat-only path
     model:    STATE.model,
     embedder: STATE.embedder,
+    // The geometric organ for the edge-grounding fact-check (the talker's assertions
+    // contrasted against the graph). Holds at no-commit until MiniLM + centroids come
+    // online, so its geometric verdicts degrade to indeterminate until then; the
+    // embedder-free symbolic algebra (disjoint-kinship axioms) fires regardless.
+    classifier: STATE.geometric?.installer?.getState?.().classifier || null,
     auditLog: STATE.audit,
     history:  STATE.history,    // the prior transcript — the session fold reads it
     onStep:   (name, ctx, data) => updateThinking(thinking, name, data, ctx),
