@@ -36,6 +36,12 @@ const hz = (note) => (typeof note === 'number' ? note : note.hz);
 export const ingestFrequencies = (spec = {}) => {
   const { name = `tones-${Date.now()}`, notes = [], partials = 16, label } = spec;
   const fmt = label || ((f) => `${f.toFixed(1)}Hz`);
+  // Which multiples of the fundamental to sound. The default is the HARMONIC
+  // series (1f, 2f, 3f, …) — what a real string does, and the source of octave
+  // equivalence and consonance. A control can pass INHARMONIC multipliers (random,
+  // non-integer) to confirm the structure comes from the harmonics and not the
+  // overlap machinery: under inharmonic partials the consonance curve must flatten.
+  const mults = spec.partialMultipliers || Array.from({ length: partials }, (_, k) => k + 1);
 
   const log = createLog({ docId: name });
   const units = [], sentences = [], tokensBySentence = [], partialTokens = [], noteHz = [];
@@ -44,7 +50,7 @@ export const ingestFrequencies = (spec = {}) => {
   notes.forEach((note, i) => {
     const f0 = hz(note);
     const toks = [];
-    for (let k = 1; k <= partials; k++) toks.push(bin(f0 * k));
+    for (const mlt of mults) toks.push(bin(f0 * mlt));
     const set = new Set(toks);
 
     const id = `n${i}`;
