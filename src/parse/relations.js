@@ -312,6 +312,24 @@ export const scanDescriptors = (sentence) => {
   return out;
 };
 
+// Vocative scan — the naming half of the SYN discovery (parse/naming.js). A bare
+// capitalised name immediately before ! or ? is a DIRECT ADDRESS ("Grete!",
+// "Mother?"); an interjection ("Oh God!", "my Lord!") is not, and is filtered. Like
+// scanDescriptors this reports surface names only — admission and person-hood are
+// the caller's gate. The responder to a name-call is that name: naming.js pairs each
+// vocative with the role epithet that answers it, the apposition-free bridge by
+// which a reader learns "his sister" is Grete (Kafka never writes them adjacent).
+const VOCATIVE_INTERJECTION = /\b(?:oh|o|ah|my|alas|dear|lord|good|well)\s*,?\s*$/i;
+export const scanVocatives = (sentence) => {
+  const s = String(sentence || '');
+  const out = [];
+  for (const m of s.matchAll(/\b([A-Z][a-zA-Z]+)\s*[!?]/g)) {
+    if (VOCATIVE_INTERJECTION.test(s.slice(0, m.index))) continue;   // exclamation, not address
+    out.push({ name: m[1], index: m.index });
+  }
+  return out;
+};
+
 export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // Speech / copula / modifier classification comes from the conventions ledger
   // when one is supplied (its seed ∪ Pass-0 learned), falling back to the seeds.
