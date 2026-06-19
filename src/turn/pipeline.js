@@ -20,7 +20,7 @@ import { stages } from './stages.js';
 // short-circuits (smalltalk, math, who, confirm) terminate at `route` and never reach
 // it; they need no history.
 const PIPELINE = [
-  'route', 'converse', 'retrieve', 'fold', 'prompt', 'llm', 'bind', 'veto', 'settle',
+  'route', 'converse', 'retrieve', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'veto', 'settle',
 ];
 
 export const runTurn = async ({ question, doc, model, embedder, auditLog, onStep, history = [] }) => {
@@ -89,6 +89,9 @@ const summarize = (name, ctx, ms) => {
                                 anchor: ctx.surf.anchor, peak: ctx.surf.peak, stops: ctx.surf.stops,
                                 focus:  ctx.surf.focus,  recs: ctx.surf.recCursors, rode: ctx.surf.rode,
                               } : null };
+    case 'answerable': return ctx.void
+      ? { ...base, verdict: 'void', kind: ctx.void.kind, rode: ctx.void.rode }
+      : { ...base, verdict: 'answer' };
     case 'prompt':   return { ...base, promptLen: ctx.promptText?.length || 0 };
     case 'llm':      return { ...base, outputLen: ctx.rawOutput?.length || 0, maxTokens: ctx.maxTokens };
     case 'bind':     return { ...base,

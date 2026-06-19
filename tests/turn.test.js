@@ -64,7 +64,12 @@ test('audit captures the verbatim prompt and raw output for grounded turns', asy
   assert.ok(t.steps.find(s => s.name === 'veto'));
 });
 
-test('empty retrieval terminates with a chat fallback', async () => {
+test('a doc question with nothing to retrieve routes to a typed VOID, never the talker', async () => {
+  // Doc open, the question lands nowhere on the page. The honest response is the
+  // typed absence (the answerability gate, docs/answerability.md) — NOT an ungrounded
+  // chat answer, which would let the talker speak from outside the material and
+  // contradicts SYSTEM_GROUND's own "if the material does not cover it, say the
+  // document does not say."
   const doc = setup('Alice loves apples.');
   const model = createModel('echo');
   await model.load();
@@ -74,8 +79,24 @@ test('empty retrieval terminates with a chat fallback', async () => {
     doc, model, embedder: { isWarm: () => false, embed: async () => new Float32Array(64), warm: async () => {} },
     auditLog: audit,
   });
-  assert.equal(result.turn.route, 'chat');
+  assert.equal(result.turn.route, 'void');
   assert.equal(result.sources.length, 0);
+  assert.match(result.answer, /does not say/i);
+  // The talker is never warmed for a measured void.
+  assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
+});
+
+test('a whole-document summary request is never voided — it reaches the talker', async () => {
+  // "summarize this" points at no location, so weak retrieval is not an absence.
+  // The answerability gate must exempt whole-document tasks (docs/answerability.md).
+  const doc = setup('Alice loves apples. Bob hates broccoli. Carol grows carrots. Dan dislikes dill.');
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'summarize this', doc, model, embedder: createHashEmbedder(), auditLog: audit,
+  });
+  assert.notEqual(result.turn.route, 'void');
 });
 
 test('runs without a doc — chat mode, no veto noise', async () => {
