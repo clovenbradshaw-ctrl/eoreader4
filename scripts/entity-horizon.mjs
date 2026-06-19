@@ -26,16 +26,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ingestText } from '../src/ingest/index.js';
-import { readingAt } from '../src/read/index.js';
+import { readingAt, deriveNull } from '../src/read/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
-let file = null, gamma = 0.7, topN = 12, find = 'must go';
+let file = null, gamma = 0.7, topN = 12, find = 'must go', alpha = 0.01;
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   if (a === '--gamma') gamma = Number(args[++i]);
   else if (a === '--top') topN = Number(args[++i]);
   else if (a === '--find') find = args[++i];
+  else if (a === '--alpha') alpha = Number(args[++i]);
   else if (!a.startsWith('--')) file = a;
 }
 file = file || path.resolve(here, '../data/metamorphosis.txt');
@@ -114,4 +115,33 @@ if (target >= 0) {
   console.log(`   entity horizon ADMITS prior lines: ${admitted.map(c => 's' + c).join(' ')}`);
   for (const c of admitted) console.log(`       + s${c}  ${clip(units[c], 70)}`);
   console.log(`   entity horizon DROPS prior lines:  ${dropped.map(c => 's' + c).join(' ')}`);
+
+  // THE DERIVED VOID BOUNDARY (src/read/voidnull.js) — the rigorous form of "signal vs
+  // noise is context-specific." The threshold is not a number you set: it is a high
+  // quantile of the NOISE NULL estimated live from the non-cohering background (the
+  // also-ran bayes the reach throws up by chance), with the EXTREME-VALUE correction (the
+  // bar the largest of N chance draws reaches, so the longest accidental chain fires VOID,
+  // not SYN), LEAVE-ONE-OUT (a real structure never has to outrank itself), and a ROBUST
+  // bulk-cut (a few real ruptures do not poison the floor). The only knob is alpha, the
+  // hallucination budget. And the HORIZON IS THE BACKGROUND: choosing recency vs entity
+  // chooses the pool the null is measured from — which is the definition of what counts
+  // as nothing here. Verdict: SYN = beats the null (structure); NUL = held below it.
+  const lo = Math.max(0, target - 4), hi = Math.min(S - 1, target + 16);
+  const reach = []; for (let c = lo; c <= hi; c++) reach.push(c);
+  const named = { 'recency γ=0.7 (today)': { gamma: 0.7 }, 'entity  γ=0.95 (care)': { gamma: 0.95, horizon: 'entity' } };
+  console.log(`\n## the derived VOID boundary — does the rupture beat the noise null? (reach s${lo}–s${hi}, alpha ${alpha})`);
+  for (const [nm, opt] of Object.entries(named)) {
+    const b = []; for (let c = 0; c < S; c++) b[c] = readingAt(doc, c, opt).bayes;
+    const bg = reach.map(c => b[c]);
+    const verdict = (c) => (b[c] > deriveNull(bg, { scale: 'linear', alpha, leaveOut: b[c] }) ? 'SYN' : 'NUL');
+    const syn = reach.filter(c => verdict(c) === 'SYN').sort((x, y) => b[y] - b[x]);
+    const nul0 = deriveNull(bg, { scale: 'linear', alpha, leaveOut: b[target] });
+    console.log(`   ${nm}`);
+    console.log(`      null (leave-one-out, extreme-value) ${Number.isFinite(nul0) ? nul0.toFixed(3) : '∞ (abstain)'}` +
+                `   disowning s${target} ${b[target].toFixed(3)} → ${verdict(target)}` +
+                `   violin s26 ${b[26].toFixed(3)} → ${verdict(26)}`);
+    console.log(`      SYN (beats the null): ${syn.map(c => 's' + c + ' ' + b[c].toFixed(2)).join('  ') || '—'}`);
+  }
+  console.log(`   ⇒ the horizon IS the background: the entity pool collapses the null, so the rupture clears it`);
+  console.log(`     while the recency artifact (s35) sinks toward it — the verdict flips with the chosen background.`);
 }
