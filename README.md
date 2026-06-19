@@ -79,6 +79,18 @@ nine operators onto the same log, so the graph, the reading cursor, the three
 reading levels and the fold all work unchanged whether the units are sentences
 or image regions. New modalities are new adapters, not a new spine.
 
+Two of those adapters probe how far the spine reaches, in `scripts/`. `ingestMusic`
+hands the reader a bare note sequence (no key, no labels): flat γ-mass recovers the
+tonic and dominant, and the learned-sequence reader (`read/sequence.js`, an order-k
+n-gram folded the same way conventions are — *the signal teaches the reader*)
+anticipates a tune's phrase repeats, no music theory supplied. `ingestFrequencies`
+goes lower still — raw Hz as overtone token sets, every tone its own entity — and the
+**same Level-1 set-overlap** the reader runs over the words of a sentence
+(`hits/qLen`) discovers octave equivalence and the consonance ordering from shared
+overtones alone, with no scale, no `mod 12`, and no ratio table. See
+`scripts/extract-music-meaning.mjs`, `scripts/predict-harmonics.mjs`, and
+`scripts/discover-harmonics.mjs`.
+
 ## Three levels of reading — three kinds of math
 
 Reading happens at three levels, the three domains of the EO cube read top to
