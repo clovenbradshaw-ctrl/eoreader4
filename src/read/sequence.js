@@ -35,8 +35,10 @@ const sum = (it) => { let s = 0; for (const w of it) s += w; return s; };
 
 // The ordered stream of unit → entity id: the first INS at each unit index, in
 // reading order. For a melody that is the note at each beat; for a one-entity-
-// per-unit signal it is the signal itself.
-export const unitIdSequence = (doc) => {
+// per-unit signal it is the signal itself. `repOf` canonicalises each id to its
+// merged representative — pass a projection's `representative` to read the stream
+// in terms of DISCOVERED equivalence classes rather than raw per-occurrence ids.
+export const unitIdSequence = (doc, repOf = (x) => x) => {
   const firstAt = new Map();
   for (const e of snapshot(doc.log)) {
     if (e.op === 'INS' && e.sentIdx != null && !firstAt.has(e.sentIdx)) {
@@ -45,7 +47,7 @@ export const unitIdSequence = (doc) => {
   }
   const max = firstAt.size ? Math.max(...firstAt.keys()) : -1;
   const seq = [];
-  for (let i = 0; i <= max; i++) if (firstAt.has(i)) seq.push(firstAt.get(i));
+  for (let i = 0; i <= max; i++) if (firstAt.has(i)) seq.push(repOf(firstAt.get(i)));
   return seq;
 };
 
@@ -113,8 +115,8 @@ export const predictNextUnit = (model, context) => {
 // counterpart of readingAt's recency surprise: −log₂ of the probability the
 // LEARNED model gave the unit that landed, squashed to [0,1). `learned` is true
 // once the current context has led somewhere before (a recollection, not a guess).
-export const predictiveSequenceReading = (doc, { gamma = GAMMA, order = ORDER } = {}) => {
-  const seq = unitIdSequence(doc);
+export const predictiveSequenceReading = (doc, { gamma = GAMMA, order = ORDER, repOf } = {}) => {
+  const seq = unitIdSequence(doc, repOf);
   const labelOf = labelMap(doc);
   const steps = [];
   for (let at = 1; at < seq.length; at++) {
