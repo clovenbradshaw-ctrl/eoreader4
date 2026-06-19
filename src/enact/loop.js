@@ -135,6 +135,7 @@ export const createEnactedLoop = ({
   strainLeak = DEFAULT_STRAIN_LEAK,  // strain's per-cursor retention — the leaky integrator (frame.js)
   impulseThreshold = DEFAULT_IMPULSE,// a single EVA at/above this breaks the frame on impact (Newton)
   refractoryPeriod = DEFAULT_REFRACTORY, // cursors a just-restructured frame cannot re-break (hysteresis)
+  calibrate = null,                  // { mode:'causal', alpha } → band/threshold from PAST surprises only
   read,                              // (cursor) => { surprise ∈ [0,1], terms } — the cheap γ-mass signal
 } = {}) => {
   if (typeof read !== 'function') {
@@ -148,6 +149,31 @@ export const createEnactedLoop = ({
   const lastRec = new Map();         // layer → cursor of the last REC (the refractory clock)
   let lastCursor = -1;               // the arrow of time — strictly increasing
 
+  // CAUSAL SCALE (§5 — the arrow inside the calibrator). The confirm band and the
+  // layer thresholds measure "normal surprise" for THIS reader. Measuring that from
+  // the WHOLE reading (calibrateReader over every surprise) smuggles the future into
+  // the band that judges an early EVA — the one acausal seam in a loop built to
+  // police the arrow. In causal mode the SAME fit runs on an expanding window of the
+  // surprises seen SO FAR: the band that judges cursor c is fit from surprises
+  // strictly before c, refreshed after each verdict. Same statistic (median band,
+  // k·mean-excess thresholds), no future. Habituation falls out — "normal" rises in
+  // turbulent text. Seeded at the static defaults until enough surprises are seen.
+  const causal = calibrate?.mode === 'causal';
+  const perLayerSteps = calibrate?.perLayerSteps;            // optional override passed to calibrateReader
+  const seen = [];                                          // surprises seen so far — the causal window
+  let causalBand = confirmBand;                             // band fit from `seen` (past only)
+  let causalThresholds = thresholds;                        // thresholds fit from `seen` (past only)
+  const recalibrate = () => {
+    const cal = calibrateReader(seen, {
+      layers: orderedLayers,
+      ...(perLayerSteps ? { perLayerSteps } : {}),
+      defaults: thresholds, defaultBand: confirmBand,
+    });
+    causalBand = cal.confirmBand;
+    causalThresholds = cal.thresholds;
+  };
+  const bandNow = () => (causal ? causalBand : confirmBand);
+
   const emit = (e) => {
     // Every enacted event is tagged with its register and its reader. The reader
     // is the reading itself: an enacted act is witnessed by the reading, the way a
@@ -159,7 +185,8 @@ export const createEnactedLoop = ({
   };
 
   const thresholdOf = (layer) =>
-    thresholds[layer] ?? DEFAULT_THRESHOLDS[layer] ?? thresholds[base] ?? 1.5;
+    causal ? (causalThresholds[layer] ?? DEFAULT_THRESHOLDS[layer] ?? causalThresholds[base] ?? 1.5)
+           : (thresholds[layer] ?? DEFAULT_THRESHOLDS[layer] ?? thresholds[base] ?? 1.5);
 
   // Establish a frame at a layer — an enacted DEF. `producedBy` is 'initial' for
   // the opening frame, or { rec: seq } when a REC installs the new terms (§8: a DEF
@@ -200,8 +227,9 @@ export const createEnactedLoop = ({
     const dt = Math.max(0, cursor - frame.strainCursor);
     frame.strain *= Math.pow(frame.leak, dt);
     frame.strainCursor = cursor;
-    const verdict = surprise < confirmBand ? 'confirm' : 'strain';
-    const strainDelta = Math.max(0, surprise - confirmBand);
+    const band = bandNow();          // causal: the EWMA of past surprises only (never the future)
+    const verdict = surprise < band ? 'confirm' : 'strain';
+    const strainDelta = Math.max(0, surprise - band);
     frame.strain = round(frame.strain + strainDelta);
     const ev = emit({
       op: 'EVA',
@@ -269,8 +297,16 @@ export const createEnactedLoop = ({
       // first because a shock should not wait on accumulation. ACCUMULATION
       // (Leibniz): the leaky strain sum crossing threshold — a sustained grind.
       if (s >= impulseThreshold) { rec(layer, cursor, terms, 'impulse'); lastRec.set(layer, cursor); }
-      else if (frame.strain >= frame.threshold) { rec(layer, cursor, terms, 'accumulation'); lastRec.set(layer, cursor); }
+      // Break against the CURRENT threshold, not the frame's frozen one: in causal
+      // mode the scale is still being learned when the opening frame is set, so its
+      // belt must track the calibration as it settles (identical to frame.threshold
+      // in fixed mode, where thresholdOf is constant).
+      else if (frame.strain >= thresholdOf(layer)) { rec(layer, cursor, terms, 'accumulation'); lastRec.set(layer, cursor); }
     }
+    // Refresh the causal scale AFTER the verdicts, so the band/thresholds that judged
+    // this cursor were fit from surprises strictly before it — the arrow, kept inside
+    // the calibrator. (No-op in fixed mode.)
+    if (causal) { seen.push(s); recalibrate(); }
     return { cursor, surprise: round(s) };
   };
 

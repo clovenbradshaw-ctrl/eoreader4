@@ -140,6 +140,22 @@ test('the arrow of time — forward only, never a future frame', () => {
   }
 });
 
+// §5 — causal scale: the band that judges a line is an EWMA of PAST surprises only,
+// so a later spike cannot reach back through the calibrator and change an earlier
+// verdict (what a whole-reading median would do).
+test('causal calibration — the future cannot change a past verdict', () => {
+  const base      = [0, 0.3, 0.3, 0.3, 0.3];
+  const withSpike = [0, 0.3, 0.3, 0.3, 0.3, 0.99, 0.99, 0.99];   // identical to cursor 4, then a shock
+  const a = createEnactedLoop({ read: fromArray(base),      calibrate: { mode: 'causal' } });
+  const b = createEnactedLoop({ read: fromArray(withSpike), calibrate: { mode: 'causal' } });
+  a.runTo(4);
+  b.runTo(4);                                                    // stop before the spike
+  const evas = (loop) => ops(loop.events, 'EVA').filter(e => e.cursor <= 4)
+    .map(e => [e.cursor, e.frameLayer, e.verdict, e.strainDelta]);
+  assert.deepEqual(evas(a), evas(b),
+    'the EVAs through cursor 4 are identical — the later spike cannot reach back');
+});
+
 // §8, §10 — the log is in generation order; the order is constitutive.
 test('the log is in generation order — seqs dense, cursors non-decreasing', () => {
   const loop = createEnactedLoop({ read: fromArray([0, 0.9, 0.9, 0.9, 0.9]) });

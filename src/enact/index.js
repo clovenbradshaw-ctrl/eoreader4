@@ -18,7 +18,7 @@
 // live (§11).
 
 import { readingAt } from '../read/index.js';
-import { createEnactedLoop, calibrateReader } from './loop.js';
+import { createEnactedLoop } from './loop.js';
 import { replayFrames, loopStats } from './replay.js';
 import { buildMeaningRead } from './meaning.js';
 
@@ -44,22 +44,25 @@ export { buildMeaningRead } from './meaning.js';
 // cursor from it. Same discipline as projectGraph's memo — keyed by the doc, which
 // is immutable post-parse — so the loop is run once, not per cursor move.
 //
-// The readings are computed once over the whole document, both to drive the loop and
-// to CALIBRATE the band + thresholds to this text's `bayes` scale (calibrateReader):
-// `bayes` clusters far below the old surprisal band, so without the fit the frame
-// goes numb. A caller's explicit confirmBand/thresholds (opts) always win.
+// The readings drive the loop; the band + thresholds are now calibrated CAUSALLY,
+// online inside the loop from the surprises seen so far (calibrate:'causal'), not
+// from a median over the whole reading — the future no longer sets the band that
+// judges an early line. `bayes` clusters far below the static band, so the causal
+// EWMA fits the scale as it reads, drifting up in turbulent text. A caller's
+// explicit opts still win.
 const LOGS = new WeakMap();
 const enactedLogOf = (doc, opts) => {
   const cached = LOGS.get(doc);
   if (cached && !opts) return cached;
   const units = doc.units || doc.sentences || [];
   const readings = units.map((_, c) => readingAt(doc, c));
-  const cal = calibrateReader(readings.map(r => r.bayes));
+  // Causal calibration is the default; an explicit band/thresholds/calibrate in opts
+  // turns it off (the caller is pinning the scale by hand, e.g. to show the numb path).
+  const explicit = opts && (opts.confirmBand != null || opts.thresholds != null || opts.calibrate != null);
   const loop = createEnactedLoop({
     read: (c) => ({ surprise: readings[c]?.bayes ?? 0, terms: readings[c]?.predicted?.figures || [] }),
-    confirmBand: cal.confirmBand,
-    thresholds: cal.thresholds,
-    ...(opts || {}),                  // an explicit band/thresholds overrides the fit
+    ...(explicit ? {} : { calibrate: { mode: 'causal' } }),  // band + thresholds from PAST surprises only
+    ...(opts || {}),
   });
   if (units.length) loop.runTo(units.length - 1);
   if (!opts) LOGS.set(doc, loop.events);
