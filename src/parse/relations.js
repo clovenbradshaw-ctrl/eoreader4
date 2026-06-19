@@ -338,15 +338,16 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
     const base = clause.offset;                       // clause-relative offset → `s`
     let subj = leadingSubject(clause.text, admission, coref);
     if (!subj || !subj.id) {
-      // No subject token, but a head verb after any coordinator → INHERIT the open
-      // activation: the running subject of this sentence, else the warmest referent
-      // the reading still holds active (the coref field). Its weight rides as
-      // coupling, so an inherited subject carries its uncertainty exactly as a
-      // pronoun's does — a witnessed deposit, never a certain claim.
+      // No subject token, but a head verb after any coordinator → DEFAULT TO THE
+      // LAST INS REFERENT ACTIVATED. The arrow of time, not the gravity well: the
+      // running subject this sentence established, else the most recently
+      // instantiated referent still in the activation window (`coref.lastIns`) —
+      // never the field's mass-argmax, which in a God-heavy text is just the
+      // biggest well. Its weight rides as coupling: a witnessed deposit, not a
+      // certain claim.
       const lead = (clause.text.match(LEAD_COORD) || [''])[0].length;
       if (headVerb(clause.text.slice(lead), verbOpts)) {
-        const cands = coref?.field ? coref.field() : [];
-        const inh = running || cands[0];
+        const inh = running || (coref.lastIns ? coref.lastIns() : null);
         if (inh && inh.id) subj = { id: inh.id, start: lead, end: lead, text: '', kind: 'inherited', w: inh.w ?? 0 };
       }
     }

@@ -101,6 +101,15 @@ export const createParser = ({
     // recurrence gate, move 3). INS/SYN still emit inline, in reading order.
     const candidates = [];
 
+    // The arrow of time, tracked at instantiation: the LAST INS referent activated,
+    // in reading order. A clause that resolves no subject defaults to it (the
+    // genealogy's "and begat …" continues the patriarch just named, not whatever
+    // has the most accumulated mass). Snapshotted before each line so a subjectless
+    // clause looks strictly backward, and bounded by the activation reach so a
+    // long-dead referent never reaches forward to claim a verb.
+    const INHERIT_REACH = 8;
+    let lastIns = null;                         // { id, sentIdx } in reading order
+
     sentences.forEach((sent, sentIdx) => {
       // Chrome-ness is a weight: the mechanical score plus an optional nudge
       // (a mini-LLM's chrome probability) decides whether the line is held.
@@ -112,8 +121,11 @@ export const createParser = ({
         return;
       }
       // Snapshot the field before this line's own entities are folded in, so
-      // a subject pronoun looks backward for its antecedent.
+      // a subject pronoun looks backward for its antecedent. The last-INS register
+      // is snapshotted the same way — a subjectless clause defaults to the referent
+      // activated before this line, never one this line introduces.
       const priorField = corefField.field(sentIdx);
+      const priorLastIns = lastIns;
 
       for (const obs of admission.observe(sent, sentIdx)) {
         // INS on every sighting (admit and present) so edge weights track how
@@ -121,6 +133,7 @@ export const createParser = ({
         if (obs.status === 'admit' || obs.status === 'present') {
           log.append({ op: 'INS', id: obs.id, label: obs.label, sentIdx });
           corefField.note(obs.id, sentIdx);
+          lastIns = { id: obs.id, sentIdx };       // the arrow of time advances
         }
         // A name-containment alias is a synthesis (SYN): "Gregor" folded into
         // the "Gregor Samsa" referent. Recorded for audit; the ids were
@@ -139,6 +152,15 @@ export const createParser = ({
       const coref = {
         field:   () => priorField,
         resolve: () => priorField[0]?.id ?? null,
+        // The last INS referent activated before this line, for a subjectless
+        // clause to default to — within the activation reach, weight decayed by how
+        // many lines back it was instantiated (the same γ kernel, as coupling).
+        lastIns: () => {
+          if (!priorLastIns) return null;
+          const d = sentIdx - priorLastIns.sentIdx;
+          if (d < 0 || d > INHERIT_REACH) return null;
+          return { id: priorLastIns.id, w: Math.round(Math.pow(0.7, d) * 1000) / 1000 };
+        },
       };
       const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier,
                         referents: true };   // open the NP object slot for the page (move 2)
