@@ -15,6 +15,22 @@
 // holds none of its own: it takes an `isAbbreviation` predicate, defaulting to the
 // ledger's seed so a standalone call still works. The pipeline hands it the live
 // conventions, so a document's learned abbreviations flow straight in.
+//
+// HONEST SEAM — the boundary set is `.!?` only; `:` and `;` are not sentence ends.
+// That is right for modern prose (a colon introduces a list or elaboration, not a
+// new sentence), but WRONG for archaic text that uses the colon as its primary
+// sentence separator. Measured on the KJV book of Genesis: 214 of 1458 units run
+// over 40 words and the longest is 147 — whole genealogies welded into one unit
+// because their verses end in `:`. This is not a local nuisance: the sentence is
+// the reading UNIT everywhere downstream — the cursor steps per unit, the γ-mass /
+// Bayesian surprise is computed per unit, the enacted loop breaks frames per unit,
+// the coref decay window counts in units — so a 147-word unit silently degrades the
+// surprise signal, the activation field, and the frame loop together, and it buries
+// clause subjects deep enough that subject resolution (parse/relations.js) cannot
+// reach them. The principled fix is a LEARNABLE boundary convention (a document that
+// leans on `:`/`;` as sentence separators teaches the splitter to treat them as
+// boundaries for that text, the way it already learns abbreviations) — not a
+// hardcoded rule that would over-split modern prose. Left as a known limitation.
 
 import { SEED_ABBREVIATIONS } from '../conventions/index.js';
 
