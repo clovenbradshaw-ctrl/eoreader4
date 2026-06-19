@@ -35,15 +35,53 @@ const defIsModifier = (w) => MODIFIER_SEED.has(w);
 
 const SUBJECT_PRONOUN = new Set(['He', 'She', 'They', 'We', 'It', 'I', 'You']);
 
-// Words that are not verbs: if the head slot lands on one of these, there is
-// no relation here — better silence than "Grete who Just" or "Just by Gregor".
+// Words that are not verbs: if the head slot lands on one of these, there is no
+// relation here — better silence than "Grete who Just" or "Gregor --between-->
+// spoke". Prepositions, indefinite pronouns, and bare cardinals are added because
+// they were the surface words the flat extractor mistook for predicates
+// ("Gregor --something--> awful", "Gregor --two--> whole") — exactly the junk the
+// note format forbids in the relation slot.
 const NOT_HEAD = new Set([
   'who', 'whom', 'whose', 'which', 'that', 'what', 'where', 'when', 'why', 'how',
   'by', 'of', 'in', 'on', 'at', 'to', 'from', 'with', 'for', 'as', 'than', 'about',
   'and', 'but', 'or', 'nor', 'so', 'because', 'although', 'while', 'if', 'unless',
   'a', 'an', 'the', 'his', 'her', 'their', 'its', 'this', 'these', 'those',
   'my', 'your', 'our', 'mine', 'yours', 'ours',
+  'between', 'among', 'amongst', 'through', 'throughout', 'without', 'within',
+  'into', 'onto', 'upon', 'over', 'under', 'across', 'behind', 'beside', 'below',
+  'above', 'near', 'past', 'around', 'round', 'against', 'toward', 'towards',
+  'during', 'off', 'up', 'down', 'out',
+  'something', 'nothing', 'anything', 'everything', 'someone', 'anyone', 'everyone',
+  'somebody', 'anybody', 'everybody', 'nobody', 'none', 'one',
+  'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
 ]);
+
+// The polarity / modality channel the flat predicate dropped. A negation ("not",
+// "never", an n't-contraction) flips polarity to −; a modal ("could", "must") or a
+// hedge verb ("seemed") sets the modality. The negation word AND the modal aux are
+// STEPPED OVER so the real verb is still reached — "couldn't understand" → the verb
+// `understand`, polarity −, modality epistemic — where the old walk either swallowed
+// the negation as a modifier (dropping it) or mistook the contraction for the verb
+// ("--couldn't--> understand"). Small closed sets; a later pass can move them to the
+// conventions ledger, the home for language-specific lists.
+const NEGATION        = new Set(['not', 'never', 'cannot']);
+const MODAL_EPISTEMIC = new Set(['could', 'would', 'might', 'may']);
+const MODAL_DEONTIC   = new Set(['must', 'should', 'shall', 'ought']);
+const MODAL_IRREALIS  = new Set(['will', 'can']);
+const MODALS          = new Set([...MODAL_EPISTEMIC, ...MODAL_DEONTIC, ...MODAL_IRREALIS]);
+const HEDGE_VERB      = new Set(['seem', 'seems', 'seemed', 'appear', 'appears', 'appeared', 'look', 'looks', 'looked']);
+const NEG_CONTRACTION = /^([a-z]+)n['’]t$/;            // couldn't, didn't, won't, isn't — the
+                                                       // apostrophe is REQUIRED, so plain -nt words
+                                                       // ("went", "want", "meant") are not negations
+const DO_SUPPORT      = new Set(['do', 'does', 'did']); // dummy aux in "didn't X" — carries no modality
+
+// The polarity/modality fields for an edge, written only when they DEPART from the
+// default (positive · realis), so a plain bond's event is unchanged and only the
+// marked cases carry the extra channel.
+const polmod = (head) => ({
+  ...(head.polarity === '−' ? { polarity: '−' } : {}),
+  ...(head.modality && head.modality !== 'realis' ? { modality: head.modality } : {}),
+});
 
 const KIN_NOUNS = Object.freeze([
   'father', 'mother', 'sister', 'brother', 'son', 'daughter', 'wife', 'husband', 'parents',
@@ -122,28 +160,43 @@ const coupling = (subj) =>
 export const headVerb = (text, { isCopula = defIsCopula, isModifier = defIsModifier } = {}) => {
   let rest = text.replace(/^[\s,]+/, '');
   let consumed = text.length - rest.length;             // chars of `text` walked past
+  let polarity = '+';                                   // captured as we step over the aux run
+  let modality = 'realis';
+  const setModality = (w) => {
+    if (MODAL_EPISTEMIC.has(w) || HEDGE_VERB.has(w)) modality = 'epistemic';
+    else if (MODAL_DEONTIC.has(w)) modality = 'deontic';
+    else if (MODAL_IRREALIS.has(w) && modality === 'realis') modality = 'irrealis';
+  };
+  const stepOver = (m) => {
+    const sliced  = rest.slice(m[0].length);
+    const trimmed = sliced.replace(/^[\s,]+/, '');
+    consumed += m[0].length + (sliced.length - trimmed.length);
+    rest = trimmed;
+  };
   // The verb guard, ReVerb's relation-phrase constraint by hand: step over the
-  // adverbs/intensifiers/auxiliaries (the modifier list), route a copula to its
-  // own DEF branch, and reject a preposition/relative as a head. What remains is
-  // verb-headed — or, if we only ever found modifiers, nothing, and that clause is
-  // no relation. The guard limit is generous because a clause can stack several
-  // modifiers ("had not really quite walked").
-  for (let guard = 0; guard < 6; guard++) {
+  // adverbs/intensifiers/auxiliaries (the modifier list), AND over negation and modal
+  // auxiliaries while capturing the polarity/modality they carry, route a copula to
+  // its own DEF branch, and reject a preposition/relative as a head. What remains is
+  // verb-headed — or, if we only ever found modifiers, nothing, and that clause is no
+  // relation. The guard limit is generous because a clause can stack several markers
+  // ("had not really quite walked").
+  for (let guard = 0; guard < 8; guard++) {
     const m = rest.match(/^([A-Za-z][a-zA-Z'’]*)\b/);
     if (!m) return null;
     const w = m[1].toLowerCase();
     const at = consumed;                                // verb token start in `text`
     const restStart = at + m[0].length;                 // post-verb text start in `text`
-    if (isCopula(w)) return { verb: w, rest: rest.slice(m[0].length), copular: true, at, restStart };
-    if (isModifier(w)) {
-      const sliced  = rest.slice(m[0].length);
-      const trimmed = sliced.replace(/^[\s,]+/, '');
-      consumed += m[0].length + (sliced.length - trimmed.length);
-      rest = trimmed;
-      continue;
-    }
+    // A negative contraction ("couldn't" = could + not): negation AND a modal/aux
+    // stem, both stepped over so the REAL verb is found next, neither dropped.
+    const contr = w.match(NEG_CONTRACTION);
+    if (contr) { polarity = '−'; if (!DO_SUPPORT.has(contr[1])) setModality(contr[1]); stepOver(m); continue; }
+    if (NEGATION.has(w)) { polarity = '−'; stepOver(m); continue; }
+    if (MODALS.has(w))   { setModality(w);  stepOver(m); continue; }
+    if (isCopula(w)) return { verb: w, rest: rest.slice(m[0].length), copular: true, at, restStart, polarity, modality };
+    if (isModifier(w)) { stepOver(m); continue; }
     if (NOT_HEAD.has(w)) return null;   // a preposition/relative pronoun is not a verb
-    return { verb: w, rest: rest.slice(m[0].length), copular: false, at, restStart };
+    if (HEDGE_VERB.has(w)) modality = 'epistemic';      // "seemed", "appeared" → a hedge
+    return { verb: w, rest: rest.slice(m[0].length), copular: false, at, restStart, polarity, modality };
   }
   return null;
 };
@@ -379,7 +432,7 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
     const w = coupling(subj);
     if (head.copular) {
       const pred = head.rest.replace(/^[\s,]+/, '').replace(/[.!?]+\s*$/, '').trim();
-      if (pred) out.push({ op: 'DEF', id: subj.id, key: 'predicate', value: pred, ...w });
+      if (pred) out.push({ op: 'DEF', id: subj.id, key: 'predicate', value: pred, ...w, ...polmod(head) });
       continue;
     }
     const op = isSpeech(head.verb) ? 'SIG' : 'CON';
@@ -398,7 +451,7 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
     for (const obj of objectEntities(head.rest, admission, subj.id)) {
       const oStart = restBase + obj.start, oEnd = restBase + obj.end;
       const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: obj.id };
-      out.push({ op, src: subj.id, tgt: obj.id, via: head.verb, ...w, args: { subject, verb, object, op } });
+      out.push({ op, src: subj.id, tgt: obj.id, via: head.verb, ...w, ...polmod(head), args: { subject, verb, object, op } });
       bonded = true;
     }
     // The NP referent object — only when the page asks for referents, and only when
@@ -410,7 +463,7 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
       if (np) {
         const oStart = restBase + np.start, oEnd = restBase + np.end;
         const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: np.lemma };
-        out.push({ op, src: subj.id, tgt: np.lemma, via: head.verb, tgtKind: 'np', ...w,
+        out.push({ op, src: subj.id, tgt: np.lemma, via: head.verb, tgtKind: 'np', ...w, ...polmod(head),
                    args: { subject, verb, object, op } });
       }
     }

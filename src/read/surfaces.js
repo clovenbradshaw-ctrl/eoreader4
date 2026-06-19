@@ -47,7 +47,7 @@ export const structureSurface = (doc, idxs) => {
       // the noun (sister → sibling, captain → leads) — null when it doesn't. The
       // type is the projection the relation algebra reasons over; the surface
       // string stays untouched for the notes register.
-      case 'SIG': relations.push({ op: e.op, src: name(e.src), tgt: name(e.tgt), via: e.via, type: typeOf(e.via)?.type || null, idx: e.sentIdx }); break;
+      case 'SIG': relations.push({ op: e.op, src: name(e.src), tgt: name(e.tgt), via: e.via, type: typeOf(e.via)?.type || null, polarity: e.polarity || '+', modality: e.modality || 'realis', idx: e.sentIdx }); break;
       case 'SYN': if (e.kind === 'merge') merges.push({ from: name(e.from), to: name(e.to), idx: e.sentIdx }); break;
       case 'SEG': if (e.kind === 'retract') splits.push({ refSeq: e.refSeq, idx: e.sentIdx }); break;
     }
@@ -128,7 +128,8 @@ export const figureSurface = (doc, focusIds, { max = FOCUS_MAX_BONDS } = {}) => 
   const relations = ranked.map((e) => ({
     op:  e.kind === 'sig' ? 'SIG' : 'CON',
     src: name(e.from), tgt: name(e.to),
-    via: e.via, type: typeOf(e.via)?.type || null, idx: e.sentIdx,
+    via: e.via, type: typeOf(e.via)?.type || null,
+    polarity: e.polarity || '+', modality: e.modality || 'realis', idx: e.sentIdx,
   }));
 
   // Figures: the focus referents first (the centre), then the neighbours they bond
@@ -192,10 +193,16 @@ export const serializeNotes = (structure, { max = 8 } = {}) => {
   const seen = new Set();
   for (const r of (structure?.relations || [])) {
     const rel = plainRel(r.via);
-    const key = `${r.src.id}|${rel}|${r.tgt.id}`;
+    // Polarity is a CONSCIENCE token (the spec's §11.2): a negated bond must reach
+    // even a tiny talker as a negation, never the bare positive — dropping the "not"
+    // is the latent hallucination. Carried as a literal "not-" prefix so the arrow
+    // stays basic and the sign cannot be smoothed away. (Modality stays in the rich
+    // log layer; the model feed is kept basic.)
+    const neg = r.polarity === '−' ? 'not-' : '';
+    const key = `${r.src.id}|${neg}${rel}|${r.tgt.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    lines.push(`${r.src.label} --${rel}--> ${r.tgt.label}`);
+    lines.push(`${r.src.label} --${neg}${rel}--> ${r.tgt.label}`);
     if (lines.length >= max) return lines;
   }
   for (const d of (structure?.defs || [])) {

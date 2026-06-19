@@ -134,6 +134,33 @@ test('kinship apposition resolves a pronoun owner through the field ("His sister
   assert.equal(con.tgt, 'grete');
 });
 
+test('relation elements carry polarity and modality — negation and hedge are not dropped', () => {
+  // "couldn't understand" used to log as --couldn't--> understand, dropping the
+  // negation. Now the real verb is recovered and the sign and mood ride the element.
+  const doc = parseText(
+    'Gregor Samsa could not understand the words. Gregor told Grete. Gregor Samsa did not open the door.',
+    { docId: 'pm' });
+  const evs = doc.log.snapshot();
+  const understand = evs.find(e => e.op === 'CON' && e.via === 'understand');
+  assert.ok(understand, 'the real verb is recovered, not "couldn\'t"');
+  assert.equal(understand.polarity, '−', 'negation survives as polarity');
+  assert.equal(understand.modality, 'epistemic', 'the modal "could" sets the modality');
+  const open = evs.find(e => e.op === 'CON' && e.via === 'open');
+  assert.equal(open.polarity, '−', 'do-support negation survives');
+  assert.equal(open.modality, undefined, 'do-support carries no modality');
+  const told = evs.find(e => e.op === 'SIG' && e.via === 'told');
+  assert.equal(told.polarity, undefined, 'a plain positive bond writes no polarity field');
+});
+
+test('a preposition or indefinite pronoun in the head slot yields no relation (no surface-word junk)', () => {
+  // "Gregor --something--> awful" / "Gregor --between--> spoke" — the flat extractor's
+  // junk. The head slot landing on a non-verb now produces silence, not a bond.
+  const doc = parseText('Gregor Samsa something awful happened. Gregor Samsa between two rooms.', { docId: 'j' });
+  const vias = doc.log.snapshot().filter(e => e.op === 'CON').map(e => e.via);
+  assert.ok(!vias.includes('something'), 'an indefinite pronoun is not a relation');
+  assert.ok(!vias.includes('between'), 'a preposition is not a relation');
+});
+
 test('speech verbs emit SIG, other transitive verbs emit CON', () => {
   const doc = parseText('Alice told Bob. Alice told Bob. Alice told Bob now.', { docId: 'g' });
   assert.ok(doc.log.filter(e => e.op === 'SIG' && e.via === 'told').length >= 1);

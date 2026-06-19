@@ -122,6 +122,12 @@ const computeProjection = (log, frame) => {
           from: e.src, to: e.tgt,
           kind: e.op.toLowerCase(),
           via:  e.via,
+          // The polarity/modality channel rides through verbatim when present — a
+          // negated or hedged bond ("could not understand", "seemed clear") must
+          // keep its sign and mood all the way to the reading, never silently
+          // flattened to the positive. Absent on a plain bond (positive · realis).
+          ...(e.polarity ? { polarity: e.polarity } : {}),
+          ...(e.modality ? { modality: e.modality } : {}),
           seq:  e.seq,
           sentIdx: e.sentIdx,
           // Coupling: a referent resolved by field rather than by name carries

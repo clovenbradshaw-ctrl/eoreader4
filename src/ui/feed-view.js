@@ -166,7 +166,8 @@ export const feedHolons = (structure) => {
   for (const r of relations) {
     // SIG is speech (⟨says⟩), CON is a plain bond (--with-->). The verb on the
     // edge is the relation; the operator only picks the bracket it reads in.
-    ensure(r.src).bonds.push({ op: r.op, via: r.via || (r.op === 'SIG' ? 'says' : 'with'), to: r.tgt, idx: r.idx });
+    ensure(r.src).bonds.push({ op: r.op, via: r.via || (r.op === 'SIG' ? 'says' : 'with'), to: r.tgt, idx: r.idx,
+      polarity: r.polarity || '+', modality: r.modality || 'realis' });
   }
   for (const d of defs) ensure({ id: d.id, label: d.label }).defs.push({ value: d.value, idx: d.idx });
 
@@ -200,13 +201,19 @@ const holonTree = (holons, { units = [], filename, sentences } = {}) => {
     for (const b of h.bonds) {
       const row = document.createElement('div');
       row.className = 'holon-bond';
+      // Polarity rides on the arrow (¬ before the relation — a negated bond is never
+      // shown as the bare positive); modality trails as its mood, the rich-note
+      // channel the flat arrow used to drop.
+      const not = b.polarity === '−' ? '¬' : '';
       const arrow = b.op === 'SIG'
-        ? `⟨${escapeHtml(b.via)}⟩`
-        : `--${escapeHtml(b.via)}--&gt;`;
+        ? `⟨${not}${escapeHtml(b.via)}⟩`
+        : `--${not}${escapeHtml(b.via)}--&gt;`;
+      const mood = (b.modality && b.modality !== 'realis')
+        ? ` <span class="holon-mood">⟨${escapeHtml(b.modality)}⟩</span>` : '';
       row.innerHTML =
         `<span class="op ${b.op}">${b.op}</span>` +
         `<span class="holon-arrow">${arrow}</span> ` +
-        `<span class="holon-label">${escapeHtml(b.to?.label ?? b.to?.id ?? '?')}</span>` +
+        `<span class="holon-label">${escapeHtml(b.to?.label ?? b.to?.id ?? '?')}</span>${mood}` +
         cite(b.idx);
       const line = units[b.idx];
       if (line != null) {
