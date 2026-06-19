@@ -8,7 +8,7 @@
 // Vetoes are flag-only — they never substitute the model's answer.
 // The user sees what the model actually said, with a flag pinned to it.
 
-import { answerSmalltalk, answerMath, answerConfirm, answerWho } from '../answer/index.js';
+import { answerSmalltalk, answerMath, answerConfirm, answerRelation, answerWho } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold }         from '../read/index.js';
@@ -41,7 +41,9 @@ export const stages = {
     // (intent.js): the prompt register (summary guard) and the token ceiling — the
     // real length bound. The mechanical paths above need neither.
     if (ctx.doc) {
-      const mech = answerConfirm(ctx.doc, ctx.question) || answerWho(ctx.doc, ctx.question);
+      const mech = answerConfirm(ctx.doc, ctx.question)
+        || answerRelation(ctx.doc, ctx.question)   // "who is X's sister" — surf the graph edge
+        || answerWho(ctx.doc, ctx.question);
       if (mech) return short(mech);
       return { ...ctx, route: 'grounded', ...taskOf(ctx.question) };
     }

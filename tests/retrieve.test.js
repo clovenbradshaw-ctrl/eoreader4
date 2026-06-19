@@ -50,3 +50,22 @@ test('retrieveLexical respects k', () => {
   const r = retrieveLexical(doc, 'ran', 3);
   assert.equal(r.length, 3);
 });
+
+// Fuzzy: a term the document never spells exactly is rescued onto the nearest token
+// it DOES spell ("greta"→"grete"), so a near-miss no longer sinks the whole turn.
+test('retrieveLexical fuzzy-matches a near-spelling the document never writes', () => {
+  const doc = parseText('His sister Grete brought milk. Grete set the food down.', { docId: 'd1' });
+  const exact = retrieveLexical(doc, 'grete', 5);
+  const fuzzy = retrieveLexical(doc, 'greta', 5);   // 'greta' appears nowhere
+  assert.ok(fuzzy.length > 0, 'the near-spelling still retrieves');
+  assert.deepEqual(fuzzy.map(s => s.idx), exact.map(s => s.idx), 'it lands on the Grete lines');
+  assert.ok(fuzzy[0].score < exact[0].score, 'a fuzzy hit scores below the exact one');
+});
+
+// Exactness is never diluted: a real word matches only itself, and a term with no
+// near neighbour retrieves nothing (no phantom hits).
+test('retrieveLexical keeps an exact term exact and still abstains on a far term', () => {
+  const doc = parseText('Alice loves apples. Bob hates broccoli.', { docId: 'd1' });
+  assert.equal(retrieveLexical(doc, 'apples', 5)[0].score, 1, 'exact stays full-weight');
+  assert.equal(retrieveLexical(doc, 'zebras', 5).length, 0, 'no near neighbour → empty');
+});

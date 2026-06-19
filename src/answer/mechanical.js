@@ -5,6 +5,7 @@
 // is never warmed for it. This is the single largest UX win on cold start.
 
 import { tok } from '../parse/tokenize.js';
+import { editWithin, fuzzCeiling } from '../parse/fuzzy.js';
 import { projectGraph } from '../core/project.js';
 import { typeOf, areDisjoint } from '../read/relation-types.js';
 
@@ -109,7 +110,8 @@ export const answerConfirm = (doc, question) => {
 };
 
 // Resolve a queried name to an admitted entity id — alias-aware, so "gregor"
-// finds the referent even after "Gregor" was synthesised into "Gregor Samsa".
+// finds the referent even after "Gregor" was synthesised into "Gregor Samsa", and
+// FUZZY as a last resort, so a near-spelling ("greta") still lands on "Grete".
 const resolveEntityId = (doc, name) => {
   if (!doc || !doc.admission) return null;
   const n = name.toLowerCase();
@@ -120,7 +122,18 @@ const resolveEntityId = (doc, name) => {
     const l = label.toLowerCase();
     if (l.includes(n) || n.includes(l)) return id;
   }
-  return null;
+  // Last resort: a near-spelling of an admitted label. Bounded edit distance, so
+  // "greta"→"Grete" lands but unrelated names do not; only fires when exact and
+  // substring both missed. The closest label wins (deterministic over admitted order).
+  let best = null;
+  for (const [label, id] of doc.admission.admitted) {
+    const l = label.toLowerCase();
+    const ceil = fuzzCeiling(Math.max(n.length, l.length));
+    if (ceil === 0) continue;
+    const d = editWithin(n, l, ceil);
+    if (d > 0 && d <= ceil && (!best || d < best.d)) best = { id, d };
+  }
+  return best ? best.id : null;
 };
 
 export const answerWho = (doc, question) => {
@@ -139,6 +152,71 @@ export const answerWho = (doc, question) => {
     route: 'who',
     text: `${label} is ${def.value} [s${def.sentIdx}].`,
     sources: [def.sentIdx],
+  };
+};
+
+// A relational "who" — "who is Gregor's sister?", "who is the captain of the ship?"
+// — is not a definition lookup; it is a one-hop GRAPH SURF. The document already
+// logged the tie as a typed CON edge (Gregor --sister--> Grete), so the answer is
+// the node on the other end. We resolve the owner, TYPE the asked relation, and
+// read the matching edge straight off the projection. Crucially this runs BEFORE
+// the entity-name `answerWho`, which would otherwise bind "Gregor's sister" to
+// Gregor himself (the bare name is a substring of the phrase) and answer with his
+// predicate — the confidently-wrong path the user hit.
+const REL_POSSESSIVE = /^\s*who\s+(?:is|are|was|were)\s+(?:the\s+)?(.+?)'s\s+([A-Za-z]+)\s*[?.!]*$/i;
+const REL_OF_FORM    = /^\s*who\s+(?:is|are|was|were)\s+(?:the\s+|a\s+|an\s+)?([A-Za-z]+)\s+of\s+(.+?)\s*[?.!]*$/i;
+
+export const answerRelation = (doc, question) => {
+  if (!doc || !doc.log) return null;
+  const q = String(question || '').replace(/[‘’]/g, "'");   // normalise curly apostrophes
+
+  let owner, relation, m;
+  if ((m = q.match(REL_POSSESSIVE)))   { owner = m[1]; relation = m[2]; }
+  else if ((m = q.match(REL_OF_FORM))) { relation = m[1]; owner = m[2]; }
+  if (!owner || !relation) return null;
+
+  const asked = typeOf(relation);
+  if (!asked) return null;                            // not a relation the algebra knows → defer
+  const ownerId = resolveEntityId(doc, owner.trim().replace(/^(?:the|a|an)\s+/i, ''));
+  if (!ownerId) return null;
+
+  // Match edges whose typed relation is the asked primitive. Kinship CON edges are
+  // logged owner → relative, so the forward read (owner is `from`) answers with the
+  // `to`, and there the edge's noun describes the answer — so a gendered query can
+  // be gated by gender (a "sister" query never returns a brother). A SYMMETRIC
+  // primitive (sibling, spouse) also holds in reverse, so an edge pointing AT the
+  // owner answers with its `from`; but there the noun describes the OWNER, not the
+  // answer, so a gendered reverse can't be verified and is left to retrieval —
+  // reverse only answers a genderless query ("who is Grete's sibling").
+  const graph = projectGraph(doc.log);
+  const rep   = graph.representative || ((id) => id);
+  const oid   = rep(ownerId);
+  const found = new Map();                            // answerId → first witnessing sentIdx
+  for (const e of graph.edges) {
+    const t = typeOf(e.via);
+    if (!t || t.type !== asked.type) continue;
+    let aid = null;
+    if (rep(e.from) === oid) {
+      if (asked.gender && t.gender && asked.gender !== t.gender) continue;  // sister ≠ brother
+      aid = rep(e.to);
+    } else if (asked.symmetric && !asked.gender && rep(e.to) === oid) {
+      aid = rep(e.from);
+    }
+    if (aid == null || aid === oid) continue;          // no match, or a self-loop
+    if (!found.has(aid)) found.set(aid, e.sentIdx);
+  }
+  if (found.size === 0) return null;                  // the tie isn't in the graph → let retrieval try
+
+  const names = [...found.keys()].map((id) => labelOf(doc, id));
+  const cites = [...found.values()].filter((s) => s != null);
+  const list  = names.length === 1
+    ? names[0]
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  const cite  = cites.length ? ` [${cites.map((s) => `s${s}`).join(', ')}]` : '';
+  return {
+    route: 'who',
+    text: `${labelOf(doc, oid)}'s ${relation.toLowerCase()} ${names.length > 1 ? 'are' : 'is'} ${list}${cite}.`,
+    sources: cites,
   };
 };
 
@@ -169,5 +247,6 @@ export const tryMechanical = (doc, question) =>
   answerSmalltalk(question)
   || answerMath(question)
   || answerConfirm(doc, question)
+  || answerRelation(doc, question)
   || answerWho(doc, question)
   || null;
