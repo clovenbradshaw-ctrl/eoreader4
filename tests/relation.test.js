@@ -1,0 +1,87 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { parseText } from '../src/parse/index.js';
+import { answerRelation, answerWho } from '../src/answer/mechanical.js';
+import { editWithin, fuzzyMatches, fuzzCeiling } from '../src/parse/fuzzy.js';
+
+// A relational "who" is a one-hop graph surf, not a definition lookup. The document
+// logs the kinship as a typed CON edge (Gregor --sister--> Grete); the answer is the
+// node on the other end. These pin the surf — and that it never mis-binds the phrase
+// to the bare name inside it, the confidently-wrong path the old `answerWho` took.
+
+const STORY =
+  'Gregor Samsa woke transformed. His sister Grete brought a bowl of milk. ' +
+  'Grete opened the window. The father drove Gregor back into the room.';
+
+const apos = String.fromCharCode(39);
+
+test('answerRelation surfs "who is X’s sister" to the graph edge, not X', () => {
+  const doc = parseText(STORY, { docId: 'rel' });
+  const a = answerRelation(doc, `who is gregor${apos}s sister`);
+  assert.ok(a, 'a relational answer is produced');
+  assert.equal(a.route, 'who');
+  assert.match(a.text, /Grete/, 'the answer is the sister, Grete');
+  assert.doesNotMatch(a.text, /salesman|transformed/, 'it is not Gregor’s own predicate');
+  assert.ok(a.sources.length > 0 && Number.isInteger(a.sources[0]), 'the witnessing line is cited');
+});
+
+test('answerRelation reads the "sister of X" form too', () => {
+  const doc = parseText(STORY, { docId: 'rel' });
+  const a = answerRelation(doc, 'who is the sister of gregor');
+  assert.ok(a && /Grete/.test(a.text), 'of-form resolves to Grete');
+});
+
+test('answerRelation honours the gender split — a sister query never returns a brother', () => {
+  const doc = parseText(STORY, { docId: 'rel' });
+  // The document has only a sister edge; asking for a brother must defer (null),
+  // not hand back Grete.
+  assert.equal(answerRelation(doc, `who is gregor${apos}s brother`), null);
+});
+
+test('answerRelation reads a SYMMETRIC primitive in reverse for a genderless query', () => {
+  const doc = parseText(STORY, { docId: 'rel' });
+  // The edge is logged Gregor --sister--> Grete; sibling is symmetric, so Grete's
+  // sibling is recoverable from the reverse, but only genderless (the noun on the
+  // edge describes the owner, not the answer).
+  const a = answerRelation(doc, `who is grete${apos}s sibling`);
+  assert.ok(a && /Gregor/.test(a.text), 'symmetric reverse finds Gregor');
+  // The gendered reverse cannot be verified and must defer.
+  assert.equal(answerRelation(doc, `who is grete${apos}s brother`), null);
+});
+
+test('answerRelation defers on a non-relational who (let answerWho handle it)', () => {
+  const doc = parseText('Gregor Samsa is a travelling salesman. Gregor waited.', { docId: 'rel' });
+  assert.equal(answerRelation(doc, 'who is gregor'), null, 'plain who is not intercepted');
+  assert.equal(answerRelation(doc, 'who is gregor samsa'), null);
+  // And the plain-who path still answers it from the predicate.
+  const w = answerWho(doc, 'who is gregor');
+  assert.ok(w && /salesman/.test(w.text));
+});
+
+test('answerRelation defers on an untyped relation (outside the algebra)', () => {
+  const doc = parseText(STORY, { docId: 'rel' });
+  assert.equal(answerRelation(doc, `who is gregor${apos}s landlord`), null);
+});
+
+// ── the fuzzy primitive ────────────────────────────────────────────────────
+
+test('editWithin is bounded and exact within the ceiling', () => {
+  assert.equal(editWithin('greta', 'grete', 1), 1, 'one substitution');
+  assert.equal(editWithin('zebras', 'apples', 1), 2, 'far apart → past the ceiling (maxDist+1)');
+  assert.equal(editWithin('cat', 'cat', 0), 0, 'identical at ceiling 0');
+});
+
+test('fuzzCeiling keeps short tokens exact and lets longer ones drift', () => {
+  assert.equal(fuzzCeiling(3), 0);
+  assert.equal(fuzzCeiling(5), 1);
+  assert.equal(fuzzCeiling(9), 2);
+});
+
+test('fuzzyMatches rescues an out-of-vocabulary term onto its near neighbour', () => {
+  const vocab = new Set(['grete', 'gregor', 'milk', 'window']);
+  assert.deepEqual(fuzzyMatches('grete', vocab), [{ token: 'grete', dist: 0 }], 'exact short-circuits');
+  const greta = fuzzyMatches('greta', vocab);
+  assert.deepEqual(greta, [{ token: 'grete', dist: 1 }], 'greta → grete at distance 1');
+  assert.deepEqual(fuzzyMatches('zzzzz', vocab), [], 'nothing near → no phantom match');
+});
