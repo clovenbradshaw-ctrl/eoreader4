@@ -23,14 +23,21 @@
 // TERMS stay the salient figures (the frame's human-readable label); the deepening
 // is the surprise that DRIVES restructuring, not the labelling. Frames standing on
 // semantic terrain rather than figure lists is a further step, noted in the doc.
+//
+// CONTRIB is the per-dimension axis the surprise strains ALONG — the same bayesBy the
+// cheap path supplies. The meaning 1−cos says HOW FAR the sense moved (the magnitude
+// that breaks the frame); bayesBy says along WHICH figures belief moved (the axis the
+// REC restructures toward). Wiring it is what lets the deep reader restructure toward
+// the cause of the break, not whatever figures were merely in view — the cheap path
+// got this; the meaning path, the one that matters, had been left without it.
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
 // Build the per-cursor meaning-distance surprise over a document's clauses, async.
 // Reuses the doc's shared sentence-embedding cache when present (the same vectors
-// retrieval uses), else embeds each clause once. Returns { surprise, terms } ready
-// to drive createEnactedLoop, or null when the embedder cannot measure meaning.
-export const buildMeaningRead = async (doc, embedder, { gamma = 0.7, termsAt } = {}) => {
+// retrieval uses), else embeds each clause once. Returns { surprise, terms, contrib }
+// ready to drive createEnactedLoop, or null when the embedder cannot measure meaning.
+export const buildMeaningRead = async (doc, embedder, { gamma = 0.7, termsAt, contribAt } = {}) => {
   if (!embedder?.measuresMeaning) return null;          // hash organ → fall back (firewall)
   const sentences = doc.units || doc.sentences || [];
   if (!sentences.length) return { surprise: [], terms: [] };
@@ -63,5 +70,12 @@ export const buildMeaningRead = async (doc, embedder, { gamma = 0.7, termsAt } =
   const terms = termsAt
     ? sentences.map((_, c) => termsAt(c))
     : sentences.map(() => []);
-  return { surprise, terms };
+  // The per-dimension strain axis (the cheap path's bayesBy), one entry per cursor.
+  // The caller already reads the cheap reading for the terms, so the contrib comes off
+  // the same read — no second pass. Null per cursor when no per-dimension signal is
+  // supplied, in which case the REC falls back to the in-view terms (loop.js).
+  const contrib = contribAt
+    ? sentences.map((_, c) => contribAt(c))
+    : sentences.map(() => null);
+  return { surprise, terms, contrib };
 };

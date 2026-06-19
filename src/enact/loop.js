@@ -66,13 +66,34 @@ export const DEFAULT_THRESHOLDS = Object.freeze({
 // holding ends and accumulating begins.
 export const DEFAULT_CONFIRM_BAND = 0.25;
 
-// THE IMPULSE threshold (Newton, §3/§6). A single EVA at or above this surprise
-// breaks the frame on impact — a fast path distinct from accumulated strain, one
-// anomaly so large the frame cannot hold it even once. Set near the top of the
-// normalised surprise range and ABOVE any sustained-strain level, so a grind
-// accumulates through the leaky sum while only a genuine shock restructures on its
-// own. The integral measures erosion; the impulse catches the hammer-blow. Tunable.
+// THE IMPULSE threshold (Newton, §3/§6). A single EVA above this surprise breaks the
+// frame on impact — a fast path distinct from accumulated strain, one anomaly so large
+// the frame cannot hold it even once. The integral measures erosion; the impulse
+// catches the hammer-blow.
+//
+// A FIXED 0.95 is a shock gate set on the raw [0,1] range — but the live surprise
+// rides a COMPRESSED scale (the γ-mass band clusters under 0.1; the meaning 1−cos
+// clusters far below 1, sentence cosines rarely orthogonal), so an absolute 0.95 is
+// an off switch in disguise on the very path that matters: it passes any synthetic
+// high-surprise test and never fires on real text. So under causal calibration the
+// impulse, like the band, is fit to THIS reader's own scale — a high quantile of the
+// surprises seen so far (DEFAULT_IMPULSE_QUANTILE). A shock is then "far above what
+// this reader normally sees," not "above 0.95," so it fires when a clause is
+// genuinely anomalous for this text rather than never. DEFAULT_IMPULSE is the fixed
+// fallback: the gate in non-causal mode, and the seed until the causal window is wide
+// enough to estimate a tail (or when the distribution is flat and has no shock in
+// it). Tunable.
 export const DEFAULT_IMPULSE = 0.95;
+
+// The causal impulse quantile — the shock sits at the top of the reader's OWN
+// surprise distribution. 0.98 ≈ where the static 0.95 sat as a quantile of the
+// γ-mass tail (measured on the worked corpus), so the shock stays the rare Newton
+// hammer-blow above the grind, not a second accumulation path. Tunable, per reader.
+export const DEFAULT_IMPULSE_QUANTILE = 0.98;
+
+// The causal window must be at least this wide before a tail quantile is trustworthy;
+// under it the impulse holds at the fixed fallback (an opening cannot shock).
+const IMPULSE_MIN_SAMPLES = 16;
 
 // THE REFRACTORY PERIOD (hysteresis, §11). After a frame restructures it cannot
 // break again for this many cursors. A bare threshold-with-reset is the textbook
@@ -128,12 +149,23 @@ const medianOf = (xs) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
+// A high quantile by nearest-rank — the tail statistic the causal impulse rides. The
+// band uses the interpolated median (calibrateReader); the shock gate wants the top of
+// the distribution, where nearest-rank is the honest "this many of the past sit below."
+const quantileOf = (xs, q) => {
+  if (!xs.length) return 0;
+  const s = [...xs].sort((a, b) => a - b);
+  const i = Math.min(s.length - 1, Math.max(0, Math.ceil(q * s.length) - 1));
+  return s[i];
+};
+
 export const createEnactedLoop = ({
   layers = ['proposition', 'document'],
   thresholds = DEFAULT_THRESHOLDS,
   confirmBand = DEFAULT_CONFIRM_BAND,
   strainLeak = DEFAULT_STRAIN_LEAK,  // strain's per-cursor retention — the leaky integrator (frame.js)
-  impulseThreshold = DEFAULT_IMPULSE,// a single EVA at/above this breaks the frame on impact (Newton)
+  impulseThreshold = DEFAULT_IMPULSE,// a single EVA above this breaks the frame on impact (Newton); causal fallback
+  impulseQuantile = DEFAULT_IMPULSE_QUANTILE, // causal mode: the shock is this quantile of PAST surprise
   refractoryPeriod = DEFAULT_REFRACTORY, // cursors a just-restructured frame cannot re-break (hysteresis)
   calibrate = null,                  // { mode:'causal', alpha } → band/threshold from PAST surprises only
   read,                              // (cursor) => { surprise ∈ [0,1], terms } — the cheap γ-mass signal
@@ -163,6 +195,7 @@ export const createEnactedLoop = ({
   const seen = [];                                          // surprises seen so far — the causal window
   let causalBand = confirmBand;                             // band fit from `seen` (past only)
   let causalThresholds = thresholds;                        // thresholds fit from `seen` (past only)
+  let causalImpulse = impulseThreshold;                    // impulse fit from `seen` (past only)
   const recalibrate = () => {
     const cal = calibrateReader(seen, {
       layers: orderedLayers,
@@ -171,8 +204,20 @@ export const createEnactedLoop = ({
     });
     causalBand = cal.confirmBand;
     causalThresholds = cal.thresholds;
+    // The impulse on the reader's own scale — a high quantile of the surprises seen so
+    // far, the band's causal discipline applied to the shock gate (§3/§6). Held at the
+    // fixed fallback until the window can estimate a tail, and whenever the quantile is
+    // not above the band (a flat reading has no shock to find) — so the fixed gate
+    // stays the honest fallback, never a hair-trigger on a degenerate distribution.
+    if (seen.length >= IMPULSE_MIN_SAMPLES) {
+      const q = quantileOf(seen, impulseQuantile);
+      causalImpulse = q > causalBand ? q : impulseThreshold;
+    } else {
+      causalImpulse = impulseThreshold;
+    }
   };
   const bandNow = () => (causal ? causalBand : confirmBand);
+  const impulseNow = () => (causal ? causalImpulse : impulseThreshold);
 
   const emit = (e) => {
     // Every enacted event is tagged with its register and its reader. The reader
@@ -315,8 +360,14 @@ export const createEnactedLoop = ({
       // Two ways a frame breaks. IMPULSE (Newton): a single surprise so large it
       // restructures on impact — the fast path the integral cannot model, checked
       // first because a shock should not wait on accumulation. ACCUMULATION
-      // (Leibniz): the leaky strain sum crossing threshold — a sustained grind.
-      if (s >= impulseThreshold) { rec(layer, cursor, terms, 'impulse'); lastRec.set(layer, cursor); }
+      // (Leibniz): the leaky strain sum crossing threshold — a sustained grind. The
+      // impulse gate is the CURRENT one (impulseNow): causal mode fits it to the
+      // reader's own scale, so a shock is "far above what this reader sees" rather than
+      // a fixed 0.95 the compressed live surprise never reaches; fixed mode holds it.
+      // STRICTLY above the gate — a shock EXCEEDS the tail, so a surprise merely tying
+      // the running max (a saturated γ-mass 1.0, a repeated cluster peak) is not a fresh
+      // shock and does not re-fire.
+      if (s > impulseNow()) { rec(layer, cursor, terms, 'impulse'); lastRec.set(layer, cursor); }
       // Break against the CURRENT threshold, not the frame's frozen one: in causal
       // mode the scale is still being learned when the opening frame is set, so its
       // belt must track the calibration as it settles (identical to frame.threshold
@@ -343,6 +394,11 @@ export const createEnactedLoop = ({
     get cursor() { return lastCursor; },
     frameAt: (layer) => { const f = live.get(layer); return f ? snapshotFrame(f) : null; },
     strainAt: (layer) => live.get(layer)?.strain ?? 0,
+    // The live scale, for callers that report it (e.g. the meaning reader). In causal
+    // mode these are the band/impulse AS THEY STAND now — fit from past surprises only;
+    // in fixed mode they are the constants the loop was built with.
+    get confirmBand() { return bandNow(); },
+    get impulse() { return impulseNow(); },
     layers: Object.freeze([...orderedLayers]),
     // The enacted-REC ledger as JSONL — the same shape as the audit trail and
     // eoreader3's conventions.jsonl, so the reading is tuned against the record (§9).
