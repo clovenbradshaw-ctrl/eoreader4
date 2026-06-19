@@ -79,6 +79,55 @@ nine operators onto the same log, so the graph, the reading cursor, the three
 reading levels and the fold all work unchanged whether the units are sentences
 or image regions. New modalities are new adapters, not a new spine.
 
+Two of those adapters probe how far the spine reaches, in `scripts/`. `ingestMusic`
+hands the reader a bare note sequence (no key, no labels): flat γ-mass recovers the
+tonic and dominant, and the learned-sequence reader (`read/sequence.js`, an order-k
+n-gram folded the same way conventions are — *the signal teaches the reader*)
+anticipates a tune's phrase repeats, no music theory supplied. `ingestFrequencies`
+goes lower still — raw Hz as overtone token sets, every tone its own entity — and the
+**same Level-1 set-overlap** the reader runs over the words of a sentence
+(`hits/qLen`) discovers octave equivalence and the consonance ordering from shared
+overtones alone, with no scale, no `mod 12`, and no ratio table. And with no
+*threshold* either: `read/equivalence.js` merges tones that are mutual nearest
+neighbours in overlap (the engine's own `SYN` union-find), so "the same note"
+**emerges** — the four octaves of A collapse to one entity while the fifth stays
+separate — the category being the output of the grouping, never its input.
+
+`ingestFrames` carries the same idea into vision, on raw pixels rather than another
+model's labels. Each frame is a field of lit pixels — TV snow — with a circle moving
+through it; the snow and the circle are the *same* lit pixels, told apart by nothing
+but **contiguity** (the circle is a blob) and **persistence** (it is sighted every
+frame, one track travelling through time). Its γ-mass towers over the snow, every
+grain of which is a one-frame flicker — *"the reading does not chase the snow; it
+rides what persists."* (Where snow chance-fakes persistence, **coherence** breaks the
+tie: a shape has extent.) The trajectory is the structure; predicting the next
+position and being surprised when it deviates marks the frame the shape turned.
+
+Each of these claims is **falsified against**, not just demonstrated
+(`scripts/controls.mjs`): inharmonic partials collapse octave overlap 0.50→0.00,
+shuffling notes leaves the mass-tonic but kills the predictor, shuffling frames
+destroys smooth motion while per-frame coherence survives. And the rarest control,
+**abstention** (`scripts/abstain.mjs`): given only noise — pure static, or
+unstructured spectra — the engine must report *nothing*. It does, but only with a
+null: the pure-rank mutual-nearest merge that gave clean recovery *hallucinates* 51
+equivalences across 40 noise runs, because rank always merges the argmax. Gating the
+merge by the noise null (the one principled threshold, `minOverlap`) refuses every
+spurious merge while still detecting the real octave — and the refusal transfers to
+video (a null-calibrated extent bound holds the false-alarm rate near zero, though
+detection power is honestly lost once static percolates past ~25%). And the
+refusal is no longer silent: it speaks the two operators the cross-modal work
+never used (`scripts/refusal-trace.mjs`). A structure the field proposes but the
+null rejects is a **NUL** — held, recorded, not transformed; an empty reading is
+a **VOID** — a DEF to VOID asserting "no equivalence / no shape here", which the
+projection exposes on `voids`. So on noise the audio log carries `NUL` held-pairs
+and one `VOID`, the video log a held-shape `NUL` and a `VOID`, while a real signal
+carries `SYN` merges and no void — the abstention is auditable in the vocabulary,
+not just an absence of output. See
+`scripts/extract-music-meaning.mjs`, `scripts/predict-harmonics.mjs`,
+`scripts/discover-harmonics.mjs`, `scripts/emerge-notes.mjs`,
+`scripts/tonal-from-discovery.mjs`, `scripts/detect-motion.mjs`,
+`scripts/controls.mjs`, `scripts/abstain.mjs`, and `scripts/refusal-trace.mjs`.
+
 ## Three levels of reading — three kinds of math
 
 Reading happens at three levels, the three domains of the EO cube read top to

@@ -14,6 +14,11 @@ export {
 export { readingAt } from './reading.js';
 export { surfFold } from './surf.js';
 export { predictNext } from './predict.js';
+export {
+  unitIdSequence, predictNextUnit, predictiveSequenceReading,
+} from './sequence.js';
+export { mutualNearestPairs, discoverEquivalences } from './equivalence.js';
+export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { siteRoles, markSites, siteIndices } from './site.js';
 export {
   PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,
