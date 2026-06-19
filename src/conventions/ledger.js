@@ -117,11 +117,83 @@ const RELATION_TYPE = new Map();
 for (const [bucket, toks] of Object.entries(SEED_RELATION_TYPES))
   for (const t of toks) if (!RELATION_TYPE.has(t)) RELATION_TYPE.set(t, bucket);
 
+// Prepositions — a name just after one is the object of the preposition, a
+// participant in a proposition ("unto Noah", "to Abraham"). Read by entity
+// admission to weigh a sighting's referential gravity. Seeded, learnable.
+export const SEED_PREPOSITION = Object.freeze([
+  'of', 'in', 'on', 'at', 'to', 'from', 'by', 'with', 'into', 'onto', 'upon', 'over',
+  'under', 'through', 'after', 'before', 'between', 'among', 'against', 'about', 'as',
+  'unto', 'toward', 'towards', 'for', 'near', 'beside', 'within', 'without', 'beyond',
+  'beneath', 'above', 'below', 'behind', 'around', 'past',
+]);
+
+// Auxiliaries / copulas as a set — a name immediately before one is the SUBJECT of
+// a predication ("Alice is a baker", "Sarah shall bear"). Copulas keep their own
+// register (SEED_COPULA); these add the modal/have/do auxiliaries, incl. archaic.
+export const SEED_AUXILIARY = Object.freeze([
+  'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did',
+  'shall', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can',
+  'hath', 'hast', 'doth', 'dost', 'art', 'wast', 'wilt', 'shalt',
+]);
+
+// Role / kin / naming words that, sitting just before a name, make it an apposition
+// bearer or possessed referent ("his son Seth", "named Eve", "Abram's wife Sarah").
+export const SEED_ROLE = Object.freeze([
+  'son', 'sons', 'daughter', 'daughters', 'father', 'mother', 'brother', 'brethren',
+  'sister', 'sisters', 'wife', 'wives', 'husband', 'child', 'children', 'firstborn',
+  'seed', 'name', 'named', 'called', 'uncle', 'aunt', 'cousin', 'nephew', 'niece',
+  'his', 'her', 'their', 'my', 'thy', 'our', 'your', 'thine',
+]);
+
+// Closed-class words that are never a content head — so a name beside one is not
+// thereby a verb's argument. The union of the function categories; a word may sit in
+// several registers, which is fine — they answer different questions.
+export const SEED_FUNCTION = Object.freeze([
+  'a', 'an', 'the', 'this', 'that', 'these', 'those',
+  'and', 'or', 'but', 'nor', 'so', 'yet',
+  'he', 'she', 'it', 'they', 'we', 'i', 'you', 'him', 'them', 'us', 'me', 'thee',
+  'thou', 'ye', 'who', 'whom', 'whose', 'which', 'what', 'his', 'her', 'its', 'their',
+  'our', 'my', 'your', 'thy', 'thine', 'mine', 'hers', 'ours', 'yours',
+  'there', 'then', 'now', 'here', 'very', 'not', 'also', 'thus', 'lo', 'behold',
+  'yea', 'nay', 'verily', 'when', 'where', 'why', 'how', 'if', 'because', 'while',
+  'though', 'although', 'until', 'unless', 'whether', 'else', 'ever', 'never',
+  ...SEED_PREPOSITION, ...SEED_AUXILIARY,
+]);
+
+// Sentence-opening words that begin a clause but name no one — stripped from a
+// candidate phrase before admission so "Then Alice" admits "Alice". Early-modern
+// openers (Behold, Lo, Verily, Hast, Thou) belong here too: they are the KJV
+// equivalents of "Then"/"He"/"Can", and without them clause-openers masquerade as
+// characters. Seeded; a corpus can teach its own.
+export const SEED_STARTER = Object.freeze([
+  'the', 'a', 'an', 'this', 'that', 'these', 'those',
+  'i', 'you', 'he', 'she', 'it', 'we', 'they',
+  'my', 'your', 'his', 'her', 'its', 'our', 'their',
+  'then', 'now', 'here', 'there', 'when', 'where', 'why', 'how', 'what', 'who', 'whom', 'which',
+  'yes', 'no', 'maybe', 'perhaps', 'otherwise', 'also', 'however', 'indeed', 'still', 'yet',
+  'but', 'and', 'so', 'or', 'nor', 'for', 'because', 'although', 'while', 'since', 'as',
+  'in', 'on', 'at', 'to', 'from', 'by', 'with', 'of', 'up', 'down', 'over', 'under', 'into', 'out',
+  'if', 'unless', 'until', 'once', 'just', 'only', 'even', 'soon', 'again', 'almost', 'nearly',
+  'suddenly', 'finally', 'meanwhile', 'nevertheless', 'therefore', 'thus', 'hence', 'anyway',
+  'well', 'oh', 'ah', 'eh', 'alas', 'look', 'listen',
+  'can', 'could', 'would', 'should', 'shall', 'will', 'may', 'might', 'must', 'let',
+  'do', 'does', 'did', 'have', 'has', 'had', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'not', 'never', 'always', 'often', 'sometimes',
+  'thou', 'thee', 'thy', 'thine', 'ye', 'behold', 'lo', 'verily', 'yea', 'nay',
+  'hast', 'hath', 'doth', 'dost', 'art', 'wast', 'wilt', 'shalt', 'unto',
+]);
+
 const SEEDS = {
   'attribution-verb': SEED_SPEECH,
   'abbreviation': SEED_ABBREVIATIONS,
   'copula': SEED_COPULA,
   'modifier': SEED_MODIFIER,
+  'preposition': SEED_PREPOSITION,
+  'auxiliary': SEED_AUXILIARY,
+  'role': SEED_ROLE,
+  'function': SEED_FUNCTION,
+  'starter': SEED_STARTER,
 };
 
 export const createConventions = () => {
@@ -150,6 +222,12 @@ export const createConventions = () => {
     isAbbreviation: (v) => has('abbreviation', v),
     isCopula: (v) => has('copula', v),
     isModifier: (v) => has('modifier', v),
+    // Registers entity admission reads to weigh a sighting's referential gravity.
+    isPreposition: (v) => has('preposition', v),
+    isAuxiliary: (v) => has('auxiliary', v) || has('copula', v),
+    isRole: (v) => has('role', v),
+    isFunction: (v) => has('function', v),
+    isStarter: (v) => has('starter', v),
     // Type a relation predicate to its closed-vocab bucket (move 3), or null when it
     // is outside the table — additive, never a drop. Speech is read live from the
     // attribution register so a learned speech verb types as `speech` too.

@@ -58,7 +58,10 @@ export const createParser = ({
     // reads its copula/modifier/speech lists from the same place.
     const conventions = createConventions();
     const sentences   = segmentSentences(text, { isAbbreviation: conventions.isAbbreviation });
-    const admission   = createEntityAdmission();
+    // Admission reads its language-specific word-classes (starters, prepositions,
+    // role words, function words, auxiliaries) from the same conventions ledger the
+    // splitter and relation parser use — seed ∪ what this document taught.
+    const admission   = createEntityAdmission({ conventions });
 
     // Transcript detection — the handler is injected, not imported.
     if (transcriptHandler && transcriptHandler.detect && transcriptHandler.detect(text)) {
