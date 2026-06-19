@@ -30,15 +30,16 @@
 > 1. **Domain name.** The Site face below calls the third domain *Significance*;
 >    the operator vocabulary (`core/operators.js`) calls that same domain
 >    *Interpretation*. They are the same row — Atmosphere / Lens / Paradigm.
-> 2. **Alias direction (corrected).** Edit #3's prose reads "SUP to DEF, ALT to
->    EVA." The verified corpus disagrees and the code follows the corpus, not the
->    prose: SUP's exemplar cells (Binding / Tending / Tracing) are all Relate-mode,
->    so **SUP → EVA**; ALT's cells (Dissecting / Clearing / Unraveling) are all
->    Differentiate-mode, so **ALT → DEF**. The mapping is fixed by the cube
->    geometry, not the spelling of the old name. The already-renamed centroid
->    bundle (`data/centroids-27.json`, `operator_rename: {ALT: DEF, SUP: EVA}`)
->    carries the same correct direction. We map the corpus forward; we do not
->    rename the system to match the corpus, and we do not rewrite the record.
+> 2. **Alias direction.** The alias is **SUP → EVA, ALT → DEF**, fixed by the cube
+>    geometry rather than the spelling of the old name: SUP's exemplar cells
+>    (Binding / Tending / Tracing) are all Relate-mode → EVA; ALT's cells
+>    (Dissecting / Clearing / Unraveling) are all Differentiate-mode → DEF. The
+>    already-renamed centroid bundle (`data/centroids-27.json`,
+>    `operator_rename: {ALT: DEF, SUP: EVA}`) carries this direction, and the Act
+>    face and Edit #3 below have been corrected to match it. (Earlier drafts of
+>    this spec stated the alias backwards, "SUP to DEF, ALT to EVA"; the verified
+>    corpus and the shipped bundle are the committed reading, so we corrected the
+>    prose forward to match the data — we never rewrite the keys to match prose.)
 
 ## The cube
 
@@ -64,18 +65,18 @@ Every event has three components: an **operator** (Act face), a **site** (Site f
 
 |                  | Existence | Structure | Significance |
 |------------------|-----------|-----------|--------------|
-| Differentiating  | NUL       | SEG       | EVA          |
-| Relating         | SIG       | CON       | DEF          |
+| Differentiating  | NUL       | SEG       | DEF          |
+| Relating         | SIG       | CON       | EVA          |
 | Generating       | INS       | SYN       | REC          |
 
-> Note: the table as drawn in the source spec places EVA/DEF in the Differentiating/Relating
-> rows of the Significance column. The code fixes the operators the other way —
-> **DEF** is Differentiating × Significance, **EVA** is Relating × Significance
-> (`core/operators.js`) — which is what makes EVA the *evaluate-frames* relation
-> and DEF the *assert/define* distinction. The Object-diagonal cells in
-> `DIAGONAL_CELLS` follow the code.
+> Note: **DEF** is Differentiating × Significance (the *assert/define* distinction)
+> and **EVA** is Relating × Significance (the *evaluate-frames* relation). This is
+> what the verified centroid keys carry — `DEF_Dissecting_Lens` (DEF on a
+> Differentiate-mode stance), `EVA_Binding_Lens` (EVA on a Relate-mode stance) —
+> and what `core/operators.js` and `DIAGONAL_CELLS` encode. (Earlier drafts of
+> this table swapped EVA and DEF; corrected here to match the data it depends on.)
 
-The **reading loop is the Significance column** — DEF, EVA, REC, the three meaning-domain operators run across the three Modes. The loop relates a figure to a significance (DEF), differentiates it from its rivals (EVA), and generates forward (REC). It ends on the one Generating operator, which is why that step is gated.
+The **reading loop is the Significance column** — DEF, EVA, REC, the three meaning-domain operators run across the three Modes. The loop relates a figure to a significance (EVA, Relating), differentiates it from its rivals (DEF, Differentiating), and generates forward (REC, Generating). It ends on the one Generating operator, which is why that step is gated.
 
 **Naming, corrected.** The current operators are DEF and EVA. SUP and ALT are *old* names. The corpus archetype build dated 2026-04-24 still carries the stale names (and, in some records, old stance names). This is a stale-record problem in the data, not the architecture. The fix is an **import-time alias table** mapping the corpus forward, applied when ingesting exemplars or centroids. We never rename the system to match the corpus; we map the corpus forward. The architecture eats its own dogfood: the corpus is a committed reading under an earlier lens, the rename is a later defeat event, and append-only means we alias forward rather than rewrite the record. (See the As-built note for the corrected SUP/ALT direction.)
 
@@ -155,7 +156,7 @@ Ordered by leverage. Each is concrete.
 
 1. **Enforce Object-diagonal coherence, and recognize it as the confabulation guard.** Validate on every event that operator-grain, site-grain, and resolution-grain agree, and that the shared Mode and Domain agree across faces. Only the 27 diagonal cells are well-formed. *(Wired: `coherence` / `isDiagonal` / `DIAGONAL_CELLS` in `core/cube.js`.)*
 2. **Derive read/write signatures from Mode.** Hand-declared signatures that disagree with the Mode are bugs. *(Wired: `signatureOf` / `SIGNATURES`.)*
-3. **Install the import-time alias table.** Map the stale corpus forward. Alias at ingestion; never rewrite the record; never rename the system. *(Wired: `aliasOperator` / `aliasCellKey`, applied in `classify/centroids.js`. Direction corrected — see the As-built note.)*
+3. **Install the import-time alias table.** Map the stale corpus forward — **SUP → EVA, ALT → DEF** (the Mode of each old operator's stances decides it: SUP's stances are Relate-mode → EVA, ALT's are Differentiate-mode → DEF). Alias at ingestion; never rewrite the record; never rename the system. *(Wired: `aliasOperator` / `aliasCellKey`, applied in `classify/centroids.js`.)*
 4. **Classify on the diagonal, tag defeasibly.** Tagging one component constrains the other two — tag the most reliable component first and let coherence prune the rest. A tag is never a fact.
 5. **Stand up the three Ground fields, building Atmosphere first.** The significance-tone field at Atmosphere is unbuilt and is the highest-value hole the cube exposes.
 6. **Give the surf the full Significance column.** Atmosphere pass beneath the Lens, Paradigm pass above it, each holding its proper stance-grain.

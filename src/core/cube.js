@@ -171,9 +171,8 @@ export const signatureOf = (op) => {
 // at (Relate, Interpretation) is EVA whatever it was once called. The exemplar
 // data settles the direction — SUP's cells (Binding / Tending / Tracing) are all
 // Relate-mode, so SUP→EVA; ALT's cells (Dissecting / Clearing / Unraveling) are
-// all Differentiate-mode, so ALT→DEF. (The master spec's prose has these two
-// swapped — "SUP to DEF, ALT to EVA" — but the verified corpus and the already-
-// renamed centroid bundle do not, and the corpus is what we ingest. We map the
+// all Differentiate-mode, so ALT→DEF. (This matches the shipped centroid bundle's
+// operator_rename {ALT: DEF, SUP: EVA} and the corrected master spec. We map the
 // corpus forward; we never rename the system to match the corpus, and we never
 // rewrite the record.)
 export const OPERATOR_ALIASES = Object.freeze({ ALT: 'DEF', SUP: 'EVA' });

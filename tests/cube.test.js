@@ -129,8 +129,8 @@ test('the read/write signature follows the operator Mode', () => {
 
 test('the alias table maps the stale corpus forward by geometry, not spelling', () => {
   // The corpus exemplars settle the direction: SUP cells are Relate-mode → EVA;
-  // ALT cells are Differentiate-mode → DEF. (The master-spec prose has these
-  // swapped; the verified corpus and the centroid bundle do not.)
+  // ALT cells are Differentiate-mode → DEF — matching the shipped centroid
+  // bundle's operator_rename and the corrected master spec.
   assert.equal(OPERATOR_ALIASES.SUP, 'EVA');
   assert.equal(OPERATOR_ALIASES.ALT, 'DEF');
   assert.equal(aliasOperator('SUP'), 'EVA');
