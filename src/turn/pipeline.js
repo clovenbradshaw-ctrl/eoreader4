@@ -14,23 +14,28 @@
 
 import { stages } from './stages.js';
 
-// route → converse → retrieve → fold → prompt → llm → bind → veto → settle.
+// route → converse → retrieve → fold → answerable → prompt → llm → bind → factcheck → veto → settle.
 // `converse` (the session fold) sits right after `route`, before retrieval — it runs
 // for both grounded and chat turns and is independent of the document. The mechanical
 // short-circuits (smalltalk, math, who, confirm) terminate at `route` and never reach
-// it; they need no history.
+// it; they need no history. `factcheck` sits between `bind` and `veto`: it contrasts
+// the talker's propositional assertions against the document graph and deposits the
+// per-claim verdicts the veto battery reads (the answer is never gagged — flag-and-tell).
 const PIPELINE = [
-  'route', 'converse', 'retrieve', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'veto', 'settle',
+  'route', 'converse', 'retrieve', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'veto', 'settle',
 ];
 
-export const runTurn = async ({ question, doc, model, embedder, auditLog, onStep, history = [] }) => {
+// `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
+// for its meaning-distance verdicts; threaded through like `embedder`, optional, and
+// degrading honestly to the embedder-free symbolic algebra when absent.
+export const runTurn = async ({ question, doc, model, embedder, classifier, adjacency, auditLog, onStep, history = [] }) => {
   const turn      = auditLog.turn(question);
   const stepFan   = (name, ctx, ms) => {
     const data = summarize(name, ctx, ms);
     turn.step(name, data);
     onStep?.(name, ctx, data);
   };
-  const ctx0      = { question, doc, model, embedder, history };
+  const ctx0      = { question, doc, model, embedder, classifier, adjacency, history };
 
   try {
     const ctx = await PIPELINE.reduce(
@@ -99,6 +104,12 @@ const summarize = (name, ctx, ms) => {
     case 'bind':     return { ...base,
                               claims: ctx.bound?.length || 0,
                               cited:  ctx.bound?.filter(b => b.citation).length || 0 };
+    case 'factcheck': return { ...base,
+                              corroborated:  ctx.factcheck?.counts?.corroborated  || 0,
+                              contradicted:  ctx.factcheck?.counts?.contradicted  || 0,
+                              unsupported:   ctx.factcheck?.counts?.unsupported   || 0,
+                              indeterminate: ctx.factcheck?.counts?.indeterminate || 0,
+                              refuse:        ctx.factcheck?.refuse || false };
     case 'veto':     return { ...base,
                               fired:   ctx.vetoes?.map(v => v.id) || [] };
     default:         return base;

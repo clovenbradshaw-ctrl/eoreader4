@@ -21,7 +21,7 @@ retrieval scores, citations, audit, UI — every one is a fold of the log.
               │ (events)  │
               └───────────┘
                       │
-     question ────────┼───► route ─► converse ─► retrieve ─► fold ─► prompt ─► llm ─► bind ─► veto ─► answer
+     question ───┼─► route ─► converse ─► retrieve ─► fold ─► prompt ─► llm ─► bind ─► factcheck ─► veto ─► answer
                       │        │         │           │        │       │        │      │       │
                       ▼        └─────────┴───────────┴────────┴───────┴────────┴──────┴───────┴──► audit
 ```
