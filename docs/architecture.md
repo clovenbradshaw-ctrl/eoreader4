@@ -39,7 +39,12 @@ retrieval scores, citations, audit, UI — every one is a fold of the log.
   on what the model can be cited for.
 - The model never invents citations. `bindCitations` (in `ground`)
   mechanically re-cites the draft against the retrieved spans. If a claim
-  isn't lexically supported by a span, no citation tag is attached.
+  isn't lexically supported by a span, no citation tag is attached. The
+  lexical gate is an idf-weighted overlap against `MIN_OVERLAP` (a frequent
+  token can't out-pad a rare, discriminating one); among the spans that
+  clear it, the γ-field posterior at the cursor — the same warmth the
+  fact-checker grounds endpoints on — tilts the citation toward the warm
+  referent. Both priors flatten to plain overlap when no document is given.
 
 **The high sets the probabilities for the low.**
 
