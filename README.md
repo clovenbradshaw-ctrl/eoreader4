@@ -313,6 +313,18 @@ design promised. See [`docs/significance-loop.md`](docs/significance-loop.md); i
 surfaces as a fourth strip in reading mode that deepens to *semantic surprise* when
 the geometric reader is live.
 
+**The cursor predictor — predicting the next move, testably.** The open prediction
+(`read/predict.js`) asks a model for the next *sentence*. The grounded one predicts
+the next **move** — an operator-Site-Resolution triple over a ten-symbol alphabet —
+from a fusion of recurrence (an n-gram over this reading's move-log), structure (the
+fold's live frame strain), and a small move-grammar learned once from a held-out
+text. No model call, no ingested corpus. It is testable as a cursor scrubber:
+`node scripts/predict-moves.mjs` shows the posterior over the next move, the actual
+next move, the surprise, and the sharpness, recomputed causally at each step; it
+predicts the REC at a frame break from accumulated strain, and goes flat (its own
+VOID) where it has no grounded expectation. See
+[`docs/cursor-predictor.md`](docs/cursor-predictor.md).
+
 ## The surfer, the session fold, the task register
 
 Three moves replace three lingering *choices* with measurements or mechanics, all on
