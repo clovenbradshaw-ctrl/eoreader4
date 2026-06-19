@@ -517,6 +517,15 @@ comments on gates that were on.
   (not the visible graph's 40-figure, γ-faded view) — and the **model feed
   itself**: the notes (arrows, capped as the prompt caps them), the verbatim
   excerpts, and the whole prompt text. The model is never called.
+- **The Predict tab** — scrub the cursor and watch the reader predict its next
+  **move** (the operator, not the word) from the move-log. At each step it shows
+  the moves so far, the posterior over the next move (recurrence × structure ×
+  grammar, normalised), the actual next move scored against it, the surprise, and
+  the sharpness — recomputed *causally*. Quick-jumps land on each frame break (it
+  predicts the **REC** from accumulated strain) and on the flattest posterior (its
+  own **VOID**, where it has no grounded expectation). A collapsed controls panel
+  carries the falsification battery. The model is never called
+  (`ui/predict-view.js`, `docs/cursor-predictor.md`).
 
 ## Run
 

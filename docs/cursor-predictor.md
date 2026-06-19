@@ -101,6 +101,13 @@ own confidence). The recompute is strictly causal — the prediction at `c` uses
 moves up to `c`, never the future — so you can scrub back and forth and watch the
 prediction be right, be wrong, and be surprised, move by move.
 
+The same panel lives in the browser app as the **Predict tab** (beside Feed):
+`src/ui/predict-view.js` builds the move-log from the loaded document and renders the
+scrubber — a slider, prev/next, quick-jumps to each frame break and to the flattest
+posterior, and the collapsed controls battery. Load a document, open Predict, and
+drag the cursor. The move-log is built once per document; scrubbing is a single
+`predictNextMove` call per step.
+
 ## 5. NUL, VOID, and the predictor's own abstention
 
 Two of the moves are NUL and VOID, so the predictor must be able to predict its own

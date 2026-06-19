@@ -22,6 +22,7 @@ import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
 import { renderGraph } from './graph-view.js';
 import { renderLog } from './log-view.js';
 import { mountFeed } from './feed-view.js';
+import { mountPredict } from './predict-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 
 const STATE = {
@@ -44,6 +45,7 @@ const els = {
   graphView: document.getElementById('graph-view'),
   logView:   document.getElementById('log-view'),
   feedView:  document.getElementById('feed-view'),
+  predictView: document.getElementById('predict-view'),
   docTabs:   document.getElementById('doc-tabs'),
   messages:  document.getElementById('messages'),
   composer:  document.getElementById('composer'),
@@ -113,6 +115,7 @@ const ingest = async (file) => {
     isGeometricLive: () => STATE.geometric?.installer?.getState?.().geometricReader === 'live',
   });
   renderLog(doc, els.logView, { onSelectSentence: selectSentence });
+  if (STATE.activeTab === 'predict') STATE.predict?.refresh();
   const t1 = performance.now();
   const g = doc.projectGraph();
   setStatus(`parsed: ${doc.sentences.length} sentences, ${doc.log.length} events, ` +
@@ -147,8 +150,12 @@ const setTab = (name) => {
   els.graphView.hidden = name !== 'graph';
   els.logView.hidden   = name !== 'log';
   els.feedView.hidden  = name !== 'feed';
+  els.predictView.hidden = name !== 'predict';
   els.dropzone.style.display = name === 'text' ? '' : 'none';
   if (name === 'graph') STATE.graph?.reheat?.();
+  // The move-log is rebuilt only when the document changed (refresh is a no-op
+  // otherwise), so opening the tab is cheap after the first build.
+  if (name === 'predict') STATE.predict?.refresh();
 };
 
 const send = async () => {
@@ -282,6 +289,14 @@ renderLog(null, els.logView, { onSelectSentence: selectSentence });
 mountFeed(els.feedView, {
   getDoc:      () => STATE.doc,
   getEmbedder: () => STATE.embedder,
+  onSelectSentence: selectSentence,
+});
+
+// The predict view: scrub the cursor, watch the reader predict its next MOVE (the
+// operator, not the word) from the move-log — no model called. Reads the live
+// document through the getter; rebuilds the move-log only when the doc changes.
+STATE.predict = mountPredict(els.predictView, {
+  getDoc: () => STATE.doc,
   onSelectSentence: selectSentence,
 });
 
