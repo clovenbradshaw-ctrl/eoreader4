@@ -261,11 +261,15 @@ export const readingAt = (doc, cursor, opts = {}) => {
   if (focusShift) surprises.push({ op: 'SEG', text: `focus shifts off ${name(predFigures[0])}`, idx: at });
 
   const held = confirmed.length > 0;
-  const summary = surprise < 0.25
-    ? (predFigures.length
+  // "Surprise — …" only when there is a NAMEABLE surprise (a new figure, an unseen
+  // bond, a definition, a focus shift). A high bayes score with nothing to name —
+  // belief moved but no discrete event carried it — must not render as the empty
+  // "Surprise — ."; it falls back to the steady reading, which is the honest one.
+  const summary = (surprise >= 0.25 && surprises.length)
+    ? `Surprise — ${surprises.map(s => s.text).slice(0, 3).join('; ')}.`
+    : (predFigures.length
         ? `As read — ${confirmed.length ? confirmed.map(name).join(', ') + ' stay in focus' : 'steady'}.`
-        : 'Opening — no expectations yet.')
-    : `Surprise — ${surprises.map(s => s.text).slice(0, 3).join('; ')}.`;
+        : 'Opening — no expectations yet.');
 
   return {
     sentIdx: at,

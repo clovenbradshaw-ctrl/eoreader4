@@ -154,11 +154,11 @@ const describe = (e, name) => {
     case 'NUL': return `hold: “${esc(trunc(e.text))}”`;
     case 'INS': return `${esc(e.label)}`;
     case 'SYN': return `${esc(name(e.from))} ≡ ${esc(name(e.to))}`;
-    case 'CON': return `${esc(name(e.src))} —${esc(e.via || 'with')}→ ${esc(name(e.tgt))}${weight(e)}`;
-    case 'SIG': return `${esc(name(e.src))} ⟨${esc(e.via || 'says')}⟩ ${esc(name(e.tgt))}${weight(e)}`;
+    case 'CON': return `${esc(name(e.src))} —${neg(e)}${esc(e.via || 'with')}→ ${esc(name(e.tgt))}${mood(e)}${weight(e)}`;
+    case 'SIG': return `${esc(name(e.src))} ⟨${neg(e)}${esc(e.via || 'says')}⟩ ${esc(name(e.tgt))}${mood(e)}${weight(e)}`;
     case 'DEF': return e.key === 'role'
       ? `${esc(e.id)} → role: ${esc(e.value)}`
-      : `${esc(name(e.id))}: ${esc(e.value)}`;
+      : `${esc(name(e.id))}: ${neg(e)}${esc(e.value)}${mood(e)}`;
     case 'SEG': return e.kind === 'argspan' ? argspanDesc(e) : `retract #${e.refSeq}`;
     default:    return esc(JSON.stringify(e));
   }
@@ -186,6 +186,11 @@ export const argspanDesc = (e) => {
     `<span class="log-w">Ground⟨${cells(p.ground)}⟩ Figure⟨${cells(p.figure)}⟩ Pattern⟨${cells(p.pattern)}⟩ · cells held</span>`;
 };
 
+// Polarity and modality, the EO note channel the flat arrow dropped: a negated bond
+// reads with a ¬ on its relation, a non-realis one trails its mood ⟨epistemic⟩.
+const neg  = (e) => e.polarity === '−' ? '¬' : '';
+const mood = (e) => (e.modality && e.modality !== 'realis')
+  ? ` <span class="log-w">⟨${escapeHtml(e.modality)}⟩</span>` : '';
 const weight = (e) => (e.w != null && e.w < 1) ? ` <span class="log-w">coupling ${e.w}</span>` : '';
 const trunc = (s) => { const t = String(s || ''); return t.length > 60 ? t.slice(0, 60) + '…' : t; };
 const escapeHtml = (s) =>

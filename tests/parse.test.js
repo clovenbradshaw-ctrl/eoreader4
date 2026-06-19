@@ -42,6 +42,21 @@ test('admission by gravity: a clause-opener (incl. archaic KJV) never becomes a 
   assert.ok(!a.isAdmitted('Behold'), 'an archaic clause-opener is not a referent');
 });
 
+test('a capitalised sentence-opener (determiner, interjection) is not admitted as a figure', () => {
+  // Every sentence opens with a capital, so a common opener in subject position
+  // ("Other salesmen…", "Please arrive…", "One morning…") is a stray capital, not a
+  // character. These are conventions `starter`s — stripped before admission, like
+  // "Behold" — while a real name in the same window still admits.
+  const a = createEntityAdmission();
+  a.observe('Other salesmen travel constantly.', 0);
+  a.observe('Please arrive home soon.', 1);
+  a.observe('One morning Gregor Samsa woke.', 2);
+  assert.ok(!a.isAdmitted('Other'),  'a determiner is not a referent');
+  assert.ok(!a.isAdmitted('Please'), 'an interjection is not a referent');
+  assert.ok(!a.isAdmitted('One'),    'a quantifier is not a referent');
+  assert.ok(a.isAdmitted('Gregor Samsa'), 'a real name still admits');
+});
+
 test('parseText emits INS from the first sighting when the name has gravity', () => {
   const doc = parseText('Cainan begat Mahalaleel.', { docId: 'd1' });
   const ids = doc.log.filter(e => e.op === 'INS').map(e => e.id);
@@ -117,6 +132,33 @@ test('kinship apposition resolves a pronoun owner through the field ("His sister
   assert.ok(con, 'pronoun-owned kinship apposition produced a bond');
   assert.equal(con.src, 'gregor-samsa');
   assert.equal(con.tgt, 'grete');
+});
+
+test('relation elements carry polarity and modality — negation and hedge are not dropped', () => {
+  // "couldn't understand" used to log as --couldn't--> understand, dropping the
+  // negation. Now the real verb is recovered and the sign and mood ride the element.
+  const doc = parseText(
+    'Gregor Samsa could not understand the words. Gregor told Grete. Gregor Samsa did not open the door.',
+    { docId: 'pm' });
+  const evs = doc.log.snapshot();
+  const understand = evs.find(e => e.op === 'CON' && e.via === 'understand');
+  assert.ok(understand, 'the real verb is recovered, not "couldn\'t"');
+  assert.equal(understand.polarity, '−', 'negation survives as polarity');
+  assert.equal(understand.modality, 'epistemic', 'the modal "could" sets the modality');
+  const open = evs.find(e => e.op === 'CON' && e.via === 'open');
+  assert.equal(open.polarity, '−', 'do-support negation survives');
+  assert.equal(open.modality, undefined, 'do-support carries no modality');
+  const told = evs.find(e => e.op === 'SIG' && e.via === 'told');
+  assert.equal(told.polarity, undefined, 'a plain positive bond writes no polarity field');
+});
+
+test('a preposition or indefinite pronoun in the head slot yields no relation (no surface-word junk)', () => {
+  // "Gregor --something--> awful" / "Gregor --between--> spoke" — the flat extractor's
+  // junk. The head slot landing on a non-verb now produces silence, not a bond.
+  const doc = parseText('Gregor Samsa something awful happened. Gregor Samsa between two rooms.', { docId: 'j' });
+  const vias = doc.log.snapshot().filter(e => e.op === 'CON').map(e => e.via);
+  assert.ok(!vias.includes('something'), 'an indefinite pronoun is not a relation');
+  assert.ok(!vias.includes('between'), 'a preposition is not a relation');
 });
 
 test('speech verbs emit SIG, other transitive verbs emit CON', () => {

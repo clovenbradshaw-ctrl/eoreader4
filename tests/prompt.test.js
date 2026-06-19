@@ -38,6 +38,21 @@ test('serializeNotes renders plain-language arrows, never codes or indices', () 
   ]);
 });
 
+test('serializeNotes keeps negation as a conscience token (not- prefix), basic otherwise', () => {
+  // The model feed stays basic — arrows — but a negated bond must reach even a tiny
+  // talker as a negation, never the bare positive. Modality stays in the rich layer.
+  const structure = {
+    relations: [
+      { src: { id: 'g', label: 'Gregor' }, tgt: { id: 'w', label: 'words' },  via: 'understand', polarity: '−', modality: 'epistemic', idx: 0 },
+      { src: { id: 'g', label: 'Gregor' }, tgt: { id: 'gr', label: 'Grete' }, via: 'told',       polarity: '+', idx: 1 },
+    ],
+  };
+  assert.deepEqual(serializeNotes(structure), [
+    'Gregor --not-understand--> words',   // negation survives; no modality in the basic feed
+    'Gregor --told--> Grete',
+  ]);
+});
+
 // ---------------------------------------------------------------------------
 // The contract: notes PLUS excerpts, two registers (§2).
 
