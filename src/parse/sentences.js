@@ -27,10 +27,11 @@
 // the coref decay window counts in units — so a 147-word unit silently degrades the
 // surprise signal, the activation field, and the frame loop together, and it buries
 // clause subjects deep enough that subject resolution (parse/relations.js) cannot
-// reach them. The principled fix is a LEARNABLE boundary convention (a document that
-// leans on `:`/`;` as sentence separators teaches the splitter to treat them as
-// boundaries for that text, the way it already learns abbreviations) — not a
-// hardcoded rule that would over-split modern prose. Left as a known limitation.
+// reach them. The fix is a LEARNABLE boundary convention, and it is built:
+// parse/boundaries.js runs the enacted DEF·EVA·REC loop over this very DEF, promoting
+// `:`/`;` to a boundary for a document only when leaving them ignored fuses
+// propositions into incoherent run-ons (meaning revising syntax). The promoted marks
+// arrive here as `extraBoundaries`; modern prose, which fuses nothing, is unchanged.
 
 import { SEED_ABBREVIATIONS } from '../conventions/index.js';
 
@@ -47,7 +48,14 @@ const abbreviates = (buf, isAbbreviation) => {
   return /^[A-Z]$/.test(w) || isAbbreviation(w);
 };
 
-export const segmentSentences = (text, { isAbbreviation = defaultIsAbbreviation } = {}) => {
+// `extraBoundaries` is a set of marks the reading has LEARNED to treat as sentence
+// ends for this document — beyond the `.!?` floor. It is empty by default (modern
+// prose), and promoted by the boundary-induction loop (parse/boundaries.js) when a
+// text uses `:`/`;` as sentence separators and meaning will not cohere otherwise.
+export const segmentSentences = (
+  text,
+  { isAbbreviation = defaultIsAbbreviation, extraBoundaries = EMPTY } = {},
+) => {
   const t = String(text || '').replace(/\r\n?/g, '\n');
   if (!t.trim()) return [];
   const out = [];
@@ -59,8 +67,10 @@ export const segmentSentences = (text, { isAbbreviation = defaultIsAbbreviation 
       buf += p[i];
       const ch = p[i];
       const next = p[i + 1] || '';
-      if (/[.!?]/.test(ch) && (next === '' || /\s/.test(next))) {
-        // The EVA: a '.' that abbreviates is not a boundary — withhold the cut.
+      const isFloor = ch === '.' || ch === '!' || ch === '?';
+      if ((isFloor || extraBoundaries.has(ch)) && (next === '' || /\s/.test(next))) {
+        // The EVA: a '.' that abbreviates is not a boundary — withhold the cut. A
+        // learned `:`/`;` boundary has no abbreviation case.
         if (ch === '.' && abbreviates(buf, isAbbreviation)) continue;
         const s = buf.trim();
         if (s) out.push(s);
@@ -71,3 +81,5 @@ export const segmentSentences = (text, { isAbbreviation = defaultIsAbbreviation 
   }
   return out;
 };
+
+const EMPTY = new Set();

@@ -13,6 +13,7 @@
 
 import { createLog }            from '../core/log.js';
 import { segmentSentences }     from './sentences.js';
+import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';
 import { createEntityAdmission }from './entities.js';
 import { parseRelations, scanDescriptors } from './relations.js';
@@ -42,6 +43,11 @@ export const createParser = ({
   // long-range descriptor (a sibling named long after its epithet) never reaches.
   // The default is the coref field's own (a bare parse is unchanged).
   corefOpts          = undefined,
+  // The coherence-strain threshold at which the boundary-induction loop RECs a
+  // punctuation mark into a sentence boundary (parse/boundaries.js). The default is
+  // deliberately conservative (a rare crisis); exposed so a test or a known dialect
+  // can set its own sensitivity. Undefined → the loop's own default.
+  boundaryThreshold  = undefined,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -57,7 +63,19 @@ export const createParser = ({
     // "Mr. Darcy" before a single word is classified, and the relation parser
     // reads its copula/modifier/speech lists from the same place.
     const conventions = createConventions();
-    const sentences   = segmentSentences(text, { isAbbreviation: conventions.isAbbreviation });
+    // Before the first cut, let MEANING revise SYNTAX (parse/boundaries.js): the
+    // DEF·EVA·REC coherence loop learns whether THIS document uses ':'/';' as
+    // sentence boundaries — promoting one only when leaving it ignored fuses
+    // propositions into run-on units that will not cohere (the KJV genealogies). The
+    // learned marks are recorded as 'boundary' conventions, exactly as learned
+    // abbreviations are, and flow into the splitter.
+    const { extraBoundaries, recs: boundaryRecs } =
+      induceBoundaries(text, {
+        isAbbreviation: conventions.isAbbreviation,
+        thresholds: boundaryThreshold != null ? { segmentation: boundaryThreshold } : undefined,
+      });
+    for (const r of boundaryRecs) conventions.learn('boundary', r.token, r.fused || 1);
+    const sentences   = segmentSentences(text, { isAbbreviation: conventions.isAbbreviation, extraBoundaries });
     // Admission reads its language-specific word-classes (starters, prepositions,
     // role words, function words, auxiliaries) from the same conventions ledger the
     // splitter and relation parser use — seed ∪ what this document taught.
