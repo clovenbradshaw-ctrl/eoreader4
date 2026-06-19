@@ -42,6 +42,21 @@ test('admission by gravity: a clause-opener (incl. archaic KJV) never becomes a 
   assert.ok(!a.isAdmitted('Behold'), 'an archaic clause-opener is not a referent');
 });
 
+test('a capitalised sentence-opener (determiner, interjection) is not admitted as a figure', () => {
+  // Every sentence opens with a capital, so a common opener in subject position
+  // ("Other salesmen…", "Please arrive…", "One morning…") is a stray capital, not a
+  // character. These are conventions `starter`s — stripped before admission, like
+  // "Behold" — while a real name in the same window still admits.
+  const a = createEntityAdmission();
+  a.observe('Other salesmen travel constantly.', 0);
+  a.observe('Please arrive home soon.', 1);
+  a.observe('One morning Gregor Samsa woke.', 2);
+  assert.ok(!a.isAdmitted('Other'),  'a determiner is not a referent');
+  assert.ok(!a.isAdmitted('Please'), 'an interjection is not a referent');
+  assert.ok(!a.isAdmitted('One'),    'a quantifier is not a referent');
+  assert.ok(a.isAdmitted('Gregor Samsa'), 'a real name still admits');
+});
+
 test('parseText emits INS from the first sighting when the name has gravity', () => {
   const doc = parseText('Cainan begat Mahalaleel.', { docId: 'd1' });
   const ids = doc.log.filter(e => e.op === 'INS').map(e => e.id);

@@ -136,6 +136,23 @@ const resolveEntityId = (doc, name) => {
   return best ? best.id : null;
 };
 
+// A "who/what is X" answer wants a predicate NOMINATIVE — a noun phrase naming
+// what X IS ("a travelling salesman", "the chief clerk") — not a transient state
+// the copula happened to introduce ("sleeping since…", "talking, … were struck…").
+// The DEF-predicate channel records BOTH (anything after a copula), and the old
+// lookup took the LAST one, so a narrative figure answered with whatever state it
+// was last caught in. Take the FIRST clean nominal instead; when the document holds
+// none, DEFER (return null) so the turn falls through to the grounded reading —
+// which now centres on the referent and answers far better than a copula fragment.
+const NOMINAL_DEF = /^(?:an?|the)\s+[a-z]/i;          // a/an/the + a noun head
+const cleanDefinition = (defs) => {
+  for (const d of defs) {
+    const v = String(d.value || '').trim();
+    if (NOMINAL_DEF.test(v) && !v.includes(',') && v.split(/\s+/).length <= 6) return d;
+  }
+  return null;
+};
+
 export const answerWho = (doc, question) => {
   const m = String(question || '')
     .match(/^\s*who\s+(?:is|was|were|are)\s+(?:the\s+|a\s+|an\s+)?(.+?)\s*[?.!]*$/i);
@@ -145,8 +162,8 @@ export const answerWho = (doc, question) => {
   const id = resolveEntityId(doc, name);
   if (!id) return null;
   const defs = doc.log.filter(e => e.op === 'DEF' && e.id === id && e.key === 'predicate');
-  if (defs.length === 0) return null;
-  const def = defs[defs.length - 1];
+  const def = cleanDefinition(defs);
+  if (!def) return null;                              // no clean definition → defer to grounded
   const label = (doc.admission.labelOf && doc.admission.labelOf(id)) || titleCase(name);
   return {
     route: 'who',

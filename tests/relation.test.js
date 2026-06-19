@@ -59,6 +59,19 @@ test('answerRelation defers on a non-relational who (let answerWho handle it)', 
   assert.ok(w && /salesman/.test(w.text));
 });
 
+test('answerWho answers a clean nominal definition but defers on a copula-state fragment', () => {
+  // A predicate nominative ("is a violinist") is a real "who is X" answer.
+  const clean = parseText('Grete is a violinist. Grete practised daily. Grete smiled warmly.', { docId: 'wd1' });
+  const w = answerWho(clean, 'who is grete');
+  assert.ok(w && /violinist/.test(w.text), 'a predicate nominative answers mechanically');
+
+  // But a transient state the copula happened to introduce ("was sleeping", "was
+  // talking") is not a definition — answerWho defers (null) so the turn falls through
+  // to the grounded, referent-centred reading instead of answering with a state.
+  const messy = parseText('Grete entered quietly. Grete was sleeping in the cold. Grete was talking softly.', { docId: 'wd2' });
+  assert.equal(answerWho(messy, 'who is grete'), null, 'a state fragment is not a definition — defer to grounded');
+});
+
 test('answerRelation defers on an untyped relation (outside the algebra)', () => {
   const doc = parseText(STORY, { docId: 'rel' });
   assert.equal(answerRelation(doc, `who is gregor${apos}s landlord`), null);

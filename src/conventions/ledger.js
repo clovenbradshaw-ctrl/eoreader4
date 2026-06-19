@@ -182,6 +182,23 @@ export const SEED_STARTER = Object.freeze([
   'not', 'never', 'always', 'often', 'sometimes',
   'thou', 'thee', 'thy', 'thine', 'ye', 'behold', 'lo', 'verily', 'yea', 'nay',
   'hast', 'hath', 'doth', 'dost', 'art', 'wast', 'wilt', 'shalt', 'unto',
+  // Indefinite determiners / quantifiers — they open a clause but name no one, so a
+  // capitalised one at sentence start ("Other travelling salesmen…", "Most of them…",
+  // "One morning…") is a stray capital, not a character. Without these the gravity
+  // floor admits them on their sentence-initial subject position.
+  'one', 'another', 'other', 'some', 'any', 'each', 'every', 'all', 'both',
+  'many', 'much', 'more', 'most', 'few', 'fewer', 'several', 'such', 'either', 'neither', 'none',
+  // Indefinite pronouns — likewise referential of no one in particular.
+  'something', 'nothing', 'anything', 'everything',
+  'someone', 'anyone', 'everyone', 'somebody', 'anybody', 'everybody', 'nobody',
+  'whatever', 'whoever', 'whenever', 'wherever', 'whichever',
+  // Discourse openers, politeness, hedging adverbs.
+  'please', 'thanks', 'okay', 'hardly', 'scarcely', 'barely',
+  'certainly', 'surely', 'clearly', 'apparently', 'obviously', 'probably', 'possibly',
+  'eventually', 'gradually', 'usually', 'normally', 'generally',
+  // Cardinals that commonly open a clause ("Two whole days…", "Seven o'clock…").
+  'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'during',
 ]);
 
 const SEEDS = {
