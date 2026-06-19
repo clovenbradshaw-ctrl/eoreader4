@@ -88,6 +88,23 @@ test('the leak — a cluster breaks the frame; the same anomalies spread out do 
     'without the leak the lifetime sum breaks it — the leak is what makes it a crisis detector');
 });
 
+// §11 — hysteresis: a refractory period after a REC prevents the limit-cycle the
+// thrash detector could only report. A sustained shock breaks the frame once, then
+// is held — not a REC on every step.
+test('hysteresis — a refractory period stops a just-broken frame re-breaking every step', () => {
+  const seq = [0, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99];   // an unrelenting shock
+  const guarded = createEnactedLoop({ read: fromArray(seq) });        // default refractory
+  guarded.runTo(seq.length - 1);
+  const guardedRecs = ops(guarded.events, 'REC').filter(r => r.layer === 'proposition').length;
+
+  const unguarded = createEnactedLoop({ read: fromArray(seq), refractoryPeriod: 0 });
+  unguarded.runTo(seq.length - 1);
+  const unguardedRecs = ops(unguarded.events, 'REC').filter(r => r.layer === 'proposition').length;
+
+  assert.ok(unguardedRecs > guardedRecs, 'without a refractory the frame re-breaks far more often');
+  assert.ok(guardedRecs < seq.length - 1, 'with it, a sustained shock does not restructure every step');
+});
+
 // §4, §11 — the higher layer holds harder: document RECs are rarer.
 test('the higher layer holds harder — document RECs are rarer than proposition', () => {
   const surprises = Array.from({ length: 30 }, (_, i) => (i === 0 ? 0 : 0.9));

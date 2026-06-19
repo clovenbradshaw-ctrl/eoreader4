@@ -74,6 +74,15 @@ export const DEFAULT_CONFIRM_BAND = 0.25;
 // own. The integral measures erosion; the impulse catches the hammer-blow. Tunable.
 export const DEFAULT_IMPULSE = 0.95;
 
+// THE REFRACTORY PERIOD (hysteresis, §11). After a frame restructures it cannot
+// break again for this many cursors. A bare threshold-with-reset is the textbook
+// setup for a limit cycle: the surprise that broke the frame is still arriving, so
+// the fresh frame re-breaks immediately and the loop oscillates (the thrash
+// loopStats only DETECTED, never prevented). The refractory window is the
+// hysteresis that prevents it — a just-restructured frame holds through the
+// residual, and only a crisis that outlasts the window breaks it again. Tunable.
+export const DEFAULT_REFRACTORY = 3;
+
 // Calibrate the confirm band and the layer thresholds to THIS reader's scale.
 //
 // The skeleton's defaults (0.25 band, 1.5/4.0 thresholds) were measured on the
@@ -125,6 +134,7 @@ export const createEnactedLoop = ({
   confirmBand = DEFAULT_CONFIRM_BAND,
   strainLeak = DEFAULT_STRAIN_LEAK,  // strain's per-cursor retention — the leaky integrator (frame.js)
   impulseThreshold = DEFAULT_IMPULSE,// a single EVA at/above this breaks the frame on impact (Newton)
+  refractoryPeriod = DEFAULT_REFRACTORY, // cursors a just-restructured frame cannot re-break (hysteresis)
   read,                              // (cursor) => { surprise ∈ [0,1], terms } — the cheap γ-mass signal
 } = {}) => {
   if (typeof read !== 'function') {
@@ -135,6 +145,7 @@ export const createEnactedLoop = ({
   const events = [];                 // the enacted log, in GENERATION ORDER (§8, §10)
   const live = new Map();            // layer → live frame (the only mutable state)
   const sinceSet = new Map();        // layer → [seq] of EVAs since the frame was set
+  const lastRec = new Map();         // layer → cursor of the last REC (the refractory clock)
   let lastCursor = -1;               // the arrow of time — strictly increasing
 
   const emit = (e) => {
@@ -246,12 +257,19 @@ export const createEnactedLoop = ({
     for (const layer of orderedLayers) {
       if (!live.has(layer)) { def(layer, cursor, terms, 'initial'); continue; }
       const frame = eva(layer, cursor, s, cursor);
+      // HYSTERESIS (§11). A just-restructured frame is refractory: it cannot break
+      // again until `refractoryPeriod` cursors have passed, so the residual surprise
+      // still arriving cannot drive an immediate re-break (a limit cycle). Strain
+      // keeps accruing through the window; a crisis that genuinely outlasts it breaks
+      // the frame again once it clears.
+      const last = lastRec.get(layer);
+      if (last != null && cursor - last <= refractoryPeriod) continue;
       // Two ways a frame breaks. IMPULSE (Newton): a single surprise so large it
       // restructures on impact — the fast path the integral cannot model, checked
       // first because a shock should not wait on accumulation. ACCUMULATION
       // (Leibniz): the leaky strain sum crossing threshold — a sustained grind.
-      if (s >= impulseThreshold) rec(layer, cursor, terms, 'impulse');
-      else if (frame.strain >= frame.threshold) rec(layer, cursor, terms, 'accumulation');
+      if (s >= impulseThreshold) { rec(layer, cursor, terms, 'impulse'); lastRec.set(layer, cursor); }
+      else if (frame.strain >= frame.threshold) { rec(layer, cursor, terms, 'accumulation'); lastRec.set(layer, cursor); }
     }
     return { cursor, surprise: round(s) };
   };
