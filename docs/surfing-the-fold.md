@@ -59,6 +59,17 @@ in toward `maxStops`, never the flat between them. The arrest band is calibrated
 to the reach, not a fixed floor — `bayes` clusters low, so a constant floor would
 arrest nowhere.
 
+The band can be sharpened from the median to the **derived VOID boundary**
+(`read/voidnull.js`) by passing `opts.alpha`: the threshold becomes a high quantile
+of the noise null the reach's own non-cohering bulk throws up by chance —
+extreme-value (so the longest *accidental* peak is VOID, not a stop), leave-one-out,
+robust, with `alpha` the only knob (the hallucination budget). A cursor then arrests
+only when its `bayes` **beats** what this context produces by chance (`SYN`), and
+every reach cursor carries its verdict (`SYN`/`NUL`) so a checked-and-empty stretch
+is a *record*, not a silence (`rode: 'bayesian-void'`). The signal/noise boundary is
+the context's, computed live, recalibrated to the window the surf landed in. Default
+(no `alpha`) is the median rule, byte-identical.
+
 ## The fold stage uses it (`src/turn/stages.js`)
 
 ```
