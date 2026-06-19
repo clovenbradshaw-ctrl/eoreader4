@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/index.js';
 import { createCorefField } from '../src/parse/coref.js';
-import { readingAt, structureSurface, consciousness, siteRoles, predictNext } from '../src/read/index.js';
+import { readingAt, structureSurface, figureSurface, namedReferents, consciousness, siteRoles, predictNext } from '../src/read/index.js';
 import { foldNote } from '../src/fold/index.js';
 
 test('coref field is a normalised distribution, strongest first', () => {
@@ -35,6 +35,43 @@ test('structure surface reports the figures a window turns on', () => {
   const doc = parseText(STORY, { docId: 'r' });
   const s = structureSurface(doc, [3, 4, 5]);
   assert.ok(s.figures.some(f => f.id === 'gregor-pike'));
+});
+
+// A referent is an identity (the projection root), not a name; a message that
+// NAMES it resolves to that identity, with aliases collapsed onto it.
+const TWOFIG = 'Alice met Carol. Alice met Carol. Alice trusted Carol. Bob feared Dave. Bob feared Dave. Bob chased Dave.';
+
+test('namedReferents resolves a named figure to its referent identity (aliases collapsed)', () => {
+  const doc = parseText('Gregor Samsa woke. Gregor Samsa worked hard. Gregor left home.', { docId: 'n' });
+  assert.deepEqual(namedReferents(doc, 'Gregor'), ['gregor-samsa']);   // the alias folds to the identity
+  assert.deepEqual(namedReferents(doc, 'what happened next'), []);     // names no admitted figure → nothing
+});
+
+test('figureSurface centres on the named referent — its bonds, not a neighbour’s', () => {
+  const doc = parseText(TWOFIG, { docId: 'f' });
+  const s = figureSurface(doc, ['alice']);
+  assert.ok(s.relations.length > 0, 'the referent has bonds');
+  for (const r of s.relations)                                         // every bond touches Alice
+    assert.ok(r.src.id === 'alice' || r.tgt.id === 'alice', `off-centre bond: ${r.src.id} ${r.via} ${r.tgt.id}`);
+  assert.ok(!s.relations.some(r => r.src.id === 'bob' || r.tgt.id === 'bob'),
+    'a disjoint figure’s bonds are excluded');
+  assert.equal(s.figures[0].id, 'alice', 'the focus referent leads the figures');
+  assert.equal(s.figures[0].label, 'Alice', 'with its canonical display name');
+});
+
+test('consciousness turns the structured reading onto a named referent (focus), else the window', () => {
+  const doc = parseText(TWOFIG, { docId: 'c3' });
+  const spans = [0, 1, 2, 3, 4, 5].map(idx => ({ idx, text: doc.sentences[idx], score: 1 }));
+  // Focus on Alice → every structured bond touches Alice, even though the window spans Bob.
+  const focused = consciousness(doc, spans, null, ['alice']);
+  assert.ok(focused.levels.structure.relations.length > 0);
+  for (const r of focused.levels.structure.relations)
+    assert.ok(r.src.id === 'alice' || r.tgt.id === 'alice', 'focus structure is referent-centred');
+  assert.doesNotMatch(focused.text, /Bob/, 'a neighbour the message did not name stays out of the notes');
+  // No focus → the window structure, which here genuinely turns on Bob too.
+  const windowed = consciousness(doc, spans, null, []);
+  assert.ok(windowed.levels.structure.relations.some(r => r.src.id === 'bob' || r.tgt.id === 'bob'),
+    'with no named referent the reading is the window — Bob included');
 });
 
 test('the consciousness folds three levels into the arrows, indices held off the talker', () => {
