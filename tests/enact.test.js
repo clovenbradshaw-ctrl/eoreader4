@@ -88,6 +88,40 @@ test('the leak — a cluster breaks the frame; the same anomalies spread out do 
     'without the leak the lifetime sum breaks it — the leak is what makes it a crisis detector');
 });
 
+// §11 — hysteresis: a refractory period after a REC prevents the limit-cycle the
+// thrash detector could only report. A sustained shock breaks the frame once, then
+// is held — not a REC on every step.
+test('hysteresis — a refractory period stops a just-broken frame re-breaking every step', () => {
+  const seq = [0, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99, 0.99];   // an unrelenting shock
+  const guarded = createEnactedLoop({ read: fromArray(seq) });        // default refractory
+  guarded.runTo(seq.length - 1);
+  const guardedRecs = ops(guarded.events, 'REC').filter(r => r.layer === 'proposition').length;
+
+  const unguarded = createEnactedLoop({ read: fromArray(seq), refractoryPeriod: 0 });
+  unguarded.runTo(seq.length - 1);
+  const unguardedRecs = ops(unguarded.events, 'REC').filter(r => r.layer === 'proposition').length;
+
+  assert.ok(unguardedRecs > guardedRecs, 'without a refractory the frame re-breaks far more often');
+  assert.ok(guardedRecs < seq.length - 1, 'with it, a sustained shock does not restructure every step');
+});
+
+// §4 — vector strain: a REC restructures along the AXIS that strained, not whatever
+// figure happened to be in view at the break. Surprise is split across dimensions by
+// their per-figure KL contribution (the `contrib` the real reader supplies as bayesBy).
+test('vector strain — a REC restructures along the straining axis, not what is in view', () => {
+  // every line shows A and B, but the surprise is driven by B's share of the KL.
+  const read = (c) => c === 0
+    ? { surprise: 0, terms: ['A'] }
+    : { surprise: 0.9, terms: ['A', 'B'], contrib: { A: 0.02, B: 1.0 } };
+  const loop = createEnactedLoop({ read });
+  loop.runTo(6);
+  const rec = ops(loop.events, 'REC').find(r => r.layer === 'proposition');
+  assert.ok(rec, 'the frame breaks under sustained strain');
+  assert.equal(rec.alongAxis[0], 'B', 'the REC names B as the straining axis (its cause)');
+  const installed = loop.events.find(e => e.op === 'DEF' && e.producedBy?.rec === rec.seq);
+  assert.equal(installed.frame.terms[0], 'B', 'and restructures along B, not the merely-in-view A');
+});
+
 // §4, §11 — the higher layer holds harder: document RECs are rarer.
 test('the higher layer holds harder — document RECs are rarer than proposition', () => {
   const surprises = Array.from({ length: 30 }, (_, i) => (i === 0 ? 0 : 0.9));
@@ -121,6 +155,22 @@ test('the arrow of time — forward only, never a future frame', () => {
   for (const e of ops(loop.events, 'EVA')) {
     assert.ok(e.frameCursor <= e.cursor, 'an EVA never tests a frame from the future');
   }
+});
+
+// §5 — causal scale: the band that judges a line is an EWMA of PAST surprises only,
+// so a later spike cannot reach back through the calibrator and change an earlier
+// verdict (what a whole-reading median would do).
+test('causal calibration — the future cannot change a past verdict', () => {
+  const base      = [0, 0.3, 0.3, 0.3, 0.3];
+  const withSpike = [0, 0.3, 0.3, 0.3, 0.3, 0.99, 0.99, 0.99];   // identical to cursor 4, then a shock
+  const a = createEnactedLoop({ read: fromArray(base),      calibrate: { mode: 'causal' } });
+  const b = createEnactedLoop({ read: fromArray(withSpike), calibrate: { mode: 'causal' } });
+  a.runTo(4);
+  b.runTo(4);                                                    // stop before the spike
+  const evas = (loop) => ops(loop.events, 'EVA').filter(e => e.cursor <= 4)
+    .map(e => [e.cursor, e.frameLayer, e.verdict, e.strainDelta]);
+  assert.deepEqual(evas(a), evas(b),
+    'the EVAs through cursor 4 are identical — the later spike cannot reach back');
 });
 
 // §8, §10 — the log is in generation order; the order is constitutive.

@@ -37,6 +37,7 @@ export const createFrame = ({ layer, cursor, terms = [], threshold, leak = DEFAU
   leak,                                   // strain's per-cursor retention (the leaky integrator)
   strain: 0,                              // running leaky Σ surprise from EVAs against it
   strainCursor: cursor,                   // read-time of the last strain update (drives the leak)
+  dimStrain: new Map(),                   // per-dimension leaky strain — the axis the frame breaks along
 });
 
 // A frozen snapshot for the log — a frame as it stood, without its live mutable

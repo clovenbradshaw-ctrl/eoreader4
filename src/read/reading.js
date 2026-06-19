@@ -185,11 +185,22 @@ export const readingAt = (doc, cursor, opts = {}) => {
   let sumW = NOVELTY;
   for (const k of support) sumW += priorW(k);
 
+  // Render a proposition-field atom to a readable axis label (a figure, a proposition,
+  // or a predicate) — the dimension a REC restructures along when this axis strains.
+  const axisLabel = (k) => {
+    if (k.startsWith('f:')) return name(k.slice(2));
+    if (k.startsWith('p:')) { const [s, v, t] = k.slice(2).split('|'); return `${name(s)} ${v || '—'} ${name(t)}`; }
+    if (k.startsWith('d:')) { const [i, ...v] = k.slice(2).split('|'); return `${name(i)}: ${v.join('|')}`; }
+    return k;
+  };
   let bayesBits = 0;
-  for (const k of support) {
+  const bayesBy = {};                          // per-DIMENSION KL contribution — the strain AXIS the
+  for (const k of support) {                   // enacted loop accumulates so a REC knows what broke it
     const pPost = postMass.get(k) / denomPost;
     if (pPost <= 0) continue;
-    bayesBits += pPost * Math.log2(pPost / (priorW(k) / sumW));
+    const c = pPost * Math.log2(pPost / (priorW(k) / sumW));
+    bayesBits += c;
+    if (c > 0) { const a = axisLabel(k); bayesBy[a] = round((bayesBy[a] || 0) + c); }  // belief moved TOWARD it
   }
   // The reserve atom (protention) — present in both prior and posterior, the term
   // that keeps the KL defined (absolute continuity) on every newcomer.
@@ -234,6 +245,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
     surprisalBits: round(surprisal),
     bayes,
     bayesBits: round(bayesBits),
+    bayesBy,                       // per-figure KL contributions — the per-dimension strain (vector)
     held,
     summary,
     // Tagged conversational warmth folded into the prior this turn (0 when the
