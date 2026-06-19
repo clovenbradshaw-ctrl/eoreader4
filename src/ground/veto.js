@@ -69,6 +69,17 @@ export const VETOES = [
     message: 'A claimed relation has no witness in the document reading.',
   },
   {
+    // The reader measured its own referential confidence (read/referent.js): the
+    // concentration of the coref posterior at the answer cursor. A diffuse field —
+    // no figure clearly dominant — means the passage the answer draws on does not
+    // settle who it is about. Flag-only: the answer rides, the uncertainty is no
+    // longer discarded at the last step. Inert when no field was measured.
+    id: 'referent-ambiguous',
+    test: ({ referential }) => !!referential && referential.id != null && !referential.concentrated,
+    refuses: false,
+    message: 'The passage this answer draws on does not settle which figure it is about.',
+  },
+  {
     id: 'low-coverage',
     test: ({ bound }) => {
       const total = bound.length;

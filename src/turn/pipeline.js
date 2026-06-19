@@ -57,9 +57,10 @@ export const runTurn = async ({ question, doc, model, embedder, auditLog, onStep
       vetoes:    ctx.vetoes     || null,
       answer:    ctx.answer     || '',
       sources:   ctx.sources    || [],
+      referential: ctx.referential || null,
       flags,
     });
-    return { answer: ctx.answer, sources: ctx.sources || [], flags, turn };
+    return { answer: ctx.answer, sources: ctx.sources || [], referential: ctx.referential || null, flags, turn };
   } catch (err) {
     turn.step('error', { message: String(err?.message || err) });
     turn.finish({
@@ -85,6 +86,7 @@ const summarize = (name, ctx, ms) => {
                               folded: ctx.convStats?.folded || 0, notesLen: ctx.convStats?.notesLen || 0 };
     case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0 };
     case 'fold':     return { ...base, noteLen: ctx.note?.text?.length || 0,
+                              referential: ctx.referential || null,
                               surf: ctx.surf ? {
                                 anchor: ctx.surf.anchor, peak: ctx.surf.peak, stops: ctx.surf.stops,
                                 focus:  ctx.surf.focus,  recs: ctx.surf.recCursors, rode: ctx.surf.rode,
