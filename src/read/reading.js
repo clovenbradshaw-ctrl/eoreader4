@@ -18,13 +18,21 @@
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
 
-const GAMMA = 0.7;     // recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
+const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
 
 export const readingAt = (doc, cursor, opts = {}) => {
   const units = doc.units || doc.sentences || [];
   const S = units.length;
   const at = Math.max(0, Math.min(S - 1, cursor | 0));
+  // THE HORIZON. The prior is γ-decayed in READING-TIME distance, so γ sets how far
+  // back the reading still feels: at 0.7 the prior is effectively the last ~5–6 lines
+  // (0.7^8 ≈ 0.06) — a tight recency window; a wider γ keeps distant context alive
+  // (0.95^12 ≈ 0.54). It is parametrised so the SAME fixed log can be re-read against a
+  // different horizon — the move-1 question of whether `bayes` even moves with the
+  // horizon (docs/bayesian-surprise.md). Defaults to GAMMA, so a standard reading is
+  // byte-identical; only an explicit opts.gamma shifts the window.
+  const γ = Number.isFinite(opts.gamma) ? opts.gamma : GAMMA;
   const events = typeof doc.log.snapshot === 'function' ? doc.log.snapshot() : (doc.log.events || []);
 
   const label     = new Map(); // id → label
@@ -45,6 +53,34 @@ export const readingAt = (doc, cursor, opts = {}) => {
   const relAt = [];            // { op, src, tgt, via } at `at`
   const defAt = [];            // { id, value } at `at`
 
+  // THE HORIZON's REACH (opts.horizon). Beyond γ (how FAR back), the horizon also
+  // selects WHICH events build the prior — the same fixed log read against a different
+  // ground. 'recency' (default) admits every figure, so a line is read against the
+  // recent mixed window. 'entity' admits only the events of the figures THIS line acts
+  // on (its participants), so the disowning is read against Grete's own care arc, not
+  // the household's decline — the SELECTIVE horizon no temporal γ can give (a wider γ
+  // holds the decline HARDER, not the care, so it damps the rupture; only a figure
+  // filter can promote it). The line's own deposit at `at` is never filtered; the
+  // prior is. Default leaves the filter open → byte-identical to today.
+  const horizon = opts.horizon || 'recency';
+  let actors = null;
+  if (horizon === 'entity') {
+    actors = new Set();
+    for (const e of events) {
+      if (e.sentIdx !== at) continue;
+      if (e.op === 'INS')                          actors.add(e.id);
+      else if (e.op === 'CON' || e.op === 'SIG')   { actors.add(e.src); actors.add(e.tgt); }
+      else if (e.op === 'DEF' && e.key === 'predicate') actors.add(e.id);
+    }
+  }
+  const inHorizon = (e) => {
+    if (!actors) return true;                       // 'recency'/default — every figure admitted
+    if (e.op === 'INS')                          return actors.has(e.id);
+    if (e.op === 'CON' || e.op === 'SIG')        return actors.has(e.src) || actors.has(e.tgt);
+    if (e.op === 'DEF' && e.key === 'predicate') return actors.has(e.id);
+    return false;
+  };
+
   for (const e of events) {
     if (e.op === 'INS') {
       if (!label.has(e.id)) label.set(e.id, e.label);
@@ -52,7 +88,8 @@ export const readingAt = (doc, cursor, opts = {}) => {
     }
     if (e.sentIdx == null) continue;
     if (e.sentIdx < at) {
-      const w = Math.pow(GAMMA, at - 1 - e.sentIdx);
+      if (!inHorizon(e)) continue;                  // entity horizon: only the line's figures' past
+      const w = Math.pow(γ, at - 1 - e.sentIdx);
       if (e.op === 'INS') {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
         priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
@@ -176,7 +213,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   const postMass = new Map();
   let sumPost = 0;
   for (const k of support) {
-    const m1 = GAMMA * (priorProp.get(k) || 0) + (deposit.get(k) || 0); // m′ = γ·m + deposits
+    const m1 = γ * (priorProp.get(k) || 0) + (deposit.get(k) || 0); // m′ = γ·m + deposits
     postMass.set(k, m1);
     sumPost += m1;
   }
