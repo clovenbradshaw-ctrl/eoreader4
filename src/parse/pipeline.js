@@ -19,6 +19,7 @@ import { createEntityAdmission }from './entities.js';
 import { parseRelations, scanDescriptors } from './relations.js';
 import { argumentSpanSeg }      from './proposition.js';
 import { createCorefField }     from './coref.js';
+import { discoverNamings }      from './naming.js';
 import { tok }                  from './tokenize.js';
 import { createConventions, induceAttributionVerbs } from '../conventions/index.js';
 
@@ -265,6 +266,23 @@ export const createParser = ({
     for (const e of derivedEdges) {
       const relType = conventions.relationType(e.via);   // a role via → 'kinship'
       log.append(relType ? { ...e, relType } : e);
+    }
+
+    // The naming-scene discovery (parse/naming.js) — coreference by direct address.
+    // A role epithet is a referent; the name that answers it as a vocative ("Grete!"
+    // … "his sister called") is the SAME referent. We materialise the role referent,
+    // bond the owner to it (Gregor → his sister), and SYN it to the name — the
+    // projection's union-find then carries the kinship edge onto Grete with no
+    // cascade, the apposition-free hop the elimination trigger could not bootstrap.
+    // Guarded by owner-distinctness, the injected disjointness algebra, and sticky
+    // abstention; a role no scene names is left as an UNNAMED referent, not guessed.
+    for (const m of discoverNamings(sentences, { admission, corefField, conventions, rolesConflict })) {
+      const roleRef    = `role:${m.role}@${m.ownerId}`;
+      const ownerLabel = admission.labelOf(m.ownerId) || m.ownerId;
+      const relType    = conventions.relationType(m.role);
+      log.append({ op: 'INS', id: roleRef, label: `${ownerLabel}’s ${m.role}`, sentIdx: 0 });
+      log.append({ op: 'CON', src: m.ownerId, tgt: roleRef, via: m.role, sentIdx: 0, ...(relType ? { relType } : {}) });
+      log.append({ op: 'SYN', kind: 'merge', from: roleRef, to: m.name, sentIdx: 0 });
     }
 
     const tokensBySentence = sentences.map(s => new Set(tok(s)));
