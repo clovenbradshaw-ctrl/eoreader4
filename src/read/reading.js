@@ -29,8 +29,17 @@ export const readingAt = (doc, cursor, opts = {}) => {
 
   const label     = new Map(); // id → label
   const firstIns  = new Map(); // id → first INS sentIdx (admission line)
-  const priorMass = new Map(); // id → γ-decayed presence before `at`  (the ∫)
+  const priorMass = new Map(); // id → γ-decayed presence before `at`  (the ∫, figure field)
   const priorBond = new Set(); // 'src|tgt' bonded before `at`
+  // The PROPOSITION field — the belief state widened past the cast. The reading
+  // believes not just who is on stage but what it takes to be the case: the
+  // participants (figures AND the referents they act on), the propositions
+  // themselves (src|via|tgt triples), and the predicates. γ-decayed like the figure
+  // mass, so a recurring proposition confirms and a new event moves belief. This is
+  // what the Bayesian-surprise channel reads, so an EVENT on a standing figure (the
+  // apple in the back, the disowning) is significant, not only a change of cast.
+  const priorProp = new Map(); // atom → γ-decayed presence before `at`
+  const bump = (m, k, v = 1) => m.set(k, (m.get(k) || 0) + v);
 
   const insAt = [];            // entity ids instantiated at `at`
   const relAt = [];            // { op, src, tgt, via } at `at`
@@ -43,11 +52,21 @@ export const readingAt = (doc, cursor, opts = {}) => {
     }
     if (e.sentIdx == null) continue;
     if (e.sentIdx < at) {
+      const w = Math.pow(GAMMA, at - 1 - e.sentIdx);
       if (e.op === 'INS') {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
-        priorMass.set(e.id, (priorMass.get(e.id) || 0) + Math.pow(GAMMA, at - 1 - e.sentIdx));
+        priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
+        bump(priorProp, `f:${e.id}`, w);
       } else if (e.op === 'CON' || e.op === 'SIG') {
         priorBond.add(`${e.src}|${e.tgt}`);
+        // The bond's participants (incl. an NP referent target) and the proposition
+        // itself enter the belief field — the relation is part of what is the case.
+        bump(priorProp, `f:${e.src}`, w);
+        bump(priorProp, `f:${e.tgt}`, w);
+        bump(priorProp, `p:${e.src}|${e.via || ''}|${e.tgt}`, w);
+      } else if (e.op === 'DEF' && e.key === 'predicate') {
+        bump(priorProp, `f:${e.id}`, w);
+        bump(priorProp, `d:${e.id}|${e.value}`, w);
       }
     } else if (e.sentIdx === at) {
       if (e.op === 'INS')                               insAt.push(e.id);
@@ -124,36 +143,53 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // Surprisal answers "how improbable"; that is the wrong invariant for where a
   // reading's attention goes — TV-snow is maximally improbable yet moves no belief
   // (Itti & Baldi, NIPS 2005). Bayesian surprise answers "how far the reading's
-  // belief MOVED": D_KL(posterior ‖ prior) over the figure field. The posterior is
-  // the prior advanced one step — every incumbent decays by γ, every INS at this
-  // line deposits γ⁰ = 1 — taken over the common support plus a fixed reserve atom
-  // (NOVELTY) that keeps a newcomer finite (no infinite name-snow shock) and makes
-  // the opening fall to exactly zero on its own. See docs/bayesian-surprise.md.
+  // belief MOVED": D_KL(posterior ‖ prior) over the PROPOSITION field (priorProp) —
+  // the participants, the propositions among them, and the predicates, not just the
+  // cast. The posterior is the prior advanced one step — every incumbent decays by
+  // γ, every atom delivered at this line deposits γ⁰ = 1 — over the common support
+  // plus a fixed reserve atom (NOVELTY) that keeps a newcomer finite (no infinite
+  // name-snow shock) and makes the opening fall to exactly zero on its own. So an
+  // event on a standing figure moves belief now, not only a change of cast. See
+  // docs/bayesian-surprise.md.
+  // The deposit at this line — the full proposition delivered: every participant
+  // (figures and the referents they act on), every proposition (src|via|tgt), every
+  // predicate. So a new bond or predication on a standing figure moves belief.
   const deposit = new Map();
-  for (const id of insAt) deposit.set(id, (deposit.get(id) || 0) + 1);
-  const support   = new Set([...priorMass.keys(), ...deposit.keys()]);
-  const newcomers = [...deposit.keys()].filter(id => !priorMass.has(id));
-  // A newcomer is measured against its SHARE of the reserve — co-entrants split it,
-  // so the reserve is never multiply-counted (a single newcomer gets all of pNovel).
-  const newShare  = newcomers.length ? pNovel / newcomers.length : 0;
+  for (const id of insAt) bump(deposit, `f:${id}`);
+  for (const r of relAt) {
+    bump(deposit, `f:${r.src}`);
+    bump(deposit, `f:${r.tgt}`);
+    bump(deposit, `p:${r.src}|${r.via || ''}|${r.tgt}`);
+  }
+  for (const d of defAt) {
+    bump(deposit, `f:${d.id}`);
+    bump(deposit, `d:${d.id}|${d.value}`);
+  }
+  const support   = new Set([...priorProp.keys(), ...deposit.keys()]);
+  const newcomers = [...deposit.keys()].filter(k => !priorProp.has(k));
+  // The proposition field's own reserve probability — co-entrants split it, so the
+  // reserve is never multiply-counted (a single newcomer gets all of it).
+  const sumPropPrior = [...priorProp.values()].reduce((s, m) => s + m, 0);
+  const propNovel = NOVELTY / (sumPropPrior + NOVELTY);
+  const newShare  = newcomers.length ? propNovel / newcomers.length : 0;
 
   const postMass = new Map();
   let sumPost = 0;
-  for (const id of support) {
-    const m1 = GAMMA * (priorMass.get(id) || 0) + (deposit.get(id) || 0); // m′ = γ·m + deposits
-    postMass.set(id, m1);
+  for (const k of support) {
+    const m1 = GAMMA * (priorProp.get(k) || 0) + (deposit.get(k) || 0); // m′ = γ·m + deposits
+    postMass.set(k, m1);
     sumPost += m1;
   }
   const denomPost = sumPost + NOVELTY;
-  const priorW = (id) => (priorMass.has(id) ? priorMass.get(id) : newShare);
+  const priorW = (k) => (priorProp.has(k) ? priorProp.get(k) : newShare);
   let sumW = NOVELTY;
-  for (const id of support) sumW += priorW(id);
+  for (const k of support) sumW += priorW(k);
 
   let bayesBits = 0;
-  for (const id of support) {
-    const pPost = postMass.get(id) / denomPost;
+  for (const k of support) {
+    const pPost = postMass.get(k) / denomPost;
     if (pPost <= 0) continue;
-    bayesBits += pPost * Math.log2(pPost / (priorW(id) / sumW));
+    bayesBits += pPost * Math.log2(pPost / (priorW(k) / sumW));
   }
   // The reserve atom (protention) — present in both prior and posterior, the term
   // that keeps the KL defined (absolute continuity) on every newcomer.

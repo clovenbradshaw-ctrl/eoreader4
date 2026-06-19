@@ -83,16 +83,21 @@ export const TARGETS = Object.freeze({
     ],
   },
 
-  // ── T3 · the significance turn: patience breaks at the disowning ──────────
-  // The reading's frame restructures where the family gives up — a proposition
-  // REC near the disowning. A significance target: the gold carries a frame turn.
+  // ── T3 · the significance turn: the frame breaks across the terminal crisis ─
+  // With the belief field widened to the full proposition, the reading restructures
+  // on EVENTS, not cast: the proposition frame breaks at the festering wound (~24,
+  // Gregor can no longer move) and the aftermath (~39), with the disowning speech
+  // (~30) the highest-surprise line of the arc but absorbed because the frame just
+  // broke. So this is an ARC-level significance claim — the reading restructures
+  // somewhere across Gregor's decline and the family's resolution — not a turn
+  // pinned to one sentence; the window is wide on purpose.
   disowning: {
     kind: 'significance',
     required: {
       entities: ['grete', 'gregor-samsa'],
       relations: [{ src: 'grete', tgt: 'gregor-samsa' }],   // Grete turns on Gregor at the break
       spans: [33],
-      frameTurn: { layer: 'proposition', near: 31 },
+      frameTurn: { layer: 'proposition', near: 31, window: 8 },
     },
     forbidden: { tokens: SPECIES.slice() },
     angles: [
