@@ -63,6 +63,40 @@ test('REC fires on a grind OR a shock — but not on a moderate one-off', () => 
   assert.ok(recs[0].forcedBy.length >= 2, 'REC references the EVAs that forced it');
 });
 
+// §3/§6 — IMPULSE on the reader's OWN scale, BOTH directions on the live signal. A
+// fixed 0.95 is an off switch on a COMPRESSED surprise scale: it passes a synthetic
+// 0.96 yet never fires on real text, where surprise clusters far below 1. The causal
+// impulse is a high quantile of PAST surprise, so a genuine relative shock fires it
+// and routine does not — the firing-on-signal-not-on-noise discipline, on the scale
+// the reader actually sees rather than a number it never reaches.
+test('impulse fires on a relative shock at the live scale, stays quiet on routine', () => {
+  // a long COMPRESSED cluster (every value ≤ 0.20, its peak reached early), then a
+  // single genuine shock FOR THIS reader (0.6) — still well below the fixed 0.95 gate.
+  const cluster = Array.from({ length: 24 }, (_, i) => (i === 0 ? 0 : 0.05 + 0.05 * ((i * 3) % 4)));
+  const withShock = [...cluster, 0.6];
+  const idx = withShock.length - 1;
+  const impulses = (loop) => ops(loop.events, 'REC').filter(r => r.trigger === 'impulse');
+
+  // FIXED gate (non-causal): 0.6 < 0.95, so the shock is invisible — no impulse ever.
+  const fixed = createEnactedLoop({ read: fromArray(withShock) });
+  fixed.runTo(idx);
+  assert.equal(impulses(fixed).length, 0,
+    'a fixed 0.95 gate never sees a shock on a compressed scale — the off switch in disguise');
+
+  // CAUSAL gate: the impulse is fit to the cluster, which 0.6 clears decisively.
+  const causal = createEnactedLoop({ read: fromArray(withShock), calibrate: { mode: 'causal' } });
+  causal.runTo(idx);
+  const fired = impulses(causal);
+  assert.ok(fired.length >= 1, 'the causal impulse fires on a shock that is large FOR THIS reader');
+  assert.ok(fired.every(r => r.cursor === idx), 'and only on the shock, never on the routine cluster');
+
+  // the QUIET direction: the same compressed cluster with NO shock fires no impulse.
+  const routine = createEnactedLoop({ read: fromArray(cluster), calibrate: { mode: 'causal' } });
+  routine.runTo(cluster.length - 1);
+  assert.equal(impulses(routine).length, 0,
+    'routine at the same scale shocks nothing — the gate fires on signal, not on the scale itself');
+});
+
 // THE LEAK — strain is a leaky integral, so a frame breaks on a CLUSTER of anomaly
 // (a crisis), not on a lifetime total. The same number of anomalies, clustered vs
 // spread, are opposite events: the cluster breaks the frame; the spread leaks away.

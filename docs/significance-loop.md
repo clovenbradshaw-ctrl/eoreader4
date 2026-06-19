@@ -138,20 +138,31 @@ Event shapes (`enact/loop.js`):
   γ-decayed semantic prior — so frames restructure on the turns the γ-mass reader
   misses. The loop, frames, strain, cross-layer testing, and arrow of time are
   **unchanged**; only `read` got deeper. Under the hash organ it falls back to the
-  skeleton (the firewall). **Calibration (done, on real embeddings):** the meaning
-  surprise (1 − cos) lives far above the γ-mass band — on real all-MiniLM
-  embeddings of Austen the median is ≈ 0.59, where the skeleton's 0.25 would make
-  every line strain. So the meaning reader **self-calibrates its confirm band to
-  the median** of the text's own surprise (a *normal step* in this meaning space;
-  half the lines confirm), and its REC thresholds default to the meaning scale
-  (`MEANING_THRESHOLDS`), measured on the worked corpus. The result, validated on
-  1296 real sentences: the γ-mass skeleton reads turbulently (a proposition REC
-  every ~7 lines, non-converging) while the calibrated meaning reader reads calmly
-  and **converges** (every ~108 lines, no thrash) — the turbulence was the thin
-  signal, and meaning-distance settles it. Both still overridable per `read`.
-  Downward influence is still thin: the cross-layer EVA records the high being held
-  or strained by the low, but the high does not yet *re-weight* the low's surprise —
-  the next deepening, meaning-distance against the frame's own terms.
+  skeleton (the firewall). **Calibration — one discipline, CAUSAL, for both readers.**
+  The meaning surprise (1 − cos) lives far above the γ-mass band — on real all-MiniLM
+  embeddings of Austen the median is ≈ 0.59, where the skeleton's 0.25 would make every
+  line strain — and clusters *tightly* there, far below 1. So the band, the layer
+  thresholds, **and the impulse** are fit to the text's own scale. They are fit
+  **causally**: from the surprises seen *so far*, never the whole reading, so the future
+  cannot set the band that judged an early line (the arrow, inside the calibrator). The
+  meaning path used to fit its band from the **global median** of every surprise — an
+  acausal seam that peeked at the future; that survives now only as an explicitly
+  requested numb-reader demonstration (`calibrate:{mode:'global'}`), out of the live
+  answer path. The earlier measurement, on 1296 real sentences under the global-median
+  band: the γ-mass skeleton read turbulently (a proposition REC every ~7 lines,
+  non-converging) while the calibrated meaning reader read calmly and **converged** —
+  the turbulence was the thin signal, and meaning-distance settles it. Two parity fixes
+  bring the meaning path level with the cheap one. **Directional strain:** the meaning
+  magnitude says *how far* the sense moved; the same reading's `bayesBy` (the `contrib`)
+  says along *which* figures belief moved, so a REC restructures toward the **cause** of
+  the break, not whatever figures were merely in view. **The impulse on its own scale:**
+  a fixed 0.95 shock gate is an off switch on the compressed 1 − cos scale — it never
+  fires on real text — so the impulse is now a high quantile of past surprise (a shock
+  is "far above what *this* reader sees"), restoring the Newton fast path the meaning
+  reader had been running without. Both still overridable per `read`. Downward influence
+  is still thin: the cross-layer EVA records the high being held or strained by the low,
+  but the high does not yet *re-weight* the low's surprise — the next deepening,
+  meaning-distance against the frame's own terms.
 - **The REC threshold is tuning** — the assimilation/accommodation balance, the
   size of Lakatos's protective belt. Too low and the frame thrashes (RECs on every
   anomaly); too high and the frame never breaks. Set against goldens, measured per

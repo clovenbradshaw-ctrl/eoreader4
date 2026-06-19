@@ -22,7 +22,7 @@ import { createEnactedLoop } from './loop.js';
 import { replayFrames, loopStats } from './replay.js';
 import { buildMeaningRead } from './meaning.js';
 
-export { createEnactedLoop, calibrateReader, DEFAULT_THRESHOLDS, DEFAULT_CONFIRM_BAND, DEFAULT_IMPULSE } from './loop.js';
+export { createEnactedLoop, calibrateReader, DEFAULT_THRESHOLDS, DEFAULT_CONFIRM_BAND, DEFAULT_IMPULSE, DEFAULT_IMPULSE_QUANTILE } from './loop.js';
 export { replayFrames, loopStats } from './replay.js';
 export { createFrame, snapshotFrame, sameTerms, DEFAULT_STRAIN_LEAK } from './frame.js';
 export { isEnacted, isDepicted, assertSingleRegister } from './register.js';
@@ -81,12 +81,15 @@ export const enactedReadingTo = (doc, cursor, opts) => {
   return { ...fold, stats: loopStats(events), events, reader: 'cheap' };
 };
 
-// The meaning reader's REC thresholds, on its own scale. The meaning surprise
-// (1 − cos) lives far above the γ-mass band, so the skeleton's 1.5/4 would fire on
-// every line; these are measured against the worked corpus (Pride and Prejudice,
-// real all-MiniLM embeddings) to a converging, non-thrashing reading — the
-// document frame restructuring on the order of once per few chapters. Measured,
-// per reader, overridable (§11).
+// The meaning reader's REC thresholds on its own scale — now the SEED the causal
+// calibrator starts from (and the belt when a caller pins the scale by hand), not a
+// fixed belt. The meaning surprise (1 − cos) lives far above the γ-mass band, so the
+// skeleton's 1.5/4 would fire on every line; these were measured against the worked
+// corpus (real all-MiniLM embeddings) to a converging, non-thrashing reading — the
+// document frame restructuring on the order of once per few chapters. Under the causal
+// default the belt then refits to k·mean-excess as the reading proceeds (scale-free),
+// so these hold only until the window is wide enough. Measured, per reader,
+// overridable (§11).
 export const MEANING_THRESHOLDS = Object.freeze({ proposition: 5, document: 16 });
 
 // The DEEP reading — the same fold, driven by the meaning reader instead of the
@@ -96,36 +99,71 @@ export const MEANING_THRESHOLDS = Object.freeze({ proposition: 5, document: 16 }
 // are built once per (doc, embedder) and cached, so subsequent cursor folds only
 // re-run the cheap loop. Under the hash organ it falls back to the cheap reader —
 // callers can always await this and get an honest result either way.
-const MEANING_READS = new WeakMap();   // doc → Map<embedderId, { surprise, terms } | null>
-export const enactedReadingMeaning = async (doc, cursor, { embedder, confirmBand, thresholds, ...opts } = {}) => {
-  const fallback = () => enactedReadingTo(doc, cursor, { confirmBand, thresholds, ...opts });
+//
+// STRAIN PARITY with the cheap path (the gap this closes). The deeper reader had been
+// the one cutting corners: it ran the GLOBAL MEDIAN band — peeking at the future to
+// judge the past — and supplied no per-dimension contrib, so its directional strain
+// was dead and its impulse, on the compressed 1−cos scale, never fired. It now wires
+// exactly as the cheap path does: contrib from the same reading's bayesBy, and CAUSAL
+// calibration by default (band, thresholds, and impulse fit from past surprises only).
+// The machinery was already built; only the wiring on this path had skipped it.
+const MEANING_READS = new WeakMap();   // doc → Map<embedderId, { surprise, terms, contrib } | null>
+export const enactedReadingMeaning = async (doc, cursor, { embedder, confirmBand, thresholds, calibrate, ...opts } = {}) => {
+  // The firewall and any explicit forces pass straight through to the skeleton.
+  const fallback = () => enactedReadingTo(doc, cursor, {
+    ...(confirmBand != null ? { confirmBand } : {}),
+    ...(thresholds != null ? { thresholds } : {}),
+    ...(calibrate != null ? { calibrate } : {}),
+    ...opts,
+  });
   if (!embedder?.measuresMeaning) return fallback();           // firewall → skeleton
 
   let perDoc = MEANING_READS.get(doc);
   if (!perDoc) { perDoc = new Map(); MEANING_READS.set(doc, perDoc); }
   let mr = perDoc.get(embedder.id);
   if (mr === undefined) {
-    mr = await buildMeaningRead(doc, embedder, { termsAt: (c) => readingAt(doc, c).predicted?.figures || [] });
+    // The cheap reading is read ONCE per cursor and shared: the meaning surprise drives
+    // WHEN the frame breaks; the same reading's bayesBy is the per-dimension axis it
+    // breaks ALONG (the contrib). Both come off the one readingAt — no second pass.
+    const reads = (doc.units || doc.sentences || []).map((_, c) => readingAt(doc, c));
+    mr = await buildMeaningRead(doc, embedder, {
+      termsAt:   (c) => reads[c]?.predicted?.figures || [],
+      contribAt: (c) => reads[c]?.bayesBy || null,
+    });
     perDoc.set(embedder.id, mr);                               // cache the embeddings (incl. a null result)
   }
   if (!mr) return fallback();                                  // could not measure → skeleton
 
-  // Self-calibrate the confirm band to a "normal step" in THIS text's meaning
-  // space — the median surprise — because the 1 − cos scale is text- and
-  // embedder-dependent and far above the γ-mass band (sentence cosines cluster).
-  // Half the lines confirm, half strain, the same balance the γ-mass band struck
-  // at 0.25. Thresholds default to the meaning scale, calibrated on the corpus.
-  const band = confirmBand ?? medianOf(mr.surprise);
   const units = doc.units || doc.sentences || [];
+  const read = (c) => ({ surprise: mr.surprise[c], terms: mr.terms[c], contrib: mr.contrib?.[c] || null });
+
+  // ONE calibration discipline: CAUSAL, the same arrow the cheap path runs (§5). The
+  // band, the layer thresholds, AND the impulse are fit from the surprises seen SO FAR,
+  // never the whole reading. The old default fit the band from the GLOBAL MEDIAN of
+  // every surprise — the future setting the band that judged an early line; that
+  // survives only as an explicitly-requested numb-reader demonstration
+  // (calibrate:{mode:'global'}), kept out of the live answer path. An explicit
+  // confirmBand/thresholds (or a non-causal calibrate) still pins the scale by hand,
+  // exactly as on the cheap path; otherwise causal is the live default.
+  const numb = calibrate?.mode === 'global';
+  const pinned = !numb && (confirmBand != null || thresholds != null ||
+                           (calibrate != null && calibrate.mode !== 'causal'));
   const loop = createEnactedLoop({
-    read: (c) => ({ surprise: mr.surprise[c], terms: mr.terms[c] }),
-    confirmBand: band,
-    thresholds: thresholds ?? MEANING_THRESHOLDS,
+    read,
+    thresholds: thresholds ?? MEANING_THRESHOLDS,   // the meaning scale — seed for causal, belt when pinned
+    ...(numb
+        ? { confirmBand: medianOf(mr.surprise) }                                       // the numb global-median reader, by request
+        : pinned
+          ? { ...(confirmBand != null ? { confirmBand } : {}), ...(calibrate ? { calibrate } : {}) }
+          : { calibrate: calibrate ?? { mode: 'causal' } }),                           // the live default
     ...opts,
   });
   if (units.length) loop.runTo(units.length - 1);
   const fold = replayFrames(loop.events, cursor);
-  return { ...fold, stats: loopStats(loop.events), events: loop.events, reader: 'meaning', confirmBand: round3(band) };
+  // confirmBand is the live scale as it stood at the end — the causal band fit from the
+  // reading's own past (or the pinned/global band when one was requested).
+  return { ...fold, stats: loopStats(loop.events), events: loop.events,
+           reader: 'meaning', confirmBand: round3(loop.confirmBand) };
 };
 
 const medianOf = (xs) => {
