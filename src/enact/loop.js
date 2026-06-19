@@ -208,7 +208,7 @@ export const createEnactedLoop = ({
   // influence: a confirm is the high holding the low (the document frame
   // conditioning a proposition that fits it); a strain is the low bearing on the
   // high (accumulating toward the higher frame's REC).
-  const eva = (layer, cursor, surprise, particular) => {
+  const eva = (layer, cursor, surprise, particular, contrib) => {
     const frame = live.get(layer);
     // ARROW OF TIME (§5, §10, §11). An EVA tests the frame as of the cursor, never
     // a future frame. The frame was established at frame.cursor; that must not be
@@ -231,6 +231,17 @@ export const createEnactedLoop = ({
     const verdict = surprise < band ? 'confirm' : 'strain';
     const strainDelta = Math.max(0, surprise - band);
     frame.strain = round(frame.strain + strainDelta);
+    // VECTOR STRAIN. Attribute this EVA's rectified strain to the DIMENSIONS that
+    // drove the surprise (per-figure KL contributions), each leaking on the same
+    // kernel. Scalar strain says the frame is breaking; this says along WHICH axis,
+    // so the REC can restructure toward the cause, not whatever is merely in view.
+    const decay = Math.pow(frame.leak, dt);
+    for (const [d, v] of frame.dimStrain) frame.dimStrain.set(d, v * decay);
+    if (contrib && strainDelta > 0) {
+      let sum = 0; for (const k in contrib) sum += contrib[k];
+      if (sum > 0) for (const k in contrib)
+        frame.dimStrain.set(k, round((frame.dimStrain.get(k) || 0) + strainDelta * (contrib[k] / sum)));
+    }
     const ev = emit({
       op: 'EVA',
       testLayer: base, frameLayer: layer, frameCursor: frame.cursor,
@@ -251,16 +262,24 @@ export const createEnactedLoop = ({
   const rec = (layer, cursor, terms, trigger = 'accumulation') => {
     const old = live.get(layer);
     const forcedBy = sinceSet.get(layer).slice();
+    // Restructure ALONG THE STRAINING AXIS: the dimensions that accumulated the most
+    // strain ARE the cause of the break, so they become the new frame's terms — not
+    // `terms`, which is merely whatever figures were in view at the break cursor. With
+    // no per-dimension signal (a scalar `read`) the axis is empty and `terms` stands.
+    const axis = [...old.dimStrain.entries()].filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1]).map(([d]) => d);
+    const installTerms = axis.length ? axis.slice(0, 3) : terms;
     const recEv = emit({
       op: 'REC',
       target: layer, action: 'restructure',   // RULES_LEDGER shape, borrowed (§9)
       layer, cursor,
       trigger,                                 // 'accumulation' (grind) | 'impulse' (shock) — §3/§6
+      alongAxis: axis.slice(0, 3),             // the cause of the break (the straining dimensions)
       from: snapshotFrame(old),
       strainSum: round(old.strain),
       forcedBy,
     });
-    def(layer, cursor, terms, { rec: recEv.seq });   // the REC installs the new frame
+    def(layer, cursor, installTerms, { rec: recEv.seq });   // the REC installs the new frame
     return recEv;
   };
 
@@ -281,10 +300,11 @@ export const createEnactedLoop = ({
     const r = read(cursor) || {};
     const s = clamp01(Number(r.surprise) || 0);
     const terms = r.terms || [];
+    const contrib = r.contrib || null;   // per-dimension surprise (vector strain), when supplied
 
     for (const layer of orderedLayers) {
       if (!live.has(layer)) { def(layer, cursor, terms, 'initial'); continue; }
-      const frame = eva(layer, cursor, s, cursor);
+      const frame = eva(layer, cursor, s, cursor, contrib);
       // HYSTERESIS (§11). A just-restructured frame is refractory: it cannot break
       // again until `refractoryPeriod` cursors have passed, so the residual surprise
       // still arriving cannot drive an immediate re-break (a limit cycle). Strain

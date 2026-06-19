@@ -60,7 +60,8 @@ const enactedLogOf = (doc, opts) => {
   // turns it off (the caller is pinning the scale by hand, e.g. to show the numb path).
   const explicit = opts && (opts.confirmBand != null || opts.thresholds != null || opts.calibrate != null);
   const loop = createEnactedLoop({
-    read: (c) => ({ surprise: readings[c]?.bayes ?? 0, terms: readings[c]?.predicted?.figures || [] }),
+    read: (c) => ({ surprise: readings[c]?.bayes ?? 0, terms: readings[c]?.predicted?.figures || [],
+                    contrib: readings[c]?.bayesBy || null }),  // per-dimension strain (vector)
     ...(explicit ? {} : { calibrate: { mode: 'causal' } }),  // band + thresholds from PAST surprises only
     ...(opts || {}),
   });
