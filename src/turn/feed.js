@@ -17,7 +17,7 @@ import { stages } from './stages.js';
 // answer that never reaches a model. buildFeed honours that: the loop stops on
 // `terminate`, and the caller reads `ctx.mechanical` to show "answered
 // mechanically, no model feed". Otherwise the four assembling stages run in full.
-const FEED_STAGES = ['route', 'converse', 'retrieve', 'fold', 'prompt'];
+const FEED_STAGES = ['route', 'converse', 'retrieve', 'fold', 'answerable', 'prompt'];
 
 export const buildFeed = async ({ question, doc = null, embedder, history = [] }) => {
   let ctx = { question, doc, model: null, embedder, history };

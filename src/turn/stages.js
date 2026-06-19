@@ -8,7 +8,7 @@
 // Vetoes are flag-only — they never substitute the model's answer.
 // The user sees what the model actually said, with a flag pinned to it.
 
-import { answerSmalltalk, answerMath, answerConfirm, answerRelation, answerWho } from '../answer/index.js';
+import { answerSmalltalk, answerMath, answerConfirm, answerRelation, answerWho, answerVoid } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold, namedReferents } from '../read/index.js';
@@ -106,6 +106,34 @@ export const stages = {
     const focus  = ctx.doc ? namedReferents(ctx.doc, ctx.question) : [];
     const note   = foldNote(spans, { doc: ctx.doc, cursor, focus });
     return { ...ctx, spans, note, surf, focus };
+  },
+
+  // The answerability gate — is there an answer to give, or is the field VOID?
+  // (docs/answerability.md) Before the talker is warmed, measure whether the field
+  // where the question landed holds any structure. When it does not — no referent
+  // resolves, no retrieval hit is strong, and the reach is measurably flat — the turn
+  // answers the typed absence directly (a DEF to VOID) instead of handing the talker
+  // an empty field to invent from. A MEASUREMENT, not a refusal: the field is the
+  // witness, the noise null is the verdict (read/answerable.js). Conservative by
+  // construction — a short or unmeasurable field is never voided; the talker speaks.
+  // Skipped without a document (pure chat has nothing to be void about); the
+  // mechanical short-circuits terminate at `route` and never reach it.
+  //
+  // Only the default 'answer' task is gated — the SPECIFIC question that points at a
+  // location on the page, where retrieval finding nothing IS the absence. A
+  // whole-document task (summary / list / explain) operates over the document as a
+  // whole, so retrieval-weakness is not evidence of a void — "summarize this" must
+  // never come back "the document does not say." Those reach the talker; the unbound
+  // and edge-grounding vetoes catch an invented claim on the way back.
+  async answerable(ctx) {
+    if (!ctx.doc || (ctx.task && ctx.task !== 'answer')) return ctx;
+    const v = answerVoid(ctx.doc, ctx.question, ctx.spans || [], { embedder: ctx.embedder });
+    if (!v) return ctx;
+    return {
+      ...ctx, terminate: true,
+      route: 'void', mechanical: v, void: v.void,
+      answer: v.text, sources: v.sources,
+    };
   },
 
   // Build messages. Grounded when we have spans; plain chat when we don't.
