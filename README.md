@@ -87,9 +87,13 @@ anticipates a tune's phrase repeats, no music theory supplied. `ingestFrequencie
 goes lower still — raw Hz as overtone token sets, every tone its own entity — and the
 **same Level-1 set-overlap** the reader runs over the words of a sentence
 (`hits/qLen`) discovers octave equivalence and the consonance ordering from shared
-overtones alone, with no scale, no `mod 12`, and no ratio table. See
-`scripts/extract-music-meaning.mjs`, `scripts/predict-harmonics.mjs`, and
-`scripts/discover-harmonics.mjs`.
+overtones alone, with no scale, no `mod 12`, and no ratio table. And with no
+*threshold* either: `read/equivalence.js` merges tones that are mutual nearest
+neighbours in overlap (the engine's own `SYN` union-find), so "the same note"
+**emerges** — the four octaves of A collapse to one entity while the fifth stays
+separate — the category being the output of the grouping, never its input. See
+`scripts/extract-music-meaning.mjs`, `scripts/predict-harmonics.mjs`,
+`scripts/discover-harmonics.mjs`, and `scripts/emerge-notes.mjs`.
 
 ## Three levels of reading — three kinds of math
 

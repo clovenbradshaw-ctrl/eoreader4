@@ -17,6 +17,7 @@ export { predictNext } from './predict.js';
 export {
   unitIdSequence, predictNextUnit, predictiveSequenceReading,
 } from './sequence.js';
+export { mutualNearestPairs, discoverEquivalences } from './equivalence.js';
 export { siteRoles, markSites, siteIndices } from './site.js';
 export {
   PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,
