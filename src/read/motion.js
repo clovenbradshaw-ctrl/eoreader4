@@ -58,4 +58,19 @@ export const motionReading = (doc) => {
   return { trackId: top.id, mass: top.mass, area: top.area, figures: figs, points: pts, steps, peak };
 };
 
+// Abstention as an operator. Given a noise null on per-frame extent, decide
+// whether the best coherent figure is a shape or nothing. If it clears the null
+// it is read as a shape; if not, the candidate is HELD (NUL — proposed by
+// coherence, but not past chance) and the clip is asserted empty (a DEF to VOID
+// on the shape slot). The refusal is recorded in the log, not a silent absence.
+export const detectMotion = (doc, { nullExtent = 0, emit = true } = {}) => {
+  const top = coherentFigures(doc)[0];
+  if (top && top.meanSize > nullExtent) {
+    return { shape: motionReading(doc), voided: false, top };
+  }
+  if (emit && top) doc.log.append({ op: 'NUL', kind: 'held-shape', id: top.id, meanSize: top.meanSize, sentIdx: 0 });
+  if (emit) doc.log.append({ op: 'DEF', kind: 'void', node: 'shape', rel: 'moving', sentIdx: 0, note: 'no shape clears the noise null' });
+  return { shape: null, voided: true, top };
+};
+
 const round = (x) => Math.round(x * 100) / 100;

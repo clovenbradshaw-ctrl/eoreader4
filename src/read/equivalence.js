@@ -52,15 +52,26 @@ export const mutualNearestPairs = (doc, { minOverlap = 0 } = {}) => {
 // merge per mutual-nearest pair to the log, so the engine's projection collapses
 // them itself. Returns the pairs and the classes (each an array of unit indices).
 export const discoverEquivalences = (doc, { emit = true, minOverlap = 0 } = {}) => {
-  const pairs = mutualNearestPairs(doc, { minOverlap });
+  // What the overlap field PROPOSES, by rank alone — the recovery rule.
+  const candidates = mutualNearestPairs(doc, { minOverlap: 0 });
 
   const parent = new Map();
   const find = (x) => { let p = parent.get(x) ?? x; while (p !== (parent.get(p) ?? p)) p = parent.get(p) ?? p; return p; };
   const union = (a, b) => { parent.set(find(a), find(b)); };
 
-  for (const { i, j } of pairs) {
-    if (emit) doc.log.append({ op: 'SYN', kind: 'merge', from: `n${i}`, to: `n${j}`, sentIdx: j });
-    union(i, j);
+  const merged = [];   // cleared the null → SYN, a real equivalence
+  const held = [];     // proposed but did not clear the null → NUL, held not structured
+  for (const c of candidates) {
+    if (c.score > minOverlap) {
+      if (emit) doc.log.append({ op: 'SYN', kind: 'merge', from: `n${c.i}`, to: `n${c.j}`, sentIdx: c.j });
+      union(c.i, c.j);
+      merged.push(c);
+    } else {
+      // NUL is non-transformation: the field proposed this pair, but it did not
+      // clear the noise null, so it is HELD as-is — read, recorded, not merged.
+      if (emit) doc.log.append({ op: 'NUL', kind: 'held-equivalence', src: `n${c.i}`, tgt: `n${c.j}`, overlap: c.score, sentIdx: c.j });
+      held.push(c);
+    }
   }
 
   const byRoot = new Map();
@@ -69,5 +80,13 @@ export const discoverEquivalences = (doc, { emit = true, minOverlap = 0 } = {}) 
     if (!byRoot.has(r)) byRoot.set(r, []);
     byRoot.get(r).push(i);
   }
-  return { pairs, classes: [...byRoot.values()] };
+
+  // When nothing merged, assert the ABSENCE — a DEF to VOID on the identity slot.
+  // Not silence: content the audit (and the projection's `voids`) can read back.
+  const voided = merged.length === 0;
+  if (emit && voided) {
+    doc.log.append({ op: 'DEF', kind: 'void', node: 'identity', rel: 'same-as', sentIdx: 0, note: 'no equivalence clears the null' });
+  }
+
+  return { pairs: merged, held, classes: [...byRoot.values()], voided };
 };

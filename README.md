@@ -114,11 +114,19 @@ equivalences across 40 noise runs, because rank always merges the argmax. Gating
 merge by the noise null (the one principled threshold, `minOverlap`) refuses every
 spurious merge while still detecting the real octave — and the refusal transfers to
 video (a null-calibrated extent bound holds the false-alarm rate near zero, though
-detection power is honestly lost once static percolates past ~25%). See
+detection power is honestly lost once static percolates past ~25%). And the
+refusal is no longer silent: it speaks the two operators the cross-modal work
+never used (`scripts/refusal-trace.mjs`). A structure the field proposes but the
+null rejects is a **NUL** — held, recorded, not transformed; an empty reading is
+a **VOID** — a DEF to VOID asserting "no equivalence / no shape here", which the
+projection exposes on `voids`. So on noise the audio log carries `NUL` held-pairs
+and one `VOID`, the video log a held-shape `NUL` and a `VOID`, while a real signal
+carries `SYN` merges and no void — the abstention is auditable in the vocabulary,
+not just an absence of output. See
 `scripts/extract-music-meaning.mjs`, `scripts/predict-harmonics.mjs`,
 `scripts/discover-harmonics.mjs`, `scripts/emerge-notes.mjs`,
 `scripts/tonal-from-discovery.mjs`, `scripts/detect-motion.mjs`,
-`scripts/controls.mjs`, and `scripts/abstain.mjs`.
+`scripts/controls.mjs`, `scripts/abstain.mjs`, and `scripts/refusal-trace.mjs`.
 
 ## Three levels of reading — three kinds of math
 
