@@ -66,32 +66,44 @@ const KIN_RE = new RegExp(
 // parseRelations runs this PER CLAUSE (segmentClauses, the SEG-first rework), so a
 // mid-sentence subject arrives here as a clause-initial one. This function stays a
 // pure head-resolver and holds NO segmentation of its own — the split is one module.
+// A leading coordinator / opener at a clause head ("And he begat…", "Now Cainan
+// …") is not the subject — it pushes the real head one token right. KJV runs
+// almost every verse through one, so without skipping it the pronoun/name resolver
+// never reaches the subject. The set is the conjunctions/openers, by hand here;
+// it could move to a conventions register like the rest.
+const LEAD_COORD = /^\s*(?:and|but|now|so|then|or|nor|yet|for|therefore|thus)\b[\s,]*/i;
+
 const leadingSubject = (sentence, admission, coref) => {
+  const lead = (sentence.match(LEAD_COORD) || [''])[0].length;   // skip a leading coordinator
+  const rest = sentence.slice(lead);
   // Case-INSENSITIVE: clause segmentation yields lowercase-initial clauses
   // ("…, and he turned" → "he turned"), so a clause-head subject pronoun is as
   // often lower- as upper-case. The capitalised-only match dropped every split-off
   // pronoun subject — the half of Move 1 that was never wired to the clause splitter.
-  const pn = sentence.match(/^\s*(he|she|they|we|it|i|you)\b/i);
+  const pn = rest.match(/^\s*(he|she|they|we|it|i|you)\b/i);
   if (pn) {
     const cands = coref?.field ? coref.field() : [];
     const top = cands[0];
-    const start = pn[0].length - pn[1].length;     // the pronoun's offset past any lead
-    return { id: top?.id ?? null, start, end: pn[0].length, text: pn[1], kind: 'pronoun', w: top?.w ?? 0 };
+    const start = lead + (pn[0].length - pn[1].length); // the pronoun's offset past the lead
+    return { id: top?.id ?? null, start, end: lead + pn[0].length, text: pn[1], kind: 'pronoun', w: top?.w ?? 0 };
   }
   // Otherwise the first capitalised phrase, if it is an admitted entity.
-  const ents = scanEntities(sentence);
-  const first = ents.find(e => e.start <= 1); // sentence-initial
+  const ents = scanEntities(rest);
+  const first = ents.find(e => e.start <= 1); // clause-initial (after the coordinator)
   if (first && admission.isAdmitted(first.label)) {
-    return { id: admission.idOf(first.label), start: first.start, end: first.end,
-             text: sentence.slice(first.start, first.end), kind: 'name', w: 1 };
+    return { id: admission.idOf(first.label), start: lead + first.start, end: lead + first.end,
+             text: rest.slice(first.start, first.end), kind: 'name', w: 1 };
   }
   return null;
 };
 
 // Round a coupling weight for the log; only sub-unit (inferred) weights are
-// stamped — a named, certain bond carries no weight field and projects at 1.
+// stamped — a named, certain bond carries no weight field and projects at 1. A
+// pronoun and an inherited subject (the open-activation fill, below) both ride
+// their weight; a named subject is certain and carries none.
 const coupling = (subj) =>
-  subj.kind === 'pronoun' ? { w: Math.round((subj.w ?? 0) * 1000) / 1000 } : {};
+  (subj.kind === 'pronoun' || subj.kind === 'inherited')
+    ? { w: Math.round((subj.w ?? 0) * 1000) / 1000 } : {};
 
 // Step over leading adverbs/auxiliaries to the head verb. Returns the verb
 // (lowercased) and the remaining text, or null if no verb-like token follows.
@@ -317,10 +329,29 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // Move 1 — run the SVO scan PER CLAUSE, not once per sentence. A clause-initial
   // subject is reachable where a sentence-initial one was not (the carve-limit fix);
   // each clause carries its offset so the argument-span SEG still walks back to `s`.
+  // `running` is the sentence's OPEN ACTIVATION: the subject a prior clause
+  // established, the one a verb-initial continuation ("…, and begat Enoch") attaches
+  // to. A genealogy's "And he begat… and begat… and begat…" is exactly this — one
+  // patriarch, held active, gathering sons across subjectless clauses.
+  let running = null;
   for (const clause of segmentClauses(s)) {
     const base = clause.offset;                       // clause-relative offset → `s`
-    const subj = leadingSubject(clause.text, admission, coref);
+    let subj = leadingSubject(clause.text, admission, coref);
+    if (!subj || !subj.id) {
+      // No subject token, but a head verb after any coordinator → INHERIT the open
+      // activation: the running subject of this sentence, else the warmest referent
+      // the reading still holds active (the coref field). Its weight rides as
+      // coupling, so an inherited subject carries its uncertainty exactly as a
+      // pronoun's does — a witnessed deposit, never a certain claim.
+      const lead = (clause.text.match(LEAD_COORD) || [''])[0].length;
+      if (headVerb(clause.text.slice(lead), verbOpts)) {
+        const cands = coref?.field ? coref.field() : [];
+        const inh = running || cands[0];
+        if (inh && inh.id) subj = { id: inh.id, start: lead, end: lead, text: '', kind: 'inherited', w: inh.w ?? 0 };
+      }
+    }
     if (!subj || !subj.id) continue;
+    running = { id: subj.id, w: subj.kind === 'name' ? 1 : (subj.w ?? 0) };
     const after = clause.text.slice(subj.end);
     const head  = headVerb(after, verbOpts);
     if (!head) continue;
