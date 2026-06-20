@@ -120,11 +120,13 @@ test('absent conversation slots are simply omitted; present ones ride', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The talker-only window (P0.3): the talker is handed the excerpts ALONE — the
-// fold's arrows and the conversation history are withheld from the prompt, though
-// the fold is still computed upstream and recorded in the audit.
+// The grounded window: the talker is handed the document's own reading (the fold's
+// arrows) BESIDE the verbatim excerpts — discarding the computed fold was the
+// generation-side cause of the invented-location hallucination (docs/prompt-assembly.md).
+// The conversation HISTORY stays withheld (the P0.3 split): a document arrow is a reading
+// of this page, but feeding back prior turns let a small model anchor on its own answers.
 
-test('a grounded turn feeds the excerpts ALONE — the fold is computed but withheld from the window (P0.3)', async () => {
+test('a grounded turn feeds the document notes plus the excerpts; the history stays withheld', async () => {
   const text = 'Gregor Samsa loved Grete Samsa. Gregor Samsa loved Grete Samsa. Grete Samsa helped Gregor Samsa.';
   const doc = parseText(text, { docId: 'pg5200.txt' });
   doc.sentenceEmbeddings = async (e) => Promise.all(doc.sentences.map(s => e.embed(s)));
@@ -143,15 +145,13 @@ test('a grounded turn feeds the excerpts ALONE — the fold is computed but with
   assert.equal(t.route, 'grounded');
   assert.match(t.prompt, /You are reading pg5200\.txt/, 'orientation, the filename not a title');
   assert.match(t.prompt, new RegExp(EXCERPTS_HEADER), 'the verbatim excerpts are the talker’s input');
-  // The fold's arrows no longer enter the window …
-  assert.doesNotMatch(t.prompt, /Notes from the document:/, 'the arrows are withheld from the talker (P0.3)');
-  assert.doesNotMatch(t.prompt, /-->/, 'no arrow notation reaches the prompt');
-  // … and neither does the conversation history (the poisoning channel is closed).
+  // The fold's reading now enters the window — the note block is present and non-empty.
+  assert.match(t.prompt, /Notes from the document:\n\S/, 'the document notes ride beside the excerpts');
+  const fold = t.steps.find(s => s.name === 'fold');
+  assert.ok(fold && fold.data.noteLen > 0, 'the fold runs and its note is recorded for the audit');
+  // The conversation history is STILL withheld — the poisoning channel stays closed.
   assert.doesNotMatch(t.prompt, /past conversation|conversation before this/, 'history is withheld from the talker (P0.3)');
   assert.doesNotMatch(t.prompt, /earlier answer about Grete/, 'the talker never sees its own prior turns');
-  // But the fold WAS computed upstream — the audit's fold step recorded a real note.
-  const fold = t.steps.find(s => s.name === 'fold');
-  assert.ok(fold && fold.data.noteLen > 0, 'the fold still runs and is recorded for the audit');
   // The talker never sees a sentence index in its material, and binding still cites.
   const userTurn = t.prompt.slice(t.prompt.indexOf('\n\nuser: ') + 8);
   assert.doesNotMatch(userTurn, /\[s\d+\]/, 'the talker never sees a sentence index in the material');
