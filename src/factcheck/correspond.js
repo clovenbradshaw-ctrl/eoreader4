@@ -23,6 +23,8 @@
 import { segmentSentences }       from '../parse/sentences.js';
 import { parseRelations, headVerb } from '../parse/relations.js';
 import { checkRelationConflict }   from '../read/relation-types.js';
+import { coherence, terrainInfo }  from '../core/cube.js';
+import { operatorsByDomain }       from '../core/operators.js';
 
 // The four-way verdict vocabulary now lives in core (a leaf both factcheck and
 // read import down into — see core/verdicts.js). Re-exported here so the holon's
@@ -225,12 +227,85 @@ export const checkClaim = async (claim, { doc, graph, classifier, adjacency } = 
   });
 };
 
+// The grain of a claimed edge. A resolved relational claim — a bond (CON) or an
+// attribution (SIG) between two specific figures — asserts a SPECIFIC link, so it is
+// Figure-grain (the gravity-well cell). A type/class or recurrence claim would be
+// Pattern and an ambient/tone claim Ground, but the SVO clause parser yields neither
+// as an edge, so every resolved claimed edge types Figure here. The guard generalises
+// the day a claim carries its own grain.
+const claimGrain = (claim) =>
+  (claim?.resolved && (claim.op === 'CON' || claim.op === 'SIG')) ? 'Figure' : null;
+
+// The diagonal guard (P1) — the confabulation guard, made live. For each resolved
+// claim, run the LANDED cube guard (core/cube.js `coherence`) on the claim's grain
+// against the terrain the reading typed at the answer locus. We hand coherence an
+// operator in the terrain's OWN domain, so domain agreement holds by construction and
+// the only thing it adjudicates is GRAIN: a Figure claim at a Ground terrain (a Void,
+// or a site/atmosphere locus) is off the Object diagonal — "do not apply a Figure fix
+// to a Ground problem". A claim at a measured Void is the confabulation proper (the
+// Making-at-Void shape, `void:true`); a Figure claim at any other Ground terrain is the
+// softer grain over-read.
+//
+// This is GRAIN algebra, not meaning geometry — it needs no classifier, so unlike the
+// four-way edge verdicts it fires even under the hash organ. A claim the document
+// positively witnesses (corroborated) or denies (contradicted) is already adjudicated
+// with a witness and is skipped; the guard speaks to the unwitnessed claim asserted
+// where the reading found no ground for it. Inert when no terrain was measured.
+//
+// SCOPE — what this does NOT catch, and why it must stay that way. The claim space is
+// currently EDGES-ONLY: the SVO parser yields entity-to-entity relations, and such an
+// edge is Figure-grain by construction. A Ground-grain claim — a tone or atmospheric
+// predication ("the statement is neutral"), a single-argument assertion — has no second
+// entity and produces NO edge, so the guard never sees it. That is structural blindness,
+// not a miss: there is nothing to test. Closing it needs the P2 CLAIM-GRAIN CHANNEL — a
+// second extractor that reads the talker's NON-relational sentences and types their
+// grain directly, not an addition to the relation typer. Until it lands, the guard
+// covers Figure-at-Void (the hard confabulation, rightly closed first) and stays silent
+// on Ground over-reads (the softer case).
+//
+// And a standing caveat for whoever builds that channel: a Ground claim at a Ground
+// terrain — a tone claim at an Atmosphere — is ON the diagonal, grain-coherent, so the
+// guard MUST NOT flag it. A "neutral tone" read over an evasive passage fails because it
+// is FALSE (a correspondence verdict against the read tone), never because it is off-
+// grain. Catching that is blocked on two stacked, still-unbuilt things: this claim-grain
+// channel to SEE the claim, and an Atmosphere-reading pass to give it a terrain VALUE to
+// judge against. Do not "fix" the guard to fire on a coherent Ground claim.
+const diagonalGuard = (claims, terrain) => {
+  const meta = terrainInfo(terrain);
+  if (!meta) return [];
+  // The first operator in the terrain's domain — a canonical, deterministic pick (stable
+  // OPERATORS order), not arbitrary: any op in the domain satisfies the domain check by
+  // construction, leaving grain as the sole live discriminator. That is the whole point.
+  const op = operatorsByDomain(meta.domain)[0]?.id;
+  if (!op) return [];
+  const out = [];
+  for (const c of claims) {
+    if (c.verdict === VERDICTS.CORROBORATED || c.verdict === VERDICTS.CONTRADICTED) continue;
+    const grain = claimGrain(c);
+    if (!grain) continue;
+    const v = coherence({ op, grain, terrain });   // op-domain == terrain-domain → grain is the sole discriminator
+    if (!v.ok && /grain-mismatch|domain-mismatch/.test(v.reason || '')) {
+      out.push(Object.freeze({
+        sentence: c.sentence, src: c.src, tgt: c.tgt,
+        verdict: VERDICTS.OFF_DIAGONAL, reason: v.reason,
+        terrain, terrainGrain: meta.grain, claimGrain: grain,
+        void: terrain === 'Void',
+      }));
+    }
+  }
+  return out;
+};
+
 // The whole fact-check over a talker turn. Returns the per-claim verdicts, the
 // citations a corroborated claim earned (§7), and a battery-ready `fired` list
 // plus `refuse` so the veto harness can surface the edge-grounding check beside
 // the node-grounding one. The talker speaks the fold's arrows on the way out and
 // is held to the fold's arrows on the way back — same object, two directions.
-export const factCheck = async ({ prose, doc, graph, classifier, adjacency, cursor = Infinity } = {}) => {
+//
+// `terrain` is the Site-face terrain the reading typed at the answer locus (Void /
+// Atmosphere / Entity …); when present, the diagonal guard contributes OFF_DIAGONAL
+// verdicts to `edgeVerdicts` alongside the four-way ones. Absent, the guard is inert.
+export const factCheck = async ({ prose, doc, graph, classifier, adjacency, cursor = Infinity, terrain = null } = {}) => {
   const claims  = claimedEdges({ prose, doc, cursor });
   const checked = [];
   for (const claim of claims) {
@@ -256,16 +331,24 @@ export const factCheck = async ({ prose, doc, graph, classifier, adjacency, curs
   else if (weakContra)     fired.push({ id: 'edge-contradicted-weak', refuses: false, message: 'A claimed relation conflicts with the document reading, but the relation typing is too uncertain to refuse on.' });
   if (counts.unsupported)  fired.push({ id: 'edge-unsupported',       refuses: false, message: 'A claimed relation has no witness in the document reading.' });
 
+  // The diagonal guard's off-diagonal verdicts ride in `edgeVerdicts` beside the
+  // four-way ones; the veto battery reads them by `verdict:'off_diagonal'`.
+  const offDiagonal = diagonalGuard(checked, terrain);
+
   return Object.freeze({
     claims: Object.freeze(checked),
     // The flat per-claim verdict list the veto battery reads (`ctx.edgeVerdicts`).
-    edgeVerdicts: Object.freeze(checked.map(c => Object.freeze({
-      sentence: c.sentence, src: c.src, tgt: c.tgt,
-      verdict: c.verdict, reason: c.reason, citation: c.citation || null,
-      confidence: c.confidence ?? null,   // the likelihood the gate reads downstream
-    }))),
+    edgeVerdicts: Object.freeze([
+      ...checked.map(c => Object.freeze({
+        sentence: c.sentence, src: c.src, tgt: c.tgt,
+        verdict: c.verdict, reason: c.reason, citation: c.citation || null,
+        confidence: c.confidence ?? null,   // the likelihood the gate reads downstream
+      })),
+      ...offDiagonal,
+    ]),
     citations: Object.freeze(checked.filter(c => c.verdict === VERDICTS.CORROBORATED && c.citation).map(c => c.citation)),
-    counts,
+    counts: Object.freeze({ ...counts, offDiagonal: offDiagonal.length }),
+    offDiagonal: Object.freeze(offDiagonal),
     fired,
     refuse: refusing,
   });

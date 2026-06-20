@@ -14,15 +14,18 @@
 
 import { stages } from './stages.js';
 
-// route → converse → retrieve → fold → answerable → prompt → llm → bind → factcheck → veto → settle.
+// route → converse → retrieve → fold → answerable → prompt → llm → bind → factcheck → revise → veto → settle.
 // `converse` (the session fold) sits right after `route`, before retrieval — it runs
 // for both grounded and chat turns and is independent of the document. The mechanical
-// short-circuits (smalltalk, math, who, confirm) terminate at `route` and never reach
-// it; they need no history. `factcheck` sits between `bind` and `veto`: it contrasts
-// the talker's propositional assertions against the document graph and deposits the
-// per-claim verdicts the veto battery reads (the answer is never gagged — flag-and-tell).
+// short-circuits (smalltalk, math) terminate at `route` and never reach it; they need
+// no history. `factcheck` sits between `bind` and `veto`: it contrasts the talker's
+// propositional assertions against the document graph and deposits the per-claim
+// verdicts the veto battery reads (the answer is never gagged — flag-and-tell).
+// `revise` sits between `factcheck` and `veto`: when the diagonal guard caught the
+// confabulation proper (a specific claim at a measured void), it re-prompts the talker
+// once; a surviving confabulation ships, tagged by the veto (rewrite-then-tag).
 const PIPELINE = [
-  'route', 'converse', 'retrieve', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'veto', 'settle',
+  'route', 'converse', 'retrieve', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
 ];
 
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
@@ -63,6 +66,14 @@ export const runTurn = async ({ question, doc, model, embedder, classifier, adja
       answer:    ctx.answer     || '',
       sources:   ctx.sources    || [],
       referential: ctx.referential || null,
+      // Whether the hard floor GATED — substituted a typed decline for an ungrounded /
+      // denied draft. The draft survives in `revisions`; the answer is the honest word.
+      gated: ctx.gated || false,
+      // The superseded drafts (a confabulation rewritten, or a draft the floor gated),
+      // preserved beside the answer that replaced them (never erased — turn/stages.js).
+      // This is the conversational record's SEG/retract: correction beside error, both
+      // visible in the trail.
+      revisions: ctx.revisions || null,
       flags,
     });
     return { answer: ctx.answer, sources: ctx.sources || [], referential: ctx.referential || null, flags, turn };
@@ -96,8 +107,8 @@ const summarize = (name, ctx, ms) => {
                                 anchor: ctx.surf.anchor, peak: ctx.surf.peak, stops: ctx.surf.stops,
                                 focus:  ctx.surf.focus,  recs: ctx.surf.recCursors, rode: ctx.surf.rode,
                               } : null };
-    case 'answerable': return ctx.void
-      ? { ...base, verdict: 'void', kind: ctx.void.kind, rode: ctx.void.rode }
+    case 'answerable': return ctx.voidMeasure
+      ? { ...base, verdict: 'answer', terrain: 'void', kind: ctx.voidMeasure.kind, rode: ctx.voidMeasure.rode }
       : { ...base, verdict: 'answer' };
     case 'prompt':   return { ...base, promptLen: ctx.promptText?.length || 0 };
     case 'llm':      return { ...base, outputLen: ctx.rawOutput?.length || 0, maxTokens: ctx.maxTokens };
@@ -109,7 +120,13 @@ const summarize = (name, ctx, ms) => {
                               contradicted:  ctx.factcheck?.counts?.contradicted  || 0,
                               unsupported:   ctx.factcheck?.counts?.unsupported   || 0,
                               indeterminate: ctx.factcheck?.counts?.indeterminate || 0,
+                              offDiagonal:   ctx.factcheck?.counts?.offDiagonal   || 0,
                               refuse:        ctx.factcheck?.refuse || false };
+    case 'revise':   return { ...base,
+                              attempts: ctx.revised?.attempts || 0,
+                              resolved: ctx.revised?.resolved ?? null,
+                              // the superseded draft(s) ride in the step trail too, verbatim
+                              superseded: (ctx.revisions || []).map(r => r.draft) };
     case 'veto':     return { ...base,
                               fired:   ctx.vetoes?.map(v => v.id) || [] };
     default:         return base;

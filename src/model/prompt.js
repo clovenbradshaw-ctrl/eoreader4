@@ -45,12 +45,16 @@ export const SUMMARY_GUARD =
   'They want a summary: say what the document is about in your own words, drawing the ' +
   'excerpts together — never reword a single excerpt as the whole answer.';
 
-export const SYSTEM_GROUND = `You answer using only the material provided — the document and the conversation.
-- The EXCERPTS are verbatim from the document. Treat them as fact; if anything conflicts, the excerpt wins.
-- The NOTES are the structured reading: plain-language arrows of what connects to what (A --relation--> B). Speak from them.
-- Answer directly and specifically. If the material does not cover it, say the document does not say.
-- Do not use outside knowledge, and do not recognise the work — read only what is here. Do not invent names, places, or facts.
-- Write plain prose. Do not echo the arrows or write codes, indices, or citation tags like [s0]; the structure is yours to read, the citations are added for you.`;
+// P0.3: the talker is handed the excerpts ALONE — no notes block, no conversation
+// block — so the system message names only the excerpts. The abstention line is now
+// load-bearing: with the void auto-text gone (the void rides as terrain, not as a
+// pre-emptive answer), the talker itself must decline when the excerpts do not cover
+// the question, rather than invent on the empty field.
+export const SYSTEM_GROUND = `You answer using only the EXCERPTS provided — verbatim sentences from the document.
+- Treat the excerpts as fact; answer directly and specifically from them.
+- If the excerpts do not cover the question, say the document does not say. Do not guess.
+- Do not use outside knowledge and do not recognise the work. Do not invent names, places, or facts.
+- Write plain prose, no codes or citation tags.`;
 
 export const SYSTEM_CHAT = `You are a brief, accurate assistant. Answer using only what has been said in this conversation.`;
 
@@ -83,12 +87,18 @@ export const buildGroundedMessages = ({
   task = 'answer',
   budget = DEFAULT_BUDGET,
   conversation = {},
+  corrective = '',
 } = {}) => {
   const blocks = [];
 
   if (orientation) blocks.push(`You are reading ${orientation}. Read what is here; do not name or place the work.`);
 
   blocks.push(`Here is the chat with the user:\nUser: ${question}`);
+
+  // A confabulation-rewrite corrective, when the talker is re-prompted after the
+  // diagonal guard caught a figure-at-a-void (turn/stages.js `revise`). Sits right
+  // after the question, where a small model attends, before the excerpts.
+  if (corrective) blocks.push(corrective);
 
   // The summary guard rides on a summary task only — faithfulness, not length.
   if (task === 'summary') blocks.push(SUMMARY_GUARD);

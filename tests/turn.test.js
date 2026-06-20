@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/pipeline.js';
 import { runTurn } from '../src/turn/pipeline.js';
+import { stages } from '../src/turn/stages.js';
+import { runVetoes } from '../src/ground/veto.js';
 import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import '../src/model/echo.js';
@@ -64,12 +66,12 @@ test('audit captures the verbatim prompt and raw output for grounded turns', asy
   assert.ok(t.steps.find(s => s.name === 'veto'));
 });
 
-test('a doc question with nothing to retrieve routes to a typed VOID, never the talker', async () => {
-  // Doc open, the question lands nowhere on the page. The honest response is the
-  // typed absence (the answerability gate, docs/answerability.md) — NOT an ungrounded
-  // chat answer, which would let the talker speak from outside the material and
-  // contradicts SYSTEM_GROUND's own "if the material does not cover it, say the
-  // document does not say."
+test('a measured void no longer pre-empts the talker — it rides as terrain (P0.2)', async () => {
+  // Doc open, the question lands nowhere on the page. Under P0 the void no longer
+  // auto-answers and terminates the turn — the talker speaks for every turn, and the
+  // measured void RIDES as terrain context (`voidMeasure`) for the diagonal guard to
+  // adjudicate what the talker then asserts. So the route is NOT 'void', the llm stage
+  // runs, and the answerable step records the void as terrain (not as the answer).
   const doc = setup('Alice loves apples.');
   const model = createModel('echo');
   await model.load();
@@ -79,11 +81,13 @@ test('a doc question with nothing to retrieve routes to a typed VOID, never the 
     doc, model, embedder: { isWarm: () => false, embed: async () => new Float32Array(64), warm: async () => {} },
     auditLog: audit,
   });
-  assert.equal(result.turn.route, 'void');
-  assert.equal(result.sources.length, 0);
-  assert.match(result.answer, /does not say/i);
-  // The talker is never warmed for a measured void.
-  assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
+  assert.notEqual(result.turn.route, 'void', 'the void never short-circuits the talker now');
+  // The talker is reached for every turn now (here via chat, retrieval being empty).
+  assert.ok(result.turn.steps.find(s => s.name === 'llm'), 'the talker is warmed — the void no longer pre-empts it');
+  // And the measurement rides: the answerable step records the void as terrain context.
+  const able = result.turn.steps.find(s => s.name === 'answerable');
+  assert.equal(able?.data?.terrain, 'void', 'the void rides as terrain context on the answerable step');
+  assert.equal(able?.data?.kind, 'never-set');
 });
 
 test('a whole-document summary request is never voided — it reaches the talker', async () => {
@@ -134,26 +138,10 @@ test('math short-circuits even without a doc', async () => {
   assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
 });
 
-test('vetoes flag but never substitute the answer', async () => {
-  const doc = setup('Alice loves apples. Bob hates broccoli.');
-  // A backend that emits an obviously unbound claim — overlap < the
-  // bind threshold against every span. The unbound veto must fire.
-  const unboundModel = {
-    id: 'unbound', kind: 'test', isLoaded: () => true,
-    async load() {},
-    async phrase() { return 'Zebras unrelated cosmic nonsense.'; },
-  };
-  const audit = createAuditLog();
-  const result = await runTurn({
-    question: 'apples',
-    doc, model: unboundModel, embedder: createHashEmbedder(), auditLog: audit,
-  });
-  const ids = result.flags.map(f => f.id);
-  assert.ok(ids.includes('unbound'), `expected unbound flag, got: ${ids.join(',')}`);
-  // The answer is the model's text — NOT the substitution string.
-  assert.ok(!/did not produce a grounded answer/i.test(result.answer));
-  assert.ok(/zebras/i.test(result.answer));
-});
+// The hard-floor gate sentinel — that a refusing veto over real spans substitutes the
+// surfaced answer (and the bidirectional / adversarial / suppress-not-delete guards) —
+// lives in its own file, tests/gate.test.js, because it is the load-bearing invariant
+// that wiring the gate is correct in both directions.
 
 test('a grounded turn carries the reader’s referential confidence to the result', async () => {
   const doc = setup('Alice loves apples. Bob hates broccoli.');
@@ -199,7 +187,10 @@ test('a greeting routes to smalltalk — never grounded, never warms the model',
   assert.equal(result.sources.length, 0);
 });
 
-test('who-is is answered mechanically and resolves through the alias', async () => {
+test('who-is now reaches the talker — the mechanical document short-circuit is retired (P0.1)', async () => {
+  // The confirm/relation/who document lookups no longer answer at the route; "who is
+  // gregor?" goes through the talker, grounded on the excerpts, where the guards
+  // adjudicate it. The llm stage runs and the answer still grounds (cites a span).
   const doc = setup('Gregor Samsa is a travelling salesman. Gregor waited. Gregor left.');
   const model = createModel('echo');
   await model.load();
@@ -207,10 +198,50 @@ test('who-is is answered mechanically and resolves through the alias', async () 
   const result = await runTurn({
     question: 'who is gregor?', doc, model, embedder: createHashEmbedder(), auditLog: audit,
   });
-  assert.equal(result.turn.route, 'who');
-  assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
-  assert.ok(/salesman/i.test(result.answer));
-  assert.ok(result.sources.length > 0);
+  assert.equal(result.turn.route, 'grounded', 'no longer the mechanical "who" route');
+  assert.ok(result.turn.steps.find(s => s.name === 'llm'), 'the talker is warmed');
+  assert.ok(/salesman/i.test(result.answer), 'the echo talker speaks the grounding excerpt');
+  assert.ok(result.sources.length > 0, 'the grounder still cites a span');
+});
+
+test('revise rewrites a figure-at-a-void; a clean rewrite replaces it, a stubborn one ships tagged (P1)', async () => {
+  // The confabulation guard caught a specific connection asserted where the reading
+  // measured a void. The revise stage gives the talker one corrective pass on the same
+  // excerpts; rewrite-then-tag is the whole behaviour, exercised at the stage so the
+  // void/grounded/confabulate combination is deterministic.
+  const doc = setup('Gregor Pike waited at home. Klaus Berg arrived later.');
+  const spans = doc.sentences.map((t, i) => ({ idx: i, text: t, score: 1 }));
+  const base = {
+    doc, spans, question: 'did Gregor harm Klaus?', task: 'answer', maxTokens: 384,
+    voidMeasure: { kind: 'never-set' }, surf: { peak: 0 },   // the measured void rides as terrain
+  };
+  // Seed a first draft that confabulates a specific connection at the void.
+  const seeded = await stages.factcheck(await stages.bind({ ...base, rawOutput: 'Gregor Pike harmed Klaus Berg.' }));
+  assert.ok(seeded.edgeVerdicts.some(v => v.verdict === 'off_diagonal' && v.void), 'the guard caught the figure-at-a-void');
+
+  // A talker that abstains on the rewrite → the confabulation is cleared and replaced.
+  const cleanModel = { async phrase() { return 'The document does not say.'; } };
+  const cleaned = await stages.revise({ ...seeded, model: cleanModel });
+  assert.equal(cleaned.revised.attempts, 1);
+  assert.equal(cleaned.revised.resolved, true);
+  assert.ok(!cleaned.edgeVerdicts.some(v => v.verdict === 'off_diagonal' && v.void), 'the flag cleared after the rewrite');
+  assert.match(cleaned.answer, /does not say/i, 'the clean draft replaces the confabulation');
+  // … but the false draft is NOT laundered — it is preserved beside its replacement,
+  // with the verdict that condemned it. Correction lives next to error, both visible.
+  assert.ok(Array.isArray(cleaned.revisions) && cleaned.revisions.length === 1, 'a revision is recorded');
+  assert.match(cleaned.revisions[0].draft, /harmed Klaus Berg/, 'the original confabulation is kept verbatim');
+  assert.ok(cleaned.revisions[0].offDiagonal.length > 0, 'the off-diagonal verdict travels with the superseded draft');
+  assert.match(cleaned.revisions[0].replacedBy, /does not say/i, 'and the truer word it was replaced by');
+
+  // A talker that keeps confabulating → put through, the span still tagged (flag-only).
+  const stubborn = { async phrase() { return 'Gregor Pike harmed Klaus Berg.'; } };
+  const tagged = await stages.revise({ ...seeded, model: stubborn });
+  assert.equal(tagged.revised.resolved, false);
+  assert.ok(tagged.edgeVerdicts.some(v => v.verdict === 'off_diagonal' && v.void), 'the surviving confabulation ships tagged');
+  // And the veto surfaces it as a flag, never a refusal — the answer rides.
+  const fired = runVetoes({ draft: tagged.answer, question: base.question, bound: tagged.bound, edgeVerdicts: tagged.edgeVerdicts });
+  assert.ok(fired.fired.some(f => f.id === 'off-diagonal-void' && !f.refuses));
+  assert.equal(fired.refuse, false);
 });
 
 test('audit exports JSONL one record per turn', async () => {

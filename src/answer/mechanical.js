@@ -159,6 +159,13 @@ export const answerWho = (doc, question) => {
   if (!m) return null;
   const name = m[1].trim();
   if (!name) return null;
+  // Bare-name lookup ONLY. A possessive ("gregor's sister") is a relational query —
+  // answerRelation owns it, or it defers to the grounded reading; a multi-word run-on
+  // ("gregor's sister and what does she do in the story") is not a name either. In
+  // both, the phrase merely CONTAINS an admitted name, and resolveEntityId's substring
+  // rule would bind the whole phrase to that name — the confidently-wrong path the
+  // audit caught (Gregor answered for "Gregor's sister"). Defer instead.
+  if (/['‘’]/.test(name) || name.split(/\s+/).length > 4) return null;
   const id = resolveEntityId(doc, name);
   if (!id) return null;
   const defs = doc.log.filter(e => e.op === 'DEF' && e.id === id && e.key === 'predicate');
@@ -180,8 +187,14 @@ export const answerWho = (doc, question) => {
 // the entity-name `answerWho`, which would otherwise bind "Gregor's sister" to
 // Gregor himself (the bare name is a substring of the phrase) and answer with his
 // predicate — the confidently-wrong path the user hit.
-const REL_POSSESSIVE = /^\s*who\s+(?:is|are|was|were)\s+(?:the\s+)?(.+?)'s\s+([A-Za-z]+)\s*[?.!]*$/i;
-const REL_OF_FORM    = /^\s*who\s+(?:is|are|was|were)\s+(?:the\s+|a\s+|an\s+)?([A-Za-z]+)\s+of\s+(.+?)\s*[?.!]*$/i;
+// The relation noun (possessive form) or the owner (of-form) may be followed by a
+// CONJOINED clause — "who is gregor's sister AND what does she do" — so the match no
+// longer anchors to the end of the string right after it. The possessive owner stays a
+// single head (non-greedy, up to the first "'s"); the of-form owner stops at a trailing
+// "and …". The typed-relation gate below keeps the looser match from over-firing: a
+// noun the algebra doesn't know as a relation still returns null and defers.
+const REL_POSSESSIVE = /^\s*who\s+(?:is|are|was|were)\s+(?:the\s+)?(.+?)'s\s+([A-Za-z]+)\b/i;
+const REL_OF_FORM    = /^\s*who\s+(?:is|are|was|were)\s+(?:the\s+|a\s+|an\s+)?([A-Za-z]+)\s+of\s+(.+?)(?:\s+and\s+.*)?\s*[?.!]*$/i;
 
 export const answerRelation = (doc, question) => {
   if (!doc || !doc.log) return null;

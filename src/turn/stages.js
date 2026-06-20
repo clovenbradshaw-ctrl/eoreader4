@@ -8,10 +8,10 @@
 // Vetoes are flag-only — they never substitute the model's answer.
 // The user sees what the model actually said, with a flag pinned to it.
 
-import { answerSmalltalk, answerMath, answerConfirm, answerRelation, answerWho, answerVoid } from '../answer/index.js';
+import { answerSmalltalk, answerMath, answerVoid } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold, namedReferents, referentialConfidence } from '../read/index.js';
+import { surfFold, namedReferents, referentialConfidence, siteIndices } from '../read/index.js';
 import { foldConversation } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';
@@ -22,10 +22,16 @@ import { factCheck }        from '../factcheck/index.js';
 
 export const stages = {
 
-  // Cheapest, model-free paths first — and routing is now intent-aware.
+  // Cheapest, model-free paths first. P0 retires the DOCUMENT mechanical short-
+  // circuits (confirm / relation / who): every document answer now goes through the
+  // talker, where the edge-grounding and diagonal guards adjudicate what it says.
+  // This kills the confirm token-overlap rubber-stamp (the "Yes." that fired on a
+  // shared-token disclaimer) and the who lookups at the route. Only the non-document
+  // smalltalk and math paths still short-circuit — routing arithmetic to a 135M
+  // talker is the riskier choice. The relation-typing edge-walk in answer/mechanical.js
+  // is kept (cold) for the P2 relational-referent resolver.
   //   smalltalk → a greeting is never grounded against the document.
   //   math      → arithmetic, with or without a doc.
-  //   who/confirm → mechanical lookups when a doc is open.
   //   else      → grounded (doc) or chat (no doc).
   async route(ctx) {
     const short = (m) => ({
@@ -42,13 +48,7 @@ export const stages = {
     // Not a mechanical short-circuit → a real turn. Read the TASK register
     // (intent.js): the prompt register (summary guard) and the token ceiling — the
     // real length bound. The mechanical paths above need neither.
-    if (ctx.doc) {
-      const mech = answerConfirm(ctx.doc, ctx.question)
-        || answerRelation(ctx.doc, ctx.question)   // "who is X's sister" — surf the graph edge
-        || answerWho(ctx.doc, ctx.question);
-      if (mech) return short(mech);
-      return { ...ctx, route: 'grounded', ...taskOf(ctx.question) };
-    }
+    if (ctx.doc) return { ...ctx, route: 'grounded', ...taskOf(ctx.question) };
     return { ...ctx, route: 'chat', ...taskOf(ctx.question) };
   },
 
@@ -138,28 +138,32 @@ export const stages = {
     if (!ctx.doc || (ctx.task && ctx.task !== 'answer')) return ctx;
     const v = answerVoid(ctx.doc, ctx.question, ctx.spans || [], { embedder: ctx.embedder });
     if (!v) return ctx;
-    return {
-      ...ctx, terminate: true,
-      route: 'void', mechanical: v, void: v.void,
-      answer: v.text, sources: v.sources,
-    };
+    // P0.2: the void no longer auto-answers and terminates. The talker speaks for
+    // every turn; the measured void RIDES as terrain context (`voidMeasure`) so the
+    // diagonal guard (P1) can catch a specific claim asserted where the reading typed
+    // an absence — a figure at a void — instead of the void silently pre-empting it.
+    return { ...ctx, voidMeasure: v.void };
   },
 
   // Build messages. Grounded when we have spans; plain chat when we don't.
-  // The talker is fed the FOLD (the document notes) PLUS the verbatim excerpts —
-  // never spans alone. The fold's output, which the audit used to record and then
-  // discard, now reaches the prompt. Notes and excerpts are built from the same
-  // spans/cursor upstream, so the structured reading and the verbatim cohere (§6).
+  // P0.3: the talker is handed the MINIMAL window — system + one orientation line +
+  // the question + the verbatim excerpts, nothing else. The fold's arrows (`ctx.note`)
+  // and the session history are deliberately withheld: the arrows are the document's
+  // reading, not the talker's to paraphrase, and feeding back the history let a small
+  // model anchor on its own prior turns (a wrong answer poisoning the follow-ups). The
+  // fold is still computed upstream and recorded in the audit; it just stops entering
+  // the window. The excerpts are the only input, so every claim the talker makes is
+  // checkable against them on the way back.
   async prompt(ctx) {
     const messages = ctx.spans?.length
       ? buildGroundedMessages({
           question:     ctx.question,
           spans:        ctx.spans,
-          notes:        ctx.note?.text || '',
+          notes:        '',                      // P0.3: the arrows no longer enter the window
           orientation:  orientationOf(ctx.doc),
           task:         ctx.task,               // the summary guard rides on a summary task
           budget:       ctx.budget,             // none by default; a caller may impose one
-          conversation: ctx.conversation || {}, // session fold: notes + verbatim window
+          conversation: {},                      // P0.3: the history no longer enters the window
         })
       : buildChatMessages({
           question: ctx.question,
@@ -219,6 +223,10 @@ export const stages = {
     const fc = await factCheck({
       prose: ctx.rawOutput, doc: ctx.doc, graph, cursor,
       classifier: ctx.classifier || null, adjacency: ctx.adjacency || null,
+      // P1: the Site-face terrain at the answer locus, for the diagonal guard. A
+      // measured void rides as Void; this is what turns a specific claim made over an
+      // absence into an OFF_DIAGONAL verdict the veto battery can tag.
+      terrain: terrainAtLocus(ctx, cursor),
     });
     // A claim the GRAPH corroborates earns the cited sentence even when the model
     // spoke from memory: fold those citations into the answer's sources, de-duped.
@@ -228,12 +236,66 @@ export const stages = {
     return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, sources };
   },
 
-  // Flag-only veto pass. The answer is never substituted — the user sees
-  // the model's text with the flags pinned alongside.
-  // Without a doc we skip the grounding vetoes entirely.
+  // The confabulation rewrite — rewrite-then-tag. When the diagonal guard found the
+  // confabulation proper (a specific claim asserted at a measured Void), give the
+  // talker ONE more pass with a corrective, on the same excerpts, and re-run the bind
+  // and fact-check on the new draft through the very same stages. If the rewrite clears
+  // it, the clean draft replaces the confabulation outright. If it STILL confabulates,
+  // we put it through: the answer ships and the veto tags the offending span (flag-only,
+  // never silently dropped) — the record carries that a rewrite was tried and the
+  // figure-at-a-void survived it. Inert when the guard found nothing, in chat mode, or
+  // with no model. The grain guard is classifier-free, so this arms even under the hash
+  // organ.
+  async revise(ctx) {
+    if (!ctx.doc || !ctx.spans?.length || !ctx.model || !confabulating(ctx)) return ctx;
+    let cur = ctx, attempts = 0;
+    const revisions = [];
+    while (attempts < REWRITE_ATTEMPTS && confabulating(cur)) {
+      attempts++;
+      // Record the superseded draft BESIDE its successor — never erase it. The
+      // off-diagonal verdicts that condemned it travel with it, so the trail shows
+      // verbatim what the machine said and why it was made to answer again. This is the
+      // log's own SEG/retract law (core/log.js) applied to the conversational record:
+      // a truer word may be appended, the false one is not unwritten.
+      const supersededDraft   = cur.rawOutput;
+      const supersededVerdicts = (cur.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
+      const messages = buildGroundedMessages({
+        question:    ctx.question,
+        spans:       ctx.spans,
+        notes:       '',
+        orientation: orientationOf(ctx.doc),
+        task:        ctx.task,
+        budget:      ctx.budget,
+        conversation: {},
+        corrective:  CONFAB_CORRECTIVE,
+      });
+      const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
+      cur = await stages.factcheck(await stages.bind({ ...cur, rawOutput: raw, messages }));
+      revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw }));
+    }
+    return { ...cur, revised: { attempts, resolved: !confabulating(cur) }, revisions };
+  },
+
+  // The veto pass. The SOFT flags ride alongside the answer (low-coverage, the
+  // edge-unsupported / weak-contradiction / off-diagonal family, referent-ambiguous,
+  // abstained) — marked, not traded. So does the libel-grade `edge-contradicted`: it is
+  // refuses:true (a serious pill) but flag-and-tell by the factcheck holon's deliberate
+  // design — the talker may speak from memory, and the system must not assert the
+  // document's primacy over the world.
+  //
+  // But the HARD floor GATES: when a `gates` veto fires (empty / declined / echo /
+  // unbound — the node-level "no grounded answer was produced", the bullshitter case)
+  // the draft is not grounded enough to stand, so the shown word is substituted with a
+  // typed decline. This is the lexical-priority bar made real in the CONTROL FLOW — the
+  // signal was computed and discarded here, which made it an audit pill, not a gate.
+  //
+  // Nothing is laundered: the draft is preserved BESIDE the decline in `revisions`, the
+  // way the rewrite and the event log preserve a superseded word (core/log.js). The
+  // record shows what the talker said, why it was gated, and the honest word shipped in
+  // its place. Without a doc we skip the grounding vetoes entirely.
   async veto(ctx) {
     if (!ctx.spans?.length) return { ...ctx, vetoes: [] };
-    const { fired } = runVetoes({
+    const { fired, gate } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
       referential: ctx.referential, task: ctx.task,
       // The edge-grounding verdicts the factcheck stage just deposited — the link-
@@ -241,7 +303,14 @@ export const stages = {
       // computed and discarded; now a claim the graph DENIES becomes a flag.
       edgeVerdicts: ctx.edgeVerdicts,
     });
-    return { ...ctx, vetoes: fired };
+    if (!gate) return { ...ctx, vetoes: fired };
+
+    const gatedBy   = fired.filter(f => f.gates).map(f => f.id);
+    const decline   = declineAnswer(gatedBy);
+    const revisions = [...(ctx.revisions || []), Object.freeze({
+      draft: ctx.rawOutput, refusedBy: gatedBy, replacedBy: decline,
+    })];
+    return { ...ctx, vetoes: fired, gated: true, answer: decline, sources: [], revisions };
   },
 
   // Settle: a placeholder for conversation-field updates and form stamps.
@@ -249,6 +318,45 @@ export const stages = {
   async settle(ctx) {
     return ctx;
   },
+};
+
+// One corrective rewrite. The user's rule: on confabulation, trigger a rewrite; if it
+// still fails, put it through with the span tagged. One pass is the "a rewrite".
+const REWRITE_ATTEMPTS = 1;
+
+// The corrective handed to the talker on the rewrite pass — name the over-reach and
+// steer to the excerpts or to the honest abstention. No notes, no history (P0.3).
+const CONFAB_CORRECTIVE =
+  'A previous attempt asserted a specific connection — a cause, a relationship, an ' +
+  'identity, an action between named figures — that the excerpts do not state. Answer ' +
+  'again using ONLY what the excerpts say. If the excerpts do not state such a ' +
+  'connection, do not assert one: say the document does not say.';
+
+// Did the diagonal guard catch the confabulation proper — a specific claim asserted at
+// a measured Void (the figure-at-a-void shape)? The hard case the rewrite targets.
+const confabulating = (ctx) =>
+  (ctx.edgeVerdicts || []).some(v => v.verdict === 'off_diagonal' && v.void);
+
+// The typed decline the hard floor substitutes when a refusing veto gates the turn —
+// the talker-floor's NUL, distinct from the perception void (which is about no spans).
+// Named to the dominant reason so the shown word is honest about WHY it declined, never
+// a bare "I can't." The draft it replaces is preserved in `revisions`, never erased.
+const DECLINE = Object.freeze({
+  unbound:   "I can't ground an answer to that in the document.",
+  empty:     "I don't have an answer to that.",
+  echo:      "I don't have a grounded answer to that.",
+  declined:  "I don't have a grounded answer to that.",
+});
+const declineAnswer = (gatedBy = []) => DECLINE[gatedBy[0]] || "I can't give a grounded answer to that.";
+
+// The Site-face terrain the reading typed at the answer locus, for the diagonal guard.
+// A measured void is a Void; a locus the document DEF'd as a site (boilerplate /
+// furniture, read/site.js) is ambient Ground (Atmosphere); otherwise the locus carries
+// a figure (Entity), where a specific claim sits on the diagonal and the guard passes.
+const terrainAtLocus = (ctx, cursor) => {
+  if (ctx.voidMeasure) return 'Void';
+  if (cursor != null && Number.isFinite(cursor) && ctx.doc && siteIndices(ctx.doc).has(cursor)) return 'Atmosphere';
+  return 'Entity';
 };
 
 // Orientation WITHOUT recognition (§3): the talker is handed the FILENAME, the

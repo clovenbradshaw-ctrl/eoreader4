@@ -120,9 +120,11 @@ test('absent conversation slots are simply omitted; present ones ride', () => {
 });
 
 // ---------------------------------------------------------------------------
-// The bug fix, end to end: the fold reaches the prompt (§1).
+// The talker-only window (P0.3): the talker is handed the excerpts ALONE — the
+// fold's arrows and the conversation history are withheld from the prompt, though
+// the fold is still computed upstream and recorded in the audit.
 
-test('a grounded turn feeds the fold into the prompt — notes plus excerpts, no indices leak', async () => {
+test('a grounded turn feeds the excerpts ALONE — the fold is computed but withheld from the window (P0.3)', async () => {
   const text = 'Gregor Samsa loved Grete Samsa. Gregor Samsa loved Grete Samsa. Grete Samsa helped Gregor Samsa.';
   const doc = parseText(text, { docId: 'pg5200.txt' });
   doc.sentenceEmbeddings = async (e) => Promise.all(doc.sentences.map(s => e.embed(s)));
@@ -132,17 +134,26 @@ test('a grounded turn feeds the fold into the prompt — notes plus excerpts, no
   const result = await runTurn({
     question: 'what happens to Gregor?', doc, model,
     embedder: createHashEmbedder(), auditLog: audit,
+    history: [
+      { role: 'user', content: 'who is Grete?' },
+      { role: 'assistant', content: 'Some earlier answer about Grete.' },
+    ],
   });
   const t = audit.turns[0];
   assert.equal(t.route, 'grounded');
   assert.match(t.prompt, /You are reading pg5200\.txt/, 'orientation, the filename not a title');
-  assert.match(t.prompt, /Notes from the document:/, 'the fold reached the prompt (not discarded)');
-  assert.match(t.prompt, /Gregor Samsa --\S+--> Grete Samsa/, 'the structured reading is the arrows');
-  assert.match(t.prompt, new RegExp(EXCERPTS_HEADER), 'the verbatim excerpts ride alongside');
-  // The data the talker READS — the notes and excerpts (the user turn) — carries
-  // no index. (The system rule may name [s0] to forbid the talker writing it.)
+  assert.match(t.prompt, new RegExp(EXCERPTS_HEADER), 'the verbatim excerpts are the talker’s input');
+  // The fold's arrows no longer enter the window …
+  assert.doesNotMatch(t.prompt, /Notes from the document:/, 'the arrows are withheld from the talker (P0.3)');
+  assert.doesNotMatch(t.prompt, /-->/, 'no arrow notation reaches the prompt');
+  // … and neither does the conversation history (the poisoning channel is closed).
+  assert.doesNotMatch(t.prompt, /past conversation|conversation before this/, 'history is withheld from the talker (P0.3)');
+  assert.doesNotMatch(t.prompt, /earlier answer about Grete/, 'the talker never sees its own prior turns');
+  // But the fold WAS computed upstream — the audit's fold step recorded a real note.
+  const fold = t.steps.find(s => s.name === 'fold');
+  assert.ok(fold && fold.data.noteLen > 0, 'the fold still runs and is recorded for the audit');
+  // The talker never sees a sentence index in its material, and binding still cites.
   const userTurn = t.prompt.slice(t.prompt.indexOf('\n\nuser: ') + 8);
   assert.doesNotMatch(userTurn, /\[s\d+\]/, 'the talker never sees a sentence index in the material');
-  // binding still works off the spans array, so citations are still produced
-  assert.ok(result.sources.length > 0, 'the grounder still cites mechanically');
+  assert.ok(result.sources.length > 0, 'the grounder still cites mechanically off the spans');
 });

@@ -37,7 +37,36 @@ test('the factcheck stage runs in a grounded turn', async () => {
     'factcheck sits in the live pipeline, after bind and before veto');
 });
 
-test('a from-memory claim the graph DENIES is flagged, and the answer still rides', async () => {
+test('a GROUNDED claim the graph denies is flagged and RIDES — flag-and-tell on its real domain', async () => {
+  // The rider edge-contradicted exists to protect: an answer that GROUNDS (claim 1
+  // "Grete waited." binds s1) yet contains a contradicted relation (Grete as Gregor's
+  // MOTHER, sister ⟂ mother). The contradiction is a fallible MEASUREMENT — the talker
+  // may speak from memory — so it is flagged, not gated, and the model text is surfaced.
+  // (The old fixture here used an UNGROUNDED contradiction, which conflated this case
+  // with the structural floor; the next test pins that case separately.)
+  const doc = parseText(STORY, { docId: 'adj' });
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'Tell me about Grete.',
+    doc, model: memoryModel("Grete waited. Gregor Samsa's mother Grete stood."),
+    embedder: createHashEmbedder(), auditLog: audit,
+  });
+  const ids = result.flags.map(f => f.id);
+  assert.ok(ids.includes('edge-contradicted'),
+    `expected an edge-contradicted flag, got: ${ids.join(',') || '(none)'}`);
+  assert.ok(!ids.includes('unbound'), 'the answer grounds (claim 1 binds) — the structural floor stays silent');
+  assert.equal(result.turn.gated, false, 'a grounded contradiction is NOT gated — it rides');
+  assert.match(result.answer, /mother/i, 'the model text is surfaced with the flag, not gagged');
+  const fc = result.turn.steps.find(s => s.name === 'factcheck');
+  assert.equal(fc.data.contradicted, 1);
+});
+
+test('an UNGROUNDED claim that also contradicts gates on the structural floor — but the measurement survives', async () => {
+  // The same denied relation, but with NOTHING bound. Now the STRUCTURAL floor (unbound)
+  // gates — ungrounded prose does not surface as fact — even though the claim also
+  // contradicts. The gate is about grounding, not the contradiction: the contradiction is
+  // still measured and recorded (factcheck contradicted=1), and the draft is suppressed-
+  // not-deleted (kept in revisions). The gate erases no signal.
   const doc = parseText(STORY, { docId: 'adj' });
   const audit = createAuditLog();
   const result = await runTurn({
@@ -45,17 +74,11 @@ test('a from-memory claim the graph DENIES is flagged, and the answer still ride
     doc, model: memoryModel("Gregor Samsa's mother Grete waited at the door."),
     embedder: createHashEmbedder(), auditLog: audit,
   });
-  // The contradiction is caught against the graph — embedder-free, via the symbolic
-  // kinship algebra (sister ⟂ mother), so it fires under the hash organ too.
-  const ids = result.flags.map(f => f.id);
-  assert.ok(ids.includes('edge-contradicted'),
-    `expected an edge-contradicted flag, got: ${ids.join(',') || '(none)'}`);
-  // Flag-and-tell: the model's own words are NOT substituted or suppressed.
-  assert.ok(/mother/i.test(result.answer),
-    'the answer is the model text, surfaced with the flag — not gagged');
-  // The audit records the verdict count for the turn.
+  assert.equal(result.turn.gated, true, 'nothing bound → the structural floor gates');
+  assert.doesNotMatch(result.answer, /mother/i, 'the ungrounded prose is not surfaced');
   const fc = result.turn.steps.find(s => s.name === 'factcheck');
-  assert.equal(fc.data.contradicted, 1);
+  assert.equal(fc.data.contradicted, 1, 'the contradiction is still measured and recorded — the gate erased nothing');
+  assert.ok(result.turn.revisions?.some(r => /mother/i.test(r.draft)), 'and the gated draft survives in revisions');
 });
 
 test('a from-memory claim consistent with the graph draws no contradiction flag', async () => {

@@ -35,6 +35,8 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
       flags: [],
       answer: null,
       sources: [],
+      gated: false,      // did the hard floor substitute a typed decline for the draft?
+      revisions: null,   // superseded drafts (gated or rewritten), kept beside the answer (never erased)
       step(name, data) {
         this.steps.push({
           name, t: Date.now() - this.startedAt, data: cloneShallow(data),
@@ -79,6 +81,8 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
         flags:      t.flags,
         answer:     t.answer,
         sources:    t.sources,
+        gated:      t.gated,
+        revisions:  t.revisions,
       };
       try {
         return JSON.stringify(record);

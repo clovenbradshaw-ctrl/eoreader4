@@ -31,8 +31,15 @@ import { documentFieldAt } from '../factcheck/correspond.js';
 const MIN_OVERLAP = 0.25;
 const BETA        = 0.5;   // how hard the warm-referent prior tilts the ranking
 
+// P0.4: a talker sometimes opens with a meta-line — "Here's a direct and specific
+// answer to the user's question:" / "Sure, here is …:" — before the real first claim.
+// Strip a single leading meta-line so it never ships and the first citation binds to
+// the real claim, not the preamble. Anchored, one line, only the announce-then-colon
+// shape — a claim that merely contains "here" mid-sentence is untouched.
+const PREAMBLE = /^\s*(?:here(?:'s| is)\b[^:\n]*:|sure[,!]?\s[^:\n]*:)\s*/i;
+
 export const bindCitations = (draft, spans, opts = {}) => {
-  const claims = splitClaims(draft);
+  const claims = splitClaims(String(draft || '').replace(PREAMBLE, ''));
   const idf        = buildIdf(opts.doc);
   const fieldByIdx = buildFieldByIdx(opts.doc, opts.cursor);
   const cache  = new Map();

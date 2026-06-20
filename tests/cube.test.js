@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { OPERATORS, GRAINS } from '../src/core/operators.js';
 import { eoAddressOfEvent } from '../src/core/address.js';
 import {
-  STANCES, TERRAINS, stanceOf, terrainOf, grainOfStance, grainOfTerrain,
+  STANCES, TERRAINS, stanceOf, terrainOf, grainOfStance, grainOfTerrain, terrainInfo,
   cellOf, DIAGONAL_CELLS, coherence, isDiagonal,
   SIGNATURES, signatureOf,
   OPERATOR_ALIASES, aliasOperator, aliasCellKey,
@@ -38,6 +38,16 @@ test('off-cube coordinates return null, never a guess', () => {
   assert.equal(terrainOf('Nope', 'Ground'), null);
   assert.equal(cellOf('XXX', 'Ground'), null);
   assert.equal(cellOf('INS', 'Nope'), null);
+});
+
+test('terrainInfo names the (domain, grain) a terrain sits at — the diagonal guard reads it', () => {
+  assert.deepEqual(terrainInfo('Void'),       { domain: 'Existence',      grain: 'Ground' });
+  assert.deepEqual(terrainInfo('Entity'),     { domain: 'Existence',      grain: 'Figure' });
+  assert.deepEqual(terrainInfo('Atmosphere'), { domain: 'Interpretation', grain: 'Ground' });
+  assert.equal(terrainInfo('Nope'), null);
+  // Consistent with the grain-only reverse already exported.
+  for (const terrain of ['Void', 'Entity', 'Kind', 'Field', 'Link', 'Atmosphere', 'Lens', 'Paradigm', 'Network'])
+    assert.equal(terrainInfo(terrain).grain, grainOfTerrain(terrain));
 });
 
 // ── The 27 diagonal cells, bound to the data registry ────────────────────────

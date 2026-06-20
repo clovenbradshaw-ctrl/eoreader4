@@ -153,6 +153,68 @@ test('a mixed turn reports each verdict and refuses only on contradiction', asyn
 });
 
 // ---------------------------------------------------------------------------
+// The diagonal guard (P1): the confabulation guard, made live. A specific (Figure-
+// grain) claim asserted where the reading typed Ground is off the Object diagonal.
+
+test('the diagonal guard catches a specific claim at a measured Void — the confabulation proper', async () => {
+  const doc   = parseText(DOC_TEXT, { docId: 'd' });
+  const graph = projectGraph(doc.log, {});
+  // A resolved relational claim (Figure-grain) over a Void (Ground) is a grain mismatch.
+  // The guard is grain algebra, not meaning geometry — no classifier, so it fires even
+  // under the hash organ (here, with no classifier at all).
+  const out = await factCheck({ prose: 'Grete Vale owns Klaus Berg.', doc, graph, terrain: 'Void' });
+  assert.equal(out.counts.offDiagonal, 1);
+  const od = out.offDiagonal[0];
+  assert.equal(od.verdict, VERDICTS.OFF_DIAGONAL);
+  assert.equal(od.void, true);
+  assert.equal(od.terrainGrain, 'Ground');
+  assert.equal(od.claimGrain, 'Figure');
+  assert.match(od.reason, /grain-mismatch/);
+  // It rides in edgeVerdicts beside the four-way verdict, for the veto battery.
+  assert.ok(out.edgeVerdicts.some(v => v.verdict === 'off_diagonal' && v.void));
+});
+
+test('the diagonal guard passes a figure claim at a figure terrain, and is inert with no terrain', async () => {
+  const doc   = parseText(DOC_TEXT, { docId: 'd' });
+  const graph = projectGraph(doc.log, {});
+  // At an Entity terrain (a figure locus) the same Figure claim is ON the diagonal.
+  const onDiag = await factCheck({ prose: 'Grete Vale owns Klaus Berg.', doc, graph, terrain: 'Entity' });
+  assert.equal(onDiag.counts.offDiagonal, 0);
+  // With no terrain measured the guard does not run.
+  const inert = await factCheck({ prose: 'Grete Vale owns Klaus Berg.', doc, graph });
+  assert.equal(inert.counts.offDiagonal, 0);
+  assert.equal(inert.offDiagonal.length, 0);
+});
+
+test('the diagonal guard skips a corroborated claim — a witnessed edge is grounded, not a confabulation', async () => {
+  const doc   = parseText(DOC_TEXT, { docId: 'd' });
+  const graph = projectGraph(doc.log, {});
+  const clf   = liveClassifier({
+    'Grete Vale looks after Gregor Pike.': [1, 0, 0, 0],
+    'Grete Vale tends Gregor Pike now.':   [0.8, 0.6, 0, 0],
+  });
+  // Even handed a Void terrain, a claim the document positively witnesses is not flagged.
+  const out = await factCheck({ prose: 'Grete Vale looks after Gregor Pike.', doc, graph, classifier: clf, terrain: 'Void' });
+  assert.equal(out.counts.corroborated, 1);
+  assert.equal(out.counts.offDiagonal, 0);
+});
+
+test('the diagonal-guard vetoes flag, never refuse — rewrite-then-tag', () => {
+  const base = { draft: 'a sentence', question: 'q', bound: [] };
+  // A figure at a measured Void ships tagged (the rewrite was the mitigation).
+  const atVoid = runVetoes({ ...base, edgeVerdicts: [{ verdict: 'off_diagonal', terrainGrain: 'Ground', void: true }] });
+  assert.ok(atVoid.fired.some(f => f.id === 'off-diagonal-void' && !f.refuses));
+  assert.equal(atVoid.refuse, false);
+  // A figure at a non-void Ground terrain (a site/atmosphere locus) — the softer flag.
+  const atGround = runVetoes({ ...base, edgeVerdicts: [{ verdict: 'off_diagonal', terrainGrain: 'Ground', void: false }] });
+  assert.ok(atGround.fired.some(f => f.id === 'off-diagonal-grain' && !f.refuses));
+  assert.equal(atGround.refuse, false);
+  // Inert when no diagonal verdict is present.
+  const none = runVetoes({ ...base, edgeVerdicts: [{ verdict: 'unsupported' }] });
+  assert.ok(!none.fired.some(f => f.id.startsWith('off-diagonal')));
+});
+
+// ---------------------------------------------------------------------------
 // Relation correspondence is geometric, not string (§4).
 
 test('cell adjacency is read off the centroid geometry; unmeasurable under no centroids', () => {
