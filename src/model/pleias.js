@@ -19,13 +19,22 @@
 // every other backend. The talker still never emits a citation token the user
 // sees — the source ids live inside Pleias's own framing and never escape.
 //
-// Two members, both loading the same way:
-//   pleias-pico  · Pleias-Pico (353M)  · 709 MB GGUF · the light default
-//   pleias-rag   · Pleias-RAG-1B (1.2B) · 2.39 GB GGUF · heavier, stronger grounding
+// Two members, both loading the same way (and both cached to OPFS on first use):
+//   pleias-pico  · Pleias-Pico (353M)   · 709 MB bf16 GGUF   · the light default
+//   pleias-rag   · Pleias-RAG-1B (1.2B) · 744 MB Q4_K_M GGUF · the larger grounder
+//
+// Why Q4_K_M for the RAG member. wllama reads each GGUF into a single ArrayBuffer
+// (max 2^31-1 bytes), so the official 2.39 GB bf16 Pleias-RAG-1B cannot load in
+// the browser at all — it fails as a bare "network error". The Q4_K_M build is
+// the same 1.2B RAG-trained model with every parameter intact, quantised to 4-bit
+// so it fits under the ceiling. For full bf16 precision, split the official file
+// into sub-2GB shards and host them (docs/large-models.md); wllama then fetches,
+// caches and assembles a sharded model transparently.
 //
 // Sources:
 //   https://huggingface.co/PleIAs/Pleias-Pico-GGUF
-//   https://huggingface.co/PleIAs/Pleias-RAG-1B-gguf
+//   https://huggingface.co/PleIAs/Pleias-RAG-1B-gguf             (official bf16, >2GB)
+//   https://huggingface.co/brendanddev/Pleias-RAG-1B-Q4_K_M-GGUF (the 4-bit build we load)
 //   https://github.com/Pleias/Pleias-RAG-Library
 
 import { registerBackend } from './interface.js';
@@ -34,8 +43,11 @@ import { EXCERPTS_HEADER } from './prompt.js';
 
 const PICO_GGUF =
   'https://huggingface.co/PleIAs/Pleias-Pico-GGUF/resolve/main/pleias_pico_bf16.gguf';
+// The 744 MB Q4_K_M build — the full 1.2B model, under wllama's 2GB ceiling. The
+// official 2.39 GB bf16 file can't load single-file; see docs/large-models.md to
+// run it at full precision via shards (then point this at the first shard).
 const RAG_GGUF =
-  'https://huggingface.co/PleIAs/Pleias-RAG-1B-gguf/resolve/main/Pleias-RAG-1B.gguf';
+  'https://huggingface.co/brendanddev/Pleias-RAG-1B-Q4_K_M-GGUF/resolve/main/Pleias-RAG-1B-Q4_K_M.gguf';
 
 // ---------------------------------------------------------------------------
 // Rebuilding Pleias's structured input from the grounded prompt.

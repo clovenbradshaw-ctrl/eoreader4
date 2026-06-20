@@ -432,8 +432,8 @@ chat model we then have to fence in.
 
 | backend       | model            | weights            | loads via |
 |---------------|------------------|--------------------|-----------|
-| `pleias-pico` | Pleias-Pico 353M | 709 MB GGUF        | wllama WASM, by URL |
-| `pleias-rag`  | Pleias-RAG-1B    | 2.39 GB GGUF       | wllama WASM, by URL |
+| `pleias-pico` | Pleias-Pico 353M | 709 MB bf16 GGUF   | wllama WASM, by URL |
+| `pleias-rag`  | Pleias-RAG-1B    | 744 MB Q4_K_M GGUF | wllama WASM, by URL |
 | `wllama`      | SmolLM2-135M     | 138 MB GGUF        | wllama WASM, by URL |
 | `webllm`      | Llama-3.2-3B     | MLC                | WebGPU |
 
@@ -446,6 +446,16 @@ rebuilds that structure from the grounded prompt the turn already assembled and
 strips Pleias's scaffolding back off on the way out — the binder receives the
 same clean prose it gets from every other backend, and no citation token the
 user sees ever escapes. SmolLM2 and Llama-3.2 remain selectable for comparison.
+
+Every wllama-loaded model is **cached to OPFS** on first download and reloads
+from disk thereafter (`allowOffline`) — you pay the download once per browser
+profile. `pleias-rag` is the 744 MB **Q4_K_M** build of Pleias-RAG-1B: the
+official bf16 weights are 2.39 GB, over wllama's 2 GB per-file `ArrayBuffer`
+ceiling, so a single-file load fails outright (as a bare "network error"). Q4_K_M
+is the same 1.2 B-parameter model quantised to 4-bit. To run it at full
+precision, split the weights into sub-2 GB shards and host them — wllama fetches,
+caches and assembles a sharded model transparently
+([`docs/large-models.md`](docs/large-models.md)).
 
 ## Auditable
 
