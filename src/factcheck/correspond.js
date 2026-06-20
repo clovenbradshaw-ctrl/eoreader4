@@ -25,6 +25,7 @@ import { parseRelations, headVerb } from '../parse/relations.js';
 import { checkRelationConflict }   from '../read/relation-types.js';
 import { coherence, terrainInfo }  from '../core/cube.js';
 import { operatorsByDomain }       from '../core/operators.js';
+import { deriveNull }              from '../read/voidnull.js';
 
 // The four-way verdict vocabulary now lives in core (a leaf both factcheck and
 // read import down into — see core/verdicts.js). Re-exported here so the holon's
@@ -124,13 +125,58 @@ export const claimedEdges = ({ prose, doc, cursor = Infinity }) => {
 // Type a relation to its Pattern cell. We pass BOTH the clause and the verb so
 // the classifier can embed at whichever grain its centroids were built in (the
 // verb doubles as the clause when no sentence is available, e.g. a bare void
-// relation). Returns the cell key or null (no-commit / weak embedder).
+// relation). Returns the cell key (or null — no-commit / weak embedder) AND the
+// assignment MARGIN — how far the winning cell beat its nearest competitor, the
+// amplitude of the typing. The void-denial reads that margin as the strength of
+// the EVA, and weighs it against the null the document's own typings derive.
 const patternCell = async (classifier, clause, verb) => {
   const p = await classifier.classify({ clause: clause || verb || '', verb: verb || '' });
-  return { live: !!p.live, cell: p.pattern?.cell || null };
+  return { live: !!p.live, cell: p.pattern?.cell || null, margin: p.pattern?.margin ?? null };
 };
 
 const result = (verdict, extra = {}) => Object.freeze({ verdict, ...extra });
+
+// The tolerated false-positive rate for a geometric void-denial. The denial is the
+// LIBEL-GRADE verdict — a false positive calls the talker a liar — so the snow tolerance
+// is tight, the same α the engine uses to fire SYN over a measured void (read/voidnull.js).
+const VOID_DENIAL_ALPHA = 0.01;
+
+const _mean = (xs) => xs.reduce((a, b) => a + b, 0) / (xs.length || 1);
+const _std  = (xs) => { const m = _mean(xs); return Math.sqrt(_mean(xs.map(x => (x - m) ** 2))); };
+
+// The background a void-denial measures itself against: the cell-assignment margins of the
+// document's own NON-DENYING relations (the graph's edges, typed by the same classifier).
+// These margins are samples of how sharply this reader types an ordinary relation on this
+// page — the noise model a denial's own typing must beat to count as structure rather than
+// snow. Embedder-gated: under the hash organ nothing types, so the background is empty and
+// the denial cannot be certified (it degrades to a flag, never a hard refusal).
+const cellMarginBackground = async (graph, doc, classifier) => {
+  const out = [];
+  for (const e of (graph?.edges || [])) {
+    const p = await patternCell(classifier, doc?.sentences?.[e.sentIdx], e.via);
+    if (p.cell && Number.isFinite(p.margin)) out.push(p.margin);
+  }
+  return out;
+};
+
+// The confidence of a void-denial: how far its weakest typing beats the derived null. The
+// amplitude is min(void-margin, talker-margin) — the denial rests on BOTH the void's
+// relation and the talker's being solidly typed, so the weakest link is its strength. The
+// null is the (1-α) extreme-value bound on the background of non-denying margins
+// (read/voidnull.js, deriveNull). We centre a bounded reading on that bound so the threshold
+// maps to the refusal floor exactly: amplitude AT the null → 0.5, ABOVE it → >0.5 (refuses),
+// BELOW it → <0.5 (degrades to a flag). When the null is unmeasurable — a thin background,
+// the document too quiet to derive a noise model — the denial cannot be certified at all and
+// the confidence is 0: snow wearing a verdict is held back to a flag, never used to refuse.
+// THIS path earns Born-rule language (graded naming): it computes a real quantile against a
+// measured background, unlike the symbolic algebra, whose honest amplitude is its prior.
+const denialConfidence = (amplitude, background) => {
+  if (!Number.isFinite(amplitude)) return 0;
+  const T = deriveNull(background, { scale: 'linear', alpha: VOID_DENIAL_ALPHA });
+  if (!Number.isFinite(T)) return 0;                 // null unmeasurable → cannot certify → flag
+  const sigma = Math.max(_std(background), 1e-6);
+  return 0.5 * (1 + Math.tanh((amplitude - T) / sigma));
+};
 
 // An explicit VOID that DENIES this claim: a carved absence touching one of the
 // claim's endpoints whose voided relation is the same or adjacent cell as the
@@ -139,7 +185,14 @@ const result = (verdict, extra = {}) => Object.freeze({ verdict, ...extra });
 // Needs the meaning reader on both the void's relation and the talker's; under
 // the hash organ it cannot be measured, so contradiction (like every relational
 // verdict) degrades to indeterminate — §4, §10.
-const voidDenial = async ({ src, tgt, talkerCell }, { graph, classifier, adj }) => {
+//
+// The denial is an EVA with an amplitude, not an identity that holds: it carries a
+// `confidence` equal to the margin by which its cell assignments beat the derived null
+// (denialConfidence). A denial that beats its null refuses (the libel-grade catch); one
+// that does not is held back to a weak flag. The geometric path no longer defaults to
+// certainty — the one reading resting entirely on a classifier posterior is the one most
+// in need of a null to beat. (docs/grounding-floor.md)
+const voidDenial = async ({ src, tgt, talkerCell, talkerMargin, background = [] }, { graph, classifier, adj }) => {
   const voids = graph?.voids || [];
   if (!voids.length || !adj?.adjacent) return null;
   const rep = graph?.representative || ((id) => id);
@@ -147,9 +200,13 @@ const voidDenial = async ({ src, tgt, talkerCell }, { graph, classifier, adj }) 
     const node = rep(v.node);
     if (node !== src && node !== tgt) continue;     // the void must touch an endpoint
     if (!v.rel) continue;                           // a void with no relation can't be compared
-    const { cell: voidCell } = await patternCell(classifier, v.rel, v.rel);
+    const { cell: voidCell, margin: voidMargin } = await patternCell(classifier, v.rel, v.rel);
     if (!voidCell) continue;
-    if (adj.adjacent(talkerCell, voidCell) === true) return v;
+    if (adj.adjacent(talkerCell, voidCell) === true) {
+      const amplitude  = Math.min(talkerMargin ?? Infinity, voidMargin ?? Infinity);
+      const confidence = denialConfidence(amplitude, background);
+      return { void: v, confidence };
+    }
   }
   return null;
 };
@@ -195,9 +252,16 @@ export const checkClaim = async (claim, { doc, graph, classifier, adjacency } = 
   const rep = graph?.representative || ((id) => id);
   const src = rep(claim.src), tgt = rep(claim.tgt);
 
-  // Contradiction first — the hard verdict dominates.
-  const denied = await voidDenial({ src, tgt, talkerCell }, { graph, classifier, adj });
-  if (denied) return result(VERDICTS.CONTRADICTED, { reason: 'voided', talkerCell, voided: denied });
+  // Contradiction first — the hard verdict dominates. The denial is an EVA: it beats, or
+  // fails to beat, the null derived from the document's own non-denying relation margins,
+  // and carries that margin as its `confidence`. The downstream gate refuses only when the
+  // confidence clears the floor (contradictionRefuses); a denial that does not beat its
+  // null degrades to a weak flag.
+  const background = await cellMarginBackground(graph, doc, classifier);
+  const denied = await voidDenial({ src, tgt, talkerCell, talkerMargin: tp.margin, background }, { graph, classifier, adj });
+  if (denied) return result(VERDICTS.CONTRADICTED, {
+    reason: 'voided', talkerCell, voided: denied.void, confidence: denied.confidence,
+  });
 
   // Corroboration — same endpoints, same or adjacent Pattern cell. Both relations
   // are typed by the SAME classifier so the cosine is measured in one space.

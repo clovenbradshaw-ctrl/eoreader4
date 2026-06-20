@@ -43,7 +43,7 @@ export const foldConversation = (history = [], opts = {}) => {
   }
   const recentMessages = msgs.slice(recentStart);
   const older          = msgs.slice(0, recentStart);   // the fold candidates
-  const pastTurns      = recentMessages.map(m => `${label(m.role)} ${m.content}`);
+  const pastTurns      = recentMessages.map(renderTurn);
 
   // The fold engages only beyond the token count — short sessions ride entirely
   // verbatim, no recap.
@@ -59,7 +59,11 @@ export const foldConversation = (history = [], opts = {}) => {
   const vocab = new Map();   // token → decayed weight
   const surprise = older.map((m) => {
     for (const [t, w] of vocab) vocab.set(t, w * cfg.gamma);
-    const toks = contentTokens(m.content);
+    // The atom of surprise is the JUDGED assertion: a turn the floor flagged carries its
+    // verdict tokens into the count, so "I said X, and X read as unbound" reads as content
+    // ADDED and is kept as a mover rather than folded silently away. The natural gradient
+    // is to defend the self-model; the verdict rides at full weight or over to counter it.
+    const toks = surpriseTokens(m);
     let added = 0;
     for (const t of toks) if ((vocab.get(t) || 0) < cfg.forget) added++;
     for (const t of toks) vocab.set(t, 1);
@@ -84,7 +88,7 @@ export const foldConversation = (history = [], opts = {}) => {
   idxs.sort((a, b) => a - b);                          // back into reading order
 
   const notes = idxs
-    .map(i => `#${i} ${label(older[i].role)} ${condense(older[i].content)}`)
+    .map(i => `#${i} ${renderTurn(older[i], { condense: true })}`)
     .join('\n');
 
   return {
@@ -94,6 +98,30 @@ export const foldConversation = (history = [], opts = {}) => {
 };
 
 const label = (role) => (role === 'assistant' ? 'Me:' : 'You:');
+
+// Render one turn as a `You:` / `Me:` line, the talker's turn WELDED to its EVA. A turn
+// the floor judged carries its verdict inline ("Me: [read as unbound] …"), so there is no
+// read path that surfaces "I said X" without its evaluation in the same unit — the
+// self-fold re-enters the field as a judged assertion, never the bare word it could anchor
+// on. The verdict is the floor's reading of self: it orients the next turn, never grounds.
+// (docs/grounding-floor.md) A turn with no flags (a user line, or an unjudged reply) renders
+// exactly as before, so a short verdict-free session is unchanged.
+const renderTurn = (m, { condense: doCondense = false } = {}) => {
+  const body = doCondense ? condense(m.content) : m.content;
+  return `${label(m.role)} ${verdictTag(m)}${body}`;
+};
+
+// The verdict prefix for an assistant turn — the floor's fired flags, compacted. Only the
+// talker's own turns carry a verdict (a user line is not the engine's to judge); a turn the
+// floor passed clean carries none. The ids are the evaluations themselves (`unbound`,
+// `edge-contradicted`, `off-diagonal-void`, …), surfaced so the talker meets its own prior
+// reading head-on rather than re-reading a bare assertion as ground.
+const verdictTag = (m) => {
+  if (m.role !== 'assistant') return '';
+  const ids = (Array.isArray(m.flags) ? m.flags : [])
+    .map(f => f && f.id).filter(Boolean);
+  return ids.length ? `[read as ${ids.join(', ')}] ` : '';
+};
 
 // A rough token estimate — chars/4, the usual heuristic. Exact accounting is the
 // model's; this only has to decide where the verbatim window ends.
@@ -110,6 +138,21 @@ const contentTokens = (s) => {
   const out = new Set();
   for (const t of String(s || '').toLowerCase().match(/[a-z0-9']+/g) || []) {
     if (t.length > 1 && !STOP.has(t)) out.add(t);
+  }
+  return out;
+};
+
+// The surprise tokens of a turn: its content, plus — for a judged talker turn — the verdict
+// ids the floor read on it. The verdict is part of the atom, so a flagged turn cannot be
+// folded away as if it were inert: its own decline is content the next fold must meet.
+const surpriseTokens = (m) => {
+  const out = contentTokens(m.content);
+  if (m.role === 'assistant') {
+    for (const f of (Array.isArray(m.flags) ? m.flags : [])) {
+      for (const t of String(f?.id || '').toLowerCase().match(/[a-z0-9']+/g) || []) {
+        if (t.length > 1 && !STOP.has(t)) out.add(t);
+      }
+    }
   }
   return out;
 };

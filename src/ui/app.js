@@ -203,8 +203,13 @@ const send = async () => {
   if (result.sources?.length) highlightSources(els.docView, result.sources);
 
   // Append the completed exchange so the next turn's session fold can read it back.
+  // The talker's turn is welded to its EVA: the verdicts the floor read on this answer
+  // (`flags`) travel WITH the content into the history record, so the self-fold re-enters
+  // the field as a JUDGED assertion ("I said X, and X read as unbound"), never the bare
+  // word. Folding the bare word back is what let the self-model defend itself; the atom
+  // that re-enters must carry its own collapse. (docs/grounding-floor.md, session-fold.md)
   STATE.history.push({ role: 'user', content: question });
-  STATE.history.push({ role: 'assistant', content: result.answer || '' });
+  STATE.history.push({ role: 'assistant', content: result.answer || '', flags: result.flags || [] });
 
   els.send.disabled = false;
 };

@@ -26,15 +26,21 @@ export const VETOES = [
   {
     // `gates: true` is the HARD FLOOR — the turn stage substitutes a typed decline for
     // the draft (not merely a pill). It is reserved for the node-level "nothing bound at
-    // all" failures: empty / declined / echo / unbound. The cut between GATING and
-    // FLAGGING is EPISTEMIC, not deference to a holon: a node-floor failure is a
-    // STRUCTURAL FACT — `bound.every(b => !b.citation)` is just true or false, it cannot
-    // be wrong — so we gate where we are certain and the failure is total. A
-    // contradiction is a fallible MEASUREMENT: it carries a confidence, degrades to
-    // indeterminate under the hash organ, and the claim may speak truly from memory
-    // against a document that is merely silent or that we mis-typed. So edge-contradicted
-    // is refuses:true (a serious pill) but flag-and-tell, never gated. Gate on certainty
-    // where the absence is total; flag on inference that might be contested.
+    // all" failures: empty / declined / echo / unbound.
+    //
+    // The honest framing (docs/grounding-floor.md): the verdict is an EVALUATION (EVA),
+    // never an identity that holds. These are not a separate "structural-certainty"
+    // category sitting beside the fallible measurements; they are the SAME un-groundedness
+    // reading at the HIGH-AMPLITUDE LIMIT. There is no noise model under which an empty
+    // string, a refusal, or the question echoed back is an answer, so the reading
+    // overwhelms every null — which is why action (substitution) is reserved here and a
+    // faint lexical reading only flags. `unbound` over a lexical binder is the same EVA at
+    // a low, noisy amplitude; it gates today as the first honest discretisation, until the
+    // meaning reader gives the binder's overlap fraction a real distribution to beat. A
+    // contradiction is the assertive dual: it carries a confidence (edge-contradicted), and
+    // the geometric void-denial must now beat its own derived null before it refuses
+    // (factcheck/correspond.js). One rule, not two: read the output against the record, and
+    // act in proportion to how far the reading beats the null.
     id: 'empty',
     test: ({ draft }) => String(draft || '').trim().length === 0,
     refuses: true,

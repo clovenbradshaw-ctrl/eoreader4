@@ -10,7 +10,8 @@ import { createCorefField } from '../src/parse/coref.js';
 import { runVetoes } from '../src/ground/veto.js';
 import { TALKER } from '../src/converse/index.js';
 import {
-  VERDICTS, documentFieldAt, claimedEdges, factCheck,
+  VERDICTS, documentFieldAt, claimedEdges, checkClaim, factCheck,
+  CONTRADICTION_REFUSE_FLOOR, contradictionRefuses,
   proposeCoref, corroborateCoref, geometricSecond,
 } from '../src/factcheck/index.js';
 
@@ -92,9 +93,62 @@ test('unsupported: a relation between two resolved referents with no document ed
   assert.equal(out.refuse, false);                // unsupported flags, does not refuse
 });
 
-test('contradicted: an explicit VOID denying the claimed relation is a hard refusal', async () => {
+// The geometric void-denial is an EVA, not an identity that holds: it is the libel-grade
+// catch (a false positive calls the talker a liar), and it must clear the null derived from
+// the document's OWN non-denying relation margins before it earns a hard refusal. The path
+// resting entirely on a classifier posterior — the one with real snow — no longer defaults
+// to certainty. (docs/grounding-floor.md)
+
+test('a geometric void-denial that BEATS its null is a hard refusal (denial clears its null)', async () => {
+  // The background is the document's own non-denying relations, each typed at a LOW margin
+  // (~0.08) — the noise model the denial must beat. The denial here types SHARPLY (margin
+  // 0.2 ≫ the background), so it clears the derived null and earns the refusal.
+  const clf = liveClassifier({
+    'A caused B.': [1, 0, 0, 0],   // talker's relation → CON_Binding_Link, margin ~0.2
+    'caused':      [1, 0, 0, 0],   // the void's relation, same cell, margin ~0.2
+    bg:            [5.1, 1, 0, 0], // an ordinary relation, typed at a low margin (~0.08)
+  });
+  const doc   = { sentences: ['bg', 'bg', 'bg', 'bg', 'bg'] };
+  const graph = {
+    representative: (id) => id,
+    edges: [0, 1, 2, 3, 4].map(i => ({ from: `c${i}`, to: `d${i}`, via: 'rel', sentIdx: i })),
+    voids: [{ node: 'a', rel: 'caused', sentIdx: null }],
+  };
+  const claim = { resolved: true, src: 'a', tgt: 'b', via: 'caused', sentence: 'A caused B.' };
+  const v = await checkClaim(claim, { doc, graph, classifier: clf });
+  assert.equal(v.verdict, VERDICTS.CONTRADICTED);
+  assert.ok(v.confidence >= CONTRADICTION_REFUSE_FLOOR, `beats the null → refuses (conf ${v.confidence})`);
+  assert.ok(contradictionRefuses(v));
+});
+
+test('a geometric void-denial that does NOT beat its null degrades to a weak flag', async () => {
+  // Same background, but the void's own relation types NO sharper than the noise (margin
+  // ~0.06, within the background). The denial cannot be told from chance, so it is held back
+  // to a flag — the contradiction is still measured, it just does not refuse.
+  const clf = liveClassifier({
+    'A caused B.': [1, 0, 0, 0],     // talker sharp
+    'caused':      [4.35, 1, 0, 0],  // the void's relation, typed at ~0.06 (within the noise)
+    bg:            [5.1, 1, 0, 0],   // background ~0.08
+  });
+  const doc   = { sentences: ['bg', 'bg', 'bg', 'bg', 'bg'] };
+  const graph = {
+    representative: (id) => id,
+    edges: [0, 1, 2, 3, 4].map(i => ({ from: `c${i}`, to: `d${i}`, via: 'rel', sentIdx: i })),
+    voids: [{ node: 'a', rel: 'caused', sentIdx: null }],
+  };
+  const claim = { resolved: true, src: 'a', tgt: 'b', via: 'caused', sentence: 'A caused B.' };
+  const v = await checkClaim(claim, { doc, graph, classifier: clf });
+  assert.equal(v.verdict, VERDICTS.CONTRADICTED, 'still a contradiction — just an uncertain one');
+  assert.ok(v.confidence < CONTRADICTION_REFUSE_FLOOR, `within the noise → does not refuse (conf ${v.confidence})`);
+  assert.ok(!contradictionRefuses(v));
+});
+
+test('a void-denial with no measurable null degrades to a flag, never a hard refusal', async () => {
+  // The minimal document: too few typed relations to derive a noise model at all. The denial
+  // is real (the void's cell is adjacent to the talker's), but it cannot be certified against
+  // a null it cannot measure — so it is a weak flag, never the libel-grade hard refusal the
+  // old boolean path asserted on a single, unscrutinised classifier posterior.
   const doc = parseText('Block Corp opened downtown. River House stood beside it.', { docId: 'v' });
-  // The document carves the cause of River House as absent — a no-cause-named VOID.
   doc.log.append({ op: 'NUL', kind: 'void', node: 'river-house', rel: 'caused', sentIdx: 1 });
   const graph = projectGraph(doc.log, {});
   assert.equal(graph.voids.length, 1);
@@ -103,10 +157,11 @@ test('contradicted: an explicit VOID denying the claimed relation is a hard refu
     'caused':                          [1, 0, 0, 0],   // the void's relation, same cell
   });
   const out = await factCheck({ prose: 'Block Corp caused River House.', doc, graph, classifier: clf });
-  assert.equal(out.counts.contradicted, 1);
+  assert.equal(out.counts.contradicted, 1, 'the contradiction is still measured and recorded');
   assert.equal(out.claims[0].verdict, VERDICTS.CONTRADICTED);
-  assert.equal(out.refuse, true);
-  assert.ok(out.fired.some(f => f.id === 'edge-contradicted' && f.refuses === true));
+  assert.equal(out.refuse, false, 'but with no null to beat, it does not hard-refuse');
+  assert.ok(out.fired.some(f => f.id === 'edge-contradicted-weak' && f.refuses === false));
+  assert.ok(!out.fired.some(f => f.id === 'edge-contradicted' && f.refuses === true));
 });
 
 test('indeterminate under the hash organ: every relational verdict holds (§4)', async () => {

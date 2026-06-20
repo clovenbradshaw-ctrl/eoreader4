@@ -73,6 +73,62 @@ test('a maxNoteTurns cap keeps a long backlog from blowing the notes budget', ()
   assert.ok(f.stats.folded <= 5, 'the strongest movers win the limited slots');
 });
 
+// THE SELF-FOLD ATOM — the prior turn welded to its EVA. (docs/grounding-floor.md)
+//
+// The self-model-defended failure was the talker reading its prior outputs back as
+// authoritative `Me:` lines and anchoring on them. The fix is not to withhold the history
+// (protect-by-absence) but to re-enter it as a JUDGED assertion: every read path that
+// surfaces "I said X" must carry the floor's verdict on X in the same unit.
+
+test('a judged Me: turn carries its verdict inline — no read path surfaces "I said X" bare', () => {
+  const hist = [
+    { role: 'user', content: 'who set the fire?' },
+    { role: 'assistant', content: 'The landlord set the fire.', flags: [{ id: 'unbound', refuses: true }] },
+  ];
+  const f = foldConversation(hist);
+  const me = f.pastTurns.find(t => t.startsWith('Me:'));
+  assert.match(me, /^Me: \[read as unbound\] /, 'the Me: line is welded to the floor\'s verdict');
+  assert.match(me, /landlord set the fire/, 'the content still rides — suppress the status, not the word');
+});
+
+test('an unjudged turn is unchanged — a verdict-free session reads exactly as before', () => {
+  const hist = [
+    { role: 'user', content: 'who is Gregor?' },
+    { role: 'assistant', content: 'Gregor Samsa is a travelling salesman.' },   // no flags
+  ];
+  const f = foldConversation(hist);
+  assert.deepEqual(f.pastTurns, ['You: who is Gregor?', 'Me: Gregor Samsa is a travelling salesman.']);
+});
+
+test('a verdict only ever tags the talker\'s OWN turn, never a You: line', () => {
+  // A user message is not the engine\'s to judge; even were a flag attached, it is not read.
+  const hist = [
+    { role: 'user', content: 'tell me about the clerk', flags: [{ id: 'unbound' }] },
+    { role: 'assistant', content: 'The clerk left early.', flags: [{ id: 'low-coverage' }] },
+  ];
+  const f = foldConversation(hist);
+  const you = f.pastTurns.find(t => t.startsWith('You:'));
+  const me  = f.pastTurns.find(t => t.startsWith('Me:'));
+  assert.equal(you, 'You: tell me about the clerk', 'a You: line never carries a verdict');
+  assert.match(me, /^Me: \[read as low-coverage\] /);
+});
+
+test('the folded recap also carries the verdict — the atom survives the fold, never bare', () => {
+  // A long session pushes the judged turn into the surfed recap; its verdict must travel
+  // with it. The judged turn is a mover (its verdict is content added), so it is kept.
+  const long = [
+    { role: 'user', content: 'What does the fire reveal about the household and its slow collapse?' },
+    { role: 'assistant', content: 'The landlord set the fire to collect insurance money.',
+      flags: [{ id: 'edge-contradicted', refuses: true }] },
+    ...pairs('the violin', 'the clerk', 'the apple', 'the boarders'),
+    { role: 'user', content: 'who cleans the flat?' },
+    { role: 'assistant', content: 'The charwoman cleans the flat.' },
+  ];
+  const f = foldConversation(long, { budgetTokens: 80, minRecent: 2 });
+  assert.match(f.notes, /\[read as edge-contradicted\]/,
+    'the recap renders the prior reply with its verdict, not as a bare assertion');
+});
+
 // The two prompt paths: the chat (no-doc) path rides recentMessages as real
 // {role,content} history and folds the recap into the system message.
 test('the chat path rides the recent window as message history and the recap in the system message', () => {
