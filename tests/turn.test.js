@@ -138,26 +138,10 @@ test('math short-circuits even without a doc', async () => {
   assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
 });
 
-test('vetoes flag but never substitute the answer', async () => {
-  const doc = setup('Alice loves apples. Bob hates broccoli.');
-  // A backend that emits an obviously unbound claim — overlap < the
-  // bind threshold against every span. The unbound veto must fire.
-  const unboundModel = {
-    id: 'unbound', kind: 'test', isLoaded: () => true,
-    async load() {},
-    async phrase() { return 'Zebras unrelated cosmic nonsense.'; },
-  };
-  const audit = createAuditLog();
-  const result = await runTurn({
-    question: 'apples',
-    doc, model: unboundModel, embedder: createHashEmbedder(), auditLog: audit,
-  });
-  const ids = result.flags.map(f => f.id);
-  assert.ok(ids.includes('unbound'), `expected unbound flag, got: ${ids.join(',')}`);
-  // The answer is the model's text — NOT the substitution string.
-  assert.ok(!/did not produce a grounded answer/i.test(result.answer));
-  assert.ok(/zebras/i.test(result.answer));
-});
+// The hard-floor gate sentinel — that a refusing veto over real spans substitutes the
+// surfaced answer (and the bidirectional / adversarial / suppress-not-delete guards) —
+// lives in its own file, tests/gate.test.js, because it is the load-bearing invariant
+// that wiring the gate is correct in both directions.
 
 test('a grounded turn carries the reader’s referential confidence to the result', async () => {
   const doc = setup('Alice loves apples. Bob hates broccoli.');

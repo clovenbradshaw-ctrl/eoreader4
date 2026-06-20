@@ -24,9 +24,21 @@ export const groundingFloor = (task) => GROUNDING_FLOOR[task] ?? GROUNDING_FLOOR
 
 export const VETOES = [
   {
+    // `gates: true` is the HARD FLOOR — the turn stage substitutes a typed decline for
+    // the draft (not merely a pill). It is reserved for the node-level "nothing bound at
+    // all" failures: empty / declined / echo / unbound. The cut between GATING and
+    // FLAGGING is EPISTEMIC, not deference to a holon: a node-floor failure is a
+    // STRUCTURAL FACT — `bound.every(b => !b.citation)` is just true or false, it cannot
+    // be wrong — so we gate where we are certain and the failure is total. A
+    // contradiction is a fallible MEASUREMENT: it carries a confidence, degrades to
+    // indeterminate under the hash organ, and the claim may speak truly from memory
+    // against a document that is merely silent or that we mis-typed. So edge-contradicted
+    // is refuses:true (a serious pill) but flag-and-tell, never gated. Gate on certainty
+    // where the absence is total; flag on inference that might be contested.
     id: 'empty',
     test: ({ draft }) => String(draft || '').trim().length === 0,
     refuses: true,
+    gates: true,
     message: 'Empty response.',
   },
   {
@@ -34,6 +46,7 @@ export const VETOES = [
     test: ({ draft }) =>
       /^(i (don'?t|cannot|can'?t) (answer|know|tell))/i.test(String(draft || '').trim()),
     refuses: true,
+    gates: true,
     message: 'Model declined.',
   },
   {
@@ -41,6 +54,7 @@ export const VETOES = [
     test: ({ draft, question }) =>
       normalize(draft) === normalize(question) && normalize(draft).length > 0,
     refuses: true,
+    gates: true,
     message: 'Model echoed the question.',
   },
   {
@@ -61,6 +75,7 @@ export const VETOES = [
     id: 'unbound',
     test: ({ bound, draft }) => bound.length > 0 && bound.every(b => !b.citation) && !isAbstention(draft),
     refuses: true,
+    gates: true,   // the bullshitter case — prose grounded in nothing; the floor substitutes
     message: 'No claim could be tied to a source sentence.',
   },
   // The edge-grounding checks — the LINK-shaped sibling of `unbound`. `unbound`
@@ -156,12 +171,13 @@ const isAbstention = (draft) => ABSTAIN.test(String(draft || '').trim());
 
 export const runVetoes = (ctx) => {
   const fired  = [];
-  let refuse = false;
+  let refuse = false, gate = false;
   for (const v of VETOES) {
     if (v.test(ctx)) {
-      fired.push({ id: v.id, message: v.message, refuses: v.refuses });
-      if (v.refuses) refuse = true;
+      fired.push({ id: v.id, message: v.message, refuses: !!v.refuses, gates: !!v.gates });
+      if (v.refuses) refuse = true;   // serious-pill marker (display + audit)
+      if (v.gates)   gate = true;     // hard floor — the turn stage substitutes the answer
     }
   }
-  return { fired, refuse };
+  return { fired, refuse, gate };
 };

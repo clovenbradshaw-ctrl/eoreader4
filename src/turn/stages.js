@@ -276,12 +276,26 @@ export const stages = {
     return { ...cur, revised: { attempts, resolved: !confabulating(cur) }, revisions };
   },
 
-  // Flag-only veto pass. The answer is never substituted — the user sees
-  // the model's text with the flags pinned alongside.
-  // Without a doc we skip the grounding vetoes entirely.
+  // The veto pass. The SOFT flags ride alongside the answer (low-coverage, the
+  // edge-unsupported / weak-contradiction / off-diagonal family, referent-ambiguous,
+  // abstained) — marked, not traded. So does the libel-grade `edge-contradicted`: it is
+  // refuses:true (a serious pill) but flag-and-tell by the factcheck holon's deliberate
+  // design — the talker may speak from memory, and the system must not assert the
+  // document's primacy over the world.
+  //
+  // But the HARD floor GATES: when a `gates` veto fires (empty / declined / echo /
+  // unbound — the node-level "no grounded answer was produced", the bullshitter case)
+  // the draft is not grounded enough to stand, so the shown word is substituted with a
+  // typed decline. This is the lexical-priority bar made real in the CONTROL FLOW — the
+  // signal was computed and discarded here, which made it an audit pill, not a gate.
+  //
+  // Nothing is laundered: the draft is preserved BESIDE the decline in `revisions`, the
+  // way the rewrite and the event log preserve a superseded word (core/log.js). The
+  // record shows what the talker said, why it was gated, and the honest word shipped in
+  // its place. Without a doc we skip the grounding vetoes entirely.
   async veto(ctx) {
     if (!ctx.spans?.length) return { ...ctx, vetoes: [] };
-    const { fired } = runVetoes({
+    const { fired, gate } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
       referential: ctx.referential, task: ctx.task,
       // The edge-grounding verdicts the factcheck stage just deposited — the link-
@@ -289,7 +303,14 @@ export const stages = {
       // computed and discarded; now a claim the graph DENIES becomes a flag.
       edgeVerdicts: ctx.edgeVerdicts,
     });
-    return { ...ctx, vetoes: fired };
+    if (!gate) return { ...ctx, vetoes: fired };
+
+    const gatedBy   = fired.filter(f => f.gates).map(f => f.id);
+    const decline   = declineAnswer(gatedBy);
+    const revisions = [...(ctx.revisions || []), Object.freeze({
+      draft: ctx.rawOutput, refusedBy: gatedBy, replacedBy: decline,
+    })];
+    return { ...ctx, vetoes: fired, gated: true, answer: decline, sources: [], revisions };
   },
 
   // Settle: a placeholder for conversation-field updates and form stamps.
@@ -315,6 +336,18 @@ const CONFAB_CORRECTIVE =
 // a measured Void (the figure-at-a-void shape)? The hard case the rewrite targets.
 const confabulating = (ctx) =>
   (ctx.edgeVerdicts || []).some(v => v.verdict === 'off_diagonal' && v.void);
+
+// The typed decline the hard floor substitutes when a refusing veto gates the turn —
+// the talker-floor's NUL, distinct from the perception void (which is about no spans).
+// Named to the dominant reason so the shown word is honest about WHY it declined, never
+// a bare "I can't." The draft it replaces is preserved in `revisions`, never erased.
+const DECLINE = Object.freeze({
+  unbound:   "I can't ground an answer to that in the document.",
+  empty:     "I don't have an answer to that.",
+  echo:      "I don't have a grounded answer to that.",
+  declined:  "I don't have a grounded answer to that.",
+});
+const declineAnswer = (gatedBy = []) => DECLINE[gatedBy[0]] || "I can't give a grounded answer to that.";
 
 // The Site-face terrain the reading typed at the answer locus, for the diagonal guard.
 // A measured void is a Void; a locus the document DEF'd as a site (boilerplate /

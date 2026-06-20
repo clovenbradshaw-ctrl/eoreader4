@@ -66,10 +66,13 @@ export const runTurn = async ({ question, doc, model, embedder, classifier, adja
       answer:    ctx.answer     || '',
       sources:   ctx.sources    || [],
       referential: ctx.referential || null,
-      // The superseded confabulation drafts, preserved beside the answer that
-      // replaced them (never erased — see turn/stages.js `revise`). Null when no
-      // rewrite ran. This is the conversational record's SEG/retract: correction
-      // beside error, both visible in the trail.
+      // Whether the hard floor GATED — substituted a typed decline for an ungrounded /
+      // denied draft. The draft survives in `revisions`; the answer is the honest word.
+      gated: ctx.gated || false,
+      // The superseded drafts (a confabulation rewritten, or a draft the floor gated),
+      // preserved beside the answer that replaced them (never erased — turn/stages.js).
+      // This is the conversational record's SEG/retract: correction beside error, both
+      // visible in the trail.
       revisions: ctx.revisions || null,
       flags,
     });
