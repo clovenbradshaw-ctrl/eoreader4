@@ -73,4 +73,27 @@ export const surpriseAt = (prior, arrival, { gamma, novelty = NOVELTY_RESERVE, a
   return { bayesBits, bayesBy };
 };
 
+// p(next | profile) — THE FORWARD DISTRIBUTION (Track A, docs/spec-one-surprise.md).
+//
+// Surprise has two objects. The profile is the BACKWARD object — the γ-decayed summary of
+// what has arrived. Scoring (and generating) also needs the FORWARD object: an explicit
+// distribution over what arrives next. This is it: the profile renormalised into a proper
+// distribution over the basis, with the NOVELTY reserve holding probability for an unseen
+// atom (`reserve`). Σ p(dist) + reserve = 1.
+//
+// "Reading scores the arrival under p(next); generation draws from p(next)." Same object,
+// two uses. It is exposed here for the DRAW (the generator's first act, Part II) and as the
+// honest forward object the recognition core can already turn around into. It is NOT yet
+// wired into the predictive SCORE — today's surprisal is an ad-hoc floored mean, not
+// −log₂ p(arrival) under this distribution; adopting this for scoring changes the surprisal
+// and ships behind RULES_REV with a parallel golden (the deferred Track A step).
+export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
+  const sum = [...profile.values()].reduce((s, m) => s + m, 0);
+  const Z = sum + novelty;                       // reserve mass keeps it proper over an open basis
+  const dist = [...profile.entries()]
+    .map(([atom, m]) => [atom, m / Z])
+    .sort((a, b) => b[1] - a[1]);                // ranked — the heaviest incumbents lead the draw
+  return { dist, reserve: novelty / Z, Z };
+};
+
 const round = (x) => Math.round(x * 100) / 100;

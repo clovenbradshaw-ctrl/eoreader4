@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt } from './surprise.js';
+import { surpriseAt, forwardDist } from './surprise.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -243,7 +243,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
         ? `As read — ${confirmed.length ? confirmed.map(name).join(', ') + ' stay in focus' : 'steady'}.`
         : 'Opening — no expectations yet.');
 
-  return {
+  const out = {
     sentIdx: at,
     sentence: units[at],
     chrome: presentIds.size === 0 && surprises.length === 0,
@@ -265,6 +265,15 @@ export const readingAt = (doc, cursor, opts = {}) => {
     // expect door wasn't used). Separable, so the fold can subtract the echo.
     conversationalPrior: round(conversationalPrior),
   };
+  // p(next | profile) — the explicit forward distribution, OPT-IN so default reading stays
+  // byte-identical (the parity gate). It is the object the generator draws from (Part II)
+  // and the honest forward turn of the recognition profile: the γ-decayed proposition field
+  // `priorProp` renormalised, with the NOVELTY reserve. Over the full proposition basis
+  // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
+  // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
+  // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
+  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  return out;
 };
 
 const round = (x) => Math.round(x * 100) / 100;
