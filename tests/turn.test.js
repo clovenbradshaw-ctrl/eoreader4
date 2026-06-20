@@ -138,10 +138,10 @@ test('math short-circuits even without a doc', async () => {
   assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
 });
 
-// The hard-floor gate sentinel — that a refusing veto over real spans substitutes the
-// surfaced answer (and the bidirectional / adversarial / suppress-not-delete guards) —
-// lives in its own file, tests/gate.test.js, because it is the load-bearing invariant
-// that wiring the gate is correct in both directions.
+// The flag-and-tell sentinel — that a veto rides ALONGSIDE the model's answer and never
+// substitutes it (an ungrounded draft is surfaced with its flag, not swapped for a decline)
+// — lives in its own file, tests/gate.test.js, because it is the load-bearing invariant:
+// we trust the talker, surface what it said, and tell the user where the grounding is thin.
 
 test('a grounded turn carries the reader’s referential confidence to the result', async () => {
   const doc = setup('Alice loves apples. Bob hates broccoli.');

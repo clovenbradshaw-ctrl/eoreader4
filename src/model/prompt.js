@@ -45,16 +45,21 @@ export const SUMMARY_GUARD =
   'They want a summary: say what the document is about in your own words, drawing the ' +
   'excerpts together — never reword a single excerpt as the whole answer.';
 
-// P0.3: the talker is handed the excerpts ALONE — no notes block, no conversation
-// block — so the system message names only the excerpts. The abstention line is now
-// load-bearing: with the void auto-text gone (the void rides as terrain, not as a
-// pre-emptive answer), the talker itself must decline when the excerpts do not cover
-// the question, rather than invent on the empty field.
-export const SYSTEM_GROUND = `You answer using only the EXCERPTS provided — verbatim sentences from the document.
-- Treat the excerpts as fact; answer directly and specifically from them.
-- If the excerpts do not cover the question, say the document does not say. Do not guess.
-- Do not use outside knowledge and do not recognise the work. Do not invent names, places, or facts.
-- Write plain prose, no codes or citation tags.`;
+// The talker is the answerer, and we trust it. A chatbot exists to SYNTHESIZE — to read
+// the page and tell the user what it means — not to hand back the raw text; if the user
+// wanted the verbatim sentences they would search the document themselves. So the system
+// message asks for an answer in the model's own words, names the notes and excerpts as its
+// MEMORY of the reading (not text to quote back), and leans against the reflexive refusal:
+// answer the question you can reasonably address. The grounding is added AFTER, on the way
+// back — the binder cites, the fact-check adjudicates and flags — never by gagging the
+// talker on the way out. The system message is stable across turns so the prefix cache holds.
+export const SYSTEM_GROUND = `You are a sharp, helpful reading companion. You've just read the part of the document the user is asking about, and they want your answer — not the raw text.
+
+What follows is your own memory of that reading: your notes, and the passages they came from. Use them to answer in your OWN WORDS. Synthesize and explain; don't quote passages back or tell the user to "see the excerpt" — if they wanted the raw text, they would search it themselves.
+
+Lead with a direct answer. Draw on what you read; if part of the question genuinely isn't covered, answer what you can and say briefly what's missing — but don't refuse a question you can reasonably address.
+
+Write natural prose. Don't write citations or tags; those are added for you.`;
 
 export const SYSTEM_CHAT = `You are a brief, accurate assistant. Answer using only what has been said in this conversation.`;
 

@@ -6,19 +6,17 @@ import { runTurn } from '../src/turn/pipeline.js';
 import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 
-// THE HARD-FLOOR SENTINEL.
+// THE FLAG-AND-TELL SENTINEL.
 //
-// Wiring the gate (a `gates` veto SUBSTITUTES the surfaced answer with a typed decline)
-// trades the system's dark-room IMMUNITY — nothing could make the talker refuse — for a
-// real refusal capacity, ON PURPOSE: surfacing ungrounded text as fact is the worse
-// failure than declining. But the moment refusal substitutes, the dark room becomes
-// reachable, and the bind floor (MIN_OVERLAP, the threshold `unbound` reads through)
-// acquires teeth: set it too high and a legitimately grounded answer gets NUL'd.
+// We trust the talker to answer, and we ALWAYS surface what it said. A veto is an
+// annotation that rides alongside the answer — telling the user (and the audit) where the
+// grounding is thin, contested, or absent — never a trade for it. There is no hard floor:
+// nothing here substitutes a canned decline or a raw span for the model's words. Surfacing
+// the answer the model wanted to give, with the caveats attached, IS the safety; hiding it
+// behind a refusal was the old span-extractive reflex, now retired.
 //
-// So the sentinel guards BOTH directions, plus the adversarial sibling, plus the
-// suppress-not-delete invariant. Each test is the SOLE case that proves one half of the
-// guarantee — without it, a regression (drop `refuse` again; let fluency vote; delete the
-// draft) reads green because nothing exercises the boundary.
+// This sentinel guards that no regression re-wires a gate: an ungrounded draft must ride
+// with its flag, never disappear.
 
 const setup = (text) => {
   const doc = parseText(text, { docId: 'g' });
@@ -31,53 +29,54 @@ const model = (text) => ({ id: 'm', kind: 'test', isLoaded: () => true, async lo
 const run   = (m, audit = createAuditLog()) =>
   runTurn({ question: 'apples', doc: setup(DOC), model: m, embedder: createHashEmbedder(), auditLog: audit });
 
-// 1 — THE CATCH. A gating veto over real spans substitutes the SURFACED answer. This is
-// the catch that was missing: `refuse` was computed and dropped, so the floor painted a
-// pill while the ungrounded prose shipped and entered history as fact.
-test('catch: an unbound draft over real spans is replaced by the decline, never surfaced', async () => {
+// 1 — THE SURFACE. An ungrounded draft over real spans is SHOWN, with a flag, never swapped
+// for a decline. The model's word is the answer; the flag is the addition that tells the user
+// it couldn't be tied to the page.
+test('surface: an unbound draft rides with its flag — the model word is never substituted', async () => {
   const r = await run(model('Zebras orbit cosmic nonsense beyond comprehension.'));
-  assert.ok(r.flags.some(f => f.id === 'unbound' && f.refuses), 'unbound is a refusing veto');
-  assert.equal(r.turn.gated, true, 'the floor GATES — it does not merely flag');
-  assert.doesNotMatch(r.answer, /zebras/i, 'the ungrounded draft is NOT the surfaced answer');
-  assert.match(r.answer, /can'?t ground/i, 'a typed decline is surfaced in its place');
-  assert.equal(r.sources.length, 0);
+  assert.ok(r.flags.some(f => f.id === 'unbound' && f.refuses), 'unbound is a serious-pill flag');
+  assert.equal(r.turn.gated, false, 'nothing gates — the answer is not traded for a decline');
+  assert.match(r.answer, /zebras/i, 'the model text IS the surfaced answer');
+  assert.doesNotMatch(r.answer, /can'?t ground|do(?:n'?t| not) have/i, 'no canned decline is shipped in its place');
+  assert.equal(r.sources.length, 0, 'it cites nothing — honestly, the flag says so');
 });
 
-// 2 — THE CALIBRATION GUARD. The regression that wiring the gate newly makes possible:
-// too strict a floor NULs a legitimately grounded answer. A clearly-grounded draft must
-// ride — the floor must not be so eager it refuses a real answer.
-test('calibration: a well-grounded answer rides — the floor never NULs a real answer', async () => {
+// 2 — THE GROUNDED CASE. A clearly-grounded answer rides too, and earns its citation. The
+// flag-and-tell rule must not cost a real answer its grounding.
+test('a well-grounded answer rides and cites its span', async () => {
   const r = await run(model('Alice loves apples.'));
-  assert.equal(r.turn.gated, false, 'a grounded answer is not gated');
+  assert.equal(r.turn.gated, false);
   assert.ok(!r.flags.some(f => f.id === 'unbound'), 'unbound does not fire on a bound claim');
   assert.match(r.answer, /alice loves apples/i, 'the model text rides');
   assert.ok(r.sources.length > 0, 'and it cites its span');
 });
 
-// 3 — THE ADVERSARIAL SIBLING. The floor reads `bound` / `edgeVerdicts`, NEVER the
-// draft's prose, so fluency buys nothing past it. A terse ungrounded draft and an
-// arbitrarily eloquent one gate IDENTICALLY. This documents that the floor takes no
-// fluency argument — so a later refactor that tries to let eloquence vote breaks here.
-test('the floor takes no fluency argument: eloquent ungrounded prose gates exactly as terse does', async () => {
+// 3 — FLUENCY IS IRRELEVANT, EITHER WAY. The veto reads `bound` / `edgeVerdicts`, never the
+// prose, so a terse ungrounded draft and an eloquent one are flagged identically — and BOTH
+// ride. (The old sentinel proved they gated identically; now it proves they surface identically.)
+test('fluency changes nothing: terse and eloquent ungrounded prose both ride, both flagged', async () => {
   const terse  = await run(model('Zebras nonsense.'));
   const florid = await run(model(
     'In a luminous and profoundly orchestrated meditation, the ineffable cosmos unfurls ' +
     'its transcendent mystery across the boundless and shimmering dark of pure being.'));
-  assert.equal(terse.turn.gated,  true, 'terse ungrounded → gated');
-  assert.equal(florid.turn.gated, true, 'eloquent ungrounded → gated all the same');
-  assert.equal(terse.answer, florid.answer, 'identical decline — fluency changed nothing about the floor');
+  assert.equal(terse.turn.gated,  false, 'terse ungrounded → surfaced, flagged');
+  assert.equal(florid.turn.gated, false, 'eloquent ungrounded → surfaced, flagged all the same');
+  assert.ok(terse.flags.some(f => f.id === 'unbound'),  'terse is flagged unbound');
+  assert.ok(florid.flags.some(f => f.id === 'unbound'), 'florid is flagged unbound');
+  assert.match(terse.answer,  /zebras/i,  'the terse model word rides');
+  assert.match(florid.answer, /luminous/i, 'the florid model word rides');
 });
 
-// 4 — SUPPRESS, NOT DELETE. The gated draft survives verbatim in the record — the event
-// log's own SEG/retract law (core/log.js) applied to the turn: the false word is kept
-// beside the truer one, never unwritten. Pinned, not assumed.
-test('a gated draft is suppressed, not deleted: it survives in rawOutput and revisions', async () => {
+// 4 — THE RECORD. The surfaced answer IS the model's draft (nothing swapped), and the flag
+// is recorded in the audit beside it — the user can see what was said and what we could and
+// couldn't ground.
+test('the surfaced answer is the verbatim draft, with the flag recorded beside it', async () => {
   const audit = createAuditLog();
-  await run(model('Zebras orbit cosmic nonsense.'), audit);
+  const r = await run(model('Zebras orbit cosmic nonsense.'), audit);
   const t = audit.turns[0];
-  assert.equal(t.gated, true);
-  assert.match(t.rawOutput, /zebras/i, 'the verbatim draft survives in rawOutput');
-  assert.ok(t.revisions?.some(r => /zebras/i.test(r.draft) && r.refusedBy.includes('unbound')),
-    'and in revisions, tagged with the veto that gated it');
-  assert.doesNotMatch(t.answer, /zebras/i, 'while the surfaced answer is the decline');
+  assert.equal(t.gated, false);
+  assert.match(t.rawOutput, /zebras/i, 'the verbatim draft is captured');
+  assert.match(t.answer, /zebras/i, 'and it IS the surfaced answer — not replaced');
+  assert.ok(t.flags.some(f => f.id === 'unbound' && f.refuses),
+    'the flag rides in the record, telling the user the grounding is absent');
 });
