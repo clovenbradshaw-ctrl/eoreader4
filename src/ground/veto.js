@@ -83,6 +83,29 @@ export const VETOES = [
     refuses: false, // flag-only; the claim rides, marked unwitnessed
     message: 'A claimed relation has no witness in the document reading.',
   },
+  // The diagonal guard's verdicts (P1, core/cube.js `coherence`) — a specific
+  // (Figure-grain) claim asserted where the reading typed Ground. Both are FLAG-ONLY:
+  // under the rewrite-then-tag rule the turn already gave the talker a corrective pass
+  // (turn/stages.js `revise`); a confabulation that survived it is not suppressed, it
+  // ships with the span tagged so the record shows the figure-at-a-void and that a
+  // rewrite was tried. Inert when no fact-check ran (no `off_diagonal` verdict present).
+  {
+    // The confabulation proper: a figure at a measured Void.
+    id: 'off-diagonal-void',
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(
+      v => v.verdict === 'off_diagonal' && v.terrainGrain === 'Ground' && v.void),
+    refuses: false,
+    message: 'A specific claim was made where the document marks an absence (a figure at a void); a rewrite did not clear it, so it ships tagged.',
+  },
+  {
+    // The softer category error: a figure-grain claim at a Ground terrain that is not a
+    // Void (a site / atmosphere locus) — pitched finer than the passage supports.
+    id: 'off-diagonal-grain',
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(
+      v => v.verdict === 'off_diagonal' && !v.void),
+    refuses: false,
+    message: 'A claim is pitched at a finer grain than the passage supports.',
+  },
   {
     // The reader measured its own referential confidence (read/referent.js): the
     // concentration of the coref posterior at the answer cursor. A diffuse field —

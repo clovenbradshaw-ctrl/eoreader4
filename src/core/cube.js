@@ -64,6 +64,11 @@ for (const domain of DOMAINS)
 export const grainOfStance  = (stance)  => STANCE_GRAIN.get(stance)?.grain ?? null;
 export const grainOfTerrain = (terrain) => TERRAIN_GRAIN.get(terrain)?.grain ?? null;
 
+// The full (domain, grain) a terrain names — the Site-face row and column. The
+// diagonal guard uses this to pick an operator in the terrain's OWN domain, so a
+// coherence check on a claim's grain at that terrain is decided by grain alone.
+export const terrainInfo = (terrain) => TERRAIN_GRAIN.get(terrain) ?? null;
+
 // ── The 27 diagonal cells ────────────────────────────────────────────────────
 // The legal events. Each operator (a fixed Mode × Domain) crosses the three
 // grains to a stance and a terrain that share that grain — three cells per
