@@ -13,6 +13,10 @@
 //   vetoes:    [{ id, message, refuses }, ...] | null,
 //   answer:    string,
 //   sources:   number[],
+//   revisions: [{ draft, offDiagonal:[...], replacedBy }, ...] | null,
+//              // superseded confabulation drafts, preserved BESIDE the answer that
+//              // replaced them — the conversational record's SEG/retract. A rewrite
+//              // appends a truer word; the false one is never unwritten.
 // }
 
 export const SCHEMA_VERSION = 'eo-audit/1';

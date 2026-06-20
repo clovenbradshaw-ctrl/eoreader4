@@ -249,8 +249,16 @@ export const stages = {
   async revise(ctx) {
     if (!ctx.doc || !ctx.spans?.length || !ctx.model || !confabulating(ctx)) return ctx;
     let cur = ctx, attempts = 0;
+    const revisions = [];
     while (attempts < REWRITE_ATTEMPTS && confabulating(cur)) {
       attempts++;
+      // Record the superseded draft BESIDE its successor — never erase it. The
+      // off-diagonal verdicts that condemned it travel with it, so the trail shows
+      // verbatim what the machine said and why it was made to answer again. This is the
+      // log's own SEG/retract law (core/log.js) applied to the conversational record:
+      // a truer word may be appended, the false one is not unwritten.
+      const supersededDraft   = cur.rawOutput;
+      const supersededVerdicts = (cur.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
       const messages = buildGroundedMessages({
         question:    ctx.question,
         spans:       ctx.spans,
@@ -263,8 +271,9 @@ export const stages = {
       });
       const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
       cur = await stages.factcheck(await stages.bind({ ...cur, rawOutput: raw, messages }));
+      revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw }));
     }
-    return { ...cur, revised: { attempts, resolved: !confabulating(cur) } };
+    return { ...cur, revised: { attempts, resolved: !confabulating(cur) }, revisions };
   },
 
   // Flag-only veto pass. The answer is never substituted — the user sees

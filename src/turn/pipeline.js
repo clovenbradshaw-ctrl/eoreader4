@@ -66,6 +66,11 @@ export const runTurn = async ({ question, doc, model, embedder, classifier, adja
       answer:    ctx.answer     || '',
       sources:   ctx.sources    || [],
       referential: ctx.referential || null,
+      // The superseded confabulation drafts, preserved beside the answer that
+      // replaced them (never erased — see turn/stages.js `revise`). Null when no
+      // rewrite ran. This is the conversational record's SEG/retract: correction
+      // beside error, both visible in the trail.
+      revisions: ctx.revisions || null,
       flags,
     });
     return { answer: ctx.answer, sources: ctx.sources || [], referential: ctx.referential || null, flags, turn };
@@ -116,7 +121,9 @@ const summarize = (name, ctx, ms) => {
                               refuse:        ctx.factcheck?.refuse || false };
     case 'revise':   return { ...base,
                               attempts: ctx.revised?.attempts || 0,
-                              resolved: ctx.revised?.resolved ?? null };
+                              resolved: ctx.revised?.resolved ?? null,
+                              // the superseded draft(s) ride in the step trail too, verbatim
+                              superseded: (ctx.revisions || []).map(r => r.draft) };
     case 'veto':     return { ...base,
                               fired:   ctx.vetoes?.map(v => v.id) || [] };
     default:         return base;

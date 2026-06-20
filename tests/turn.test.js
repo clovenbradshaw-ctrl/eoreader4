@@ -242,6 +242,12 @@ test('revise rewrites a figure-at-a-void; a clean rewrite replaces it, a stubbor
   assert.equal(cleaned.revised.resolved, true);
   assert.ok(!cleaned.edgeVerdicts.some(v => v.verdict === 'off_diagonal' && v.void), 'the flag cleared after the rewrite');
   assert.match(cleaned.answer, /does not say/i, 'the clean draft replaces the confabulation');
+  // … but the false draft is NOT laundered — it is preserved beside its replacement,
+  // with the verdict that condemned it. Correction lives next to error, both visible.
+  assert.ok(Array.isArray(cleaned.revisions) && cleaned.revisions.length === 1, 'a revision is recorded');
+  assert.match(cleaned.revisions[0].draft, /harmed Klaus Berg/, 'the original confabulation is kept verbatim');
+  assert.ok(cleaned.revisions[0].offDiagonal.length > 0, 'the off-diagonal verdict travels with the superseded draft');
+  assert.match(cleaned.revisions[0].replacedBy, /does not say/i, 'and the truer word it was replaced by');
 
   // A talker that keeps confabulating → put through, the span still tagged (flag-only).
   const stubborn = { async phrase() { return 'Gregor Pike harmed Klaus Berg.'; } };
