@@ -32,6 +32,30 @@ test('answerRelation reads the "sister of X" form too', () => {
   assert.ok(a && /Grete/.test(a.text), 'of-form resolves to Grete');
 });
 
+test('a CONJOINED relational who still surfs to the sister, not the bare name', () => {
+  // The audit case: "who is gregor's sister AND what does she do in the story?" used to
+  // fail answerRelation's end-anchored regex, fall through to answerWho, and bind the
+  // whole phrase to Gregor (it CONTAINS "gregor") — answering with his own predicate.
+  // The relation noun may now be followed by a conjoined clause; the surf fires.
+  const doc = parseText(STORY, { docId: 'rel' });
+  const a = answerRelation(doc, `who is gregor${apos}s sister and what does she do in the story?`);
+  assert.ok(a, 'the conjoined question still produces a relational answer');
+  assert.match(a.text, /Grete/, 'it surfs to the sister, Grete');
+  assert.doesNotMatch(a.text, /transformed|salesman|milk/, 'never Gregor’s own predicate');
+  // The of-form takes a trailing clause too, without truncating a multi-word owner.
+  const b = answerRelation(doc, 'who is the sister of gregor and what does she do?');
+  assert.ok(b && /Grete/.test(b.text), 'of-form + trailing clause resolves to Grete');
+});
+
+test('answerWho defers a possessive or run-on phrase instead of mis-binding the name inside it', () => {
+  const doc = parseText(STORY, { docId: 'rel' });
+  // answerWho is a BARE-NAME lookup. A possessive ("gregor's sister") and a long
+  // run-on both merely contain an admitted name; binding the phrase to that name is the
+  // confidently-wrong path. Both must defer (null) so the turn surfs or grounds instead.
+  assert.equal(answerWho(doc, `who is gregor${apos}s sister and what does she do in the story?`), null);
+  assert.equal(answerWho(doc, `who is gregor${apos}s sister`), null, 'a bare possessive is not a name');
+});
+
 test('answerRelation honours the gender split — a sister query never returns a brother', () => {
   const doc = parseText(STORY, { docId: 'rel' });
   // The document has only a sister edge; asking for a brother must defer (null),
