@@ -284,10 +284,13 @@ export const stages = {
   // document's primacy over the world.
   //
   // But the HARD floor GATES: when a `gates` veto fires (empty / declined / echo /
-  // unbound — the node-level "no grounded answer was produced", the bullshitter case)
-  // the draft is not grounded enough to stand, so the shown word is substituted with a
-  // typed decline. This is the lexical-priority bar made real in the CONTROL FLOW — the
-  // signal was computed and discarded here, which made it an audit pill, not a gate.
+  // unbound — the high-amplitude LIMIT where the un-groundedness reading overwhelms every
+  // null: an empty/refusing/echoed draft, or prose that made no lexical contact with any
+  // span) the draft is not grounded enough to stand, so the shown word is substituted with
+  // a typed decline. This is the lexical-priority bar made real in the CONTROL FLOW — the
+  // signal was computed and discarded here, which made it an audit pill, not a gate. The
+  // FAINT sibling `unbound-contact` (a paraphrase that made contact but could not cite) does
+  // NOT gate — it flags and rides; enacting a faint amplitude as certainty would over-refuse.
   //
   // Nothing is laundered: the draft is preserved BESIDE the decline in `revisions`, the
   // way the rewrite and the event log preserve a superseded word (core/log.js). The

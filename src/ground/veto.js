@@ -6,6 +6,7 @@
 // why an answer was refused or flagged.
 
 import { CONTRADICTION_REFUSE_FLOOR } from '../factcheck/correspond.js';
+import { CONTACT_FLOOR } from './bind.js';
 
 // How much of a grounded answer must be tied to a source before the coverage
 // veto flags it — a per-task prior, not one flat 0.5. A direct answer should be
@@ -24,17 +25,28 @@ export const groundingFloor = (task) => GROUNDING_FLOOR[task] ?? GROUNDING_FLOOR
 
 export const VETOES = [
   {
-    // `gates: true` is the HARD FLOOR — the turn stage substitutes a typed decline for
-    // the draft (not merely a pill). It is reserved for the node-level "nothing bound at
-    // all" failures: empty / declined / echo / unbound. The cut between GATING and
-    // FLAGGING is EPISTEMIC, not deference to a holon: a node-floor failure is a
-    // STRUCTURAL FACT — `bound.every(b => !b.citation)` is just true or false, it cannot
-    // be wrong — so we gate where we are certain and the failure is total. A
-    // contradiction is a fallible MEASUREMENT: it carries a confidence, degrades to
-    // indeterminate under the hash organ, and the claim may speak truly from memory
-    // against a document that is merely silent or that we mis-typed. So edge-contradicted
-    // is refuses:true (a serious pill) but flag-and-tell, never gated. Gate on certainty
-    // where the absence is total; flag on inference that might be contested.
+    // Every veto is an EVALUATION (EVA) of the talker's output against what the engine holds
+    // — a reading with an AMPLITUDE, never a fact that holds. `gates: true` is the HARD FLOOR:
+    // the turn stage substitutes a typed decline for the draft (turn/stages.js), not merely a
+    // pill. Vetoes differ not in KIND but in AMPLITUDE — how far the un-groundedness reading
+    // beats its null — and the action is proportional to it:
+    //   • empty / declined / echo are EVAs at the HIGH-AMPLITUDE LIMIT — there is no noise
+    //     model under which an empty string, a refusal, or the echoed question is an answer,
+    //     so the reading overwhelms every null. They gate (the limit case enacted). This was
+    //     once typed as a "structural certainty" distinct from a fallible measurement; that
+    //     was a category error — `bound.every(b => !b.citation)` is not a fact ABOUT the
+    //     output, it is the engine EVALUATING its output, at the limit where the reading is
+    //     overwhelming. The gate is that limit, not a certainty the floor is owed.
+    //   • unbound (no lexical contact with ANY span — prose from nowhere) is the same limit
+    //     on the binding amplitude: score ≤ CONTACT_FLOOR for every claim → substitute.
+    //   • unbound-contact (a claim made contact yet could not clear MIN_OVERLAP — a paraphrase)
+    //     is a FAINT reading: flag, ride, NEVER substituted — enacting a faint amplitude as
+    //     certainty is the over-refusal hazard.
+    //   • a contradiction is a fallible MEASUREMENT carrying its own confidence; it degrades to
+    //     indeterminate under the hash organ and may speak truly from memory against a document
+    //     that is merely silent or mis-typed, so edge-contradicted is refuses:true (a serious
+    //     pill) but flag-and-tell, never gated. Substitution is reserved for the limit where no
+    //     paraphrase could clear the null.
     id: 'empty',
     test: ({ draft }) => String(draft || '').trim().length === 0,
     refuses: true,
@@ -72,11 +84,36 @@ export const VETOES = [
     message: 'The talker declined: the excerpts do not cover the question.',
   },
   {
+    // The from-nowhere LIMIT: every claim is uncited AND made no lexical contact with any
+    // span (score ≤ CONTACT_FLOOR for all). Prose grounded in nothing — the bullshitter case.
+    // The un-groundedness reading beats every null, so the floor substitutes (gates:true).
     id: 'unbound',
-    test: ({ bound, draft }) => bound.length > 0 && bound.every(b => !b.citation) && !isAbstention(draft),
+    test: ({ bound, draft }) =>
+      bound.length > 0 &&
+      bound.every(b => !b.citation) &&
+      bound.every(b => (b.score || 0) <= CONTACT_FLOOR) &&
+      !isAbstention(draft),
     refuses: true,
-    gates: true,   // the bullshitter case — prose grounded in nothing; the floor substitutes
-    message: 'No claim could be tied to a source sentence.',
+    gates: true,
+    message: 'No claim could be tied to a source sentence, and none made lexical contact with one.',
+  },
+  {
+    // The FAINT sibling: every claim is uncited, but at least one made lexical contact with a
+    // span (CONTACT_FLOOR < score < MIN_OVERLAP) — a paraphrase the lexical binder cannot tie
+    // to a single sentence. Flag, RIDE — never substituted. A faint amplitude has no business
+    // being enacted as certainty (the over-refusal guard); the binder cannot tell a reword from
+    // coincidence, so the meaning reader, not the floor, is what closes this residual. It is
+    // refuses:true (a serious pill — the answer cites nothing) but rides, the way a denied-but-
+    // -from-memory contradiction does.
+    id: 'unbound-contact',
+    test: ({ bound, draft }) =>
+      bound.length > 0 &&
+      bound.every(b => !b.citation) &&
+      bound.some(b => (b.score || 0) > CONTACT_FLOOR) &&
+      !isAbstention(draft),
+    refuses: true,
+    gates: false,
+    message: 'No claim could be tied to a single source sentence, though the prose made lexical contact with one — a paraphrase that rides, flagged.',
   },
   // The edge-grounding checks — the LINK-shaped sibling of `unbound`. `unbound`
   // catches a claim with no node-level witness; these catch a claimed RELATION

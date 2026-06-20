@@ -28,8 +28,19 @@
 import { tok } from '../parse/tokenize.js';
 import { documentFieldAt } from '../factcheck/correspond.js';
 
-const MIN_OVERLAP = 0.25;
+export const MIN_OVERLAP = 0.25;   // the citation bar — the null the lexical posterior beats to CITE
 const BETA        = 0.5;   // how hard the warm-referent prior tilts the ranking
+
+// CONTACT_FLOOR — the amplitude below which a claim made NO lexical contact with any span:
+// zero surviving content tokens, prose from nowhere. The binder's `score` is an idf-weighted
+// overlap FRACTION over tokens that survive the tokenizer's stop/length filter, so score > 0
+// means at least one content token of the claim landed in some span. This names the
+// HIGH-AMPLITUDE LIMIT of the un-groundedness reading — where the floor SUBSTITUTES — as
+// distinct from a paraphrase that made contact yet could not clear MIN_OVERLAP, which RIDES
+// flagged. Under the lexical organ the honest floor is exactly "no token survived" (0); a
+// future meaning reader may raise it past 0, once the amplitude is a real distribution to
+// beat rather than an overlap fraction (docs/grounding-floor.md, the graded-naming seam).
+export const CONTACT_FLOOR = 0;
 
 // P0.4: a talker sometimes opens with a meta-line — "Here's a direct and specific
 // answer to the user's question:" / "Sure, here is …:" — before the real first claim.
@@ -51,9 +62,13 @@ export const bindCitations = (draft, spans, opts = {}) => {
       best = bestMatch(claim, spans, { idf, fieldByIdx });
       cache.set(key, best);
     }
+    // A claim CITES only when its amplitude cleared the MIN_OVERLAP bar (`best.cited`).
+    // Below the bar the citation is null — but the sub-threshold amplitude still RIDES in
+    // `score`, so the floor can read the contact reading and tell a paraphrase that made
+    // lexical contact (flag, ride) from prose that came from nowhere (substitute).
     bound.push({
       claim,
-      citation: best ? `s${best.idx}` : null,
+      citation: best && best.cited ? `s${best.idx}` : null,
       score:    best ? best.score : 0,
     });
   }
@@ -118,21 +133,31 @@ const bestMatch = (claim, spans, { idf = () => 1, fieldByIdx = null } = {}) => {
     scored.push({ s, lex, field });
   }
 
-  // The GATE is the lexical posterior against the unchanged MIN_OVERLAP null —
-  // the field never lets an under-grounded claim bind, it only re-ranks claims
-  // that already clear the bar. So the warm-referent prior can change WHICH
-  // source a claim cites, never WHETHER it cites one.
-  const admitted = scored.filter(x => x.lex >= MIN_OVERLAP);
-  if (!admitted.length) return null;
+  if (!scored.length) return null;   // no lexical contact with any span — prose from nowhere
 
-  let best = null, bestRank = -Infinity;
-  for (const x of admitted) {
-    const prior = maxField > 0 ? (1 - BETA) + BETA * (x.field / maxField) : 1;
-    const rank  = x.lex * prior;
-    // Report the lexical posterior as the grounding strength; the tilt only
-    // breaks ties so `score` stays a comparable [0,1] measure of how grounded.
-    if (rank > bestRank) { bestRank = rank; best = { ...x.s, score: x.lex }; }
+  // The CITATION gate is the lexical posterior against the unchanged MIN_OVERLAP null —
+  // the field never lets an under-grounded claim CITE, it only re-ranks claims that
+  // already clear the bar. So the warm-referent prior can change WHICH source a claim
+  // cites, never WHETHER it cites one.
+  const admitted = scored.filter(x => x.lex >= MIN_OVERLAP);
+  if (admitted.length) {
+    let best = null, bestRank = -Infinity;
+    for (const x of admitted) {
+      const prior = maxField > 0 ? (1 - BETA) + BETA * (x.field / maxField) : 1;
+      const rank  = x.lex * prior;
+      // Report the lexical posterior as the grounding strength; the tilt only
+      // breaks ties so `score` stays a comparable [0,1] measure of how grounded.
+      if (rank > bestRank) { bestRank = rank; best = { ...x.s, score: x.lex, cited: true }; }
+    }
+    return best;
   }
+
+  // Contact, but below the citation bar (CONTACT_FLOOR < score < MIN_OVERLAP): the claim
+  // does NOT cite, but its strongest sub-threshold amplitude is REPORTED so the floor reads
+  // the contact and flags-and-rides rather than substitutes. No field tilt here — the tilt
+  // only breaks ties among CITABLE claims; a claim that does not cite has no citation to tilt.
+  let best = null, bestLex = -Infinity;
+  for (const x of scored) if (x.lex > bestLex) { bestLex = x.lex; best = { ...x.s, score: x.lex, cited: false }; }
   return best;
 };
 
