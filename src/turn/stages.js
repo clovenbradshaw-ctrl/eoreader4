@@ -146,24 +146,29 @@ export const stages = {
   },
 
   // Build messages. Grounded when we have spans; plain chat when we don't.
-  // P0.3: the talker is handed the MINIMAL window — system + one orientation line +
-  // the question + the verbatim excerpts, nothing else. The fold's arrows (`ctx.note`)
-  // and the session history are deliberately withheld: the arrows are the document's
-  // reading, not the talker's to paraphrase, and feeding back the history let a small
-  // model anchor on its own prior turns (a wrong answer poisoning the follow-ups). The
-  // fold is still computed upstream and recorded in the audit; it just stops entering
-  // the window. The excerpts are the only input, so every claim the talker makes is
-  // checkable against them on the way back.
+  //
+  // The talker is handed the document's own reading — the fold's arrows (`ctx.note`) —
+  // BESIDE the verbatim excerpts. The arrows are grounding it speaks FROM on the way out
+  // and is held TO on the way back (the edge-grounding veto checks the same arrows). Hand
+  // a small model spans alone and it fills the gaps between sentences with probable tokens
+  // and invents a place; discarding the computed fold here was the generation-side cause
+  // of that hallucination (docs/prompt-assembly.md). So the note enters the window again.
+  //
+  // The conversation HISTORY stays withheld (the P0.3 split): a document arrow is a reading
+  // of THIS page — pure grounding, no poisoning risk — but feeding back prior turns let a
+  // small model anchor on its own earlier answers, a wrong reply poisoning the follow-ups.
+  // So `conversation: {}` on the grounded path; only the document note rides. The fold is
+  // still recorded in the audit either way.
   async prompt(ctx) {
     const messages = ctx.spans?.length
       ? buildGroundedMessages({
           question:     ctx.question,
           spans:        ctx.spans,
-          notes:        '',                      // P0.3: the arrows no longer enter the window
+          notes:        ctx.note?.text || '',    // the fold's arrows — the document's reading, fed back in
           orientation:  orientationOf(ctx.doc),
           task:         ctx.task,               // the summary guard rides on a summary task
           budget:       ctx.budget,             // none by default; a caller may impose one
-          conversation: {},                      // P0.3: the history no longer enters the window
+          conversation: {},                      // P0.3 retained: the history is the poisoning channel, still withheld
         })
       : buildChatMessages({
           question: ctx.question,

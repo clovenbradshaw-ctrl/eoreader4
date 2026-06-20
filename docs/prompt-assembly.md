@@ -83,7 +83,7 @@ real length bound.
 
 | task | matched by | `max_tokens` |
 |---|---|---|
-| summary | summari{se,ze}, tl;dr, recap, gist, "what is this about" | 512 |
+| summary | summari{se,ze}, tl;dr, recap, gist, overview, and the whole-document identity question — "what is this about", "what is this document?", "what is this?" (but not a pointed "what is this WORD?") | 512 |
 | list | list, enumerate, "what are the…", "name every…" | 448 |
 | explain | explain, why, how, "walk me through", "in detail" | 448 |
 | answer (default) | everything else | 384 |
@@ -148,8 +148,12 @@ the audit is the projection of the fold pointed at the human.
   the same turn (`fold` builds the note at `spans[0].idx`; the prompt feeds those
   same spans). A note folded to one cursor and excerpts retrieved against another
   would be a new place to invent.
-- **The conversation scope is wired but unfed.** The prompt builder renders the
-  conversation notes and past-turn excerpts when supplied; the turn does not yet
-  populate them — that is the conversational-provenance follow-up's session-field
-  plumbing into `runTurn`, the same seam that doc named. The document scope ships
-  now.
+- **The document note rides; the conversation history is held back (the P0.3 split).**
+  The session fold (`converse` stage) now populates the conversation slots, but the
+  GROUNDED prompt stage deliberately passes `conversation: {}`: feeding a small model its
+  own prior turns let a wrong answer anchor the follow-ups (the history-poisoning
+  channel). The document note is different in kind — it is a reading of *this page*, pure
+  grounding the talker is also held to on the way back — so it is fed. The CHAT path (no
+  document, nothing to be held to) does feed the conversation notes, since there a wrong
+  prior turn is the only context there is. So: document arrows always on; conversation
+  history on for chat, off for grounded.
