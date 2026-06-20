@@ -17,6 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
+import { surpriseAt } from './surprise.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -202,26 +203,6 @@ export const readingAt = (doc, cursor, opts = {}) => {
     bump(deposit, `f:${d.id}`);
     bump(deposit, `d:${d.id}|${d.value}`);
   }
-  const support   = new Set([...priorProp.keys(), ...deposit.keys()]);
-  const newcomers = [...deposit.keys()].filter(k => !priorProp.has(k));
-  // The proposition field's own reserve probability — co-entrants split it, so the
-  // reserve is never multiply-counted (a single newcomer gets all of it).
-  const sumPropPrior = [...priorProp.values()].reduce((s, m) => s + m, 0);
-  const propNovel = NOVELTY / (sumPropPrior + NOVELTY);
-  const newShare  = newcomers.length ? propNovel / newcomers.length : 0;
-
-  const postMass = new Map();
-  let sumPost = 0;
-  for (const k of support) {
-    const m1 = γ * (priorProp.get(k) || 0) + (deposit.get(k) || 0); // m′ = γ·m + deposits
-    postMass.set(k, m1);
-    sumPost += m1;
-  }
-  const denomPost = sumPost + NOVELTY;
-  const priorW = (k) => (priorProp.has(k) ? priorProp.get(k) : newShare);
-  let sumW = NOVELTY;
-  for (const k of support) sumW += priorW(k);
-
   // Render a proposition-field atom to a readable axis label (a figure, a proposition,
   // or a predicate) — the dimension a REC restructures along when this axis strains.
   const axisLabel = (k) => {
@@ -230,22 +211,13 @@ export const readingAt = (doc, cursor, opts = {}) => {
     if (k.startsWith('d:')) { const [i, ...v] = k.slice(2).split('|'); return `${name(i)}: ${v.join('|')}`; }
     return k;
   };
-  let bayesBits = 0;
-  const bayesBy = {};                          // per-DIMENSION KL contribution — the strain AXIS the
-  for (const k of support) {                   // enacted loop accumulates so a REC knows what broke it
-    const pPost = postMass.get(k) / denomPost;
-    if (pPost <= 0) continue;
-    const c = pPost * Math.log2(pPost / (priorW(k) / sumW));
-    bayesBits += c;
-    if (c > 0) { const a = axisLabel(k); bayesBy[a] = round((bayesBy[a] || 0) + c); }  // belief moved TOWARD it
-  }
-  // The reserve atom (protention) — present in both prior and posterior, the term
-  // that keeps the KL defined (absolute continuity) on every newcomer.
-  {
-    const pPost = NOVELTY / denomPost;
-    if (pPost > 0) bayesBits += pPost * Math.log2(pPost / (NOVELTY / sumW));
-  }
-  bayesBits = Math.max(0, bayesBits);          // KL ≥ 0 (clamp float noise)
+  // THE ONE SURPRISE (Track A, docs/spec-one-surprise.md). D_KL(posterior ‖ prior) over
+  // the γ-decayed proposition field `priorProp`, with this line's `deposit` as the arrival.
+  // The computation is lifted verbatim into the modality-agnostic `surpriseAt` core, which
+  // text/music/phasepost all call — they differ only in the front-end that builds these two
+  // maps and the axis renderer. Same operations, same order: the text path stays byte-
+  // identical (parity gate: node --test tests/*.test.js).
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
