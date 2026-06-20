@@ -405,15 +405,47 @@ those questions.
   Open `index.html` and the pipeline is already alive against the
   deterministic `echo` backend.
 - **Model loads on first message, not on page open.** Page-open cost: 0.
-  When the user sends their first message, the chosen local backend
-  (`wllama` SmolLM2-135M on CPU, ~30 s cold; or `webllm` Llama-3.2-3B on
-  WebGPU, ~2 min cold) is fetched.
+  When the user sends their first message, the chosen local backend is
+  fetched — a GGUF pulled by URL through the wllama WASM runtime, or an
+  MLC model on WebGPU. See **Ethical, grounded talkers** below for the
+  backend roster.
 - **Memoized `projectGraph` with the full frame in the key.** The
   largest single perf win called out in the eoreader3 map — with the
   rules-in-frame discipline that makes it actually safe.
 - **One query embedding per turn**, shared across retrieval / fold / score.
 - **Mechanical paths first.** Math, who-is, simple confirm — answered
   without loading the model at all.
+
+## Ethical, grounded talkers
+
+The default local talkers are the **Pleias** models — the only small-model
+family trained *exclusively* on the [Common Corpus](https://huggingface.co/PleIAs):
+public-domain and permissively licensed text, no CommonCrawl, fully auditable.
+Everything else in this size class is trained on web crawl. Choosing Pleias is
+the talker-side expression of the same discipline the rest of the system runs
+on: a record you can stand behind, no figure at a void.
+
+They also *fit the work*. The Pleias RAG variants are trained to quote their
+sources and ground every claim — exactly what this app demands. A model trained
+to cite is a better realiser for a "no figure at a void" system than a general
+chat model we then have to fence in.
+
+| backend       | model            | weights            | loads via |
+|---------------|------------------|--------------------|-----------|
+| `pleias-pico` | Pleias-Pico 353M | 709 MB GGUF        | wllama WASM, by URL |
+| `pleias-rag`  | Pleias-RAG-1B    | 2.39 GB GGUF       | wllama WASM, by URL |
+| `wllama`      | SmolLM2-135M     | 138 MB GGUF        | wllama WASM, by URL |
+| `webllm`      | Llama-3.2-3B     | MLC                | WebGPU |
+
+The Pleias backends load **the same way** the existing wllama backend does — a
+GGUF fetched by URL through the shared `loadWllamaModel` runtime
+([`src/model/wllama.js`](src/model/wllama.js)). The only thing that differs is
+the prompt template: Pleias speaks a structured RAG format (special tokens for
+the query and each source), so [`src/model/pleias.js`](src/model/pleias.js)
+rebuilds that structure from the grounded prompt the turn already assembled and
+strips Pleias's scaffolding back off on the way out — the binder receives the
+same clean prose it gets from every other backend, and no citation token the
+user sees ever escapes. SmolLM2 and Llama-3.2 remain selectable for comparison.
 
 ## Auditable
 

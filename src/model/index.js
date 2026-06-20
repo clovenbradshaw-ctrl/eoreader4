@@ -11,4 +11,5 @@ export { buildGroundedMessages, buildChatMessages, SYSTEM_GROUND, SYSTEM_CHAT,
 
 import './echo.js';
 import './wllama.js';
+import './pleias.js';
 import './webllm.js';
