@@ -23,34 +23,20 @@ export const GROUNDING_FLOOR = Object.freeze({
 });
 export const groundingFloor = (task) => GROUNDING_FLOOR[task] ?? GROUNDING_FLOOR.answer;
 
+// Every veto is an EVALUATION (EVA) of the talker's output against what the engine holds
+// — a reading with an AMPLITUDE, never a fact that holds, and it FLAGS, it does not trade.
+// There is no hard floor any more: nothing here substitutes the answer. We trust the talker
+// to speak and we surface what it said; a veto is the annotation that travels alongside,
+// telling the user (and the audit) where the grounding is thin, contested, or absent. The
+// strongest readings — empty, declined, echo, the from-nowhere `unbound` — are still the
+// HIGH-AMPLITUDE LIMIT, but the right response to "the model gave us little to stand on" is
+// to TELL the user that, not to hide the little it gave behind a canned refusal. `refuses`
+// is a severity marker for display (a serious pill, shown louder), never a gate.
 export const VETOES = [
   {
-    // Every veto is an EVALUATION (EVA) of the talker's output against what the engine holds
-    // — a reading with an AMPLITUDE, never a fact that holds. `gates: true` is the HARD FLOOR:
-    // the turn stage substitutes a typed decline for the draft (turn/stages.js), not merely a
-    // pill. Vetoes differ not in KIND but in AMPLITUDE — how far the un-groundedness reading
-    // beats its null — and the action is proportional to it:
-    //   • empty / declined / echo are EVAs at the HIGH-AMPLITUDE LIMIT — there is no noise
-    //     model under which an empty string, a refusal, or the echoed question is an answer,
-    //     so the reading overwhelms every null. They gate (the limit case enacted). This was
-    //     once typed as a "structural certainty" distinct from a fallible measurement; that
-    //     was a category error — `bound.every(b => !b.citation)` is not a fact ABOUT the
-    //     output, it is the engine EVALUATING its output, at the limit where the reading is
-    //     overwhelming. The gate is that limit, not a certainty the floor is owed.
-    //   • unbound (no lexical contact with ANY span — prose from nowhere) is the same limit
-    //     on the binding amplitude: score ≤ CONTACT_FLOOR for every claim → substitute.
-    //   • unbound-contact (a claim made contact yet could not clear MIN_OVERLAP — a paraphrase)
-    //     is a FAINT reading: flag, ride, NEVER substituted — enacting a faint amplitude as
-    //     certainty is the over-refusal hazard.
-    //   • a contradiction is a fallible MEASUREMENT carrying its own confidence; it degrades to
-    //     indeterminate under the hash organ and may speak truly from memory against a document
-    //     that is merely silent or mis-typed, so edge-contradicted is refuses:true (a serious
-    //     pill) but flag-and-tell, never gated. Substitution is reserved for the limit where no
-    //     paraphrase could clear the null.
     id: 'empty',
     test: ({ draft }) => String(draft || '').trim().length === 0,
     refuses: true,
-    gates: true,
     message: 'Empty response.',
   },
   {
@@ -58,7 +44,6 @@ export const VETOES = [
     test: ({ draft }) =>
       /^(i (don'?t|cannot|can'?t) (answer|know|tell))/i.test(String(draft || '').trim()),
     refuses: true,
-    gates: true,
     message: 'Model declined.',
   },
   {
@@ -66,7 +51,6 @@ export const VETOES = [
     test: ({ draft, question }) =>
       normalize(draft) === normalize(question) && normalize(draft).length > 0,
     refuses: true,
-    gates: true,
     message: 'Model echoed the question.',
   },
   {
@@ -86,7 +70,9 @@ export const VETOES = [
   {
     // The from-nowhere LIMIT: every claim is uncited AND made no lexical contact with any
     // span (score ≤ CONTACT_FLOOR for all). Prose grounded in nothing — the bullshitter case.
-    // The un-groundedness reading beats every null, so the floor substitutes (gates:true).
+    // The un-groundedness reading beats every null, so this is the loudest flag — but it
+    // still rides: the answer ships with a prominent "couldn't tie any of this to the page"
+    // caveat, rather than being swapped for a refusal. Telling the user is the safety.
     id: 'unbound',
     test: ({ bound, draft }) =>
       bound.length > 0 &&
@@ -94,7 +80,6 @@ export const VETOES = [
       bound.every(b => (b.score || 0) <= CONTACT_FLOOR) &&
       !isAbstention(draft),
     refuses: true,
-    gates: true,
     message: 'No claim could be tied to a source sentence, and none made lexical contact with one.',
   },
   {
@@ -208,13 +193,12 @@ const isAbstention = (draft) => ABSTAIN.test(String(draft || '').trim());
 
 export const runVetoes = (ctx) => {
   const fired  = [];
-  let refuse = false, gate = false;
+  let refuse = false;
   for (const v of VETOES) {
     if (v.test(ctx)) {
-      fired.push({ id: v.id, message: v.message, refuses: !!v.refuses, gates: !!v.gates });
-      if (v.refuses) refuse = true;   // serious-pill marker (display + audit)
-      if (v.gates)   gate = true;     // hard floor — the turn stage substitutes the answer
+      fired.push({ id: v.id, message: v.message, refuses: !!v.refuses });
+      if (v.refuses) refuse = true;   // serious-pill marker (display + audit) — never a gate
     }
   }
-  return { fired, refuse, gate };
+  return { fired, refuse };
 };

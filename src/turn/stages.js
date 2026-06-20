@@ -267,11 +267,11 @@ export const stages = {
       const messages = buildGroundedMessages({
         question:    ctx.question,
         spans:       ctx.spans,
-        notes:       '',
+        notes:       ctx.note?.text || '',   // the refine reads the same notes as the first pass
         orientation: orientationOf(ctx.doc),
         task:        ctx.task,
         budget:      ctx.budget,
-        conversation: {},
+        conversation: {},                     // history still withheld on the grounded path
         corrective:  CONFAB_CORRECTIVE,
       });
       const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
@@ -281,29 +281,21 @@ export const stages = {
     return { ...cur, revised: { attempts, resolved: !confabulating(cur) }, revisions };
   },
 
-  // The veto pass. The SOFT flags ride alongside the answer (low-coverage, the
-  // edge-unsupported / weak-contradiction / off-diagonal family, referent-ambiguous,
-  // abstained) — marked, not traded. So does the libel-grade `edge-contradicted`: it is
-  // refuses:true (a serious pill) but flag-and-tell by the factcheck holon's deliberate
-  // design — the talker may speak from memory, and the system must not assert the
-  // document's primacy over the world.
-  //
-  // But the HARD floor GATES: when a `gates` veto fires (empty / declined / echo /
-  // unbound — the high-amplitude LIMIT where the un-groundedness reading overwhelms every
-  // null: an empty/refusing/echoed draft, or prose that made no lexical contact with any
-  // span) the draft is not grounded enough to stand, so the shown word is substituted with
-  // a typed decline. This is the lexical-priority bar made real in the CONTROL FLOW — the
-  // signal was computed and discarded here, which made it an audit pill, not a gate. The
-  // FAINT sibling `unbound-contact` (a paraphrase that made contact but could not cite) does
-  // NOT gate — it flags and rides; enacting a faint amplitude as certainty would over-refuse.
-  //
-  // Nothing is laundered: the draft is preserved BESIDE the decline in `revisions`, the
-  // way the rewrite and the event log preserve a superseded word (core/log.js). The
-  // record shows what the talker said, why it was gated, and the honest word shipped in
-  // its place. Without a doc we skip the grounding vetoes entirely.
+  // The veto pass — flag-and-tell, ALWAYS. The vetoes ride alongside the model's answer
+  // as the fact-check's annotations; they never substitute it. We trust the talker to say
+  // the thing, surface what it said, and pin a flag where the grounding is thin or
+  // contested (low-coverage, edge-unsupported / contradicted, off-diagonal, referent-
+  // ambiguous, abstained, and the from-nowhere `unbound`). A flag is an ADDITION to the
+  // answer, not a trade for it: the user sees the answer the model gave — never a canned
+  // decline, never a raw span swapped in for it — with the caveats attached. Surfacing the
+  // model's word and telling the user what we could and couldn't ground is the whole job;
+  // hiding it behind a typed refusal was the old span-extractive reflex, now retired. If
+  // the talker truly needs to know more before it can speak, that is the upstream retrieval
+  // / revise loop's problem, not a reason to gag the answer here. Without a doc we skip the
+  // grounding vetoes entirely.
   async veto(ctx) {
     if (!ctx.spans?.length) return { ...ctx, vetoes: [] };
-    const { fired, gate } = runVetoes({
+    const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
       referential: ctx.referential, task: ctx.task,
       // The edge-grounding verdicts the factcheck stage just deposited — the link-
@@ -311,14 +303,7 @@ export const stages = {
       // computed and discarded; now a claim the graph DENIES becomes a flag.
       edgeVerdicts: ctx.edgeVerdicts,
     });
-    if (!gate) return { ...ctx, vetoes: fired };
-
-    const gatedBy   = fired.filter(f => f.gates).map(f => f.id);
-    const decline   = declineAnswer(gatedBy);
-    const revisions = [...(ctx.revisions || []), Object.freeze({
-      draft: ctx.rawOutput, refusedBy: gatedBy, replacedBy: decline,
-    })];
-    return { ...ctx, vetoes: fired, gated: true, answer: decline, sources: [], revisions };
+    return { ...ctx, vetoes: fired };
   },
 
   // Settle: a placeholder for conversation-field updates and form stamps.
@@ -332,30 +317,21 @@ export const stages = {
 // still fails, put it through with the span tagged. One pass is the "a rewrite".
 const REWRITE_ATTEMPTS = 1;
 
-// The corrective handed to the talker on the rewrite pass — name the over-reach and
-// steer to the excerpts or to the honest abstention. No notes, no history (P0.3).
+// The corrective handed to the talker on the rewrite pass — a REFINE, not a retreat. It
+// names the specific over-reach (a connection the passages don't support) and asks for a
+// truer answer in the model's own words, dropping the unsupported link — NOT for a blanket
+// "the document does not say." We are still trusting the talker; we are only steering it
+// off the one claim the reading could not witness.
 const CONFAB_CORRECTIVE =
-  'A previous attempt asserted a specific connection — a cause, a relationship, an ' +
-  'identity, an action between named figures — that the excerpts do not state. Answer ' +
-  'again using ONLY what the excerpts say. If the excerpts do not state such a ' +
-  'connection, do not assert one: say the document does not say.';
+  'A previous attempt asserted a specific connection between named figures — a cause, an ' +
+  'action, an identity, a relationship — that the passages do not actually support. Answer ' +
+  'again in your own words, keeping to what the passages support. State the connection only ' +
+  'if it is really there; otherwise answer the part you can and leave the unsupported link out.';
 
 // Did the diagonal guard catch the confabulation proper — a specific claim asserted at
 // a measured Void (the figure-at-a-void shape)? The hard case the rewrite targets.
 const confabulating = (ctx) =>
   (ctx.edgeVerdicts || []).some(v => v.verdict === 'off_diagonal' && v.void);
-
-// The typed decline the hard floor substitutes when a refusing veto gates the turn —
-// the talker-floor's NUL, distinct from the perception void (which is about no spans).
-// Named to the dominant reason so the shown word is honest about WHY it declined, never
-// a bare "I can't." The draft it replaces is preserved in `revisions`, never erased.
-const DECLINE = Object.freeze({
-  unbound:   "I can't ground an answer to that in the document.",
-  empty:     "I don't have an answer to that.",
-  echo:      "I don't have a grounded answer to that.",
-  declined:  "I don't have a grounded answer to that.",
-});
-const declineAnswer = (gatedBy = []) => DECLINE[gatedBy[0]] || "I can't give a grounded answer to that.";
 
 // The Site-face terrain the reading typed at the answer locus, for the diagonal guard.
 // A measured void is a Void; a locus the document DEF'd as a site (boilerplate /
