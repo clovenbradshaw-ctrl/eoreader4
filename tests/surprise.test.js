@@ -67,6 +67,23 @@ test('forwardDist on an empty profile puts ALL mass on the unseen (the opening d
 
 const STORY = 'Grete Vale entered. Grete sat. Grete read. Gregor Pike arrived. Gregor coughed. Gregor waited.';
 
+// --- EXACT-VALUE PARITY GOLDEN. ---------------------------------------------------------
+// The existing read/bayes goldens assert only `== 0` (opening) and ORDERINGS (newcomer >
+// recurrence), so a small numeric drift in the extracted core would pass unseen. These pin
+// exact mid-stream values — verified byte-identical against the pre-extraction inline
+// reading.js over two full texts (data/metamorphosis.txt, data/esker.txt). A future
+// refactor of surpriseAt that shifts a value trips here.
+test('exact-value parity: the extracted core reproduces the inline surprise byte-for-byte', () => {
+  const doc = parseText(
+    'Ada Long spoke. Ada Long spoke. Ben Cole arrived. Ben Cole spoke. Cara Dove entered. Cara Dove spoke.',
+    { docId: 'gold' });
+  const at = (c) => { const r = readingAt(doc, c); return [r.surprisalBits, r.bayesBits]; };
+  assert.deepEqual(at(0), [0, 0],      'opening is zero on both channels');
+  assert.deepEqual(at(1), [1, 0.05],   'a confirming recurrence (Ada) barely moves belief');
+  assert.deepEqual(at(2), [1.43, 0.2], 'a newcomer (Ben) — exact surprisal + KL');
+  assert.deepEqual(at(4), [1.82, 0.26],'a third figure (Cara) into a committed cast');
+});
+
 test('readingAt exposes p(next) ONLY under { forward:true } — default is byte-identical (parity)', () => {
   const doc = parseText(STORY, { docId: 'pn' });
   assert.equal(readingAt(doc, 3).pNext, undefined, 'no forward field unless asked — the goldens are untouched');
