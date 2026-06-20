@@ -251,9 +251,31 @@ const claimGrain = (claim) =>
 // positively witnesses (corroborated) or denies (contradicted) is already adjudicated
 // with a witness and is skipped; the guard speaks to the unwitnessed claim asserted
 // where the reading found no ground for it. Inert when no terrain was measured.
+//
+// SCOPE — what this does NOT catch, and why it must stay that way. The claim space is
+// currently EDGES-ONLY: the SVO parser yields entity-to-entity relations, and such an
+// edge is Figure-grain by construction. A Ground-grain claim — a tone or atmospheric
+// predication ("the statement is neutral"), a single-argument assertion — has no second
+// entity and produces NO edge, so the guard never sees it. That is structural blindness,
+// not a miss: there is nothing to test. Closing it needs the P2 CLAIM-GRAIN CHANNEL — a
+// second extractor that reads the talker's NON-relational sentences and types their
+// grain directly, not an addition to the relation typer. Until it lands, the guard
+// covers Figure-at-Void (the hard confabulation, rightly closed first) and stays silent
+// on Ground over-reads (the softer case).
+//
+// And a standing caveat for whoever builds that channel: a Ground claim at a Ground
+// terrain — a tone claim at an Atmosphere — is ON the diagonal, grain-coherent, so the
+// guard MUST NOT flag it. A "neutral tone" read over an evasive passage fails because it
+// is FALSE (a correspondence verdict against the read tone), never because it is off-
+// grain. Catching that is blocked on two stacked, still-unbuilt things: this claim-grain
+// channel to SEE the claim, and an Atmosphere-reading pass to give it a terrain VALUE to
+// judge against. Do not "fix" the guard to fire on a coherent Ground claim.
 const diagonalGuard = (claims, terrain) => {
   const meta = terrainInfo(terrain);
   if (!meta) return [];
+  // The first operator in the terrain's domain — a canonical, deterministic pick (stable
+  // OPERATORS order), not arbitrary: any op in the domain satisfies the domain check by
+  // construction, leaving grain as the sole live discriminator. That is the whole point.
   const op = operatorsByDomain(meta.domain)[0]?.id;
   if (!op) return [];
   const out = [];
