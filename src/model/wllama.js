@@ -27,7 +27,11 @@
 
 import { registerBackend } from './interface.js';
 
-const WLLAMA_VERSION = '2.4.0';
+// Pinned to 2.3.7, the last release before wllama 2.4.0 made Memory64 (wasm64) a
+// hard requirement. 2.4.0 drops Safari and any browser without memory64 support,
+// where loading a model crashes mid-parse as "Invalid typed array length: …" —
+// the glue misreading 64-bit memory. 2.3.x is the broadly compatible line.
+const WLLAMA_VERSION = '2.3.7';
 const WLLAMA_BASE = `https://cdn.jsdelivr.net/npm/@wllama/wllama@${WLLAMA_VERSION}/esm`;
 const WLLAMA_RUNTIME_URL = `${WLLAMA_BASE}/index.js`;
 // The wasm assets the constructor needs, keyed by the logical names wllama looks
