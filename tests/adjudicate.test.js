@@ -61,12 +61,17 @@ test('a GROUNDED claim the graph denies is flagged and RIDES — flag-and-tell o
   assert.equal(fc.data.contradicted, 1);
 });
 
-test('an UNGROUNDED claim that also contradicts gates on the structural floor — but the measurement survives', async () => {
-  // The same denied relation, but with NOTHING bound. Now the STRUCTURAL floor (unbound)
-  // gates — ungrounded prose does not surface as fact — even though the claim also
-  // contradicts. The gate is about grounding, not the contradiction: the contradiction is
-  // still measured and recorded (factcheck contradicted=1), and the draft is suppressed-
-  // not-deleted (kept in revisions). The gate erases no signal.
+test('a contradicting claim that makes lexical CONTACT rides, flagged — the lexical floor does not over-refuse a paraphrase, and the contradiction is still measured', async () => {
+  // The denied relation again, in a draft that CITES nothing (no claim clears MIN_OVERLAP)
+  // but DOES make lexical contact with a span — it restates "Grete waited" with extra
+  // material. Under the floor's re-typing (docs/grounding-floor.md) the lexical gate
+  // substitutes only the from-nowhere LIMIT — prose with no contact at all. A paraphrase
+  // that made contact but could not cite is a FAINT reading: it rides, flagged
+  // (`unbound-contact`), never substituted — enacting a faint amplitude as certainty is the
+  // over-refusal hazard, and a contradiction about real figures necessarily NAMES them, so
+  // it is never truly "from nowhere". The contradiction is the right organ for the false
+  // relation: it is independently measured (contradicted=1) and flagged (`edge-contradicted`),
+  // flag-and-tell. The lexical floor erases no signal by declining to gate.
   const doc = parseText(STORY, { docId: 'adj' });
   const audit = createAuditLog();
   const result = await runTurn({
@@ -74,11 +79,14 @@ test('an UNGROUNDED claim that also contradicts gates on the structural floor �
     doc, model: memoryModel("Gregor Samsa's mother Grete waited at the door."),
     embedder: createHashEmbedder(), auditLog: audit,
   });
-  assert.equal(result.turn.gated, true, 'nothing bound → the structural floor gates');
-  assert.doesNotMatch(result.answer, /mother/i, 'the ungrounded prose is not surfaced');
+  const ids = result.flags.map(f => f.id);
+  assert.equal(result.turn.gated, false, 'a contacting paraphrase is NOT substituted — the over-refusal guard holds');
+  assert.ok(ids.includes('unbound-contact'), 'it flags as contact-but-uncitable (a faint reading), not the from-nowhere gate');
+  assert.ok(!ids.includes('unbound'), 'the from-nowhere gate stays silent — the prose made contact');
+  assert.ok(ids.includes('edge-contradicted'), 'and the contradiction is flagged on its own organ — flag-and-tell');
+  assert.match(result.answer, /mother/i, 'the model text rides with its flags, not gagged');
   const fc = result.turn.steps.find(s => s.name === 'factcheck');
-  assert.equal(fc.data.contradicted, 1, 'the contradiction is still measured and recorded — the gate erased nothing');
-  assert.ok(result.turn.revisions?.some(r => /mother/i.test(r.draft)), 'and the gated draft survives in revisions');
+  assert.equal(fc.data.contradicted, 1, 'the contradiction is still measured and recorded — declining to gate erased nothing');
 });
 
 test('a from-memory claim consistent with the graph draws no contradiction flag', async () => {
