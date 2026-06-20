@@ -44,8 +44,22 @@ export const VETOES = [
     message: 'Model echoed the question.',
   },
   {
+    // The honest abstention — "the document does not say." With the void no longer
+    // auto-answered (P0.2), the talker itself declines when the excerpts don't cover the
+    // question, and that decline now flows through bind/veto. It is the CORRECT void
+    // response, not a grounding failure: it makes no claims precisely because there is
+    // nothing to claim. Recognise it as a benign, non-refusing outcome so the grounding
+    // vetoes below (unbound, low-coverage) don't mislabel an abstention as an unbound
+    // answer. Anchored to the document/text/excerpts subject so a real claim that merely
+    // contains "does not say" ("the clerk does not say goodbye") is untouched.
+    id: 'abstained',
+    test: ({ draft }) => isAbstention(draft),
+    refuses: false,
+    message: 'The talker declined: the excerpts do not cover the question.',
+  },
+  {
     id: 'unbound',
-    test: ({ bound }) => bound.length > 0 && bound.every(b => !b.citation),
+    test: ({ bound, draft }) => bound.length > 0 && bound.every(b => !b.citation) && !isAbstention(draft),
     refuses: true,
     message: 'No claim could be tied to a source sentence.',
   },
@@ -119,9 +133,9 @@ export const VETOES = [
   },
   {
     id: 'low-coverage',
-    test: ({ bound, task }) => {
+    test: ({ bound, task, draft }) => {
       const total = bound.length;
-      if (total === 0) return false;
+      if (total === 0 || isAbstention(draft)) return false;   // an abstention claims nothing — not under-covered
       const cited = bound.filter(b => b.citation).length;
       return cited / total < groundingFloor(task);
     },
@@ -132,6 +146,13 @@ export const VETOES = [
 
 const normalize = (s) =>
   String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+
+// An honest void abstention — the talker declining because the excerpts don't cover the
+// question. Anchored to the document/text/excerpts (or a bare "no information") subject,
+// so it recognises "the document does not say" / "the text does not mention X" but NOT a
+// real claim that happens to contain the words ("the clerk does not say goodbye").
+const ABSTAIN = /^\s*(?:the\s+(?:document|text|excerpts?|passage)|it|this(?:\s+(?:document|text))?)\s+(?:does\s*n['’]?t|does\s+not|do\s+not|is\s+silent|says?\s+nothing)\b[^.?!]*?\b(?:say|says|mention|mentions|state|states|specify|specifies|cover|covers|address|addresses|indicate|indicates|contain|contains|tell)?\b|^\s*no\s+(?:information|mention|indication|details?|record)\b/i;
+const isAbstention = (draft) => ABSTAIN.test(String(draft || '').trim());
 
 export const runVetoes = (ctx) => {
   const fired  = [];
