@@ -29,7 +29,7 @@ const STATE = {
   doc:       null,
   audit:     createAuditLog(),
   embedder:  createHashEmbedder(),
-  backendName: 'echo',
+  backendName: 'webllm',
   model:     null,
   loadingBackend: null,  // promise of the in-flight model load, if any
   graph:     null,       // graph-view controller for the current doc
