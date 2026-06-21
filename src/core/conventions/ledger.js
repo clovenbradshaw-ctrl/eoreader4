@@ -1,13 +1,28 @@
-// The conventions ledger — eoreader3's RULES_LEDGER / conventions.jsonl.
+// The conventions ledger — the CORE's learning layer (reshape §5).
 //
-// This is the home for the language-specific stuff. The parser and the splitter
-// hold NO word-lists of their own; they READ from here. Each convention is seeded
-// (a DEF, the established starting rule) and learnable (a REC, the document
-// teaching the reader its own dialect — a sci-fi text whose dialogue runs on
-// "pinged", a journal whose "Inst." is no sentence end). The high (a learned rule)
-// sets the probabilities for the low (how the next thousand sentences segment and
-// classify). Nothing is hard-coded true; a convention is whatever the language is,
-// seeded, and whatever the text keeps doing, learned.
+// This is the home for the language-specific stuff, and it lives in the core, not
+// in a sense organ, because the built-in reading knowledge is inherited sediment:
+// the SAME substance, format, slot, and defeasible status as what the DEF·EVA·REC
+// loop deposits while reading. The parser and the splitter hold NO word-lists of
+// their own; they READ from here.
+//
+// Two origins, one status. An INHERITED prior (the seeds below) and a LEARNED
+// convention (a sci-fi text whose dialogue runs on "pinged", a journal whose
+// "Inst." is no sentence end) sit in the same store with the same authority. A
+// prior is just a convention with strain-history pre-baked — a HEAD START in
+// confidence, not an exemption from the loop. So every convention is defeasible:
+//
+//   DEF   hold a convention (this token marks speech; this term binds kin)
+//   EVA   test it against what the stream gives → reinforce (support grows) on a
+//         hold, accrue strain on a break
+//   REC   revise: when strain overtakes support the convention is DEFEATED, and a
+//         learned convention can beat an inherited one. `has()` then answers false.
+//
+// Nothing is hard-coded true; a prior is whatever the language started as, and a
+// convention is whatever the text keeps doing — and either can lose. Three
+// guarantees fall out (the falsifiability tests in tests/conventions-emergence):
+// readable with priors OFF, a seed can LOSE, and a learned convention occupies
+// the SAME slot a later document inherits exactly as it inherited the seeds.
 //
 // The registers, all the same shape:
 //   attribution  verbs that mark speech → SIG          (said, asked, pinged)
@@ -213,26 +228,105 @@ const SEEDS = {
   'starter': SEED_STARTER,
 };
 
-export const createConventions = () => {
-  const rules = [];                 // learned REC entries, append-only (→ the doc log)
-  const reg = {};                   // kind → Map(token → weight)
-  const learned = new Set();        // 'kind:token' the document taught (vs seed)
-  for (const [kind, seed] of Object.entries(SEEDS)) {
-    reg[kind] = new Map(seed.map((t) => [t, 0]));
-  }
+// The pre-baked strain-history a prior carries: a seed is not an axiom, it is a
+// convention that has already held a few times. So it takes more breaks to defeat
+// a prior than a brand-new learned convention (which starts with support 1) — the
+// head start in confidence, made of the same stuff as a reinforcement.
+const PRIOR_SUPPORT = 3;
+
+// One ledger, two origins, one status. `createConventions()` seeds the priors;
+//   { seeds: false }    constructs with priors OFF (the substrate for TEST 1 —
+//                       can the core still read from units alone?)
+//   { inherit: [...] }  loads conventions exported by an earlier read as priors —
+//                       a learned convention inherited exactly as a seed is (TEST 3)
+export const createConventions = ({ seeds = true, inherit = null } = {}) => {
+  const rules = [];                 // learned/revised entries, append-only (→ the doc log)
+  const reg = {};                   // kind → Map(token → entry)
+  // entry = { origin: 'prior'|'learned', weight, support, strain, defeated }
+  //   weight   the attribution/learn weight (0 for an unlearned prior), as before
+  //   support  strain-history: holds. priors pre-baked to PRIOR_SUPPORT
+  //   strain   accrued breaks; when strain > support the convention is defeated
+  const ensure = (kind) => (reg[kind] || (reg[kind] = new Map()));
   const norm = (v) => String(v || '').toLowerCase().replace(/\.$/, '');
 
+  // Seed the inherited priors. A prior is a convention with strain-history baked
+  // in, so it enters with weight 0 (unlearned), pre-baked support, no strain.
+  if (seeds) {
+    for (const [kind, seed] of Object.entries(SEEDS)) {
+      const m = ensure(kind);
+      for (const t of seed)
+        m.set(t, { origin: 'prior', weight: 0, support: PRIOR_SUPPORT, strain: 0, defeated: false });
+    }
+  }
+  // Inherited sediment from an earlier read arrives in the SAME slot as a seed —
+  // a prior to this document, whatever its origin in the last one (TEST 3).
+  if (Array.isArray(inherit)) {
+    for (const e of inherit) {
+      if (e.defeated) continue;       // a defeated convention is not inherited
+      const t = norm(e.token);
+      ensure(e.kind).set(t, {
+        origin: 'prior',
+        weight: e.weight || 0,
+        support: e.support || PRIOR_SUPPORT,
+        strain: 0,
+        defeated: false,
+      });
+    }
+  }
+
+  const entryOf = (kind, v) => (reg[kind] ? reg[kind].get(norm(v)) : undefined);
+  const has = (kind, v) => { const e = entryOf(kind, v); return !!e && !e.defeated; };
+
+  // DEF — hold a convention. A freshly held convention is learned sediment; an
+  // already-held one (a prior) is reinforced. Recorded as a REC line on the log,
+  // exactly as before, so the rules ledger and exportJSONL are byte-identical.
   const learn = (kind, token, weight = 1) => {
     const t = norm(token);
-    if (!reg[kind]) reg[kind] = new Map();
-    reg[kind].set(t, (reg[kind].get(t) || 0) + weight);
-    learned.add(`${kind}:${t}`);
+    const m = ensure(kind);
+    const e = m.get(t);
+    if (e) { e.weight += weight; e.support += weight; e.origin = 'learned'; e.defeated = false; }
+    else m.set(t, { origin: 'learned', weight, support: weight, strain: 0, defeated: false });
     rules.push({ op: 'REC', kind, token: t, weight, t: Date.now() });
   };
-  const has = (kind, v) => !!reg[kind] && reg[kind].has(norm(v));
+
+  // EVA — test a convention against what the stream gives. A hold reinforces
+  // (support grows, strain relaxes); a break accrues strain. REC fires
+  // automatically when strain overtakes support: the convention is DEFEATED.
+  const eva = (kind, token, holds = true) => {
+    const t = norm(token);
+    const m = ensure(kind);
+    let e = m.get(t);
+    if (!e) { e = { origin: 'learned', weight: 0, support: 0, strain: 0, defeated: false }; m.set(t, e); }
+    if (holds) { e.support += 1; if (e.strain > 0) e.strain -= 1; }
+    else { e.strain += 1; }
+    if (e.strain > e.support && !e.defeated) {
+      e.defeated = true;
+      rules.push({ op: 'REC', kind, token: t, defeat: true, t: Date.now() });
+    }
+    return { defeated: e.defeated, support: e.support, strain: e.strain };
+  };
+
+  // REC — revise directly. `defeat` overrides a convention (a discovery beating an
+  // inherited prior); `reinstate` clears the defeat; otherwise it reinforces.
+  const rec = (kind, token, { defeat = false, reinstate = false } = {}) => {
+    const t = norm(token);
+    const m = ensure(kind);
+    let e = m.get(t);
+    if (!e) { e = { origin: 'learned', weight: 0, support: 0, strain: 0, defeated: false }; m.set(t, e); }
+    if (defeat) { e.defeated = true; }
+    else if (reinstate) { e.defeated = false; e.strain = 0; }
+    else { e.support += 1; }
+    rules.push({ op: 'REC', kind, token: t, ...(defeat ? { defeat: true } : {}), t: Date.now() });
+    return { defeated: e.defeated, support: e.support, strain: e.strain };
+  };
 
   return {
     learn,
+    def: learn,                     // DEF — hold (alias; a held convention is learned sediment)
+    eva,                            // EVA — test against the stream
+    rec,                            // REC — revise / override
+    defeat: (kind, token) => rec(kind, token, { defeat: true }),
+    reinstate: (kind, token) => rec(kind, token, { reinstate: true }),
     learnAttribution: (token, weight = 1) => learn('attribution-verb', token, weight),
     learnAbbreviation: (token, weight = 1) => learn('abbreviation', token, weight),
     isAttributionVerb: (v) => has('attribution-verb', v),
@@ -245,6 +339,11 @@ export const createConventions = () => {
     isRole: (v) => has('role', v),
     isFunction: (v) => has('function', v),
     isStarter: (v) => has('starter', v),
+    // Convention status — the strain-history a consumer or a test can read.
+    isDefeated: (kind, v) => { const e = entryOf(kind, v); return !!e && e.defeated; },
+    originOf: (kind, v) => entryOf(kind, v)?.origin ?? null,
+    strainOf: (kind, v) => entryOf(kind, v)?.strain ?? 0,
+    supportOf: (kind, v) => entryOf(kind, v)?.support ?? 0,
     // Type a relation predicate to its closed-vocab bucket (move 3), or null when it
     // is outside the table — additive, never a drop. Speech is read live from the
     // attribution register so a learned speech verb types as `speech` too.
@@ -254,19 +353,33 @@ export const createConventions = () => {
       if (has('attribution-verb', t)) return 'speech';
       return RELATION_TYPE.get(t) || null;
     },
-    weightOf: (v) => reg['attribution-verb'].get(norm(v)) || 0,
+    weightOf: (v) => entryOf('attribution-verb', v)?.weight || 0,
     get rules() { return rules; },
-    get attribution() { return reg['attribution-verb']; },
-    get abbreviation() { return reg['abbreviation']; },
-    // The full language spec — conventions.jsonl. A line per convention, DEF for
-    // the seed it started from, REC for what the document taught. This is where the
-    // language-specific stuff lives; the parser and splitter only read it.
+    // Back-compat Map views (token → weight). Derived; not load-bearing.
+    get attribution() { return new Map([...(reg['attribution-verb'] || [])].map(([t, e]) => [t, e.weight])); },
+    get abbreviation() { return new Map([...(reg['abbreviation'] || [])].map(([t, e]) => [t, e.weight])); },
+    // The full language spec — conventions.jsonl. A line per convention, DEF for the
+    // prior it started from, REC for what the document taught; a defeated one carries
+    // the flag. The parser and splitter only read it.
     exportJSONL() {
       const out = [];
       for (const [kind, m] of Object.entries(reg))
-        for (const [token, weight] of m)
-          out.push(JSON.stringify({ op: learned.has(`${kind}:${token}`) ? 'REC' : 'DEF', kind, token, weight }));
+        for (const [token, e] of m)
+          out.push(JSON.stringify({
+            op: e.origin === 'learned' ? 'REC' : 'DEF', kind, token, weight: e.weight,
+            ...(e.defeated ? { defeated: true } : {}),
+          }));
       return out.join('\n');
+    },
+    // Structured export for inheritance: the sediment a later read picks up as its
+    // priors, the same slot it picks up the seeds (TEST 3 / reshape §5).
+    exportLedger() {
+      const out = [];
+      for (const [kind, m] of Object.entries(reg))
+        for (const [token, e] of m)
+          out.push({ kind, token, origin: e.origin, weight: e.weight, support: e.support,
+                     strain: e.strain, defeated: e.defeated });
+      return out;
     },
   };
 };

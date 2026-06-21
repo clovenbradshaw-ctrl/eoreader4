@@ -33,7 +33,7 @@
 // propositions into incoherent run-ons (meaning revising syntax). The promoted marks
 // arrive here as `extraBoundaries`; modern prose, which fuses nothing, is unchanged.
 
-import { SEED_ABBREVIATIONS } from '../conventions/index.js';
+import { SEED_ABBREVIATIONS } from '../core/conventions/index.js';
 
 const SEED_ABBR = new Set(SEED_ABBREVIATIONS);
 const defaultIsAbbreviation = (w) => SEED_ABBR.has(String(w).toLowerCase());

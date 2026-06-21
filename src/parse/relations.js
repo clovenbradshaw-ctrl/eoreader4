@@ -19,7 +19,7 @@
 
 import { scanEntities } from './entities.js';
 import { segmentClauses } from './clauses.js';
-import { SEED_COPULA, SEED_MODIFIER, SEED_SPEECH } from '../conventions/index.js';
+import { SEED_COPULA, SEED_MODIFIER, SEED_SPEECH } from '../core/conventions/index.js';
 
 // The verb-classification word-lists live in the conventions ledger (the home for
 // the language-specific stuff), seeded and learnable. The parser holds NO list of

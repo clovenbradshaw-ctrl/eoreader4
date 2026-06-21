@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createConventions } from '../src/conventions/index.js';
+import { createConventions } from '../src/core/conventions/index.js';
 import { segmentSentences } from '../src/parse/sentences.js';
 import { headVerb } from '../src/parse/relations.js';
 import { parseText } from '../src/parse/index.js';

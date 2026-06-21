@@ -22,7 +22,7 @@
 
 import { createLog }         from '../core/log.js';
 import { projectGraph }      from '../core/index.js';
-import { createConventions } from '../conventions/index.js';
+import { createConventions } from '../core/conventions/index.js';
 
 // 8-connected components of a set of "x,y" lit-pixel keys → blobs with centroid.
 const components = (on) => {

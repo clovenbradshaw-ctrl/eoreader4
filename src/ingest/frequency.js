@@ -21,7 +21,7 @@
 
 import { createLog }         from '../core/log.js';
 import { projectGraph }      from '../core/index.js';
-import { createConventions } from '../conventions/index.js';
+import { createConventions } from '../core/conventions/index.js';
 
 // A partial lands in a bin if it falls within TOL of it — a frequency-resolution
 // grain, the finest distinction the reader is asked to make. It is NOT a scale:

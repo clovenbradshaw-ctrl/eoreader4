@@ -21,7 +21,7 @@
 
 import {
   SEED_STARTER, SEED_FUNCTION, SEED_PREPOSITION, SEED_ROLE, SEED_AUXILIARY,
-} from '../conventions/index.js';
+} from '../core/conventions/index.js';
 
 const TITLE = String.raw`(?:Mr|Mrs|Ms|Dr|Miss|Mister|Sir|Madam|Madame|Lady|Lord|Professor|Prof|Capt|Captain|Rev|St|Aunt|Uncle)\.?`;
 // A lowercase connector (von, of, the) only counts when it sits *between* two

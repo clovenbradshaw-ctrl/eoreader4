@@ -22,7 +22,7 @@ import { argumentSpanSeg }      from './proposition.js';
 import { createCorefField }     from './coref.js';
 import { discoverNamings }      from './naming.js';
 import { tok }                  from './tokenize.js';
-import { createConventions, induceAttributionVerbs } from '../conventions/index.js';
+import { createConventions, induceAttributionVerbs } from '../core/conventions/index.js';
 
 // A pronoun-resolved descriptor owner ("his sister") is taken only when the prior
 // field's top candidate outweighs the runner-up by this ratio — an unambiguous
@@ -50,6 +50,11 @@ export const createParser = ({
   // deliberately conservative (a rare crisis); exposed so a test or a known dialect
   // can set its own sensitivity. Undefined → the loop's own default.
   boundaryThreshold  = undefined,
+  // The core's learning layer (reshape §5), injectable so a harness can turn the
+  // inherited priors OFF ({ seeds: false }) to prove the core still reads from
+  // units alone (TEST 1), or feed sediment a prior read deposited ({ inherit }).
+  // Default undefined → the seeded ledger; a bare parse is unchanged.
+  conventionsOpts    = undefined,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -64,7 +69,7 @@ export const createParser = ({
     // reads its abbreviation list from the ledger, so segmentation already honours
     // "Mr. Darcy" before a single word is classified, and the relation parser
     // reads its copula/modifier/speech lists from the same place.
-    const conventions = createConventions();
+    const conventions = createConventions(conventionsOpts);
     // Before the first cut, let MEANING revise SYNTAX (parse/boundaries.js): the
     // DEF·EVA·REC coherence loop learns whether THIS document uses ':'/';' as
     // sentence boundaries — promoting one only when leaving it ignored fuses
