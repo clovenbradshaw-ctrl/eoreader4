@@ -359,7 +359,7 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 }
 .tab:hover { background: #232328; color: #e4e4e7; }
 .tab.active { background: #1d2030; color: #93c5fd; border-color: #1e3a8a; }
-#doc-view[hidden], #graph-view[hidden], #log-view[hidden], #feed-view[hidden], #predict-view[hidden] { display: none; }
+#doc-view[hidden], #graph-view[hidden], #log-view[hidden], #feed-view[hidden], #predict-view[hidden], #idle-view[hidden] { display: none; }
 
 /* Site-role units in the text view — held back from grounding */
 #doc-view .sentence.site { opacity: .4; }
@@ -657,3 +657,38 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 .pv-ctl-l { color: #a1a1aa; flex: 1; }
 .pv-ctl-v { color: #e4e4e7; font-family: ui-monospace, monospace; min-width: 3rem; text-align: right; }
 .pv-ctl-n { color: #6ee7b7; font-size: .68rem; min-width: 9rem; }
+
+/* The Rest view — the instrument still reading after the first pass (§15/§16). */
+.iv-wrap { display: flex; flex-direction: column; gap: .6rem; }
+.iv-field { background: #131316; border: 1px solid #27272a; border-radius: 6px; padding: .6rem .7rem; }
+.iv-top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.iv-state { display: inline-flex; align-items: center; gap: .4rem; font-size: .74rem; letter-spacing: .04em; color: #a1a1aa; text-transform: uppercase; }
+.iv-dot { width: 7px; height: 7px; border-radius: 50%; background: #6ee7b7; }
+.iv-state.surfing { color: #93c5fd; }
+.iv-state.surfing .iv-dot { background: #93c5fd; box-shadow: 0 0 0 0 rgba(147,197,253,.5); animation: iv-pulse 1.5s ease-out infinite; }
+@keyframes iv-pulse { 0% { box-shadow: 0 0 0 0 rgba(147,197,253,.45); } 100% { box-shadow: 0 0 0 8px rgba(147,197,253,0); } }
+.iv-tele { font-size: .7rem; color: #71717a; font-family: ui-monospace, monospace; }
+.iv-canvas { display: block; width: 100%; height: 48px; margin: .4rem 0 .25rem; }
+.iv-note { font-size: .7rem; color: #71717a; }
+
+.iv-sec-h { display: flex; align-items: center; gap: .5rem; margin-top: .5rem; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: #71717a; }
+.iv-rule { flex: 1; height: 1px; background: #27272a; }
+.iv-sub { font-size: .74rem; color: #71717a; font-style: italic; margin: .1rem 0 .3rem; }
+
+.iv-q { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; padding: .4rem 0; border-bottom: 1px solid #1f1f23; }
+.iv-qt { font-size: .86rem; color: #e4e4e7; }
+.iv-qr { font-size: .68rem; color: #52525b; font-family: ui-monospace, monospace; }
+.iv-band { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; padding: .05rem .4rem; border-radius: 3px; border: 1px solid #3f3f46; color: #a1a1aa; white-space: nowrap; }
+.iv-band.void { color: #71717a; border-color: #3f3f46; }
+.iv-band.hedged { color: #fcd34d; border-color: #78350f; }
+
+/* candidates — reafferent: dashed, ghosted, never solid; you decide (the §8 firewall in FORM). */
+.iv-cand { border: 1px dashed #3f4a46; border-radius: 5px; padding: .55rem .65rem; margin-top: .45rem; background: rgba(110,231,183,.025); }
+.iv-tag { font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; color: #71717a; }
+.iv-body { font-size: .88rem; color: #e4e4e7; font-style: italic; margin: .35rem 0 .5rem; }
+.iv-acts { display: flex; gap: .4rem; }
+.iv-ok { color: #6ee7b7 !important; border-color: #065f46 !important; }
+.iv-cite { color: #93c5fd; cursor: pointer; font-family: ui-monospace, monospace; }
+.iv-cite:hover { text-decoration: underline; }
+.iv-drive { display: flex; gap: .5rem; margin-top: .6rem; padding-top: .5rem; border-top: 1px solid #1f1f23; }
+.iv-drive button[disabled] { opacity: .4; cursor: default; }

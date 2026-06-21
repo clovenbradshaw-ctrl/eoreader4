@@ -23,6 +23,7 @@ import { renderGraph } from './graph-view.js';
 import { renderLog } from './log-view.js';
 import { mountFeed } from './feed-view.js';
 import { mountPredict } from './predict-view.js';
+import { mountIdle } from './idle-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 
 const STATE = {
@@ -59,6 +60,7 @@ const els = {
   logView:   document.getElementById('log-view'),
   feedView:  document.getElementById('feed-view'),
   predictView: document.getElementById('predict-view'),
+  idleView:  document.getElementById('idle-view'),
   docTabs:   document.getElementById('doc-tabs'),
   messages:  document.getElementById('messages'),
   composer:  document.getElementById('composer'),
@@ -130,6 +132,7 @@ const renderViewedDoc = (doc) => {
   });
   renderLog(doc, els.logView, { onSelectSentence: selectSentence });
   if (STATE.activeTab === 'predict') STATE.predict?.refresh();
+  if (STATE.activeTab === 'idle')    STATE.idle?.refresh();
 };
 
 // Show the empty placeholders (no document loaded).
@@ -248,11 +251,13 @@ const setTab = (name) => {
   els.logView.hidden   = name !== 'log';
   els.feedView.hidden  = name !== 'feed';
   els.predictView.hidden = name !== 'predict';
+  els.idleView.hidden  = name !== 'idle';
   els.dropzone.style.display = name === 'text' ? '' : 'none';
   if (name === 'graph') STATE.graph?.reheat?.();
-  // The move-log is rebuilt only when the document changed (refresh is a no-op
-  // otherwise), so opening the tab is cheap after the first build.
+  // The move-log / open-set are rebuilt only when the document changed (refresh is
+  // a no-op otherwise), so opening the tab is cheap after the first build.
   if (name === 'predict') STATE.predict?.refresh();
+  if (name === 'idle')    STATE.idle?.refresh();
 };
 
 // Run one query through the pipeline and render it. Factored out of the composer so
@@ -454,6 +459,15 @@ mountFeed(els.feedView, {
 // operator, not the word) from the move-log — no model called. Reads the live
 // document through the getter; rebuilds the move-log only when the doc changes.
 STATE.predict = mountPredict(els.predictView, {
+  getDoc: () => STATE.doc,
+  onSelectSentence: selectSentence,
+});
+
+// The Rest view: after the first read, the instrument keeps working the open set
+// that ingress left — re-reading on its own and surfacing, from later in the same
+// document, what it could not learn at first sight. Reafferent, firewalled, yours
+// to confirm (the §15 idle loop over the real projected graph).
+STATE.idle = mountIdle(els.idleView, {
   getDoc: () => STATE.doc,
   onSelectSentence: selectSentence,
 });
