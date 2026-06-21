@@ -27,6 +27,7 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
       finishedAt: null,
       durationMs: null,
       route: null,
+      grounding: null,   // the register the user selected: 'auto' | 'grounded' | 'free'
       steps: [],
       prompt: null,
       rawOutput: null,
@@ -73,6 +74,7 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
         finishedAt: t.finishedAt,
         durationMs: t.durationMs,
         route:      t.route,
+        grounding:  t.grounding ?? null,
         steps:      t.steps,
         prompt:     t.prompt,
         rawOutput:  t.rawOutput,

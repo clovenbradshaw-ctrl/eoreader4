@@ -50,8 +50,18 @@ export const stages = {
     // Not a mechanical short-circuit → a real turn. Read the TASK register
     // (intent.js): the prompt register (summary guard) and the token ceiling — the
     // real length bound. The mechanical paths above need neither.
-    if (ctx.doc) return { ...ctx, route: 'grounded', ...taskOf(ctx.question) };
-    return { ...ctx, route: 'chat', ...taskOf(ctx.question) };
+    //
+    // The GROUNDING register (the UI's Grounded / Free form / Auto chip, ctx.grounding)
+    // chooses the route here. 'grounded' forces the document register even with no doc
+    // (the downstream strict refusal answers the absence); 'free' forces ungrounded chat,
+    // ignoring the document entirely; 'auto' (the default) keeps the original behaviour —
+    // a document grounds the turn, its absence falls to chat.
+    const reg = taskOf(ctx.question);
+    const grounding = ctx.grounding || 'auto';
+    if (grounding === 'free')     return { ...ctx, route: 'chat',     ...reg };
+    if (grounding === 'grounded') return { ...ctx, route: 'grounded', ...reg };
+    if (ctx.doc) return { ...ctx, route: 'grounded', ...reg };
+    return { ...ctx, route: 'chat', ...reg };
   },
 
   // The session fold — the conversation's own two registers, mirroring the document
@@ -72,10 +82,16 @@ export const stages = {
   // Hybrid retrieval. Skipped entirely when there's no document — chat mode
   // simply has nothing to retrieve.
   async retrieve(ctx) {
-    if (!ctx.doc) return { ...ctx, spans: [] };
+    // Free-form turns ignore the document; with no document there is nothing to
+    // retrieve. Either way the prompt stage builds an ungrounded chat message.
+    if (!ctx.doc || ctx.grounding === 'free') return { ...ctx, spans: [] };
     const spans = await retrieveHybrid(ctx.doc, ctx.question, ctx.embedder, 6);
     if (spans.length === 0) {
-      // Doc loaded but nothing matches — fall through to ungrounded chat.
+      // Strict grounded mode never falls through to free generation: it stays on the
+      // grounded route and answers the absence ("the document doesn't cover this")
+      // rather than inventing from outside knowledge.
+      if (ctx.grounding === 'grounded') return { ...ctx, spans: [] };
+      // Auto / default: doc loaded but nothing matches — fall through to ungrounded chat.
       return { ...ctx, spans: [], route: 'chat' };
     }
     return { ...ctx, spans };
@@ -162,20 +178,26 @@ export const stages = {
   // So `conversation: {}` on the grounded path; only the document note rides. The fold is
   // still recorded in the audit either way.
   async prompt(ctx) {
-    const messages = ctx.spans?.length
+    // The register is the route the grounding chip selected upstream — not just
+    // "did we get spans". A strict-grounded turn with no spans still builds a
+    // grounded (strict-refusal) message; a free-form turn always builds chat.
+    const grounded = ctx.route === 'grounded';
+    const messages = grounded
       ? buildGroundedMessages({
           question:     ctx.question,
-          spans:        ctx.spans,
+          spans:        ctx.spans || [],
           notes:        ctx.note?.text || '',    // the fold's arrows — the document's reading, fed back in
           orientation:  orientationOf(ctx.doc),
           task:         ctx.task,               // the summary guard rides on a summary task
           budget:       ctx.budget,             // none by default; a caller may impose one
           conversation: {},                      // P0.3 retained: the history is the poisoning channel, still withheld
+          strict:       ctx.grounding === 'grounded',   // "only from the document" — refusal is the required fallback
         })
       : buildChatMessages({
           question: ctx.question,
           history:  ctx.recentMessages || [],   // a chat model wants turns as turns
           notes:    ctx.conversation?.notes || '',
+          free:     ctx.grounding === 'free',   // general-knowledge register, explicitly ungrounded
         });
     return {
       ...ctx,

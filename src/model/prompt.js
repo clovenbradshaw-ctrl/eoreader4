@@ -63,6 +63,26 @@ Write natural prose. Don't write citations or tags; those are added for you.`;
 
 export const SYSTEM_CHAT = `You are a brief, accurate assistant. Answer using only what has been said in this conversation.`;
 
+// The STRICT grounded register — "only from the document" (the Grounded chip). Same
+// own-words synthesis discipline as SYSTEM_GROUND, but the fallback is inverted: where
+// SYSTEM_GROUND leans AGAINST refusal ("answer what you can"), this REQUIRES refusal when
+// the passages don't cover the question and forbids drawing on outside knowledge. A
+// faithful "it isn't in the text" is the correct answer here, never a failure.
+export const SYSTEM_GROUND_STRICT = `You are a precise reading companion, answering ONLY from the document the user is reading.
+
+What follows is your own memory of that reading: your notes, and the passages they came from. Answer in your OWN WORDS — synthesize and explain, don't quote the passages back — but stay strictly inside them. Every part of your answer must be supported by the notes and passages below.
+
+If the passages do not answer the question, say so plainly — "The document doesn't cover that." — and stop there. Do NOT fill the gap from outside or general knowledge, and do not guess. A faithful "it isn't in the text" is the right answer here, not a failure.
+
+Write natural prose. Don't write citations or tags; those are added for you.`;
+
+// The FREE register — general-knowledge chat that ignores the document (the Free form
+// chip). Distinct from SYSTEM_CHAT, which is the conversation-only fallback: this one
+// explicitly invites outside knowledge and labels itself ungrounded.
+export const SYSTEM_FREE = `You are a helpful, knowledgeable assistant. Answer the user's question directly and accurately, drawing on your general knowledge. Be clear and concise.
+
+(This reply is free-form — it is not grounded in any document the user may have loaded.)`;
+
 // Orientation WITHOUT recognition. Filename, type, length — never the title the
 // document metadata may carry, never the author, never the genre.
 export const orientationLine = ({ filename, type, length } = {}) => {
@@ -93,6 +113,7 @@ export const buildGroundedMessages = ({
   budget = DEFAULT_BUDGET,
   conversation = {},
   corrective = '',
+  strict = false,
 } = {}) => {
   const blocks = [];
 
@@ -122,8 +143,14 @@ export const buildGroundedMessages = ({
   if (notes)        blocks.push(`Notes from the document:\n${notes}`);
   if (spans.length) blocks.push(`${EXCERPTS_HEADER}\n${spans.map(s => s.text).join('\n')}`);
 
+  // Strict mode with nothing retrieved: name the absence so the talker refuses
+  // cleanly ("the document doesn't cover this") instead of reaching for outside
+  // knowledge. The strict system prompt already forbids that; this is the cue.
+  if (strict && !spans.length)
+    blocks.push('No passages from the document were retrieved for this question. Say plainly that the document does not cover it — do not answer from outside knowledge.');
+
   return [
-    { role: 'system', content: SYSTEM_GROUND },
+    { role: 'system', content: strict ? SYSTEM_GROUND_STRICT : SYSTEM_GROUND },
     { role: 'user',   content: blocks.join('\n\n') },
   ];
 };
@@ -131,10 +158,11 @@ export const buildGroundedMessages = ({
 // The chat (no-doc) path: a chat model wants turns as turns, so the recent verbatim
 // window rides as real {role,content} message history and the surfed recap folds into
 // the system message (docs/session-fold.md).
-export const buildChatMessages = ({ question, history = [], notes = '' } = {}) => {
+export const buildChatMessages = ({ question, history = [], notes = '', free = false } = {}) => {
+  const base   = free ? SYSTEM_FREE : SYSTEM_CHAT;
   const system = notes
-    ? `${SYSTEM_CHAT}\n\nNotes about our conversation before this:\n${notes}`
-    : SYSTEM_CHAT;
+    ? `${base}\n\nNotes about our conversation before this:\n${notes}`
+    : base;
   return [
     { role: 'system', content: system },
     ...history,

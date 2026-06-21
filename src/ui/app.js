@@ -35,6 +35,17 @@ const STATE = {
   graph:     null,       // graph-view controller for the current doc
   activeTab: 'text',
   history:   [],         // the running transcript, fed back each turn (the session fold)
+  grounding: 'auto',     // how answers use the document: 'auto' | 'grounded' | 'free' (the chip)
+};
+
+// The grounding register the chip cycles through. One value (STATE.grounding) that the
+// turn pipeline fans out to the route, the retrieval fallback, and the system prompt.
+const GROUNDING_MODES  = ['auto', 'grounded', 'free'];
+const GROUNDING_LABEL  = { auto: 'Auto', grounded: 'Chat with document', free: 'Free form' };
+const GROUNDING_TITLE  = {
+  auto:     'Auto — use the document when it covers the question, otherwise answer from general knowledge.',
+  grounded: 'Chat with document — answer from the loaded document and tag it as a source; if it doesn’t cover the question, say so.',
+  free:     'Free form — answer from general knowledge, ignoring the document.',
 };
 
 const els = {
@@ -54,6 +65,7 @@ const els = {
   auditView: document.getElementById('audit-view'),
   exportBtn: document.getElementById('export-audit'),
   backend:   document.getElementById('backend'),
+  groundingChip: document.getElementById('grounding-chip'),
 };
 
 const setStatus = (s) => { els.status.textContent = s; };
@@ -158,15 +170,15 @@ const setTab = (name) => {
   if (name === 'predict') STATE.predict?.refresh();
 };
 
-const send = async () => {
-  const question = els.input.value.trim();
+// Run one query through the pipeline and render it. Factored out of the composer so
+// an errored turn can offer a one-click retry (re-runs the very same question).
+const runQuery = async (question) => {
   if (!question) return;
-
-  els.input.value = '';
   els.send.disabled = true;
   renderUserMessage(els.messages, question);
 
-  // Live "thinking" bubble — updates as each pipeline stage finishes.
+  // Live "thinking" bubble — updates as each pipeline stage finishes, with an
+  // elapsed-time cue (the local 3B model takes ~20–40s).
   const thinking = createThinkingMessage(els.messages,
     STATE.doc ? 'thinking…' : 'thinking (no doc — chat mode)…');
 
@@ -174,7 +186,7 @@ const send = async () => {
     await ensureModel();
   } catch (err) {
     finalizeThinking(thinking, `Model failed to load: ${err?.message || err}`, [], {
-      route: 'error', flags: [],
+      route: 'error', flags: [], mode: STATE.grounding, onRetry: () => runQuery(question),
     });
     els.send.disabled = false;
     return;
@@ -193,20 +205,38 @@ const send = async () => {
     classifier: STATE.geometric?.installer?.getState?.().classifier || null,
     auditLog: STATE.audit,
     history:  STATE.history,    // the prior transcript — the session fold reads it
+    grounding: STATE.grounding, // the Grounded / Free form / Auto register (the chip)
     onStep:   (name, ctx, data) => updateThinking(thinking, name, data, ctx),
   });
   const ms = Math.round(performance.now() - t0);
+  const route = result.route || result.turn.route;
 
   finalizeThinking(thinking, result.answer, result.sources, {
-    route: result.turn.route, ms, flags: result.flags,
+    route, ms, flags: result.flags,
+    mode: STATE.grounding,
+    // Tag the loaded document as a source whenever the answer was grounded in it.
+    docName: route === 'grounded' ? (STATE.doc?.docId || null) : null,
+    onDocSource: () => setTab('text'),
+    onRetry: () => runQuery(question),
   });
   if (result.sources?.length) highlightSources(els.docView, result.sources);
 
-  // Append the completed exchange so the next turn's session fold can read it back.
-  STATE.history.push({ role: 'user', content: question });
-  STATE.history.push({ role: 'assistant', content: result.answer || '' });
+  // Append the completed exchange so the next turn's session fold can read it back —
+  // but never feed an error turn back into the conversation (it would poison the fold).
+  if (route !== 'error') {
+    STATE.history.push({ role: 'user', content: question });
+    STATE.history.push({ role: 'assistant', content: result.answer || '' });
+  }
 
   els.send.disabled = false;
+};
+
+// The composer's submit path: read the box, clear it, run.
+const send = () => {
+  const question = els.input.value.trim();
+  if (!question) return;
+  els.input.value = '';
+  runQuery(question);
 };
 
 // File input + drag-drop
@@ -246,6 +276,26 @@ els.backend.addEventListener('change', () => {
   STATE.model = null;
   setStatus(`${STATE.backendName}: starting…`);
   ensureModel().catch(() => { /* status already reflects failure */ });
+});
+
+// Grounding chip — one click cycles Auto → Grounded → Free form → Auto. The choice
+// is persisted so it survives a reload, and reflected on the chip's label + colour.
+const applyGrounding = () => {
+  const m = STATE.grounding;
+  els.groundingChip.textContent  = GROUNDING_LABEL[m] || 'Auto';
+  els.groundingChip.title        = GROUNDING_TITLE[m] || '';
+  els.groundingChip.dataset.mode = m;
+};
+try {
+  const saved = localStorage.getItem('eoreader.grounding');
+  if (saved && GROUNDING_MODES.includes(saved)) STATE.grounding = saved;
+} catch { /* localStorage may be unavailable (private mode) — default stands */ }
+applyGrounding();
+els.groundingChip.addEventListener('click', () => {
+  const i = GROUNDING_MODES.indexOf(STATE.grounding);
+  STATE.grounding = GROUNDING_MODES[(i + 1) % GROUNDING_MODES.length];
+  try { localStorage.setItem('eoreader.grounding', STATE.grounding); } catch { /* ignore */ }
+  applyGrounding();
 });
 
 // Audit: live-render on every step / finish. Export stays disabled until there

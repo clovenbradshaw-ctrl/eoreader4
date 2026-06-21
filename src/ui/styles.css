@@ -204,6 +204,39 @@ section h2 .hint {
   background: #2a1216; color: #fca5a5; border-color: #7f1d1d;
 }
 
+/* Elapsed-time cue on the thinking bubble — the local 3B model takes ~20–40s. */
+.msg.assistant .elapsed {
+  color: #fbbf24; font-family: ui-monospace, monospace; font-size: .75rem; margin-left: .4rem;
+}
+
+/* Plain-language coverage verdict — the headline read above the terse pills. */
+.msg.assistant .coverage {
+  font-size: .72rem; margin-top: .45rem; padding: .2rem .5rem;
+  border-radius: 6px; border: 1px solid #27272a; display: inline-block; line-height: 1.4;
+}
+.msg.assistant .coverage.good    { color: #6ee7b7; border-color: #065f46; background: #07241c; }
+.msg.assistant .coverage.partial { color: #fbbf24; border-color: #78350f; background: #271a06; }
+.msg.assistant .coverage.weak    { color: #fca5a5; border-color: #7f1d1d; background: #2a1216; }
+.msg.assistant .coverage.free    { color: #a1a1aa; border-color: #3f3f46; background: #1f1f23; }
+
+/* Document-source tag — the loaded document, tagged as a source on grounded answers.
+   The "source" label is styling; the text is just the document's display name. */
+.msg.assistant .docsource {
+  display: inline-flex; align-items: baseline; gap: .35rem;
+  font-size: .7rem; margin-top: .4rem; padding: .12rem .5rem;
+  border-radius: 999px; border: 1px solid #1e3a8a;
+  background: #11203a; color: #93c5fd; font-family: ui-monospace, monospace;
+}
+.msg.assistant .docsource::before {
+  content: 'source'; color: #71717a; font-family: inherit;
+  text-transform: uppercase; letter-spacing: .06em; font-size: .6rem;
+}
+.msg.assistant .docsource.clickable { cursor: pointer; }
+.msg.assistant .docsource.clickable:hover { background: #16294a; }
+
+/* Retry affordance on an errored turn. */
+.msg.assistant .retry { margin-top: .55rem; }
+
 #composer { display: flex; gap: .5rem; flex-shrink: 0; }
 #input {
   flex: 1; padding: .5rem .65rem;
@@ -213,6 +246,19 @@ section h2 .hint {
   color: inherit; resize: none; font: inherit; font-size: .9rem;
 }
 #input:focus { outline: none; border-color: #60a5fa; }
+
+/* Grounding chip — one click cycles Auto · Chat with document · Free form. One value
+   (STATE.grounding) that fans out to the route, the retrieval fallback, and the prompt. */
+#composer .chip {
+  background: #11203a; color: #93c5fd;
+  border: 1px solid #1e3a8a; border-radius: 8px;
+  padding: .5rem .7rem; font-size: .8rem; white-space: nowrap; line-height: 1.2;
+}
+#composer .chip:hover { background: #16294a; }
+#composer .chip[data-mode="grounded"] { color: #6ee7b7; border-color: #065f46; background: #07241c; }
+#composer .chip[data-mode="grounded"]:hover { background: #0a3026; }
+#composer .chip[data-mode="free"]     { color: #fcd34d; border-color: #78350f; background: #271a06; }
+#composer .chip[data-mode="free"]:hover { background: #32230a; }
 button {
   padding: .5rem 1rem;
   background: #2563eb; border: none; border-radius: 8px;
