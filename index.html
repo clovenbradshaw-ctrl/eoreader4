@@ -32,8 +32,8 @@
           </span>
         </h2>
         <div class="dropzone" id="dropzone">
-          <input type="file" id="file-input" accept=".txt,.md,text/plain">
-          <p>Drop a text file, or <label for="file-input">browse</label>.</p>
+          <input type="file" id="file-input" accept=".txt,.md,text/plain" multiple>
+          <p>Drop text files, or <label for="file-input">browse</label>. Add several — each becomes a chip you can select.</p>
         </div>
         <div id="doc-view"></div>
         <div id="graph-view" hidden></div>
@@ -44,6 +44,7 @@
       <section id="chat-pane">
         <h2>Chat</h2>
         <div id="messages"></div>
+        <div id="doc-chips" class="doc-chips" hidden></div>
         <form id="composer">
           <textarea id="input" placeholder="Ask anything — a doc makes answers grounded…" rows="2"></textarea>
           <button type="button" id="grounding-chip" class="chip" data-mode="auto" title="Click to cycle: how answers use the document">Auto</button>

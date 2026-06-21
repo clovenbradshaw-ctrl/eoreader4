@@ -12,6 +12,7 @@
 // operators onto the same log. The spine does not change.
 
 export { ingestText }        from './text.js';
+export { createCompositeDoc, proposeCrossDocSyn, compositeDocIdOf } from './composite.js';
 export { ingestImage }       from './image.js';
 export { ingestMusic }       from './music.js';
 export { ingestFrequencies } from './frequency.js';
