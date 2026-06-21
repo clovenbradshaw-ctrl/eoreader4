@@ -12,7 +12,7 @@
 // "reading cursor": significance predicts the next object and is surprised by
 // one that the layout did not lead it to expect — L3 math, unchanged.
 
-import { createLog }        from '../../core/log.js';
+import { createLog }        from '../../core/index.js';
 import { projectGraph }     from '../../core/index.js';
 import { createConventions }from '../../core/conventions/index.js';
 import { tok }              from '../../perceiver/parse/index.js';

@@ -21,8 +21,8 @@
 // forming surface; the basis runs it over the document's own stops. One parser,
 // two directions.
 
-import { segmentSentences }   from '../../perceiver/parse/sentences.js';
-import { parseRelations }     from '../../perceiver/parse/relations.js';
+import { segmentSentences }   from '../../perceiver/parse/index.js';
+import { parseRelations }     from '../../perceiver/parse/index.js';
 import { documentFieldAt }    from '../../factcheck/correspond.js';
 import { typeOf }             from '../../perceiver/relation-types.js';
 

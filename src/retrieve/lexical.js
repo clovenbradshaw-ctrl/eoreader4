@@ -8,8 +8,8 @@
 // match contributes nothing — never a phantom hit. Only out-of-vocabulary terms
 // pay the edit-distance scan, so the common, all-exact query is as fast as before.
 
-import { tok } from '../perceiver/parse/tokenize.js';
-import { fuzzyMatches } from '../perceiver/parse/fuzzy.js';
+import { tok } from '../perceiver/parse/index.js';
+import { fuzzyMatches } from '../perceiver/parse/index.js';
 
 // The document's token vocabulary — the union of every sentence's token set. Built
 // once per document and cached on a WeakMap (no doc mutation), and from the SAME

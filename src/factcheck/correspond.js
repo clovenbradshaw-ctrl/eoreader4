@@ -20,16 +20,16 @@
 // document referent table, the centroid classifier — and adds the four-way
 // verdict and the geometric relation comparison.
 
-import { segmentSentences }       from '../perceiver/parse/sentences.js';
-import { parseRelations, headVerb } from '../perceiver/parse/relations.js';
+import { segmentSentences }       from '../perceiver/parse/index.js';
+import { parseRelations, headVerb } from '../perceiver/parse/index.js';
 import { checkRelationConflict }   from '../perceiver/relation-types.js';
-import { coherence, terrainInfo }  from '../core/cube.js';
-import { operatorsByDomain }       from '../core/operators.js';
+import { coherence, terrainInfo }  from '../core/index.js';
+import { operatorsByDomain }       from '../core/index.js';
 
 // The four-way verdict vocabulary now lives in core (a leaf both factcheck and
 // read import down into — see core/verdicts.js). Re-exported here so the holon's
 // public surface (factcheck/index.js → VERDICTS) is unchanged.
-import { VERDICTS } from '../core/verdicts.js';
+import { VERDICTS } from '../core/index.js';
 export { VERDICTS };
 
 const GAMMA = 0.7;   // the same γ kernel the graph and the field run on

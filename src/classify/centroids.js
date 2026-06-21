@@ -32,7 +32,7 @@ export const CENTROID_SCHEMA = Object.freeze({
   vectors: { 'INS_Making_Entity': '[number, … dim]' },
 });
 
-import { aliasCellKey } from '../core/cube.js';
+import { aliasCellKey } from '../core/index.js';
 
 const DEFAULT_URL = new URL('../../data/centroids-27.json', import.meta.url).href;
 const DB = 'eoreader4', STORE = 'centroids';

@@ -19,7 +19,7 @@
 // set-overlap the engine runs over the words of a sentence, run over the
 // overtones of a note, recovers the harmonic series with no scale in sight.
 
-import { createLog }         from '../../core/log.js';
+import { createLog }         from '../../core/index.js';
 import { projectGraph }      from '../../core/index.js';
 import { createConventions } from '../../core/conventions/index.js';
 

@@ -22,7 +22,7 @@
 // the predictor must be able to predict the engine asserting absence, not only
 // the nine transforming operators.
 
-import { eoAddressOfEvent } from '../core/address.js';
+import { eoAddressOfEvent } from '../core/index.js';
 import { readingAt } from '../perceiver/reading.js';
 import { createEnactedLoop } from '../enact/loop.js';
 
