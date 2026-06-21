@@ -11,8 +11,8 @@
 // configuration needs to be applied to multiple texts in sequence, or
 // when state ownership matters for testing.
 
-import { createLog }            from '../core/log.js';
-import { VERDICTS }             from '../core/verdicts.js';
+import { createLog }            from '../../core/log.js';
+import { VERDICTS }             from '../../core/verdicts.js';
 import { segmentSentences }     from './sentences.js';
 import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';
@@ -22,7 +22,7 @@ import { argumentSpanSeg }      from './proposition.js';
 import { createCorefField }     from './coref.js';
 import { discoverNamings }      from './naming.js';
 import { tok }                  from './tokenize.js';
-import { createConventions, induceAttributionVerbs } from '../core/conventions/index.js';
+import { createConventions, induceAttributionVerbs } from '../../core/conventions/index.js';
 
 // A pronoun-resolved descriptor owner ("his sister") is taken only when the prior
 // field's top candidate outweighs the runner-up by this ratio — an unambiguous

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/pipeline.js';
+import { parseText } from '../src/reader/parse/pipeline.js';
 import { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from '../src/reader/index.js';
 import { answerVoid } from '../src/answer/index.js';
 

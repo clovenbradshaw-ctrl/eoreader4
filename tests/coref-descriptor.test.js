@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createCorefField } from '../src/parse/coref.js';
-import { scanDescriptors } from '../src/parse/relations.js';
-import { parseText } from '../src/parse/index.js';
+import { createCorefField } from '../src/reader/parse/coref.js';
+import { scanDescriptors } from '../src/reader/parse/relations.js';
+import { parseText } from '../src/reader/parse/index.js';
 import { projectGraph } from '../src/core/index.js';
 import { areDisjoint, typeOf } from '../src/reader/relation-types.js';
 

@@ -4,8 +4,8 @@
 // Routing tries these first — if a question is mechanical, the model
 // is never warmed for it. This is the single largest UX win on cold start.
 
-import { tok } from '../parse/tokenize.js';
-import { editWithin, fuzzCeiling } from '../parse/fuzzy.js';
+import { tok } from '../reader/parse/tokenize.js';
+import { editWithin, fuzzCeiling } from '../reader/parse/fuzzy.js';
 import { projectGraph } from '../core/project.js';
 import { typeOf, areDisjoint } from '../reader/relation-types.js';
 

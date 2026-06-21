@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildMeaningRead, enactedReadingMeaning, enactedReadingTo, isEnacted,
 } from '../src/enact/index.js';
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/reader/parse/index.js';
 
 // A deterministic stand-in for MiniLM: each clause embeds to a fixed vector by
 // keyword, so meaning-distance is controllable under test. Proves the mechanism

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/reader/parse/index.js';
 import { projectGraph } from '../src/core/index.js';
 import { answerConfirm } from '../src/answer/index.js';
 import { factCheck, contradictionRefuses, CONTRADICTION_REFUSE_FLOOR } from '../src/factcheck/index.js';

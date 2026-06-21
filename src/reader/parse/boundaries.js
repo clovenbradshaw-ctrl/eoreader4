@@ -28,7 +28,7 @@
 // in the text, to fit the tokens that exist — it can move where a unit ends, never
 // invent one. The witness deposits, the convention layer decides (it RECs itself).
 
-import { createEnactedLoop } from '../enact/loop.js';
+import { createEnactedLoop } from '../../enact/loop.js';
 import { segmentSentences } from './sentences.js';
 
 // The marks the reader is allowed to promote — punctuation that, in some dialects,

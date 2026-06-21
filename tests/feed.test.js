@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/reader/parse/index.js';
 import { buildFeed } from '../src/turn/index.js';
 import { feedHolons } from '../src/ui/feed-view.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';

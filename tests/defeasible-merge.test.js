@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/pipeline.js';
+import { parseText } from '../src/reader/parse/pipeline.js';
 import { projectGraph } from '../src/core/project.js';
 import { VERDICTS } from '../src/core/verdicts.js';
 

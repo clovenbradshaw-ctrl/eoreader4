@@ -4,7 +4,7 @@
 // SHUFFLE compares ordered vs scrambled sentence order; LULL feeds flat text. The engine
 // must read ORDER, not which sentences are present. Run: node scripts/battery-controls.mjs
 import { readFileSync } from 'node:fs';
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/reader/parse/index.js';
 import { readingAt } from '../src/reader/index.js';
 import { enactedReadingTo } from '../src/enact/index.js';
 

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { induceBoundaries, segmentSentences, parseText } from '../src/parse/index.js';
+import { induceBoundaries, segmentSentences, parseText } from '../src/reader/parse/index.js';
 import { structureSurface } from '../src/reader/index.js';
 import { projectGraph } from '../src/core/index.js';
 

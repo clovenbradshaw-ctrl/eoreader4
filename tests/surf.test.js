@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/reader/parse/index.js';
 import { surfFold, readingAt } from '../src/reader/index.js';
 import { stages } from '../src/turn/stages.js';
 import { runTurn } from '../src/turn/pipeline.js';

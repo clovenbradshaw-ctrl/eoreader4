@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/pipeline.js';
-import { scanVocatives } from '../src/parse/relations.js';
-import { discoverNamings } from '../src/parse/naming.js';
+import { parseText } from '../src/reader/parse/pipeline.js';
+import { scanVocatives } from '../src/reader/parse/relations.js';
+import { discoverNamings } from '../src/reader/parse/naming.js';
 import { projectGraph } from '../src/core/project.js';
 import { areDisjoint, typeOf } from '../src/reader/relation-types.js';
 

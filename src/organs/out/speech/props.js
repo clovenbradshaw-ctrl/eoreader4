@@ -20,8 +20,8 @@
 // forming surface; the basis runs it over the document's own stops. One parser,
 // two directions.
 
-import { segmentSentences }   from '../../../parse/sentences.js';
-import { parseRelations }     from '../../../parse/relations.js';
+import { segmentSentences }   from '../../../reader/parse/sentences.js';
+import { parseRelations }     from '../../../reader/parse/relations.js';
 import { documentFieldAt }    from '../../../factcheck/correspond.js';
 import { typeOf }             from '../../../reader/relation-types.js';
 

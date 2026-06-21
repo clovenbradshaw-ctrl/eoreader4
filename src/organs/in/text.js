@@ -2,7 +2,7 @@
 // embedding cache. Anything beyond plain text (PDF, audio, OCR) belongs
 // in an adapter that turns its modality into text; the spine stays the same.
 
-import { parseText }    from '../../parse/index.js';
+import { parseText }    from '../../reader/parse/index.js';
 import { projectGraph } from '../../core/index.js';
 import { areDisjoint }  from '../../reader/relation-types.js';
 

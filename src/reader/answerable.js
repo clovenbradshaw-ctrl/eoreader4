@@ -28,7 +28,7 @@
 import { surfFold } from '../surfer/surf.js';
 import { deriveNull, MIN_SAMPLES } from './voidnull.js';
 import { namedReferents } from './surfaces.js';
-import { tok } from '../parse/tokenize.js';
+import { tok } from './parse/tokenize.js';
 
 // The hallucination budget for the turn's void boundary: the tolerated probability
 // of mistaking the field's own noise for an answer. Larger → a lower null → fewer

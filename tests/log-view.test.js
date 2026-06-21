@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/reader/parse/index.js';
 import { argspanDesc, serializeLog } from '../src/ui/log-view.js';
 
 const argspan = (doc) => doc.log.filter(e => e.op === 'SEG' && e.kind === 'argspan')[0];

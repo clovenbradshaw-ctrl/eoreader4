@@ -5,7 +5,7 @@ import {
   buildGroundedMessages, orientationLine, EXCERPTS_HEADER,
 } from '../src/model/prompt.js';
 import { serializeNotes } from '../src/reader/index.js';
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/reader/parse/index.js';
 import { runTurn } from '../src/turn/pipeline.js';
 import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';

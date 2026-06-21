@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/pipeline.js';
+import { parseText } from '../src/reader/parse/pipeline.js';
 import { retrieveLexical } from '../src/retrieve/lexical.js';
 import { retrieveHybrid, fuseConcordance } from '../src/retrieve/hybrid.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';

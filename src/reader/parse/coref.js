@@ -22,7 +22,7 @@
 // once the inert WRONG DOOR (a raw mass write), is now wired as exactly that
 // deposition: a talker mention deposits conversational mass, never grounded.
 
-import { CONVERSATIONAL_CAP } from '../converse/index.js';
+import { CONVERSATIONAL_CAP } from '../../converse/index.js';
 
 export const createCorefField = ({
   gamma = 0.7, maxDist = 8,

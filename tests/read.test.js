@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/index.js';
-import { createCorefField } from '../src/parse/coref.js';
+import { parseText } from '../src/reader/parse/index.js';
+import { createCorefField } from '../src/reader/parse/coref.js';
 import { readingAt, structureSurface, figureSurface, namedReferents, consciousness, siteRoles, predictNext } from '../src/reader/index.js';
 import { foldNote } from '../src/fold/index.js';
 

@@ -5,7 +5,7 @@
 // Cosine similarity over these vectors is a (very rough) bag-of-words
 // measure — enough to exercise the pipeline; not enough for real semantics.
 
-import { tok } from '../parse/tokenize.js';
+import { tok } from '../reader/parse/tokenize.js';
 
 const DIM = 64;
 

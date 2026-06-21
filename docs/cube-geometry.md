@@ -87,8 +87,11 @@ src/
     conventions/                                  (the learning layer, priors)
     cognition.js · faces.js · holon.js            (triad · three faces · Site address)
   reader/          the READER faculty (was read/) — Existence · constitute  [§A]
+    parse/         the constitution engine (was src/parse/) — marks → structure
   surfer/          the SURFER faculty (the middle) — Structure · navigate    [§A]
-  …                enact/ ground/ etc. — the talker's judging side, next
+  …                enact/ ground/ — shared significance machinery (the talker's
+                   judging side); enact is imported by the surfer and imports the
+                   reader, so it is a shared engine, not a clean talker-only dir
 ```
 
 - **Landed (structure):** `organs/in`, `organs/out/speech`, the `reader` and

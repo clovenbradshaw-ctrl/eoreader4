@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createCorefField } from '../src/parse/coref.js';
-import { parseText } from '../src/parse/index.js';
+import { createCorefField } from '../src/reader/parse/coref.js';
+import { parseText } from '../src/reader/parse/index.js';
 import { readingAt } from '../src/reader/index.js';
 import {
   TALKER, SPAN, CONVERSATIONAL_CAP,

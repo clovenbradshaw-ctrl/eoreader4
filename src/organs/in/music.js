@@ -21,7 +21,7 @@
 import { createLog }         from '../../core/log.js';
 import { projectGraph }      from '../../core/index.js';
 import { createConventions } from '../../core/conventions/index.js';
-import { tok }               from '../../parse/index.js';
+import { tok }               from '../../reader/parse/index.js';
 
 const SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 const PC_NAME  = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
