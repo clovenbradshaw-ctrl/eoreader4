@@ -6,8 +6,8 @@ import {
   makeProposition, isProposition, propositionOfEdge,
   createConventions,
 } from '../src/core/index.js';
-import { parseText } from '../src/reader/parse/index.js';
-import { headVerb } from '../src/reader/parse/relations.js';
+import { parseText } from '../src/perceiver/parse/index.js';
+import { headVerb } from '../src/perceiver/parse/relations.js';
 
 // ── The two floors (reshape §1/§2) ──────────────────────────────────────────
 // The bare unit is the input membrane: comparable + ordered, and NOTHING else.

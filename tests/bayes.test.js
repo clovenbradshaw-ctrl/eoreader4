@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/reader/parse/index.js';
-import { readingAt } from '../src/reader/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
+import { readingAt } from '../src/perceiver/index.js';
 import {
   calibrateReader, enactedReadingTo,
   DEFAULT_CONFIRM_BAND, DEFAULT_THRESHOLDS,

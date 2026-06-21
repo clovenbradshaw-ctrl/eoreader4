@@ -15,7 +15,7 @@
 import { createLog }        from '../../core/log.js';
 import { projectGraph }     from '../../core/index.js';
 import { createConventions }from '../../core/conventions/index.js';
-import { tok }              from '../../reader/parse/index.js';
+import { tok }              from '../../perceiver/parse/index.js';
 
 const slug = (s) => String(s || 'thing').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 

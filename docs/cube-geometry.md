@@ -10,34 +10,45 @@ note records what has landed and the decisions behind it.
 inward, as faculties:
 
 ```
-  READER   ──▶   SURFER   ──▶   ENACTOR
+  PERCEIVER ──▶  SURFER   ──▶   ENACTOR
   Existence      Structure      Significance
   constitute     navigate/find  judge/commit
   NUL SIG INS    SEG CON SYN    DEF EVA REC
-  (first)        (the middle)   (last; gate; modality-blind)
+  (first; m-blind) (the middle) (last; gate; m-blind)
 ```
 
 The surfer is the **middle** by construction: Structure is the relating function,
 so navigating a constituted field to find what bears *is* the relating step
-between bringing-into-being (reader) and committing-to-surface (enactor).
+between bringing-into-being (perceiver) and committing-to-surface (enactor).
 `facultyOfOperator(op)` returns which faculty fired an event, by the operator's
 Domain — so the log already names the faculty.
 
-### The third faculty is the enactor, not the talker (add-on 3)
+### Perceiver and enactor — the two modality-blind arcs (add-on 3, add-on 4)
 
-The committing faculty is **modality-blind**: deciding-and-committing is mostly
-not language (a soccer player runs the full DEF·EVA·REC loop with no speech in
-it). Speech is one output organ among several — a pass, a struck note, a hand
-closing on a ball are equally enactments. So the gate (the DEF·EVA·REC
-commitment) lives in the **core** as the enactor's significance, and output organs
-become bare renderers, symmetric with the bare input ingesters: input organs do
-no structuring (structure emerges in the core), output organs do no judging
-(commitment happens in the core).
+The two end faculties were named for one modality's surface and are renamed for
+the universal act. The **enactor** (not "talker"): deciding-and-committing is
+mostly not language — a soccer player runs the full DEF·EVA·REC loop with no
+speech; speech is one output organ among several (a pass, a struck note, a hand
+closing on a ball are equally enactments). The **perceiver** (not "reader"): taking
+the world in is mostly not text — reading the field is perceiving; "reading" is
+the text modality's name for perception. The perceiver does not receive a reading,
+it *builds* the not-me from bare units against the null, predictively, through any
+sense.
+
+So both keep their organs bare and symmetric: as input organs do no structuring
+(structure emerges in the core), output organs do no judging (commitment happens
+in the core). The gate (DEF·EVA·REC commitment) lives in the **core** as the
+enactor's significance. The perceiver is the **not-me** (the open loop, the world
+unbidden); the enactor is the **me** (the closed loop, prediction meeting its own
+return); the surfer navigates between. They are one forward model pointed two ways
+and one significance engine at two of its three objects — the mirror made legible
+by the shared name-shape (perceiver / enactor).
 
 This is being landed in tested phases:
 
-1. **done** — rename the faculty `talker → enactor` in the spine (`cognition.js`),
-   modality-blind, in the core.
+1. **done** — rename `talker → enactor` and `reader → perceiver` in the spine
+   (`cognition.js`) and the directory (`src/reader/ → src/perceiver/`), both
+   modality-blind, in the core. Behavior-preserving.
 2. move the gate (`organs/out/speech/gate` = DEF·EVA·REC commit) into the core as
    the enactor's commit step; speech becomes a bare renderer.
 3. **efference copy** at commit — the forward model (`predict/`) emits the
@@ -116,21 +127,22 @@ src/
     unit.js · proposition.js                      (the two floors)
     conventions/                                  (the learning layer, priors)
     cognition.js · faces.js · holon.js            (triad · three faces · Site address)
-  reader/          the READER faculty (was read/) — Existence · constitute  [§A]
+  perceiver/       the PERCEIVER faculty (was read/→reader/) — Existence       [§A]
     parse/         the constitution engine (was src/parse/) — marks → structure
   surfer/          the SURFER faculty (the middle) — Structure · navigate    [§A]
-  …                enact/ ground/ — shared significance machinery (the talker's
+  …                enact/ ground/ — shared significance machinery (the enactor's
                    judging side); enact is imported by the surfer and imports the
-                   reader, so it is a shared engine, not a clean talker-only dir
+                   perceiver, so it is a shared engine, not a clean enactor-only dir
 ```
 
-- **Landed (structure):** `organs/in`, `organs/out/speech`, the `reader` and
+- **Landed (structure):** `organs/in`, `organs/out/speech`, the `perceiver` and
   `surfer` faculties as their own subassemblies, and the geometry spine in `core/`.
-  The reader and surfer were fused in the old `read/` holon; they are split into
-  peer faculties that still import each other (the reader reads forward surprise;
-  the surfer rides the reading) — a real boundary, not a decoupling that would
-  change behavior.
-- **Next (golden-gated):** name the talker's judging faculty (`enact`/`ground`) and
-  the remaining `organs/out` organs (music, action); thread the holonic Site +
-  Stance onto the event emitters so every logged operation is recorded as
-  `operator(Site, Stance)` at a holonic address.
+  The perceiver and surfer were fused in the old `read/` holon; they are split into
+  peer faculties that still import each other (the perceiver reads forward surprise;
+  the surfer rides the perception) — a real boundary, not a decoupling that would
+  change behavior. The two end faculties are renamed for the universal act:
+  `reader → perceiver`, `talker → enactor`, both modality-blind.
+- **Next (golden-gated):** the enactor build-out (add-on 3) — move the gate into
+  the core, add the efference copy and the one monitor + self/world tagging; and
+  thread the holonic Site + Stance onto the event emitters so every logged
+  operation is recorded as `operator(Site, Stance)` at a holonic address.

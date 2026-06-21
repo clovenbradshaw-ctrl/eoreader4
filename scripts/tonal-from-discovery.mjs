@@ -19,8 +19,8 @@
 
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { ingestMusic }       from '../src/organs/in/music.js';
-import { discoverEquivalences } from '../src/reader/index.js';
-import { predictiveSequenceReading } from '../src/reader/index.js';
+import { discoverEquivalences } from '../src/perceiver/index.js';
+import { predictiveSequenceReading } from '../src/perceiver/index.js';
 
 const A4 = 440, NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const NOTE_HZ = {};   // the instrument's tuning, used only to synthesise the input

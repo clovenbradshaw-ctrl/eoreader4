@@ -15,7 +15,7 @@
 
 import { ingestFrames } from '../src/organs/in/video.js';
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
-import { detectMotion, discoverEquivalences, coherentFigures, createNoiseFloor, extremeValueZ } from '../src/reader/index.js';
+import { detectMotion, discoverEquivalences, coherentFigures, createNoiseFloor, extremeValueZ } from '../src/perceiver/index.js';
 
 const rng = (s) => () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 const ALPHA = 0.01;   // fire SYN only when chance would make this structure < 1% of the time

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/reader/parse/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
 import { parseProps, correspondProp, propKey } from '../src/organs/out/speech/props.js';
 
 // The unit of grounding is the PROPOSITION, and the correspondence is RELATIONAL

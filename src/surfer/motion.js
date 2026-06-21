@@ -16,7 +16,7 @@
 //
 // Pure on the doc; no model.
 
-import { createNoiseFloor } from '../reader/voidnull.js';
+import { createNoiseFloor } from '../perceiver/voidnull.js';
 
 const trackStats = (doc) => doc.tracks.map(tr => ({
   id: tr.id,

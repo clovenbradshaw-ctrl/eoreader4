@@ -5,7 +5,7 @@ import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { ingestMusic } from '../src/organs/in/music.js';
 import { ingestFrames } from '../src/organs/in/video.js';
 import { retrieveLexical } from '../src/retrieve/index.js';
-import { predictiveSequenceReading, motionReading, coherentFigures, persistentFigures } from '../src/reader/index.js';
+import { predictiveSequenceReading, motionReading, coherentFigures, persistentFigures } from '../src/perceiver/index.js';
 
 // The control battery, as falsifications: the structure must go DARK when the
 // thing it claims to read is removed, and survive when an order-blind property

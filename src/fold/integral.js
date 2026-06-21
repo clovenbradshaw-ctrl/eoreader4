@@ -7,7 +7,7 @@
 // citations still bind. Without a document it falls back to a condensed,
 // source-ordered digest of the spans — still a fold, tighter than a raw dump.
 
-import { consciousness } from '../reader/index.js';
+import { consciousness } from '../perceiver/index.js';
 
 export const foldNote = (spans, opts = {}) => {
   if (!spans || spans.length === 0) return { text: '', sources: [] };

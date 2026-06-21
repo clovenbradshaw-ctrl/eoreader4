@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { surpriseAt, forwardDist, NOVELTY_RESERVE } from '../src/surfer/surprise.js';
-import { parseText } from '../src/reader/parse/index.js';
-import { readingAt } from '../src/reader/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
+import { readingAt } from '../src/perceiver/index.js';
 
 // The modality-agnostic surprise core (Track A, docs/spec-one-surprise.md). The TEXT
 // path's byte-identical behaviour is pinned by tests/bayes.test.js, which now runs THROUGH

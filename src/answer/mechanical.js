@@ -4,10 +4,10 @@
 // Routing tries these first — if a question is mechanical, the model
 // is never warmed for it. This is the single largest UX win on cold start.
 
-import { tok } from '../reader/parse/tokenize.js';
-import { editWithin, fuzzCeiling } from '../reader/parse/fuzzy.js';
+import { tok } from '../perceiver/parse/tokenize.js';
+import { editWithin, fuzzCeiling } from '../perceiver/parse/fuzzy.js';
 import { projectGraph } from '../core/project.js';
-import { typeOf, areDisjoint } from '../reader/relation-types.js';
+import { typeOf, areDisjoint } from '../perceiver/relation-types.js';
 
 export const answerMath = (question) => {
   const m = String(question || '').match(/(-?\d+(?:\.\d+)?)\s*([+\-*/x])\s*(-?\d+(?:\.\d+)?)/);

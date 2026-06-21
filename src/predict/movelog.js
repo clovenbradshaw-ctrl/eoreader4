@@ -23,7 +23,7 @@
 // the nine transforming operators.
 
 import { eoAddressOfEvent } from '../core/address.js';
-import { readingAt } from '../reader/reading.js';
+import { readingAt } from '../perceiver/reading.js';
 import { createEnactedLoop } from '../enact/loop.js';
 
 // The prediction alphabet: the nine operators plus VOID (the asserted absence).

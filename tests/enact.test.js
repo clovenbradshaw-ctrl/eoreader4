@@ -6,7 +6,7 @@ import {
   isEnacted, isDepicted, assertSingleRegister, enactedReadingTo,
   DEFAULT_THRESHOLDS,
 } from '../src/enact/index.js';
-import { parseText } from '../src/reader/parse/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
 
 // A deterministic stand-in for the cheap γ-mass surprise: a fixed surprise per
 // cursor and an optional terms function. Under test the loop is pure on this.

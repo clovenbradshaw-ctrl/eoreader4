@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   parseText, segmentClauses, argumentSpansHold,
-} from '../src/reader/parse/index.js';
-import { parseRelations } from '../src/reader/parse/relations.js';
-import { createEntityAdmission } from '../src/reader/parse/entities.js';
+} from '../src/perceiver/parse/index.js';
+import { parseRelations } from '../src/perceiver/parse/relations.js';
+import { createEntityAdmission } from '../src/perceiver/parse/entities.js';
 import { createConventions } from '../src/core/conventions/index.js';
 import { projectGraph } from '../src/core/index.js';
 

@@ -20,10 +20,10 @@
 // forming surface; the basis runs it over the document's own stops. One parser,
 // two directions.
 
-import { segmentSentences }   from '../../../reader/parse/sentences.js';
-import { parseRelations }     from '../../../reader/parse/relations.js';
+import { segmentSentences }   from '../../../perceiver/parse/sentences.js';
+import { parseRelations }     from '../../../perceiver/parse/relations.js';
 import { documentFieldAt }    from '../../../factcheck/correspond.js';
-import { typeOf }             from '../../../reader/relation-types.js';
+import { typeOf }             from '../../../perceiver/relation-types.js';
 
 // Parse a stretch of text into normalized propositions, resolving endpoints
 // through the DOCUMENT field at `cursor` (the same binding of record the

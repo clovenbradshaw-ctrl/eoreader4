@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { ingestFrames } from '../src/organs/in/video.js';
-import { discoverEquivalences, detectMotion } from '../src/reader/index.js';
-import { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from '../src/reader/index.js';
+import { discoverEquivalences, detectMotion } from '../src/perceiver/index.js';
+import { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from '../src/perceiver/index.js';
 
 // The VOID boundary is DERIVED, not set. The engine estimates from its own
 // non-cohering background the distribution of the largest structure chance

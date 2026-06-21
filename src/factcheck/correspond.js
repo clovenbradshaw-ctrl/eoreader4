@@ -20,9 +20,9 @@
 // document referent table, the centroid classifier — and adds the four-way
 // verdict and the geometric relation comparison.
 
-import { segmentSentences }       from '../reader/parse/sentences.js';
-import { parseRelations, headVerb } from '../reader/parse/relations.js';
-import { checkRelationConflict }   from '../reader/relation-types.js';
+import { segmentSentences }       from '../perceiver/parse/sentences.js';
+import { parseRelations, headVerb } from '../perceiver/parse/relations.js';
+import { checkRelationConflict }   from '../perceiver/relation-types.js';
 import { coherence, terrainInfo }  from '../core/cube.js';
 import { operatorsByDomain }       from '../core/operators.js';
 

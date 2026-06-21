@@ -26,7 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ingestText } from '../src/organs/in/index.js';
-import { readingAt, deriveNull } from '../src/reader/index.js';
+import { readingAt, deriveNull } from '../src/perceiver/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);

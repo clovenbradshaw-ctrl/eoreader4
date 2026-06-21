@@ -10,22 +10,23 @@ import {
 
 // ── The cognition triad (add-on 2 §A) — surfer in the middle ─────────────────
 
-test('the cognition triad is reader · surfer · enactor, the surfer in the middle', () => {
-  assert.deepEqual(COGNITION_ORDER, ['reader', 'surfer', 'enactor']);
+test('the cognition triad is perceiver · surfer · enactor, the surfer in the middle', () => {
+  assert.deepEqual(COGNITION_ORDER, ['perceiver', 'surfer', 'enactor']);
   assert.equal(COGNITION.surfer.position, 'middle', 'the surfer is the relating step — the middle, by construction');
-  assert.equal(COGNITION.reader.position, 'first');
+  assert.equal(COGNITION.perceiver.position, 'first');
   assert.equal(COGNITION.enactor.position, 'last');
-  // The enactor is the modality-blind committing faculty (add-on 3 §1).
+  // The two arc-faculties are modality-blind and mirror each other (add-on 3 §1, add-on 4).
+  assert.equal(COGNITION.perceiver.modalityBlind, true, 'the perceiver is modality-blind — text is one sense among several');
   assert.equal(COGNITION.enactor.modalityBlind, true, 'the enactor is modality-blind — speech is one organ among several');
   // Each faculty's home operators are its Domain column.
-  assert.deepEqual(COGNITION.reader.operators, ['NUL', 'SIG', 'INS']);   // Existence
-  assert.deepEqual(COGNITION.surfer.operators, ['SEG', 'CON', 'SYN']);   // Structure
-  assert.deepEqual(COGNITION.enactor.operators, ['DEF', 'EVA', 'REC']);  // Interpretation
+  assert.deepEqual(COGNITION.perceiver.operators, ['NUL', 'SIG', 'INS']); // Existence
+  assert.deepEqual(COGNITION.surfer.operators, ['SEG', 'CON', 'SYN']);    // Structure
+  assert.deepEqual(COGNITION.enactor.operators, ['DEF', 'EVA', 'REC']);   // Interpretation
   assert.deepEqual(COGNITION.enactor.gate, ['DEF', 'EVA', 'REC'], 'the enactor gates (commits) with DEF·EVA·REC');
 });
 
 test('an operator names the faculty that fired it (by Domain)', () => {
-  assert.equal(facultyOfOperator('INS'), 'reader');
+  assert.equal(facultyOfOperator('INS'), 'perceiver');
   assert.equal(facultyOfOperator('CON'), 'surfer');
   assert.equal(facultyOfOperator('REC'), 'enactor');
   assert.equal(facultyOf('surfer').function, 'Structure');

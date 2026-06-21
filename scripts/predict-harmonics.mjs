@@ -14,7 +14,7 @@
 // should be surprised by each phrase the first time and ANTICIPATE its repeat.
 
 import { ingestMusic } from '../src/organs/in/music.js';
-import { predictiveSequenceReading, readingAt } from '../src/reader/index.js';
+import { predictiveSequenceReading, readingAt } from '../src/perceiver/index.js';
 
 const tune = {
   name: 'frere-jacques.mid',

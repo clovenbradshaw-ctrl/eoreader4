@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
-import { discoverEquivalences, mutualNearestPairs } from '../src/reader/index.js';
+import { discoverEquivalences, mutualNearestPairs } from '../src/perceiver/index.js';
 
 // "The same note" must EMERGE from overtone overlap by rank alone — no threshold,
 // no a priori category. Mutual nearest neighbour + the engine's union-find: two

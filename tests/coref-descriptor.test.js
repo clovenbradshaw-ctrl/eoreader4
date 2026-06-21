@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createCorefField } from '../src/reader/parse/coref.js';
-import { scanDescriptors } from '../src/reader/parse/relations.js';
-import { parseText } from '../src/reader/parse/index.js';
+import { createCorefField } from '../src/perceiver/parse/coref.js';
+import { scanDescriptors } from '../src/perceiver/parse/relations.js';
+import { parseText } from '../src/perceiver/parse/index.js';
 import { projectGraph } from '../src/core/index.js';
-import { areDisjoint, typeOf } from '../src/reader/relation-types.js';
+import { areDisjoint, typeOf } from '../src/perceiver/relation-types.js';
 
 // The standing-descriptor channel, at the FIELD layer. These exercise the
 // mechanism the pipeline wiring will drive: a role epithet ("his sister")

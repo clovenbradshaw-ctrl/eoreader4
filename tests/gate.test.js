@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/reader/parse/pipeline.js';
+import { parseText } from '../src/perceiver/parse/pipeline.js';
 import { runTurn } from '../src/turn/pipeline.js';
 import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';

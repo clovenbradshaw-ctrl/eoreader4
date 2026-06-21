@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ingestFrames } from '../src/organs/in/video.js';
-import { motionReading, persistentFigures, coherentFigures } from '../src/reader/index.js';
+import { motionReading, persistentFigures, coherentFigures } from '../src/perceiver/index.js';
 
 // A circle moving through TV snow, given as raw lit pixels. The engine must
 // recover it with no model: by contiguity (a blob), coherence (extent), and

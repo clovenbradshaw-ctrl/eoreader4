@@ -17,7 +17,7 @@
 // scopes for today, to be deepened with no shape change once the meaning reader is
 // live (§11).
 
-import { readingAt } from '../reader/index.js';
+import { readingAt } from '../perceiver/index.js';
 import { createEnactedLoop } from './loop.js';
 import { replayFrames, loopStats } from './replay.js';
 import { buildMeaningRead } from './meaning.js';

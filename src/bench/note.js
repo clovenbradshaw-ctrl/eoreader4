@@ -16,7 +16,7 @@
 
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { retrieveLexical }  from '../retrieve/index.js';
-import { surfFold, structureSurface } from '../reader/index.js';
+import { surfFold, structureSurface } from '../perceiver/index.js';
 import { enactedReadingTo, enactedReadingMeaning } from '../enact/index.js';
 
 // The read-time forces, defaulted to the live system's own. A sweep overrides one

@@ -16,7 +16,7 @@
 
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { ingestFrames } from '../src/organs/in/video.js';
-import { discoverEquivalences, detectMotion, coherentFigures } from '../src/reader/index.js';
+import { discoverEquivalences, detectMotion, coherentFigures } from '../src/perceiver/index.js';
 import { retrieveLexical } from '../src/retrieve/index.js';
 
 const rng = (s) => () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);

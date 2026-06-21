@@ -15,7 +15,7 @@ import { runTurn }          from '../turn/index.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
 import { bootGeometricReader } from '../boot/index.js';
-import { markSites }        from '../reader/index.js';
+import { markSites }        from '../perceiver/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking } from './chat.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';

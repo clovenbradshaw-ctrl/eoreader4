@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/reader/parse/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
 import { surfFold } from '../src/surfer/surf.js';
 import { buildBasis } from '../src/organs/out/speech/basis.js';
 

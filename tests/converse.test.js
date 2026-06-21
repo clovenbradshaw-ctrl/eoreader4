@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createCorefField } from '../src/reader/parse/coref.js';
-import { parseText } from '../src/reader/parse/index.js';
-import { readingAt } from '../src/reader/index.js';
+import { createCorefField } from '../src/perceiver/parse/coref.js';
+import { parseText } from '../src/perceiver/parse/index.js';
+import { readingAt } from '../src/perceiver/index.js';
 import {
   TALKER, SPAN, CONVERSATIONAL_CAP,
   conversationalEvent, witnessOf, isCitableAsDocument,

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { referentialConfidence, REFERENT_MARGIN } from '../src/reader/referent.js';
+import { referentialConfidence, REFERENT_MARGIN } from '../src/perceiver/referent.js';
 import { runVetoes } from '../src/ground/veto.js';
 
 // referentialConfidence reads the reader's own confidence about WHO a passage is
