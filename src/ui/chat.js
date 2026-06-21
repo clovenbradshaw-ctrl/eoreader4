@@ -18,13 +18,27 @@ export const createThinkingMessage = (root, initial = 'thinking…') => {
   const el = document.createElement('div');
   el.className = 'msg assistant thinking';
   el.innerHTML = `
-    <div class="body"><span class="dots"></span><span class="label">${escapeHtml(initial)}</span></div>
+    <div class="body"><span class="dots"></span><span class="label">${escapeHtml(initial)}</span><span class="elapsed"></span></div>
     <div class="trail"></div>
   `;
   root.appendChild(el);
   root.scrollTop = root.scrollHeight;
+
+  // Latency cue: answers on the local 3B WebGPU model take ~20–40s, so tick an
+  // elapsed-seconds counter while the turn is in flight to set expectations. The
+  // timer is cleared in finalizeThinking.
+  const start = nowMs();
+  const elapsedEl = el.querySelector('.elapsed');
+  const tick = () => {
+    const s = Math.floor((nowMs() - start) / 1000);
+    if (elapsedEl) elapsedEl.textContent = s >= 1 ? ` ${s}s` : '';
+  };
+  el._elapsedTimer = setInterval(tick, 1000);
   return el;
 };
+
+const nowMs = () =>
+  (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
 
 export const updateThinking = (el, stageName, data, ctx) => {
   if (!el) return;
@@ -72,10 +86,36 @@ const rawBlock = (label, text) => {
 
 export const finalizeThinking = (el, text, sources, opts = {}) => {
   if (!el) return;
+  if (el._elapsedTimer) { clearInterval(el._elapsedTimer); el._elapsedTimer = null; }
   el.classList.remove('thinking');
   const body  = el.querySelector('.body');
   const trail = el.querySelector('.trail');
   if (body) body.innerHTML = linkifyCitations(text || '');
+
+  // The plain-language coverage verdict — the headline read of how grounded the
+  // answer is, above the terse audit pills. (The pills stay for the trail.)
+  const cov = coverageSummary(opts.route, opts.flags, sources, text);
+  if (cov) {
+    const c = document.createElement('div');
+    c.className = `coverage ${cov.level}`;
+    c.textContent = cov.text;
+    el.appendChild(c);
+  }
+
+  // Tag the loaded document as a source when the answer was grounded in it. The tag
+  // shows the document's display name (its filename); the "source" label is styling,
+  // not part of the name.
+  if (opts.docName) {
+    const src = document.createElement('div');
+    src.className = 'docsource';
+    src.textContent = opts.docName;
+    src.title = 'Source — the loaded document';
+    if (typeof opts.onDocSource === 'function') {
+      src.classList.add('clickable');
+      src.addEventListener('click', () => opts.onDocSource());
+    }
+    el.appendChild(src);
+  }
 
   // Flags ride alongside the answer — never substitute it.
   if (opts.flags?.length) {
@@ -93,6 +133,7 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
 
   const parts = [];
   if (sources?.length) parts.push(`sources: ${sources.map(s => `s${s}`).join(', ')}`);
+  if (opts.mode)       parts.push(`mode: ${MODE_LABEL[opts.mode] || opts.mode}`);
   if (opts.route)      parts.push(`route: ${opts.route}`);
   if (opts.ms != null) parts.push(`${opts.ms}ms`);
   if (parts.length) {
@@ -100,6 +141,17 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
     meta.className = 'meta';
     meta.textContent = parts.join('  ·  ');
     el.appendChild(meta);
+  }
+
+  // Retry affordance — re-runs the same query. Shown on errored turns so a
+  // transient backend fault isn't a dead end.
+  if (typeof opts.onRetry === 'function' && opts.route === 'error') {
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'retry small';
+    retry.textContent = '↻ Retry';
+    retry.addEventListener('click', () => { retry.disabled = true; opts.onRetry(); });
+    el.appendChild(retry);
   }
 
   // The per-stage trail collapses to a toggle once we have an answer.
@@ -124,6 +176,35 @@ export const renderAssistantMessage = (root, text, sources, opts = {}) => {
   const el = createThinkingMessage(root);
   finalizeThinking(el, text, sources, opts);
   return el;
+};
+
+// The grounding register, for the meta line.
+const MODE_LABEL = { auto: 'Auto', grounded: 'Chat with document', free: 'Free form' };
+
+// Plain-language coverage verdict — the one-line human read of how grounded the answer
+// is. The terse pills (low-coverage, unbound-contact, …) stay for the audit trail; this
+// translates them, and the route, into a sentence. Levels drive the colour.
+const ABSTENTION_RE = /\b(does(?:n['’]?t| not)\s+(?:cover|mention|say|state|address|discuss|contain|specify)|not\s+(?:covered|mentioned|stated|specified)|isn['’]?t\s+(?:in|covered)|no\s+(?:information|mention|indication|details?))\b/i;
+
+const coverageSummary = (route, flags, sources, text) => {
+  if (route === 'error') return null;
+  const ids = new Set((flags || []).map(f => f.id));
+  if (route === 'chat')
+    return { text: 'Answered from general knowledge — not grounded in the document.', level: 'free' };
+  // Grounded routes:
+  if (ids.has('abstained') || ABSTENTION_RE.test(String(text || '')))
+    return { text: 'The document doesn’t cover this question.', level: 'partial' };
+  if (ids.has('edge-contradicted'))
+    return { text: 'A claim here conflicts with the document.', level: 'weak' };
+  if (ids.has('unbound'))
+    return { text: 'Couldn’t tie any of this to specific sentences — read with care.', level: 'weak' };
+  if (ids.has('unbound-contact'))
+    return { text: 'Loosely grounded — paraphrased from the text, not tied to a single sentence.', level: 'partial' };
+  if (ids.has('low-coverage'))
+    return { text: 'Partial coverage — some of this goes beyond the cited text.', level: 'partial' };
+  if (sources && sources.length)
+    return { text: 'Answered from the text, tied to the cited sentences.', level: 'good' };
+  return { text: 'Answered from the document.', level: 'good' };
 };
 
 const stageLabel = (name, data) => {

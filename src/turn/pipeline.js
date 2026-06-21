@@ -31,14 +31,23 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, model, embedder, classifier, adjacency, auditLog, onStep, history = [] }) => {
+export const runTurn = async ({ question, doc, model, embedder, classifier, adjacency, auditLog, onStep, history = [], grounding = 'auto' }) => {
   const turn      = auditLog.turn(question);
   const stepFan   = (name, ctx, ms) => {
     const data = summarize(name, ctx, ms);
     turn.step(name, data);
     onStep?.(name, ctx, data);
   };
-  const ctx0      = { question, doc, model, embedder, classifier, adjacency, history };
+  const ctx0      = { question, doc, model, embedder, classifier, adjacency, history, grounding };
+
+  // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
+  // veto, settle). Those annotation stages must never discard an answer the model
+  // already produced: when one throws — the observed failure was the geometric
+  // classifier's MiniLM/onnxruntime-web backend faulting transiently inside
+  // `factcheck` — we keep the bound answer, record the fault in the trail, and flag
+  // the turn, rather than collapsing it to a dead "Error:" the user can't act on.
+  // A failure BEFORE the answer exists is genuinely fatal and falls to the catch.
+  const degraded = [];
 
   try {
     const ctx = await PIPELINE.reduce(
@@ -46,9 +55,21 @@ export const runTurn = async ({ question, doc, model, embedder, classifier, adja
         const acc = await accPromise;
         if (acc.terminate) return acc;
         const t0   = nowMs();
-        const next = await stages[name](acc);
-        stepFan(name, next, nowMs() - t0);
-        return next;
+        try {
+          const next = await stages[name](acc);
+          stepFan(name, next, nowMs() - t0);
+          return next;
+        } catch (err) {
+          const message = String(err?.message || err);
+          if (acc.answer != null) {
+            // Post-answer (annotation) failure — salvage the answer, keep going so the
+            // remaining annotation stages still run, and flag the gap.
+            turn.step('error', { stage: name, message, fatal: false });
+            degraded.push(name);
+            return acc;
+          }
+          throw err;   // pre-answer failure — there is no answer to salvage
+        }
       },
       Promise.resolve(ctx0)
     );
@@ -56,9 +77,16 @@ export const runTurn = async ({ question, doc, model, embedder, classifier, adja
     const flags = (ctx.vetoes || []).map(v => ({
       id: v.id, message: v.message, refuses: v.refuses,
     }));
+    // A post-answer annotation stage failed: the answer rides, with an honest flag
+    // that the grounding check behind it could not complete.
+    if (degraded.length) flags.push({
+      id: 'grounding-incomplete', refuses: false,
+      message: `A grounding step (${degraded.join(', ')}) could not complete, so the answer is shown without that verification.`,
+    });
 
     turn.finish({
       route:     ctx.route || 'grounded',
+      grounding,                                  // the register the user selected (audit trail)
       prompt:    ctx.promptText || null,
       rawOutput: ctx.rawOutput  || null,
       bound:     ctx.bound      || null,
@@ -76,16 +104,17 @@ export const runTurn = async ({ question, doc, model, embedder, classifier, adja
       revisions: ctx.revisions || null,
       flags,
     });
-    return { answer: ctx.answer, sources: ctx.sources || [], referential: ctx.referential || null, flags, turn };
+    return { answer: ctx.answer, sources: ctx.sources || [], referential: ctx.referential || null, flags, route: ctx.route || 'grounded', grounding, turn };
   } catch (err) {
     turn.step('error', { message: String(err?.message || err) });
     turn.finish({
       route:   'error',
+      grounding,
       answer:  `Error: ${err?.message || err}`,
       sources: [],
       flags:   [],
     });
-    return { answer: turn.answer, sources: [], flags: [], turn, error: err };
+    return { answer: turn.answer, sources: [], flags: [], route: 'error', grounding, turn, error: err };
   }
 };
 
@@ -97,7 +126,7 @@ const nowMs = () =>
 const summarize = (name, ctx, ms) => {
   const base = { ms: Math.round(ms) };
   switch (name) {
-    case 'route':    return { ...base, route: ctx.route, task: ctx.task };
+    case 'route':    return { ...base, route: ctx.route, task: ctx.task, grounding: ctx.grounding };
     case 'converse': return { ...base, recent: ctx.convStats?.recent || 0,
                               folded: ctx.convStats?.folded || 0, notesLen: ctx.convStats?.notesLen || 0 };
     case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0 };

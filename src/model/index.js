@@ -7,6 +7,7 @@ export { registerBackend, availableBackends, createModel } from './interface.js'
 export { createHashEmbedder }   from './embed-hash.js';
 export { createMiniLMEmbedder } from './embed.js';
 export { buildGroundedMessages, buildChatMessages, SYSTEM_GROUND, SYSTEM_CHAT,
+         SYSTEM_GROUND_STRICT, SYSTEM_FREE,
          orientationLine, EXCERPTS_HEADER, DEFAULT_BUDGET, SUMMARY_GUARD } from './prompt.js';
 
 import './echo.js';

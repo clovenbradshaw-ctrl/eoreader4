@@ -192,7 +192,20 @@ export const createPhasepostClassifier = ({ cells, centroids, embedder, floors =
         ground: noCommit('empty-query'), figure: noCommit('empty-query'), pattern: noCommit('empty-query') });
     }
     if (memo.has(query)) return memo.get(query);
-    const qVec = await embedder.embed(query);
+    // The meaning organ (MiniLM → onnxruntime-web, loaded from a CDN on demand) can
+    // fault transiently — a backend-registration race on first inference, a lost WebGPU
+    // context. Degrade to no-commit (the honest "couldn't measure") rather than throw:
+    // a flaky reader must not crash the turn that called it (the fact-check stage). Not
+    // memoized, so a later attempt can still type the clause once the organ recovers.
+    let qVec;
+    try {
+      qVec = await embedder.embed(query);
+    } catch (e) {
+      return Object.freeze({ ...base, live: false, error: String(e?.message || e),
+        ground:  noCommit('embed-failed'),
+        figure:  noCommit('embed-failed'),
+        pattern: noCommit('embed-failed') });
+    }
     const perception = Object.freeze({
       ...base, live: true,
       ground:  measureBand(qVec, bands.Ground,  vectors, floors.Ground),
