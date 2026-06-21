@@ -221,9 +221,10 @@ section h2 .hint {
 
 /* Document-source tag — the loaded document, tagged as a source on grounded answers.
    The "source" label is styling; the text is just the document's display name. */
+.msg.assistant .docsources { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .4rem; }
 .msg.assistant .docsource {
   display: inline-flex; align-items: baseline; gap: .35rem;
-  font-size: .7rem; margin-top: .4rem; padding: .12rem .5rem;
+  font-size: .7rem; padding: .12rem .5rem;
   border-radius: 999px; border: 1px solid #1e3a8a;
   background: #11203a; color: #93c5fd; font-family: ui-monospace, monospace;
 }
@@ -236,6 +237,24 @@ section h2 .hint {
 
 /* Retry affordance on an errored turn. */
 .msg.assistant .retry { margin-top: .55rem; }
+
+/* Document chips — the loaded documents, tagged for grounding. They sit above the
+   composer and persist across turns; a selected (tagged) chip is grounded against. */
+.doc-chips { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .5rem; flex-shrink: 0; }
+.doc-chips[hidden] { display: none; }
+.doc-chip {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .75rem; padding: .15rem .25rem .15rem .55rem;
+  border-radius: 999px; border: 1px solid #3f3f46;
+  background: #1f1f23; color: #a1a1aa; font-family: ui-monospace, monospace;
+}
+.doc-chip.selected { border-color: #065f46; background: #07241c; color: #6ee7b7; }
+.doc-chip-name { cursor: pointer; }
+.doc-chip-x {
+  background: transparent; border: none; padding: 0 .25rem; margin: 0;
+  color: inherit; opacity: .6; font-size: .9rem; line-height: 1; cursor: pointer;
+}
+.doc-chip-x:hover { opacity: 1; background: transparent; color: #fca5a5; }
 
 #composer { display: flex; gap: .5rem; flex-shrink: 0; }
 #input {

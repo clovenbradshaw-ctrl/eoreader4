@@ -13,6 +13,17 @@
 // vetoes ride alongside as `flags`.
 
 import { stages } from './stages.js';
+import { createCompositeDoc } from '../organs/in/index.js';
+
+// The documents a turn's citations actually drew on. For a composite (several selected
+// documents folded into one), map each cited sentence index back through the provenance
+// axis to its source document; for a single document it is just that document.
+const sourceDocsOf = (doc, sources) => {
+  if (!doc) return [];
+  if (doc.isComposite && typeof doc.origin === 'function')
+    return [...new Set((sources || []).map(i => doc.origin(i)?.docId).filter(Boolean))];
+  return doc.docId ? [doc.docId] : [];
+};
 
 // route → converse → retrieve → fold → answerable → prompt → llm → bind → factcheck → revise → veto → settle.
 // `converse` (the session fold) sits right after `route`, before retrieval — it runs
@@ -31,14 +42,19 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, model, embedder, classifier, adjacency, auditLog, onStep, history = [], grounding = 'auto' }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, classifier, adjacency, auditLog, onStep, history = [], grounding = 'auto' }) => {
+  // Ground against a SELECTED SET of documents when one is given: several parsed docs
+  // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
+  // single document — referents stay distinct per source unless cross-doc SYN'd. A
+  // single doc passes through untouched; the legacy `doc` argument still works.
+  const groundingDoc = (Array.isArray(docs) && docs.length) ? createCompositeDoc(docs) : (doc || null);
   const turn      = auditLog.turn(question);
   const stepFan   = (name, ctx, ms) => {
     const data = summarize(name, ctx, ms);
     turn.step(name, data);
     onStep?.(name, ctx, data);
   };
-  const ctx0      = { question, doc, model, embedder, classifier, adjacency, history, grounding };
+  const ctx0      = { question, doc: groundingDoc, model, embedder, classifier, adjacency, history, grounding };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -104,7 +120,12 @@ export const runTurn = async ({ question, doc, model, embedder, classifier, adja
       revisions: ctx.revisions || null,
       flags,
     });
-    return { answer: ctx.answer, sources: ctx.sources || [], referential: ctx.referential || null, flags, route: ctx.route || 'grounded', grounding, turn };
+    return {
+      answer: ctx.answer, sources: ctx.sources || [],
+      sourceDocs: sourceDocsOf(groundingDoc, ctx.sources),
+      referential: ctx.referential || null, flags,
+      route: ctx.route || 'grounded', grounding, turn,
+    };
   } catch (err) {
     turn.step('error', { message: String(err?.message || err) });
     turn.finish({
@@ -114,7 +135,7 @@ export const runTurn = async ({ question, doc, model, embedder, classifier, adja
       sources: [],
       flags:   [],
     });
-    return { answer: turn.answer, sources: [], flags: [], route: 'error', grounding, turn, error: err };
+    return { answer: turn.answer, sources: [], sourceDocs: [], flags: [], route: 'error', grounding, turn, error: err };
   }
 };
 

@@ -102,19 +102,25 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
     el.appendChild(c);
   }
 
-  // Tag the loaded document as a source when the answer was grounded in it. The tag
+  // Tag the documents the answer drew on as sources, one chip per document. Each tag
   // shows the document's display name (its filename); the "source" label is styling,
-  // not part of the name.
-  if (opts.docName) {
-    const src = document.createElement('div');
-    src.className = 'docsource';
-    src.textContent = opts.docName;
-    src.title = 'Source — the loaded document';
-    if (typeof opts.onDocSource === 'function') {
-      src.classList.add('clickable');
-      src.addEventListener('click', () => opts.onDocSource());
+  // not part of the name. (docName kept for single-document back-compat.)
+  const docNames = opts.docNames || (opts.docName ? [opts.docName] : []);
+  if (docNames.length) {
+    const wrap = document.createElement('div');
+    wrap.className = 'docsources';
+    for (const name of docNames) {
+      const src = document.createElement('span');
+      src.className = 'docsource';
+      src.textContent = name;
+      src.title = 'Source — ' + name;
+      if (typeof opts.onDocSource === 'function') {
+        src.classList.add('clickable');
+        src.addEventListener('click', () => opts.onDocSource(name));
+      }
+      wrap.appendChild(src);
     }
-    el.appendChild(src);
+    el.appendChild(wrap);
   }
 
   // Flags ride alongside the answer — never substitute it.

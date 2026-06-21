@@ -26,7 +26,9 @@ import { mountPredict } from './predict-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 
 const STATE = {
-  doc:       null,
+  doc:       null,       // the document currently shown in the doc pane
+  docs:      new Map(),  // docId → parsed doc, every loaded document
+  selected:  new Set(),  // docIds tagged for grounding (the persistent chips)
   audit:     createAuditLog(),
   embedder:  createHashEmbedder(),
   backendName: 'webllm',
@@ -66,6 +68,7 @@ const els = {
   exportBtn: document.getElementById('export-audit'),
   backend:   document.getElementById('backend'),
   groundingChip: document.getElementById('grounding-chip'),
+  docChips:  document.getElementById('doc-chips'),
 };
 
 const setStatus = (s) => { els.status.textContent = s; };
@@ -109,10 +112,9 @@ const selectSentence = (idx) => {
   STATE.graph?.setCursor(idx);
 };
 
-const ingest = async (file) => {
-  setStatus('parsing…');
-  const t0 = performance.now();
-  const doc = await ingestText(file);
+// Render a loaded document into the shared doc pane (text · graph · log). This is the
+// "viewed" document; grounding is governed separately by the selection chips.
+const renderViewedDoc = (doc) => {
   STATE.doc = doc;
   renderDoc(doc, els.docView);
   STATE.graph?.destroy?.();
@@ -128,10 +130,93 @@ const ingest = async (file) => {
   });
   renderLog(doc, els.logView, { onSelectSentence: selectSentence });
   if (STATE.activeTab === 'predict') STATE.predict?.refresh();
+};
+
+// Show the empty placeholders (no document loaded).
+const clearDocPane = () => {
+  STATE.doc = null;
+  els.docView.innerHTML = '';
+  STATE.graph?.destroy?.();
+  STATE.graph = renderGraph(null, els.graphView, { onSelectSentence: selectSentence });
+  renderLog(null, els.logView, { onSelectSentence: selectSentence });
+};
+
+// View a loaded document by id (clicking its chip).
+const viewDoc = (id) => {
+  const doc = STATE.docs.get(id);
+  if (doc) renderViewedDoc(doc);
+};
+
+// Remove a document entirely (the chip's ×). If it was the one on screen, fall back
+// to another loaded document, or clear the pane.
+const removeDoc = (id) => {
+  STATE.docs.delete(id);
+  STATE.selected.delete(id);
+  if (STATE.doc?.docId === id) {
+    const next = STATE.docs.keys().next().value;
+    if (next) viewDoc(next); else clearDocPane();
+  }
+  renderDocChips();
+};
+
+// The persistent document chips: every loaded document is a chip; tagged (selected)
+// ones are grounded against, and stay selected until deselected. Clicking a chip
+// toggles its selection and views it; the × removes it.
+const renderDocChips = () => {
+  const root = els.docChips;
+  root.innerHTML = '';
+  if (STATE.docs.size === 0) { root.hidden = true; return; }
+  root.hidden = false;
+  for (const [id] of STATE.docs) {
+    const on = STATE.selected.has(id);
+    const chip = document.createElement('span');
+    chip.className = 'doc-chip' + (on ? ' selected' : '');
+    chip.title = on
+      ? 'Grounded in this document — click to deselect'
+      : 'Click to ground answers in this document';
+
+    const name = document.createElement('span');
+    name.className = 'doc-chip-name';
+    name.textContent = id;
+    name.addEventListener('click', () => {
+      if (STATE.selected.has(id)) STATE.selected.delete(id); else STATE.selected.add(id);
+      viewDoc(id);
+      renderDocChips();
+    });
+
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'doc-chip-x';
+    x.textContent = '×';
+    x.title = 'Remove this document';
+    x.addEventListener('click', (e) => { e.stopPropagation(); removeDoc(id); });
+
+    chip.appendChild(name);
+    chip.appendChild(x);
+    root.appendChild(chip);
+  }
+};
+
+const ingest = async (file) => {
+  setStatus('parsing…');
+  const t0 = performance.now();
+  const doc = await ingestText(file);
+  // Keep document ids unique so two files with the same name stay distinct (their
+  // referents are namespaced by this id in the composite).
+  let id = doc.docId, n = 2;
+  while (STATE.docs.has(id)) id = `${doc.docId} (${n++})`;
+  doc.docId = id;
+
+  STATE.docs.set(id, doc);
+  STATE.selected.add(id);          // a freshly loaded document is grounded by default
+  renderViewedDoc(doc);
+  renderDocChips();
+
   const t1 = performance.now();
   const g = doc.projectGraph();
   setStatus(`parsed: ${doc.sentences.length} sentences, ${doc.log.length} events, ` +
-    `${g.entities.size} figures, ${g.edges.length} links, ${Math.round(t1 - t0)}ms`);
+    `${g.entities.size} figures, ${g.edges.length} links, ${Math.round(t1 - t0)}ms · ` +
+    `${STATE.docs.size} doc${STATE.docs.size > 1 ? 's' : ''} loaded`);
 
   // Semantic site-role pass — chrome by role, not a list. Marks off-distribution
   // figure-less units as sites (DEF role=site) so retrieval skips furniture.
@@ -143,7 +228,7 @@ const ingest = async (file) => {
   if (capable && doc.sentences.length > 20) {
     try {
       const sites = await markSites(doc, STATE.embedder);
-      if (sites.length) {
+      if (sites.length && STATE.doc?.docId === id) {
         markSiteSentences(els.docView, sites);
         renderLog(doc, els.logView, { onSelectSentence: selectSentence });
       }
@@ -177,10 +262,15 @@ const runQuery = async (question) => {
   els.send.disabled = true;
   renderUserMessage(els.messages, question);
 
+  // The grounding scope is the SELECTED set of documents (the tagged chips).
+  const selectedDocs = [...STATE.selected].map(id => STATE.docs.get(id)).filter(Boolean);
+
   // Live "thinking" bubble — updates as each pipeline stage finishes, with an
   // elapsed-time cue (the local 3B model takes ~20–40s).
   const thinking = createThinkingMessage(els.messages,
-    STATE.doc ? 'thinking…' : 'thinking (no doc — chat mode)…');
+    selectedDocs.length
+      ? `thinking (${selectedDocs.length} doc${selectedDocs.length > 1 ? 's' : ''})…`
+      : 'thinking (no doc — chat mode)…');
 
   try {
     await ensureModel();
@@ -195,7 +285,7 @@ const runQuery = async (question) => {
   const t0 = performance.now();
   const result = await runTurn({
     question,
-    doc:      STATE.doc,        // may be null — chat-only path
+    docs:     selectedDocs,     // the selected set — folded into one composite to ground against
     model:    STATE.model,
     embedder: STATE.embedder,
     // The geometric organ for the edge-grounding fact-check (the talker's assertions
@@ -205,21 +295,27 @@ const runQuery = async (question) => {
     classifier: STATE.geometric?.installer?.getState?.().classifier || null,
     auditLog: STATE.audit,
     history:  STATE.history,    // the prior transcript — the session fold reads it
-    grounding: STATE.grounding, // the Grounded / Free form / Auto register (the chip)
+    grounding: STATE.grounding, // the Auto / Chat with document / Free form register (the chip)
     onStep:   (name, ctx, data) => updateThinking(thinking, name, data, ctx),
   });
   const ms = Math.round(performance.now() - t0);
   const route = result.route || result.turn.route;
 
+  // Tag the documents the answer actually drew on as sources (each cited document).
+  const docNames = route === 'grounded'
+    ? (result.sourceDocs?.length ? result.sourceDocs : selectedDocs.map(d => d.docId))
+    : [];
+
   finalizeThinking(thinking, result.answer, result.sources, {
     route, ms, flags: result.flags,
     mode: STATE.grounding,
-    // Tag the loaded document as a source whenever the answer was grounded in it.
-    docName: route === 'grounded' ? (STATE.doc?.docId || null) : null,
-    onDocSource: () => setTab('text'),
+    docNames,
+    onDocSource: (name) => { if (name && STATE.docs.has(name)) viewDoc(name); setTab('text'); },
     onRetry: () => runQuery(question),
   });
-  if (result.sources?.length) highlightSources(els.docView, result.sources);
+  // Highlight only when grounding a single document — composite indices don't map onto
+  // one doc pane (clicking a source chip switches to that document instead).
+  if (result.sources?.length && selectedDocs.length <= 1) highlightSources(els.docView, result.sources);
 
   // Append the completed exchange so the next turn's session fold can read it back —
   // but never feed an error turn back into the conversation (it would poison the fold).
@@ -239,10 +335,12 @@ const send = () => {
   runQuery(question);
 };
 
-// File input + drag-drop
-els.fileInput.addEventListener('change', (e) => {
-  const f = e.target.files?.[0];
-  if (f) ingest(f);
+// File input + drag-drop — several files may be added; each becomes a selectable chip.
+// Ingest sequentially so the per-document renders don't race.
+els.fileInput.addEventListener('change', async (e) => {
+  const files = [...(e.target.files || [])];
+  els.fileInput.value = '';   // allow re-selecting the same file later
+  for (const f of files) await ingest(f);
 });
 els.dropzone.addEventListener('dragover', (e) => {
   e.preventDefault();
@@ -251,11 +349,11 @@ els.dropzone.addEventListener('dragover', (e) => {
 els.dropzone.addEventListener('dragleave', () => {
   els.dropzone.style.borderColor = '';
 });
-els.dropzone.addEventListener('drop', (e) => {
+els.dropzone.addEventListener('drop', async (e) => {
   e.preventDefault();
   els.dropzone.style.borderColor = '';
-  const f = e.dataTransfer?.files?.[0];
-  if (f) ingest(f);
+  const files = [...(e.dataTransfer?.files || [])];
+  for (const f of files) await ingest(f);
 });
 
 // Compose
