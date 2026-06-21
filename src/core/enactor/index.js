@@ -25,3 +25,5 @@ export { runGate, VOID_TOKEN } from './gate.js';
 export { buildBasis } from './basis.js';
 export { parseProps, correspondProp, propKey, relKey } from './props.js';
 export { EFFERENCE, efferenceCopy, efferenceCopiesOf } from './efference.js';
+export { createMonitor, MISMATCH_FLOOR } from './monitor.js';
+export { SELF, WORLD, SELF_MISMATCH, isSelf, attenuates, createSelfModel } from '../self/index.js';

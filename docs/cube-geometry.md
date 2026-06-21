@@ -60,16 +60,25 @@ This is being landed in tested phases:
    proposition's identity (`propKey`) — the skeleton prediction is IDENTITY (I
    will sense P return). Modality-blind (the organ is provenance only); a VOID
    casts no copy. `runGate` returns `efference: [...]` alongside `committed`.
-4. **the one monitor** + self/world tagging (`self/`) — compare each sensed P′
-   against outstanding efference copies; a match is tagged SELF and attenuated
-   (me-ness), a miss is WORLD. One monitor, modality-blind → one self. (add-on 3
-   §3–§4: SELF-ATTENUATION test.)
-5. ALTERED-FEEDBACK + ONE-ME tests (add-on 3 §7).
+4. **done** — the **one monitor** (`core/enactor/monitor.js`) + the self/world
+   line (`core/self/`). The monitor holds the outstanding efference copies and
+   compares each sensed proposition against them: an exact match (`propKey`) →
+   SELF · attenuate · resolve the copy (me-ness); a partial correspondence to an
+   outstanding copy → SELF-MISMATCH · error · world-interference · correct the next
+   commit; no match → WORLD (news). The boundary is drawn in the core by the
+   comparison, not in any organ. There is ONE monitor and ONE self model, shared
+   across all output organs — modality is provenance the comparator ignores.
+5. **done** — the three golden tests (`tests/enactor-monitor.test.js`, add-on 3
+   §7): SELF-ATTENUATION (the efference match is the only difference between self
+   and world — can't tickle yourself), ALTERED-FEEDBACK (a self-prediction mismatch
+   errors, corrects the next commit, tags world-interference — the loop is real),
+   ONE-ME (two modalities flow through one monitor, owned by one self; turning off
+   an organ removes a renderer, not a self).
 
-The headline (add-on 3 §4): each output organ does **not** get its own feedback
-mechanism. Efference copies and sensed returns are propositions and the
-comparator is modality-blind, so **one monitor in the core** handles all output —
-one loop, one self.
+The headline (add-on 3 §4) is now realized: each output organ does **not** get its
+own feedback mechanism. Efference copies and sensed returns are propositions and
+the comparator is modality-blind, so **one monitor in the core** handles all
+output — one loop, one self.
 
 ## The three faces — operator(Site, Stance) (§B)
 
@@ -135,8 +144,11 @@ src/
     unit.js · proposition.js                      (the two floors)
     conventions/                                  (the learning layer, priors)
     cognition.js · faces.js · holon.js            (triad · three faces · Site address)
-    enactor/       the enactor's modality-blind COMMIT (add-on 3): gate (the
-                   DEF·EVA·REC collapse) · basis (the DEF) · props (the EVA)
+    enactor/       the enactor's modality-blind agentive loop (add-on 3): gate
+                   (the DEF·EVA·REC collapse) · basis (the DEF) · props (the EVA) ·
+                   efference (the predicted return) · monitor (the ONE comparator)
+    self/          the self/world line + attenuation, written by the one monitor —
+                   me-ness, modality-blind and singular (add-on 3 §2/§4)
   perceiver/       the PERCEIVER faculty (was read/→reader/) — Existence       [§A]
     parse/         the constitution engine (was src/parse/) — marks → structure
   surfer/          the SURFER faculty (the middle) — Structure · navigate    [§A]
