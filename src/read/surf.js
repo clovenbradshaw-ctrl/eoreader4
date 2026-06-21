@@ -31,7 +31,7 @@ const DEFAULT_REACH = Object.freeze({ behind: 4, ahead: 16, maxStops: 5 });
 export const surfFold = (doc, anchor = 0, opts = {}) => {
   const units = doc?.units || doc?.sentences || [];
   const S = units.length;
-  const empty = { anchor: 0, stops: [], peak: 0, focus: null, field: [], recCursors: [], rode: 'bayesian-figure' };
+  const empty = { anchor: 0, stops: [], peak: 0, focus: null, field: [], recCursors: [], recAxes: [], rode: 'bayesian-figure' };
   if (S === 0) return empty;
 
   const { behind, ahead, maxStops } = { ...DEFAULT_REACH, ...opts };
@@ -53,21 +53,44 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   }
   const reachBayes = field.map(f => f.bayes);
 
-  // The FRAME axis: run the enacted loop over the reach, calibrated to the reach, and
-  // collect the cursors where a frame broke. The same loop the significance engine
-  // runs, so cursor and frame never disagree — both ride `bayes`.
+  // The FRAME axis: run the enacted loop over the reach and collect the cursors where a
+  // frame broke. The same loop the significance engine runs, so cursor and frame never
+  // disagree — both ride `bayes`. The read now also carries `contrib` (the per-dimension
+  // bayesBy), so a local REC restructures ALONG the straining axis (its cause), not
+  // whatever figures were merely in view — the directional-strain parity the document
+  // readers already have (enact/index.js) but the surfer's own loop had skipped.
   const cal = calibrateReader(reachBayes);
   let recCursors = [];
+  let recAxes = [];
   try {
     const loop = createEnactedLoop({
-      read: (c) => ({ surprise: bayesAt(c), terms: readings[c]?.predicted?.figures || [] }),
+      read: (c) => ({ surprise: bayesAt(c), terms: readings[c]?.predicted?.figures || [],
+                      contrib: readings[c]?.bayesBy || null }),
+      // ONE calibration discipline — CAUSAL, the same arrow the document readers run: the
+      // band that judges cursor c is fit from the surprises BEFORE c. The reach fit seeds
+      // it so a short window is not numb early (calibrateReader(reachBayes) as the seed,
+      // refined causally as the reach is stepped), instead of the acausal whole-reach band
+      // that let a later cursor set the band judging an earlier one.
+      //
+      // The impulse (shock) gate stays at the loop's fixed fallback, NOT a reach quantile:
+      // on a ~20-cursor reach a high quantile sits barely above the median, so it fires on
+      // routine noise rather than a genuine shock — the fires-on-the-scale-not-the-signal
+      // anti-pattern. The shock a frame-axis impulse would catch is already a peak on the
+      // CURSOR axis (the three-axis redundancy), so it still becomes a stop, through the
+      // axis that calibrates it honestly (the derived VOID boundary) — not this one.
+      calibrate: { mode: 'causal' },
       confirmBand: cal.confirmBand,
       thresholds:  cal.thresholds,
     });
     for (let c = lo; c <= hi; c++) loop.step(c);
-    recCursors = [...new Set(loop.events.filter(e => e.op === 'REC').map(e => e.cursor))]
-      .filter(c => c >= lo && c <= hi).sort((x, y) => x - y);
-  } catch { recCursors = []; }
+    const recs = loop.events.filter(e => e.op === 'REC' && e.cursor >= lo && e.cursor <= hi);
+    recCursors = [...new Set(recs.map(e => e.cursor))].sort((x, y) => x - y);
+    // The straining axis per REC — the directional strain the surfer can now carry (dead
+    // without contrib): the dimensions a local frame broke ALONG, tagged with the layer
+    // that broke (proposition | document) and the trigger (accumulation grind | impulse
+    // shock), so a cursor that broke at both layers reads as two honest records, not a dup.
+    recAxes = recs.map(e => ({ cursor: e.cursor, layer: e.layer, alongAxis: e.alongAxis || [], trigger: e.trigger }));
+  } catch { recCursors = []; recAxes = []; }
 
   // The CURSOR axis: arrest on the peaks. The arrest threshold is calibrated to the reach,
   // not a fixed floor — `bayes` clusters low, so a constant floor would arrest nowhere.
@@ -116,7 +139,7 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   let best  = votes.get(focus) || 0;
   for (const [f, v] of votes) if (v > best) { best = v; focus = f; }
 
-  return { anchor: a, stops: stopList, peak, focus, field, recCursors, rode: useBoundary ? 'bayesian-void' : 'bayesian-figure' };
+  return { anchor: a, stops: stopList, peak, focus, field, recCursors, recAxes, rode: useBoundary ? 'bayesian-void' : 'bayesian-figure' };
 };
 
 const clampIdx = (x, S) => Math.max(0, Math.min(S - 1, x | 0));

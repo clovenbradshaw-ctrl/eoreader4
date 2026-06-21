@@ -36,6 +36,29 @@ test('the anchor is always a stop; every REC cursor is always a stop', () => {
   }
 });
 
+// §4/§11 — the surfer's frame axis now feeds CONTRIB (the per-dimension bayesBy), so a
+// local REC restructures ALONG the straining axis, not whatever figures were merely in
+// view. The document readers already had this parity; the surfer's own loop had skipped
+// it. This is the test that would have caught the gap: without contrib fed, the loop's
+// axis is empty and `alongAxis` comes back empty on every REC.
+test('the surfer feeds contrib — each REC carries the straining axis (directional strain)', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  const surf = surfFold(doc, 1);
+  assert.ok(surf.recCursors.length > 0, 'STORY breaks at least one local frame');
+  assert.ok(Array.isArray(surf.recAxes) && surf.recAxes.length > 0, 'every REC carries a directional record');
+  for (const r of surf.recAxes) {
+    assert.ok(Number.isInteger(r.cursor) && typeof r.layer === 'string' &&
+              (r.trigger === 'accumulation' || r.trigger === 'impulse') && Array.isArray(r.alongAxis),
+      'a recAxis carries { cursor, layer, trigger, alongAxis }');
+  }
+  // the records cover exactly the REC cursors (deduped over layers)
+  assert.deepEqual([...new Set(surf.recAxes.map(r => r.cursor))].sort((a, b) => a - b), surf.recCursors);
+  // the parity itself: contrib reached the loop, so at least one REC names a real straining
+  // axis — without it the REC would fall back to the in-view terms and `alongAxis` is empty.
+  assert.ok(surf.recAxes.some(r => r.alongAxis.length > 0),
+    'contrib reached the surfer loop — a REC names the dimensions belief moved along');
+});
+
 test('the peak is the steepest stop — where the significance reading is taken', () => {
   const doc = parseText(STORY, { docId: 's' });
   const surf = surfFold(doc, 1);
