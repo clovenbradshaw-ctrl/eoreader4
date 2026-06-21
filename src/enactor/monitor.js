@@ -1,4 +1,4 @@
-// core/enactor/monitor.js — the ONE monitor (add-on 3 §3, §4).
+// enactor/monitor.js — the ONE monitor (add-on 3 §3, §4).
 //
 // THE HEADLINE: each output organ does NOT get its own feedback mechanism. There
 // is one monitor, in the core, modality-blind, and it is where the self/world line
@@ -21,7 +21,7 @@
 // and me-ness is emergent in the core, the way structure is.
 
 import { correspondProp, propKey } from './props.js';
-import { SELF, WORLD, SELF_MISMATCH, createSelfModel } from '../self/index.js';
+import { SELF, WORLD, SELF_MISMATCH, createSelfModel } from '../core/self/index.js';
 
 // A sensed proposition CORRESPONDS to an outstanding copy — same figures, possibly
 // an altered relation — at or above this score → the (altered) return of that

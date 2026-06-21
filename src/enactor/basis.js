@@ -1,4 +1,4 @@
-// core/enactor/basis.js — surf → grounded basis (§4).
+// enactor/basis.js — surf → grounded basis (§4).
 //
 // The DEF the enactor's gate holds (modality-blind; add-on 3 §1). A thin adapter
 // over the surfer's result

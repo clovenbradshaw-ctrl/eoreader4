@@ -10,7 +10,7 @@
 // (cross-level fire, unaddressed emit) and the calibration one (absolute-on-
 // relative-scale) read the sealed event stream / runtime signals and land next.
 
-import { nearestHolon, isFace, holonsContaining } from './graph.js';
+import { nearestHolon, topHolon, isFace, holonsContaining } from './graph.js';
 
 // ── 1. MEMBRANE BREACH (the gravest) ─────────────────────────────────────────
 // A module imports another holon's INTERNALS instead of its published face. The
@@ -44,21 +44,23 @@ export const membraneBreaches = (graph) => {
 };
 
 // ── 3. FUSED HOLON ───────────────────────────────────────────────────────────
-// Two holons mutually coupled with no membrane between them (the read/ =
-// reader+surfer fusion). The detector: a pair of DISJOINT holons (neither contains
-// the other) that import each other's files in BOTH directions. Strain is the total
-// coupling across the pair; the locus names both. Ancestor/descendant pairs are
-// excluded — a part using its whole is nesting, not fusion. The background is every
-// disjoint pair with any cross-coupling, so a mutually-fused pair is gated against
-// how coupled the code's pairs typically are.
+// Two FACULTIES mutually coupled with no membrane between them (the read/ =
+// reader+surfer fusion). The detector works at the OUTERMOST (faculty) holon, so a
+// sub-holon collapses to its faculty — otherwise a faculty-level cycle hides as two
+// sub-holons that look unrelated (the perceiver/parse <-> enact cycle did exactly
+// this). A pair of DISJOINT faculties that import each other's files in BOTH
+// directions is a fusion. Strain is the total coupling across the pair; the locus
+// names both. Ancestor/descendant pairs are excluded — a part using its whole is
+// nesting, not fusion. The background is every disjoint pair with any cross-coupling,
+// so a mutually-fused pair is gated against how coupled the code's pairs typically are.
 export const fusedHolons = (graph) => {
   const contains = (a, b) => b === a || b.startsWith(`${a}/`);
   const pair = new Map();   // "A⇄B" (sorted) → { a, b, ab, ba }
   for (const f of graph.files.values()) {
-    const hF = nearestHolon(graph, f.rel);
+    const hF = topHolon(graph, f.rel);
     if (!hF) continue;
     for (const t of f.imports) {
-      const hT = nearestHolon(graph, t);
+      const hT = topHolon(graph, t);
       if (!hT || hT === hF) continue;
       if (contains(hF, hT) || contains(hT, hF)) continue;   // nesting, not fusion
       const [a, b] = [hF, hT].sort();

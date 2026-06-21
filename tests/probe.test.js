@@ -105,5 +105,6 @@ test('survey runs on the real source tree and returns a criterion-bound map', ()
 test('the graph crawler constitutes the real holon field', () => {
   const g = crawlGraph({ root: 'src' });
   assert.ok(g.files.size > 50, 'it perceives the modules');
-  assert.ok(g.holons.has('src/core') && g.holons.has('src/core/enactor'), 'it perceives the holon faces, nested ones too');
+  assert.ok(g.holons.has('src/core') && g.holons.has('src/enactor'), 'it perceives the faculty faces');
+  assert.ok(g.holons.has('src/core/enacted'), 'and nested ones (sub-holon faces) too');
 });

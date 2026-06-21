@@ -1,13 +1,13 @@
 // organs/out/speech — the speech output organ, a BARE RENDERER (add-on 3 §1):
 // props → language. The judging (the gate, DEF·EVA·REC) is NOT here; it moved to
-// core/enactor as the enactor's modality-blind commit step. This organ only
+// the enactor faculty as the enactor's modality-blind commit step. This organ only
 // renders candidate surfaces from the model's token murmur and hands them to the
 // core to judge — symmetric with the bare input ingesters, which do no structuring.
 //
 // SEG cuts the murmur into candidate SVOs (segment.js — the organ's one job). The
 // commit machinery it feeds lives in the core: the grounded basis (the DEF), the
 // relational correspondence (the EVA), and the collapse (the REC) are
-// core/enactor. Grounding is the SELECTION of speech, not a flag after it, and it
+// the enactor faculty. Grounding is the SELECTION of speech, not a flag after it, and it
 // is over the proposition, because only a proposition can be true (Frege/Codd).
 // The backend gains `propose` beside `phrase` (model/interface.js) — the
 // next-token distribution, no internal sampling, no weights touched.
@@ -18,13 +18,13 @@
 // as the no-logit fallback.
 
 import { segment } from './segment.js';
-import { runGate, buildBasis, parseProps, VOID_TOKEN } from '../../../core/enactor/index.js';
+import { runGate, buildBasis, parseProps, VOID_TOKEN } from '../../../enactor/index.js';
 
 // The organ's own renderer (SEG) is its surface; the commit machinery is re-exposed
 // from here only for callers that drove the old talker holon — it now lives in
-// core/enactor (the enactor's modality-blind commit).
+// the enactor faculty (the enactor's modality-blind commit).
 export { segment } from './segment.js';
-export { runGate, buildBasis, parseProps, correspondProp, propKey, VOID_TOKEN } from '../../../core/enactor/index.js';
+export { runGate, buildBasis, parseProps, correspondProp, propKey, VOID_TOKEN } from '../../../enactor/index.js';
 
 // The grounded-speech flag (§10). Read once from the environment so a script or
 // a bench can flip it (RULES_REV=1) without touching code; defaults OFF, so the

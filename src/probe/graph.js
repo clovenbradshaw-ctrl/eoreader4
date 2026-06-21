@@ -96,7 +96,17 @@ export const holonsContaining = (graph, rel) => {
 };
 
 // The nearest (innermost) holon a file belongs to, or null if it is in no holon.
+// The right granularity for a MEMBRANE breach: reaching past the closest face.
 export const nearestHolon = (graph, rel) => {
   const cs = holonsContaining(graph, rel);
   return cs.length ? cs[cs.length - 1] : null;
+};
+
+// The outermost holon a file belongs to — its FACULTY. The right granularity for a
+// FUSED-holon check: a sub-holon (perceiver/parse) must collapse to its faculty
+// (perceiver), or a faculty-level cycle stays hidden as two sub-holons that look
+// unrelated. (This is the granularity the perceiver<->enact cycle needed.)
+export const topHolon = (graph, rel) => {
+  const cs = holonsContaining(graph, rel);
+  return cs.length ? cs[0] : null;
 };

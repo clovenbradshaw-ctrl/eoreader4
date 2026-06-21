@@ -189,7 +189,7 @@ export const stages = {
   //
   // Two paths, one default. The GOLDEN path is phrase()+veto, unchanged: the model
   // samples the whole reply, the binder cites it, the veto flags it. The GATED path
-  // (core/enactor/gate.js, driven via the speech renderer) is taken only behind RULES_REV AND when the backend exposes
+  // (enactor/gate.js, driven via the speech renderer) is taken only behind RULES_REV AND when the backend exposes
   // `propose` (logit access) AND the surfer's reading is in hand — grounded speech at
   // the proposition, the answer SELECTED by grounding rather than flagged after it. Its
   // emitted surface flows down the SAME bind/factcheck/veto stages, so veto is now the
