@@ -12,12 +12,12 @@
 //
 // The gate is the system's own significance engine: a finding is reported only if
 // its strain beats the derived null over the codebase's own distribution of strain
-// (perceiver/voidnull.deriveNull) — alpha the one knob, the probe's pickiness. A
+// (core/voidnull.deriveNull) — alpha the one knob, the probe's pickiness. A
 // signature with too thin a distribution to derive a null is NOT assessed (never
 // "fine", never flagged). Every reported finding cites the Koestler criterion it
 // violates; one that cannot is taste, and is suppressed by construction.
 
-import { deriveNull } from '../perceiver/voidnull.js';
+import { deriveNull } from '../core/index.js';
 import { crawlGraph } from './graph.js';
 import { DETECTORS } from './detectors.js';
 

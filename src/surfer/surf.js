@@ -21,7 +21,7 @@
 // no read dependency), so this import stays acyclic.
 
 import { readingAt } from '../perceiver/reading.js';
-import { deriveNull } from '../perceiver/voidnull.js';
+import { deriveNull } from '../core/index.js';
 import { createEnactedLoop, calibrateReader } from '../enact/loop.js';
 
 // The reach: a little behind the anchor (to read the frame it sits inside), mostly

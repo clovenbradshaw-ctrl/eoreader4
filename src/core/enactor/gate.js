@@ -35,7 +35,7 @@
 //   on-question, unsupported (the dangerous one)  relevance>0, support=0
 //                                                 → product=0 → blocked, VOIDs
 
-import { deriveNull } from '../../perceiver/voidnull.js';
+import { deriveNull } from '../index.js';
 import { correspondProp, propKey } from './props.js';
 import { efferenceCopiesOf } from './efference.js';
 

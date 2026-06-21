@@ -17,6 +17,13 @@ export { STANCES, TERRAINS, stanceOf, terrainOf, grainOfStance, grainOfTerrain,
 // meaning). Both frozen as contracts here, in the genome everything depends on.
 export { makeUnit, isUnit, sameUnit, streamDistance, unitStream, isOrdered } from './unit.js';
 export { PROPOSITION_SLOTS, makeProposition, isProposition, propositionOfEdge } from './proposition.js';
+// The shared significance primitives — modality-agnostic, used by every faculty, so
+// they live in the genome, not in any one of them. The derived null (the Born-rule
+// VOID boundary, voidnull.js) and the one surprise (D_KL over a γ-decayed profile,
+// surprise.js): a perceiver reads forward surprise, a surfer derives a null, an
+// enactor's gate derives a null, the probe derives a null — one engine, one home.
+export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
+export { surpriseAt, forwardDist, NOVELTY_RESERVE } from './surprise.js';
 // The learning layer (reshape §5): one defeasible ledger, priors + learned, same
 // slot. It lives in the core because the built-in reading knowledge is inherited
 // sediment, the same substance the DEF·EVA·REC loop deposits while reading.

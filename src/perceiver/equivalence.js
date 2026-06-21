@@ -17,7 +17,7 @@
 // picked. The category is the output of the operation, not an input to it.
 
 import { retrieveLexical } from '../retrieve/index.js';
-import { createNoiseFloor } from './voidnull.js';
+import { createNoiseFloor } from '../core/index.js';
 
 // The set of a tone's strongest matches (a set, so exact ties — the two octaves
 // of a tone are equally near — are both kept). Empty when it shares nothing.
