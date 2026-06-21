@@ -97,6 +97,31 @@ output — one loop, one self.
 - `cellAt(op, { site, stance })` resolves the cell from the faces.
 - `cellsOf(op)` gives an operator its three grain-coherent cells (its legal reach).
 
+### Activated: the geometry is sealed onto every event (§B/§D)
+
+`src/core/log.js`. The faces and the holonic address are no longer computed only
+on demand — they are **sealed at emit time**. `append` is the single chokepoint
+every event passes through, so it stamps a frozen `eo` onto each event:
+
+```
+  e.eo = { notation, terrain, stance, address: { path, id, depth } | null }
+  e.g. CON(gregor@Network, Tracing)   addr gregor #a10d65a9
+```
+
+Sealed means sealed: the address reflects the holarchy at the moment of emission
+and, like everything in the append-only log, is never rewritten. A non-addressable
+event (no grain-coherent face, or no named target) carries no `eo`/`address`.
+`tests/log-address.test.js` pins it. (The address is depth-1 — the referent id —
+until the referent holarchy is deepened; that deepening is additive and does not
+disturb already-sealed addresses.)
+
+**On the order:** the source-tree layout does **not** enter the emitted address.
+`holonId` is FNV-1a over the *data* path, and the faculty label comes from
+`facultyOfOperator` (the operator's Domain → perceiver/surfer/enactor) — not from a
+directory. Nothing stamps a source-module path into events. So moving
+`src/perceiver → src/core/perceiver` changes no emitted address: **consolidate-core
+is genuine tidy-anytime, not a hard prerequisite for the address going live.**
+
 ## Decision: grain stays load-bearing (off-home firings)
 
 The add-on's surfer arrests (§C) include grain-mixed cells like `SIG(Entity,
