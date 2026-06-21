@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { ingestMusic } from '../src/organs/in/music.js';
-import { discoverEquivalences, predictiveSequenceReading } from '../src/perceiver/index.js';
+import { predictiveSequenceReading } from '../src/surfer/index.js';
+import { discoverEquivalences } from '../src/perceiver/index.js';
 
 // The close: the tonal reading the music adapter got from `midi % 12` comes back
 // when the equivalence is DISCOVERED from frequencies instead of asserted. If it

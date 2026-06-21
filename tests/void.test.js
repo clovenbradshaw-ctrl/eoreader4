@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { ingestFrames } from '../src/organs/in/video.js';
-import { discoverEquivalences, detectMotion, coherentFigures } from '../src/perceiver/index.js';
+import { detectMotion, coherentFigures } from '../src/surfer/index.js';
+import { discoverEquivalences } from '../src/perceiver/index.js';
 import { retrieveLexical } from '../src/retrieve/index.js';
 
 // The refusal must be RECORDED, not a silent non-output: a proposed-but-rejected
