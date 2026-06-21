@@ -16,8 +16,20 @@
 // overtone" — related vs unrelated, 0 vs not, which is not a magnitude anyone
 // picked. The category is the output of the operation, not an input to it.
 
-import { retrieveLexical } from '../retrieve/index.js';
 import { createNoiseFloor } from '../core/index.js';
+
+// The lexical retriever is INJECTED, not imported (add-on: probe fix). Discovering
+// equivalences needs a similarity ranking over the doc's units, but ranking/search
+// is the retrieve faculty's job, downstream of perception — so the perceiver must
+// not reach sideways into retrieve. The caller (who has both) passes retrieveLexical
+// in; equivalence stays pure on the injected ranker, the way the enacted loop is pure
+// on an injected read. A missing retriever is a wiring error, surfaced loudly.
+const needRetrieve = (retrieve) => {
+  if (typeof retrieve !== 'function') {
+    throw new TypeError('discoverEquivalences/mutualNearestPairs need an injected `retrieve` (e.g. retrieveLexical)');
+  }
+  return retrieve;
+};
 
 // The set of a tone's strongest matches (a set, so exact ties — the two octaves
 // of a tone are equally near — are both kept). Empty when it shares nothing.
@@ -28,8 +40,8 @@ import { createNoiseFloor } from '../core/index.js';
 // the argmax, however weak, so on noise it hallucinates equivalences (every grain
 // has a nearest grain). Abstention needs a null: pass the noise null's overlap as
 // `minOverlap` and a pair must clear what chance produces before it can merge.
-const nearestSet = (doc, i, minOverlap = 0) => {
-  const res = retrieveLexical(doc, doc.spectrumQuery(i), doc.units.length + 1)
+const nearestSet = (doc, i, minOverlap, retrieve) => {
+  const res = retrieve(doc, doc.spectrumQuery(i), doc.units.length + 1)
     .filter(r => r.idx !== i && r.score > minOverlap);
   if (!res.length) return { best: 0, set: new Set() };
   const best = res[0].score;
@@ -37,9 +49,10 @@ const nearestSet = (doc, i, minOverlap = 0) => {
 };
 
 // The mutual-nearest pairs: i and j where each is among the other's strongest.
-export const mutualNearestPairs = (doc, { minOverlap = 0 } = {}) => {
+export const mutualNearestPairs = (doc, { minOverlap = 0, retrieve } = {}) => {
+  const rank = needRetrieve(retrieve);
   const n = doc.units.length;
-  const near = Array.from({ length: n }, (_, i) => nearestSet(doc, i, minOverlap));
+  const near = Array.from({ length: n }, (_, i) => nearestSet(doc, i, minOverlap, rank));
   const pairs = [];
   for (let i = 0; i < n; i++) {
     for (const j of near[i].set) {
@@ -60,11 +73,11 @@ const overlapGrain = (doc) => 1 / (doc.partialTokens?.[0]?.length || 16);
 // proposed equivalence must beat the max-of-background null those samples imply.
 // The octave overlaps are fed too; leave-one-out plus the bulk fit keep them from
 // poisoning the floor they must clear.
-const overlapFloor = (doc, alpha) => {
+const overlapFloor = (doc, alpha, retrieve) => {
   const n = doc.units.length;
   const floor = createNoiseFloor({ scale: 'linear', alpha, grain: overlapGrain(doc), N: n });
   for (let i = 0; i < n; i++) {
-    for (const r of retrieveLexical(doc, doc.spectrumQuery(i), n + 1)) {
+    for (const r of retrieve(doc, doc.spectrumQuery(i), n + 1)) {
       if (r.idx !== i) floor.observe(r.score);
     }
   }
@@ -82,13 +95,14 @@ const overlapFloor = (doc, alpha) => {
 //     number you set; it is a readout the physics computes (see voidnull.js).
 //   • neither — 0, pure rank: merge the argmax. Right for RECOVERY, and the
 //     cold-start fallback before any null is known.
-export const discoverEquivalences = (doc, { emit = true, minOverlap = null, alpha = null } = {}) => {
+export const discoverEquivalences = (doc, { emit = true, minOverlap = null, alpha = null, retrieve } = {}) => {
+  const rank = needRetrieve(retrieve);
   // What the overlap field PROPOSES, by rank alone — the recovery rule.
-  const candidates = mutualNearestPairs(doc, { minOverlap: 0 });
+  const candidates = mutualNearestPairs(doc, { minOverlap: 0, retrieve: rank });
 
   // The per-candidate boundary. Constant when given; derived (leave-one-out,
   // extreme-value, robust, streaming) when `alpha` is set; 0 otherwise.
-  const floor = (minOverlap == null && alpha != null) ? overlapFloor(doc, alpha) : null;
+  const floor = (minOverlap == null && alpha != null) ? overlapFloor(doc, alpha, rank) : null;
   const boundary = (c) =>
     minOverlap != null ? minOverlap
       : floor ? floor.threshold({ leaveOut: c.score })

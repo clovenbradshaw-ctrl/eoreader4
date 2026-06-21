@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { ingestFrames } from '../src/organs/in/video.js';
 import { detectMotion } from '../src/surfer/index.js';
-import { discoverEquivalences } from '../src/perceiver/index.js';
+import { discoverEquivalences as _de } from '../src/perceiver/index.js';
+import { retrieveLexical } from '../src/retrieve/index.js';
+const discoverEquivalences = (doc, opts = {}) => _de(doc, { retrieve: retrieveLexical, ...opts });
 import { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from '../src/core/index.js';
 
 // The VOID boundary is DERIVED, not set. The engine estimates from its own
