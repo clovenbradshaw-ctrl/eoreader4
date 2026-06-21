@@ -1,4 +1,9 @@
-// talker/gate.js — the collapse (§5). DEF·EVA·REC over propositions.
+// core/enactor/gate.js — the collapse (§5). DEF·EVA·REC over propositions.
+//
+// The enactor's COMMIT step, modality-blind (add-on 3 §1): the gate runs over
+// propositions, so the same collapse commits a spoken proposition, a pass, or a
+// struck note. It lives in the core, not the speech organ; the organ only renders
+// candidate surfaces for the gate to judge.
 //
 // The gate is the line between thinking and speaking (Levelt's inner monitor;
 // Dehaene's ignition threshold). It runs per candidate PROPOSITION, not per
@@ -30,7 +35,7 @@
 //   on-question, unsupported (the dangerous one)  relevance>0, support=0
 //                                                 → product=0 → blocked, VOIDs
 
-import { deriveNull } from '../../../perceiver/voidnull.js';
+import { deriveNull } from '../../perceiver/voidnull.js';
 import { correspondProp, propKey } from './props.js';
 
 // The fixed, unrewordable conscience token (§7) — abstention as a collapse

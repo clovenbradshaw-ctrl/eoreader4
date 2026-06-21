@@ -49,8 +49,11 @@ This is being landed in tested phases:
 1. **done** — rename `talker → enactor` and `reader → perceiver` in the spine
    (`cognition.js`) and the directory (`src/reader/ → src/perceiver/`), both
    modality-blind, in the core. Behavior-preserving.
-2. move the gate (`organs/out/speech/gate` = DEF·EVA·REC commit) into the core as
-   the enactor's commit step; speech becomes a bare renderer.
+2. **done** — move the gate (`organs/out/speech/{gate,basis,props}` = the
+   DEF·EVA·REC commit, its grounded basis, and the relational correspondence)
+   into `core/enactor/`. Speech becomes a bare renderer (`segment.js` cuts the
+   model's token murmur into candidate SVOs; the core judges them). Behavior-
+   preserving — the gated path is byte-identical, just relocated.
 3. **efference copy** at commit — the forward model (`predict/`) emits the
    predicted sensed-consequence of a commit, indexed to it.
 4. **the one monitor** + self/world tagging (`self/`) — compare each sensed P′
@@ -121,12 +124,15 @@ parity is the rail — every move is verified byte-identical against the suite
 src/
   organs/
     in/            the sense organs (was ingest/) — modality → units      [reshape §3]
-    out/speech/    the speech organ (was talker/) — props → language      [reshape §6]
+    out/speech/    the speech organ — a BARE RENDERER: token murmur → candidate
+                   SVOs (segment.js); the gate moved to core/enactor      [add-on 3]
   core/            the genome + the geometry made first-class:
     operators · log · cube · address · project   (depends on nothing)
     unit.js · proposition.js                      (the two floors)
     conventions/                                  (the learning layer, priors)
     cognition.js · faces.js · holon.js            (triad · three faces · Site address)
+    enactor/       the enactor's modality-blind COMMIT (add-on 3): gate (the
+                   DEF·EVA·REC collapse) · basis (the DEF) · props (the EVA)
   perceiver/       the PERCEIVER faculty (was read/→reader/) — Existence       [§A]
     parse/         the constitution engine (was src/parse/) — marks → structure
   surfer/          the SURFER faculty (the middle) — Structure · navigate    [§A]

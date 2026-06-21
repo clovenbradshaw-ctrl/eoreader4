@@ -1,6 +1,7 @@
-// talker/basis.js — surf → grounded basis (§4).
+// core/enactor/basis.js — surf → grounded basis (§4).
 //
-// The DEF the gate holds. A thin adapter over the surfer's result
+// The DEF the enactor's gate holds (modality-blind; add-on 3 §1). A thin adapter
+// over the surfer's result
 // (read/surf.js: { stops, field, recCursors, … }) that emits the basis the gate
 // measures each candidate proposition against:
 //

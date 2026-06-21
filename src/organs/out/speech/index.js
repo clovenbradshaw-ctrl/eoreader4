@@ -1,33 +1,30 @@
-// organs/out/speech — the speech output organ (reshape §6): props → language,
-// with the gate at the inner face. The talker is the Significance faculty
-// rendering the core's emergent currency back into a modality.
+// organs/out/speech — the speech output organ, a BARE RENDERER (add-on 3 §1):
+// props → language. The judging (the gate, DEF·EVA·REC) is NOT here; it moved to
+// core/enactor as the enactor's modality-blind commit step. This organ only
+// renders candidate surfaces from the model's token murmur and hands them to the
+// core to judge — symmetric with the bare input ingesters, which do no structuring.
 //
-// Grounding moves from a flag AFTER speech (ground/veto.js standing alone) to
-// the SELECTION of speech (gate.js), and from the claim-string to the
-// proposition, because only a proposition can be true (Frege/Codd). The backend
-// gains `propose` beside `phrase` (model/interface.js) — the next-token
-// distribution, no internal sampling, no weights touched. SEG cuts the murmur
-// into candidate SVOs (segment.js). The gate measures each against a grounded
-// basis by relational correspondence (props.js, lifting bind.js off lexical
-// overlap), multiplies model-amplitude by support, relevance and non-redundancy,
-// and collapses what beats the null at alpha into speech (gate.js) — appending
-// it to the committed edge, rolling back what fails, collapsing to VOID where
-// the basis is empty.
+// SEG cuts the murmur into candidate SVOs (segment.js — the organ's one job). The
+// commit machinery it feeds lives in the core: the grounded basis (the DEF), the
+// relational correspondence (the EVA), and the collapse (the REC) are
+// core/enactor. Grounding is the SELECTION of speech, not a flag after it, and it
+// is over the proposition, because only a proposition can be true (Frege/Codd).
+// The backend gains `propose` beside `phrase` (model/interface.js) — the
+// next-token distribution, no internal sampling, no weights touched.
 //
 // The whole path is FLAGGED and golden-gated. RULES_REV off (the default) leaves
 // the phrase()+veto path byte-identical; the gated path is opt-in until it beats
 // the Metamorphosis battery (docs §10), then becomes default with phrase() kept
 // as the no-logit fallback.
 
-import { segment }    from './segment.js';
-import { runGate, VOID_TOKEN } from './gate.js';
-import { buildBasis } from './basis.js';
-import { parseProps } from './props.js';
+import { segment } from './segment.js';
+import { runGate, buildBasis, parseProps, VOID_TOKEN } from '../../../core/enactor/index.js';
 
-export { segment }    from './segment.js';
-export { runGate, VOID_TOKEN } from './gate.js';
-export { buildBasis } from './basis.js';
-export { parseProps, correspondProp, propKey } from './props.js';
+// The organ's own renderer (SEG) is its surface; the commit machinery is re-exposed
+// from here only for callers that drove the old talker holon — it now lives in
+// core/enactor (the enactor's modality-blind commit).
+export { segment } from './segment.js';
+export { runGate, buildBasis, parseProps, correspondProp, propKey, VOID_TOKEN } from '../../../core/enactor/index.js';
 
 // The grounded-speech flag (§10). Read once from the environment so a script or
 // a bench can flip it (RULES_REV=1) without touching code; defaults OFF, so the
