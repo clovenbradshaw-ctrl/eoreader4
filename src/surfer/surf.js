@@ -20,8 +20,8 @@
 // anchor, same path. The frame axis lives in the enact holon (loop.js, a leaf with
 // no read dependency), so this import stays acyclic.
 
-import { readingAt } from './reading.js';
-import { deriveNull } from './voidnull.js';
+import { readingAt } from '../read/reading.js';
+import { deriveNull } from '../read/voidnull.js';
 import { createEnactedLoop, calibrateReader } from '../enact/loop.js';
 
 // The reach: a little behind the anchor (to read the frame it sits inside), mostly

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { surpriseAt, forwardDist, NOVELTY_RESERVE } from '../src/read/surprise.js';
+import { surpriseAt, forwardDist, NOVELTY_RESERVE } from '../src/surfer/surprise.js';
 import { parseText } from '../src/parse/index.js';
 import { readingAt } from '../src/read/index.js';
 

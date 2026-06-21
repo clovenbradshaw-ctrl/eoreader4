@@ -25,7 +25,7 @@
 // three lets the talker speak. A short or unmeasurable field is never voided — assume
 // an answer until the void is measured.
 
-import { surfFold } from './surf.js';
+import { surfFold } from '../surfer/surf.js';
 import { deriveNull, MIN_SAMPLES } from './voidnull.js';
 import { namedReferents } from './surfaces.js';
 import { tok } from '../parse/tokenize.js';

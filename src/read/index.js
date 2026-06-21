@@ -12,13 +12,13 @@ export {
   significanceSurface, consciousness, serializeNotes,
 } from './surfaces.js';
 export { readingAt } from './reading.js';
-export { surfFold } from './surf.js';
+export { surfFold } from '../surfer/surf.js';
 export { predictNext } from './predict.js';
 export {
   unitIdSequence, predictNextUnit, predictiveSequenceReading,
-} from './sequence.js';
+} from '../surfer/sequence.js';
 export { mutualNearestPairs, discoverEquivalences } from './equivalence.js';
-export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
+export { persistentFigures, coherentFigures, motionReading, detectMotion } from '../surfer/motion.js';
 export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export { siteRoles, markSites, siteIndices } from './site.js';

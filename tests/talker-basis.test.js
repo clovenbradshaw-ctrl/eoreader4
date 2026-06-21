@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/index.js';
-import { surfFold } from '../src/read/surf.js';
+import { surfFold } from '../src/surfer/surf.js';
 import { buildBasis } from '../src/organs/out/speech/basis.js';
 
 // The surf → grounded basis adapter (§4): the props read at the surfer's stops,

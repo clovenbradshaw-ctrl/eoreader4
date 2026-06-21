@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/index.js';
-import { surfFold } from '../src/read/surf.js';
+import { surfFold } from '../src/surfer/surf.js';
 import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import { buildGroundedMessages } from '../src/model/prompt.js';

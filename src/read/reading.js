@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from './surprise.js';
+import { surpriseAt, forwardDist } from '../surfer/surprise.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
