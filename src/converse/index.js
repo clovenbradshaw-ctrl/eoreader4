@@ -17,3 +17,7 @@ export {
 // The session-register fold — the conversation's own two registers (verbatim window
 // + surfed recap), mirroring the document fold. (docs/session-fold.md)
 export { foldConversation } from './history.js';
+
+// Conversation-aware retrieval — resolve a thin / self-referential follow-up against
+// the recent USER turns so it retrieves on the topic, not its literal words.
+export { needsContext, conversationalFocus, resolveRetrievalQuery, contentWords } from './focus.js';
