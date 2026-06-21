@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>At rest — the reading instrument</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ground:#101d1c; --panel:#152625; --panel-2:#1a2e2c;
+    --ink:#e9e3d4; --ink-dim:#9aa6a0; --ink-faint:#62716b; --rule:#243634;
+    --wake:#e0a23c;          /* awake / surfing — used sparingly */
+    --rest:#6fb0a8;          /* the calm resting baseline */
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--ground); color:var(--ink);
+    font-family:var(--serif); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    padding:clamp(18px,4vw,56px);
+    max-width:920px; margin:0 auto;
+  }
+  .label{font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-faint)}
+  .mono{font-family:var(--mono)}
+
+  /* ── header ─────────────────────────────────────────── */
+  header{display:flex; align-items:baseline; justify-content:space-between;
+    gap:16px; flex-wrap:wrap; border-bottom:1px solid var(--rule);
+    padding-bottom:18px}
+  header h1{font-size:20px; font-weight:500; margin:0; letter-spacing:-.01em}
+  header h1 span{color:var(--ink-faint); font-style:italic}
+  .device{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+  .device::before{content:"◍ "; color:var(--rest)}
+
+  /* ── the field (signature) ──────────────────────────── */
+  .field{margin:30px 0 10px; padding:20px 22px;
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--rule); border-radius:3px}
+  .field-top{display:flex; align-items:center; justify-content:space-between; gap:12px}
+  .state{font-family:var(--mono); font-size:12px; letter-spacing:.1em;
+    display:flex; align-items:center; gap:9px}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--rest);
+    box-shadow:0 0 0 0 rgba(111,176,168,.5)}
+  .state.surfing .dot{background:var(--wake); animation:pulse 1.6s ease-out infinite}
+  .state .name{color:var(--ink)}
+  .state.surfing .name{color:var(--wake)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(224,162,60,.45)}
+    100%{box-shadow:0 0 0 9px rgba(224,162,60,0)}}
+  .telemetry{font-family:var(--mono); font-size:11px; color:var(--ink-faint); text-align:right}
+  canvas{display:block; width:100%; height:64px; margin-top:14px}
+  .field-note{font-family:var(--mono); font-size:11px; color:var(--ink-faint);
+    margin-top:6px; font-style:normal}
+
+  /* ── sections ───────────────────────────────────────── */
+  section{margin-top:34px}
+  .sec-head{display:flex; align-items:baseline; gap:12px; margin-bottom:4px}
+  .sec-head .rule{flex:1; height:1px; background:var(--rule)}
+  .sec-sub{font-family:var(--serif); font-style:italic; color:var(--ink-dim);
+    font-size:14px; margin:2px 0 16px}
+
+  /* open questions — the void set (exafferent, settled form) */
+  .q{display:grid; grid-template-columns:1fr auto; gap:6px 18px;
+    padding:13px 0; border-bottom:1px solid var(--rule); align-items:baseline}
+  .q .text{font-size:17px}
+  .q .rid{font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+  .q .meta{font-family:var(--mono); font-size:11px; color:var(--ink-dim);
+    text-align:right; white-space:nowrap}
+  .band{display:inline-block; padding:1px 7px; border-radius:2px; font-size:10px;
+    letter-spacing:.08em; text-transform:uppercase}
+  .band.void{border:1px solid var(--ink-faint); color:var(--ink-dim)}
+  .band.hedged{border:1px solid #7d6a3f; color:#c79a4e}
+
+  /* candidates — reafferent: dashed, ghosted, never solid, always "you decide" */
+  .cand{border:1px dashed #41524e; border-radius:3px; padding:15px 17px;
+    margin-top:14px; background:rgba(255,255,255,.012);
+    opacity:0; transform:translateY(6px); animation:rise .5s ease forwards}
+  @keyframes rise{to{opacity:1; transform:none}}
+  .cand .tag{font-family:var(--mono); font-size:10px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--ink-faint)}
+  .cand .tag::before{content:"⟂ "; color:var(--rest)}
+  .cand .body{font-size:16px; font-style:italic; color:var(--ink); margin:7px 0 13px}
+  .cand .body b{font-style:normal; font-weight:500}
+  .cand .acts{display:flex; gap:10px}
+  button{font-family:var(--mono); font-size:12px; letter-spacing:.04em;
+    color:var(--ink); background:transparent; border:1px solid var(--rule);
+    padding:7px 13px; border-radius:2px; cursor:pointer; transition:.15s}
+  button:hover{border-color:var(--ink-dim)}
+  button:focus-visible{outline:2px solid var(--rest); outline-offset:2px}
+  button.confirm{border-color:#3a5a54; color:var(--rest)}
+  button.confirm:hover{background:rgba(111,176,168,.08)}
+  .empty{font-style:italic; color:var(--ink-faint); padding:10px 0; font-size:15px}
+
+  /* drive controls (mockup only) */
+  .drive{margin-top:40px; padding-top:18px; border-top:1px solid var(--rule);
+    display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+  .drive .label{margin-right:4px}
+
+  footer{margin-top:30px; font-family:var(--mono); font-size:11px;
+    color:var(--ink-faint); line-height:1.7}
+  footer .k{color:var(--rest)}
+  @media (prefers-reduced-motion:reduce){
+    .dot,.state .dot{animation:none!important}
+    .cand{animation:none; opacity:1; transform:none}
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>ground&nbsp;truth <span>· at rest</span></h1>
+    <div class="device">on this device — nothing leaves it</div>
+  </header>
+
+  <!-- THE FIELD: the signature. Breathes amber when surfing, settles to a calm
+       line when it quiesces. Rest is a state you can trust, not a dead screen. -->
+  <div class="field">
+    <div class="field-top">
+      <div class="state" id="state">
+        <span class="dot"></span><span class="name" id="stateName">resting</span>
+      </div>
+      <div class="telemetry" id="telemetry"></div>
+    </div>
+    <canvas id="field" width="900" height="64" aria-hidden="true"></canvas>
+    <div class="field-note" id="fieldNote">perceiving — door open, no question pressing</div>
+  </div>
+
+  <!-- OPEN: the void set. The instrument's standing not-knowing, made honest.
+       This is the fuel for idle thought, and the centerpiece of the screen. -->
+  <section>
+    <div class="sec-head"><span class="label">Open</span><span class="rule"></span></div>
+    <p class="sec-sub">questions left unresolved — where more thinking can still pay</p>
+    <div id="open"></div>
+  </section>
+
+  <!-- NOTICED: reafferent candidates. Tentative by construction. You confirm. -->
+  <section>
+    <div class="sec-head"><span class="label">Noticed while you were away</span><span class="rule"></span></div>
+    <p class="sec-sub">unconfirmed — surfaced from new documents, never decided for you</p>
+    <div id="cands"><p class="empty">Nothing yet. The instrument will surface a possible link only when one appears — and only for you to judge.</p></div>
+  </section>
+
+  <div class="drive">
+    <span class="label">try it</span>
+    <button id="arrive">A document arrives</button>
+    <button id="sleep">Let it rest</button>
+  </div>
+
+  <footer>
+    <div><span class="k">resting</span> means re-surfing the open questions stopped producing anything large enough to matter. It sleeps until a new document arrives — it does not spin, and it will not call you back.</div>
+    <div>A confirmed link becomes <span class="k">yours</span> — grounded in the record. Until you confirm it, it stays a candidate the instrument cannot use as fact.</div>
+  </footer>
+
+<script>
+(function(){
+  const reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  const openQs = [
+    {rid:'r#7f3', text:'The LLC behind the surveillance MOU — who is it?', band:'void', age:'open 3 wks'},
+    {rid:'r#0a1', text:'The $15M figure — reconciled with the CBID budget line?', band:'hedged', age:'open 8 days'},
+    {rid:'r#2c4', text:'Solaren and Civicity — the same principals?', band:'void', age:'open 2 days'},
+  ];
+
+  const openEl = document.getElementById('open');
+  function renderOpen(){
+    openEl.innerHTML = openQs.map(q=>`
+      <div class="q">
+        <div><div class="text">${q.text}</div><div class="rid">${q.rid}</div></div>
+        <div class="meta"><span class="band ${q.band}">${q.band}</span><br>${q.age}</div>
+      </div>`).join('');
+  }
+  renderOpen();
+
+  const candsEl = document.getElementById('cands');
+  let cands = [];
+  function renderCands(){
+    if(!cands.length){
+      candsEl.innerHTML = '<p class="empty">Nothing yet. The instrument will surface a possible link only when one appears — and only for you to judge.</p>';
+      return;
+    }
+    candsEl.innerHTML = cands.map(c=>`
+      <div class="cand">
+        <div class="tag">candidate · unconfirmed · bears on ${c.rid}</div>
+        <div class="body">${c.body}</div>
+        <div class="acts">
+          <button class="confirm" data-confirm="${c.id}">Confirm — make it yours</button>
+          <button data-dismiss="${c.id}">Dismiss</button>
+        </div>
+      </div>`).join('');
+  }
+
+  // ── the field animation: amplitude tracks state, settles to a calm line ──
+  const cv = document.getElementById('field'), ctx = cv.getContext('2d');
+  function fit(){ const r=cv.getBoundingClientRect(), d=devicePixelRatio||1;
+    cv.width=r.width*d; cv.height=64*d; ctx.setTransform(d,0,0,d,0,0); }
+  addEventListener('resize',fit); fit();
+  let amp = 2, targetAmp = 2, phase = 0, hue = 'rest';
+  function frame(t){
+    const w = cv.width/(devicePixelRatio||1), h = 64, mid = h/2;
+    amp += (targetAmp - amp)*0.06;
+    phase += hue==='rest' ? 0.012 : 0.05;
+    ctx.clearRect(0,0,w,h);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = hue==='rest' ? 'rgba(111,176,168,.55)' : 'rgba(224,162,60,.8)';
+    ctx.beginPath();
+    for(let x=0;x<=w;x+=2){
+      const k = x/w*Math.PI*6;
+      const env = hue==='rest' ? 1 : (0.6+0.4*Math.sin(x/w*Math.PI)); // a travelling swell when surfing
+      const y = mid + Math.sin(k+phase)*amp*env + (hue==='rest'?0:Math.sin(k*0.5-phase)*amp*0.3);
+      x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    if(!reduce) requestAnimationFrame(frame);
+  }
+  if(reduce){ targetAmp=2; amp=2; frame(0); } else requestAnimationFrame(frame);
+
+  // ── state machine: resting → (arrival) → surfing → quiesce → resting ──
+  const stateEl=document.getElementById('state'),
+        nameEl=document.getElementById('stateName'),
+        noteEl=document.getElementById('fieldNote'),
+        teleEl=document.getElementById('telemetry');
+  let docs=4, lastWoke=41, surfTimer=null;
+  function tele(){ teleEl.innerHTML = `${docs} docs ingested · last woke ${lastWoke} min ago`; }
+  tele();
+
+  function setState(s){
+    if(s==='surfing'){
+      stateEl.classList.add('surfing'); nameEl.textContent='surfing';
+      noteEl.textContent='re-surfing the open questions against a new document';
+      hue='surfing'; targetAmp=13;
+    } else {
+      stateEl.classList.remove('surfing'); nameEl.textContent='resting';
+      noteEl.textContent='perceiving — door open, no question pressing';
+      hue='rest'; targetAmp=2;
+    }
+    if(reduce) frame(0);
+  }
+
+  document.getElementById('arrive').addEventListener('click',()=>{
+    docs++; lastWoke=0; tele();
+    setState('surfing');
+    clearTimeout(surfTimer);
+    // surf for a moment, surface a candidate, then quiesce on the median band
+    surfTimer=setTimeout(()=>{
+      if(!cands.find(c=>c.rid==='r#7f3')){
+        cands.unshift({id:'c'+Date.now(), rid:'r#7f3',
+          body:'A filing from this morning lists <b>Bradshaw Holdings LLC</b> at the same registered address as the MOU signatory. A possible name for the unnamed entity.'});
+        renderCands();
+      }
+      noteEl.textContent='accommodations fell below the band — settling';
+      setTimeout(()=>{ setState('resting'); lastWoke=0; tele(); },1400);
+    }, reduce?50:2600);
+  });
+
+  document.getElementById('sleep').addEventListener('click',()=>{ clearTimeout(surfTimer); setState('resting'); });
+
+  // confirm = the witness act: a candidate becomes grounded and closes/updates the open question
+  candsEl.addEventListener('click',e=>{
+    const c=e.target.dataset.confirm, d=e.target.dataset.dismiss;
+    if(c){
+      const cand=cands.find(x=>x.id===c);
+      const q=openQs.find(x=>x.rid===cand.rid);
+      if(q){ q.text='The LLC behind the surveillance MOU — Bradshaw Holdings LLC.'; q.band='hedged'; q.age='confirmed by you · just now'; renderOpen(); }
+      cands=cands.filter(x=>x.id!==c); renderCands();
+    }
+    if(d){ cands=cands.filter(x=>x.id!==d); renderCands(); }
+  });
+})();
+</script>
+</body>
+</html>

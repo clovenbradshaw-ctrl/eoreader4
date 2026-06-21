@@ -17,6 +17,18 @@ export { STANCES, TERRAINS, stanceOf, terrainOf, grainOfStance, grainOfTerrain,
 // meaning). Both frozen as contracts here, in the genome everything depends on.
 export { makeUnit, isUnit, sameUnit, streamDistance, unitStream, isOrdered } from './unit.js';
 export { PROPOSITION_SLOTS, makeProposition, isProposition, propositionOfEdge } from './proposition.js';
+// The generation side's formal notation (SPEC §1/§3): the event op(Site, Resolution,
+// Provenance, t), the two independent tiers of identity (hashId existence + Resolution
+// how-definitely), and the me-ness type law (two doors, indexical reload). The writer
+// (src/write/) reasons over these; they live in the genome because the event vocabulary
+// and the self/world line are the system's, not any one faculty's.
+export { BANDS, makeResolution, firm, voidRes, isFirm, isVoid, weaker, effectiveRes,
+         makeSite, siteNotation, HASHID_RE, isHashId, mintHash, fillsTwoSlots,
+         makeEvent, sitesOf } from './event.js';
+export { PERCEIVER, ENACTOR, DOORS, EXAFFERENCE, REAFFERENCE, READ_BACK,
+         provenance, fromPerceiver, fromEnactor, reenter, classify,
+         canOrient, canWitness, isReadBackOfPriorSelf, isMine,
+         serializeProvenance, restoreProvenance, restoreOnReload } from './provenance.js';
 // The shared significance primitives — modality-agnostic, used by every faculty, so
 // they live in the genome, not in any one of them. The derived null (the Born-rule
 // VOID boundary, voidnull.js) and the one surprise (D_KL over a γ-decayed profile,
