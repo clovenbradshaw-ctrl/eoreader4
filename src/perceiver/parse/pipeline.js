@@ -16,6 +16,7 @@ import { VERDICTS }             from '../../core/index.js';
 import { segmentSentences }     from './sentences.js';
 import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';
+import { frameSpan }            from './frame.js';
 import { createEntityAdmission }from './entities.js';
 import { parseRelations, scanDescriptors } from './relations.js';
 import { argumentSpanSeg }      from './proposition.js';
@@ -140,7 +141,24 @@ export const createParser = ({
     // rebutter when the surname proves shared by distinct agents (see below).
     const surnameMerges = [];
 
+    // Structural frame: the head and tail OUTSIDE the body the banners bracket (the
+    // licence header, the title block, the boilerplate footer). Read from the document's
+    // own shape, embedder-free (parse/frame.js). Held BEFORE the per-line chrome test so a
+    // block of licence prose — full sentences a per-line test reads as narrative — is held
+    // by the bracket it sits outside. Empty for an unframed document; this changes nothing
+    // there.
+    const frame = frameSpan(sentences);
+
     sentences.forEach((sent, sentIdx) => {
+      // Frame is held like chrome (NUL → no entities, no edges) AND marked a site (DEF
+      // role=site), so retrieval and the fold skip it too — a licence line can no longer
+      // surface as a citable span. The `via:'frame'` stamp distinguishes it in the trail
+      // from the degenerate-line chrome below.
+      if (frame.all.has(sentIdx)) {
+        log.append({ op: 'NUL', kind: 'chrome', via: 'frame', sentIdx, text: sent });
+        log.append({ op: 'DEF', id: `unit:${sentIdx}`, key: 'role', value: 'site', sentIdx });
+        return;
+      }
       // Chrome-ness is a weight: the mechanical score plus an optional nudge
       // (a mini-LLM's chrome probability) decides whether the line is held.
       if (isChrome(sent, chromeHint ? chromeHint(sent) : 0)) {
