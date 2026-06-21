@@ -260,7 +260,8 @@
       <h3>the operator algebra, sounded</h3>
       <table>
         <tr><td>INS — a figure appears</td><td>a <b>leitmotif</b> stated; first appearance is the full motif, later appearances are fragments, varied by all that has happened since (the γ-decayed integral name)</td></tr>
-        <tr><td>CON — two figures relate</td><td><b>counterpoint</b> between two stated themes — and never before both are stated (the arity gate is literally true)</td></tr>
+        <tr><td>proposition (subj→rel→obj)</td><td>its own <b>phrase</b>: state the subject's motif, step through the relation, arrive on the object — a sentence of several propositions becomes several phrases in sequence</td></tr>
+        <tr><td>CON — two figures relate</td><td><b>counterpoint</b> between two stated themes — never before both are stated (the arity gate, literally); a negated proposition refuses its home and lands a semitone above</td></tr>
         <tr><td>γ-mass rank</td><td><b>pitch</b>: the heaviest figure is the tonic, the second the dominant — the very thing the reader extracts from a melody, run backwards</td></tr>
         <tr><td>surprise (IC)</td><td><b>dynamics</b> &amp; accent, and the cue for a boundary</td></tr>
         <tr><td>strain</td><td><b>tonal tension</b>: chords move off the tonic and the suspension is held open</td></tr>
@@ -503,6 +504,34 @@ function cipher(name, len){                       // strand 1 — a name's lette
   return degs.map(d=>d-degs[0]);                   // offsets in scale steps from the figure's root
 }
 
+// PROPOSITIONS — the triadic floor of meaning (subject → relation → object),
+// the first emergent product above the unit stream (docs/omnimodal-core.md). A
+// compact extractor: split a unit into clauses, read off ordered figure mentions
+// (resolving a leading pronoun or an elided subject to the running subject), and
+// bond consecutive mentions into src→via→tgt triples. Each becomes a phrase.
+const PRON_SUBJ=new Set("he she it they".split(" "));   // subject pronouns only — "his mother" → mother is the subject, not he
+const REL_VERBS=new Set("woke lay saw stood hung showed knocked called arrived asked ask answer answered came come opened fled drove crawled hid brought set watched turned ate dared fed cleaned learned preferred decided removed remove protested feared fearing carried clung fainted returned hurled lodged festered moved move took take played crept heard hear spotted gave give apologised wept said declared insisted destroy keeping agreed broke broken retreated resigned thought died find found felt feel grew grown loved love transformed missed breathe cried swore left renounced denied accused mocked taunted blamed blame begged harden hardened reached worked fished rose fell gnawed spoke whispered named sat closed ran filled reconciled waited ruined bear keep hold held lost kept made".split(/\s+/));
+const NEG_REL=new Set("not no never without none nor denied refused renounced fled missing lost gone".split(" "));
+const isRel=lc=> REL_VERBS.has(lc) || (lc.length>4 && /(?:ed|ing)$/.test(lc) && !STOP.has(lc));
+const CLAUSE_SPLIT=/,|;|\b(?:and|but|so|yet|because|though|although|while|when|where|which|who|that|as|if|before|after|until|since)\b/i;
+function propositionsOf(unit, figset, state){
+  if(unit.brk) return [];
+  const props=[];
+  for(const clause of unit.raw.split(CLAUSE_SPLIT)){
+    const ws=clause.match(/[A-Za-z][A-Za-z']*/g)||[]; if(!ws.length) continue;
+    const ments=[], rels=[]; let pol=1;
+    ws.forEach((w,k)=>{ const lc=w.toLowerCase();
+      if(figset.has(lc)){ ments.push(lc); state.running=lc; }
+      else if(k===0 && PRON_SUBJ.has(lc) && state.running) ments.push(state.running);
+      else if(isRel(lc)) rels.push(lc);
+      if(NEG_REL.has(lc) || /n't$/.test(lc)) pol=-1; });
+    if(ments.length>=2){ for(let p=0;p<ments.length-1;p++) props.push({subj:ments[p],rel:rels[p]||rels[0]||'meets',obj:ments[p+1],polarity:pol}); }
+    else if(ments.length===1 && rels.length) props.push({subj:ments[0],rel:rels[0],obj:null,polarity:pol});
+    else if(ments.length===0 && rels.length && state.running) props.push({subj:state.running,rel:rels[0],obj:null,polarity:pol});
+  }
+  return props;
+}
+
 function compose(text, o){
   const { keyName='D', modeChoice='auto', motifSrc='cipher',
           tensionOn=true, cadenceOn=true, brightOn=true, tensionAmt=0.6, ornAmt=0.5, beatAmt=0.45 } = o;
@@ -549,15 +578,36 @@ function compose(text, o){
   // dynamic tempo (rubato): slower into tension and big cadences
   const dyn=ch=>readings.map(r=>r? r[ch] : 0);
 
+  const figset=new Set(cast.map(f=>f.id)); const state={running:null};
+  // each proposition → a phrase: state the subject's motif, step through the
+  // relation, arrive on the object (consonant if affirmed, refused a semitone
+  // above if negated). This is CON (src —via→ tgt) sounded.
+  const phraseFor=(pr,t,len,dch,isEnter)=>{
+    const out=[]; const sIdx=nearIdx(snap(pitchOf.get(pr.subj) ?? tonic));
+    let tIdx; if(pr.obj!=null && pitchOf.has(pr.obj)) tIdx=nearIdx(snap(pitchOf.get(pr.obj)));
+    else { const off=Math.abs(cipher(pr.rel||'is',pent.length)[1]||2); tIdx=clamp(sIdx+(pr.polarity<0?-off:off),0,ladder.length-1); }
+    const vel=clamp(0.32+0.5*dch+(isEnter?0.12:0),0.24,0.95);
+    const cells=(motifOf.get(pr.subj)||[0,2]).slice(0,3);
+    cells.forEach((oo,k)=>{ const idx=clamp(sIdx+(pr.polarity<0?-oo:oo),0,ladder.length-1); out.push({beat:t+k*0.25,dur:0.25,midi:ladder[idx],vel:vel*(k?0.85:1)}); });
+    let idx=clamp(sIdx+(cells.length?(pr.polarity<0?-cells[cells.length-1]:cells[cells.length-1]):0),0,ladder.length-1);
+    let bt=t+cells.length*0.25; const dir=tIdx>=idx?1:-1, steps=Math.max(1,Math.min(3,Math.abs(tIdx-idx)));
+    for(let k=0;k<steps && bt<t+len-0.25;k++){ idx=clamp(idx+dir,0,ladder.length-1); out.push({beat:bt,dur:0.25,midi:ladder[idx],vel:vel*0.6}); bt+=0.25; }
+    const landBeat=Math.min(bt,t+len-0.5); const land=ladder[tIdx]+(pr.polarity<0?1:0);
+    out.push({beat:landBeat,dur:Math.max(0.5,t+len-landBeat),midi:land,vel}); return out;
+  };
+
   const notes=[], spans=[]; let beat=0;
   const unitSpb=[], unitStartBeat=[];                         // for time mapping later
   for(let i=0;i<units.length;i++){
     const u=units[i], rd=readings[i], start=beat;
     unitStartBeat[i]=start;
     if(u.brk){ notes.push({u:i,startBeat:beat,dur:1.5,midi:tonic-24,vel:0.14,layer:'bass'});
-      beat+=1.5; unitSpb[i]=1; spans.push({start,end:beat,brk:true,seam:seam[i],surprise:0,strain:0,entropy:0,lead:null,section:sectionOf(sections,i)}); continue; }
+      beat+=1.5; unitSpb[i]=1; spans.push({start,end:beat,brk:true,seam:seam[i],surprise:0,strain:0,entropy:0,lead:null,props:[],section:sectionOf(sections,i)}); continue; }
     const surprise=rd?rd.surprise:0, entropy=rd?rd.entropy:0, ten=strain[i], surge=surprise>=0.45||seam[i]>=2;
-    const B=clamp(Math.round(u.nTok/7),1,4), lead=leads[i];
+    const lead=leads[i];
+    const props=propositionsOf(u, figset, state);          // the line's propositions = its phrases
+    const nP=Math.min(4,Math.max(1,props.length));
+    const B=clamp(props.length? Math.round(nP*1.5) : Math.max(1,Math.round(u.nTok/9)), 1, 6);
     const voidHere = voidSet.size>0 && [...u.present].some(id=>voidSet.has(id));
 
     // HARMONY — functional triad from tension; resolves to the tonic at a cadence
@@ -576,30 +626,17 @@ function compose(text, o){
     const bassRoot = (seam[i]>=2? tonic : tonic+dia[rootIdx%7]);
     notes.push({u:i,startBeat:beat,dur:B,midi:36+(((bassRoot-36)%12)+12)%12,vel:0.30,layer:'bass'});
 
-    // MELODY — the lead figure's leitmotif (stated on entrance, fragment on return)
-    if(lead!=null){
-      const base=pitchOf.get(lead), entering=firstSeen.get(lead)===i, gap=i-(prevBefore(lead,i)??-99);
-      let mm=base+((entering||gap>=RETURN_GAP)?12:0); while(mm<55)mm+=12; while(mm>83)mm-=12;
-      const root=nearIdx(snap(mm)), motif=motifOf.get(lead);
-      const vel=clamp(0.34+0.5*(o.dynChannel==='strain'?ten:o.dynChannel==='entropy'?entropy:surprise)+(entering?0.12:0),0.24,0.97);
-      const cells = entering ? motif : motif.slice(0, Math.max(2, motif.length-1));
-      const invert = surprise>0.55;                            // transform the motif under surprise
-      cells.forEach((off,k)=>{
-        const idx=clamp(root+(invert?-off:off),0,ladder.length-1), t=beat+k*0.5;
-        if(t<beat+B) notes.push({u:i,startBeat:t,dur:k===0?Math.min(1,B):0.5,midi:ladder[idx],vel:vel*(k?0.8:1),layer:'melody'});
-      });
-      // ORNAMENT run toward the next lead, scaled by sentence length × the ornament knob
-      const next=leads.slice(i+1).find(x=>x!=null), tIdx=next!=null?nearIdx(snap(pitchOf.get(next))):root;
-      let idx=clamp(root+(cells.length-1<0?0:(invert?-motif[cells.length-1]:motif[cells.length-1])),0,ladder.length-1);
-      const orn=clamp(Math.round(u.nTok/7*ornAmt*1.5)-1,0,Math.max(0,2*B-cells.length));
-      for(let k=0;k<orn;k++){ const t=beat+0.5*(cells.length+k); if(t>=beat+B) break;
-        idx+= idx<tIdx?1:idx>tIdx?-1:(k%2?1:-1); idx=clamp(idx,0,ladder.length-1);
-        notes.push({u:i,startBeat:t,dur:0.5,midi:ladder[idx],vel:clamp(vel*0.5,0.14,0.55),layer:'melody'}); }
-      // COUNTERPOINT — a second stated figure relating to the first (CON), arity-gated
-      const other=rd.present.filter(id=>id!==lead && firstSeen.get(id)<i)
-        .sort((a,b)=>(rd.massBefore.get(b)||0)-(rd.massBefore.get(a)||0))[0];
-      if(other && B>=2){ let cm=pitchOf.get(other); while(cm<52)cm+=12; while(cm>79)cm-=12;
-        notes.push({u:i,startBeat:beat+0.5,dur:Math.min(1,B-0.5),midi:snap(cm),vel:vel*0.55,layer:'melody'}); }
+    // MELODY — each PROPOSITION (subj → relation → obj) is its own phrase, in sequence
+    const dch=(o.dynChannel==='strain'?ten:o.dynChannel==='entropy'?entropy:surprise);
+    if(props.length){
+      const pb=B/nP;
+      props.slice(0,nP).forEach((pr,pi)=>{ const isEnter=firstSeen.get(pr.subj)===i;
+        for(const n of phraseFor(pr, beat+pi*pb, pb, dch, isEnter))
+          if(n.beat<beat+B) notes.push({u:i,startBeat:n.beat,dur:n.dur,midi:n.midi,vel:n.vel,layer:'melody'}); });
+    } else if(lead!=null){                                    // a figure present but no parsed relation — state its motif
+      let mm=pitchOf.get(lead); while(mm<55)mm+=12; while(mm>83)mm-=12; const root=nearIdx(snap(mm));
+      (motifOf.get(lead)||[0,2]).slice(0,3).forEach((off,k)=>{ const idx=clamp(root+off,0,ladder.length-1);
+        if(beat+k*0.5<beat+B) notes.push({u:i,startBeat:beat+k*0.5,dur:0.5,midi:ladder[idx],vel:0.5*dch+0.3,layer:'melody'}); });
     } else {
       notes.push({u:i,startBeat:beat,dur:B,midi:tonic,vel:0.22,layer:'melody'});  // narrator breath
     }
@@ -614,7 +651,7 @@ function compose(text, o){
         notes.push({u:i,startBeat:t,dur:0.2,drum:down?'down':(s===0?'beat':'sub'),vel:(acc?0.7:0.4)*beatAmt+0.1,layer:'pulse'}); } }
 
     beat+=B; unitSpb[i]=1;
-    spans.push({start,end:beat,brk:false,seam:seam[i],surprise,strain:ten,entropy,surge,lead,void:voidHere,section:sectionOf(sections,i)});
+    spans.push({start,end:beat,brk:false,seam:seam[i],surprise,strain:ten,entropy,surge,lead,void:voidHere,props,section:sectionOf(sections,i)});
   }
 
   // TEXTURE — the surfer's field as a drone, one per section (tonic + fifth)
@@ -871,7 +908,8 @@ function render(){
   baseSpb=60/Number(els.tempo.value);
   buildTimeMap();
   drawReader(); drawCast(); drawForm(0);
-  els.castCount.textContent=`${score.cast.length} figures · ${score.units.length} lines · ${score.sections.length} sections · ${score.mode}`;
+  const nProps=score.spans.reduce((a,x)=>a+((x.props&&x.props.length)||0),0);
+  els.castCount.textContent=`${score.cast.length} figures · ${nProps} phrases · ${score.units.length} lines · ${score.sections.length} sections · ${score.mode}`;
   els.bookTitle.textContent= els.sample.value==='paste'?'your text':(BOOKS[els.sample.value]?.title||'');
   els.transport.style.opacity=1; els.transport.style.pointerEvents='auto';
   els.play.disabled=false; els.stop.disabled=false; els.exportBtn.disabled=false;
@@ -956,8 +994,10 @@ function paintPlayhead(sec){
     document.querySelectorAll('#cast li.lit').forEach(e=>e.classList.remove('lit'));
     const lead=score.spans[i].lead; if(lead){ const li=els.cast.querySelector(`li[data-id="${CSS.escape(lead)}"]`); if(li) li.classList.add('lit'); }
     const s=score.spans[i];
-    if(!s.brk){ const nm=lead? `${score.cast.find(f=>f.id===lead)?.label} → ${midiName(score.pitchOf.get(lead))}`:'narrator';
-      els.readout.innerHTML=`§${s.section+1} · line ${i} · <b>${nm}</b> · surprise ${(s.surprise*100|0)}% · tension ${(s.strain*100|0)}%`+(s.seam?` · cadence L${s.seam}`:'')+(s.void?' · ∅ void':''); }
+    if(!s.brk){ const L=id=>score.cast.find(f=>f.id===id)?.label||id;
+      const nm=lead? `${L(lead)} → ${midiName(score.pitchOf.get(lead))}`:'narrator';
+      const phr=(s.props||[]).slice(0,2).map(p=>`${L(p.subj)}${p.polarity<0?' ⊣':''} ${p.rel}${p.obj?' '+L(p.obj):''}`).join(' · ');
+      els.readout.innerHTML=`§${s.section+1} · ln ${i} · <b>${nm}</b> · ${(s.surprise*100|0)}%s ${(s.strain*100|0)}%t`+(s.seam?` · cad L${s.seam}`:'')+(s.void?' · ∅':'')+(phr?` · <span style="color:var(--ink-faint)">${phr}</span>`:''); }
     lastUnit=i;
   }
   drawForm(sec); drawRoll(sec); drawCurve(sec);
@@ -1030,7 +1070,7 @@ els.sBeat.onchange=()=>{ if(score && layerOn.pulse) render(); };
 els.exportBtn.onclick=()=>{ const data={ key:score.keyName, mode:score.mode, tonic:midiName(score.tonic),
   sections:score.sections.length, instruments:layerInstr,
   cast:score.cast.map(f=>({figure:f.label,note:midiName(score.pitchOf.get(f.id)),role:score.roleOf.get(f.id),leitmotif:score.motifOf.get(f.id),unresolved:score.voidSet.has(f.id),sightings:f.count})),
-  lines:score.units.map((u,i)=>({line:i,text:u.raw,surprise:+score.spans[i].surprise.toFixed(3),tension:+score.spans[i].strain.toFixed(3),seam:score.spans[i].seam,lead:score.spans[i].lead?score.cast.find(f=>f.id===score.spans[i].lead)?.label:null})),
+  lines:score.units.map((u,i)=>({line:i,text:u.raw,surprise:+score.spans[i].surprise.toFixed(3),tension:+score.spans[i].strain.toFixed(3),seam:score.spans[i].seam,lead:score.spans[i].lead?score.cast.find(f=>f.id===score.spans[i].lead)?.label:null,propositions:(score.spans[i].props||[]).map(p=>({subject:p.subj,relation:p.rel,object:p.obj,polarity:p.polarity}))})),
   notes:score.notes.map(n=>({beat:+n.startBeat.toFixed(2),dur:n.dur,layer:n.layer,note:n.midi!=null?midiName(n.midi):n.drum,midi:n.midi??null,vel:+n.vel.toFixed(2)})) };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a');
   a.href=URL.createObjectURL(blob); a.download=(els.sample.value||'score')+'.theseam.json'; a.click(); };
