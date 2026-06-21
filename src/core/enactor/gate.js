@@ -37,6 +37,7 @@
 
 import { deriveNull } from '../../perceiver/voidnull.js';
 import { correspondProp, propKey } from './props.js';
+import { efferenceCopiesOf } from './efference.js';
 
 // The fixed, unrewordable conscience token (§7) — abstention as a collapse
 // OUTCOME, selected by the gate, rendered by the proposer. Distinct from a HELD
@@ -64,7 +65,7 @@ const ROLLBACK_BUDGET = 4;
 //               often. High alpha: speak weaker ones.
 //
 // Returns { answer, emitted, committed, voided, audit }.
-export const runGate = async (candidates, basis, { alpha = 0.05 } = {}) => {
+export const runGate = async (candidates, basis, { alpha = 0.05, modality = null } = {}) => {
   const props   = (basis?.props || []).map(p => ({ ...p }));   // mutable: depletion
   const targets = basis?.question?.targetProps || [];
   const spent   = new Map();   // propKey → fraction of support already spoken
@@ -170,10 +171,17 @@ export const runGate = async (candidates, basis, { alpha = 0.05 } = {}) => {
     voided = true;
   }
 
+  // Output is not terminal (add-on 3 §3): every committed proposition is also a
+  // prediction. At commitment the core generates an EFFERENCE COPY per commit —
+  // the predicted sensed-consequence, indexed to the commit and held outstanding
+  // for the monitor to match the system's own output against when it returns
+  // through the senses. Modality-blind: the copy carries the proposition, not the
+  // organ. VOID commits nothing, so it casts no copy.
   return Object.freeze({
     answer: emitted.join(' '),
     emitted: Object.freeze(emitted),
     committed: Object.freeze(committed),
+    efference: Object.freeze(efferenceCopiesOf(committed, { modality })),
     voided,
     audit: Object.freeze(audit),
   });

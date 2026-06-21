@@ -54,8 +54,12 @@ This is being landed in tested phases:
    into `core/enactor/`. Speech becomes a bare renderer (`segment.js` cuts the
    model's token murmur into candidate SVOs; the core judges them). Behavior-
    preserving — the gated path is byte-identical, just relocated.
-3. **efference copy** at commit — the forward model (`predict/`) emits the
-   predicted sensed-consequence of a commit, indexed to it.
+3. **done** — the **efference copy** at commit (`core/enactor/efference.js`). The
+   gate, when a proposition collapses, casts one copy per commit: the predicted
+   sensed-consequence, indexed to the commit, held outstanding, carrying the
+   proposition's identity (`propKey`) — the skeleton prediction is IDENTITY (I
+   will sense P return). Modality-blind (the organ is provenance only); a VOID
+   casts no copy. `runGate` returns `efference: [...]` alongside `committed`.
 4. **the one monitor** + self/world tagging (`self/`) — compare each sensed P′
    against outstanding efference copies; a match is tagged SELF and attenuated
    (me-ness), a miss is WORLD. One monitor, modality-blind → one self. (add-on 3

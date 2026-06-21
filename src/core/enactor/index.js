@@ -24,3 +24,4 @@
 export { runGate, VOID_TOKEN } from './gate.js';
 export { buildBasis } from './basis.js';
 export { parseProps, correspondProp, propKey, relKey } from './props.js';
+export { EFFERENCE, efferenceCopy, efferenceCopiesOf } from './efference.js';
