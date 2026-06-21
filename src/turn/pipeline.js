@@ -42,7 +42,7 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, classifier, adjacency, auditLog, onStep, history = [], grounding = 'auto' }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, auditLog, onStep, history = [], grounding = 'auto' }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -54,7 +54,10 @@ export const runTurn = async ({ question, doc, docs, model, embedder, classifier
     turn.step(name, data);
     onStep?.(name, ctx, data);
   };
-  const ctx0      = { question, doc: groundingDoc, model, embedder, classifier, adjacency, history, grounding };
+  // `geometricEmbedder` is the MiniLM organ; the retrieve stage reads it for the
+  // semantic channel when it is live, and falls back to `embedder` (the hash organ)
+  // otherwise. Threaded like `classifier` — optional, degrading honestly when absent.
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, history, grounding };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model

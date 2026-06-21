@@ -288,6 +288,11 @@ const runQuery = async (question) => {
     docs:     selectedDocs,     // the selected set — folded into one composite to ground against
     model:    STATE.model,
     embedder: STATE.embedder,
+    // The MiniLM organ for retrieval's SEMANTIC channel: when it is live, retrieval
+    // scores meaning instead of spelling, so a paraphrased question reaches the right
+    // sentence. Falls back to the hash organ (STATE.embedder) until MiniLM warms, so
+    // retrieval never blocks on the download — the same organ the geometric reader uses.
+    geometricEmbedder: STATE.geometricEmbedder,
     // The geometric organ for the edge-grounding fact-check (the talker's assertions
     // contrasted against the graph). Holds at no-commit until MiniLM + centroids come
     // online, so its geometric verdicts degrade to indeterminate until then; the

@@ -26,6 +26,20 @@ const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 export const fuseConcordance = (lex, sem) =>
   1 - (1 - clamp01(lex)) * (1 - clamp01(sem));
 
+// Which organ does the SEMANTIC channel read? Retrieval is only as semantic as
+// its vectors. The hash organ always reports warm and measuresMeaning:false, so a
+// "hybrid" retrieve over it fuses two LEXICAL channels — spelling twice — and a
+// paraphrased question with no shared surface words sinks (the recall failure the
+// audit measured: "job" never reaching "travelling salesman"). When a meaning organ
+// (MiniLM) is LIVE, the semantic channel reads MEANING; until then retrieval falls
+// back to the hash organ, so it never blocks on a model download that may never
+// arrive — the substrate's degrade-never-fail discipline. The semantic channel also
+// no-ops on a cold embedder (semantic.js gates on isWarm), so this only ever upgrades.
+export const pickRetrievalEmbedder = ({ embedder, geometricEmbedder } = {}) =>
+  (geometricEmbedder && geometricEmbedder.measuresMeaning && geometricEmbedder.isWarm?.())
+    ? geometricEmbedder
+    : embedder;
+
 export const retrieveHybrid = async (doc, query, embedder, k = 8) => {
   const lex = retrieveLexical(doc, query, k);
   const sem = await retrieveSemantic(doc, query, embedder, k);

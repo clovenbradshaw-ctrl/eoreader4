@@ -9,7 +9,7 @@
 // The user sees what the model actually said, with a flag pinned to it.
 
 import { answerSmalltalk, answerMath, answerVoid } from '../answer/index.js';
-import { retrieveHybrid }   from '../retrieve/index.js';
+import { retrieveHybrid, pickRetrievalEmbedder } from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
@@ -85,7 +85,11 @@ export const stages = {
     // Free-form turns ignore the document; with no document there is nothing to
     // retrieve. Either way the prompt stage builds an ungrounded chat message.
     if (!ctx.doc || ctx.grounding === 'free') return { ...ctx, spans: [] };
-    const spans = await retrieveHybrid(ctx.doc, ctx.question, ctx.embedder, 6);
+    // Read MEANING for the semantic channel when a meaning organ is live; else fall
+    // back to the hash organ. ctx.embedder (hash) is unchanged for every other stage —
+    // only retrieval's semantic vectors are upgraded (turn/pipeline threads the organ).
+    const re = pickRetrievalEmbedder(ctx);
+    const spans = await retrieveHybrid(ctx.doc, ctx.question, re, 6);
     if (spans.length === 0) {
       // Strict grounded mode never falls through to free generation: it stays on the
       // grounded route and answers the absence ("the document doesn't cover this")
