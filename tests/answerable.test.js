@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/pipeline.js';
-import { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from '../src/perceiver/index.js';
+import { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from '../src/surfer/index.js';
 import { answerVoid } from '../src/answer/index.js';
 
 // The answerability gate (docs/answerability.md): before the talker is warmed,

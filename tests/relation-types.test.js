@@ -9,7 +9,7 @@ import { factCheck, contradictionRefuses, CONTRADICTION_REFUSE_FLOOR } from '../
 import {
   typeOf, areDisjoint, functionalClash, isFunctional, isSymmetric,
   checkRelationConflict,
-} from '../src/perceiver/relation-types.js';
+} from '../src/core/index.js';
 import { structureSurface } from '../src/perceiver/index.js';
 import { createPhasepostClassifier } from '../src/classify/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runGate, VOID_TOKEN } from '../src/core/enactor/gate.js';
+import { runGate, VOID_TOKEN } from '../src/enactor/gate.js';
 
 // The gate measures each candidate proposition against the grounded basis and
 // collapses what beats the null into speech. The four-factor multiply is the

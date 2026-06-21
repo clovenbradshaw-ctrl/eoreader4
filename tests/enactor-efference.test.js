@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runGate, VOID_TOKEN } from '../src/core/enactor/gate.js';
-import { EFFERENCE, efferenceCopy, efferenceCopiesOf, propKey } from '../src/core/enactor/index.js';
+import { runGate, VOID_TOKEN } from '../src/enactor/gate.js';
+import { EFFERENCE, efferenceCopy, efferenceCopiesOf, propKey } from '../src/enactor/index.js';
 
 // Add-on 3 §3: output is not terminal. At commitment the core generates an
 // EFFERENCE COPY — the predicted sensed-consequence of the commit, indexed to it

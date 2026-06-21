@@ -12,7 +12,7 @@
 // order is all the fold needs — the order is the reading's arrow of time, and any
 // sorted or grouped view would destroy exactly the temporal structure being read.
 
-import { sameTerms, DEFAULT_STRAIN_LEAK } from './frame.js';
+import { sameTerms, DEFAULT_STRAIN_LEAK } from '../core/enacted/index.js';
 
 const round = (x) => Math.round(x * 1000) / 1000;
 

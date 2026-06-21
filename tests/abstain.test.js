@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 
 import { ingestFrames } from '../src/organs/in/video.js';
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
-import { coherentFigures, discoverEquivalences } from '../src/perceiver/index.js';
+import { coherentFigures } from '../src/surfer/index.js';
+import { discoverEquivalences as _de } from '../src/perceiver/index.js';
+const discoverEquivalences = (doc, opts = {}) => _de(doc, { retrieve: retrieveLexical, ...opts });
 import { retrieveLexical } from '../src/retrieve/index.js';
 
 // Abstention: given only noise, the engine must report nothing. Recovery and

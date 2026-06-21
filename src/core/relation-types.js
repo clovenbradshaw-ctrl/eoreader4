@@ -12,7 +12,7 @@
 // mother-of are no longer "two unrelated strings" — they are projections of two
 // primitives the algebra knows are disjoint.
 
-import { VERDICTS } from '../core/verdicts.js';   // imported DOWN; read stays a leaf
+import { VERDICTS } from './verdicts.js';   // imported DOWN; read stays a leaf
 
 // The closed primitive set. Properties live HERE, keyed on type, never on nouns.
 export const PRIMITIVES = Object.freeze({

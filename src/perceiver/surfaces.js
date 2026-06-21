@@ -11,9 +11,9 @@
 // verbatim spans. Nothing here calls a model; the reading is mechanical.
 
 import { readingAt } from './reading.js';
-import { typeOf } from './relation-types.js';
+import { typeOf } from '../core/index.js';
 import { projectGraph } from '../core/index.js';
-import { tok } from './parse/tokenize.js';
+import { tok } from './parse/index.js';
 
 // A focus referent's neighbourhood is bounded so a hub figure (the protagonist,
 // hundreds of bonds) stays a readable graph rather than a dump — the strongest

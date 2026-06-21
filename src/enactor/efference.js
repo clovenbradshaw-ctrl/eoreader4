@@ -1,4 +1,4 @@
-// core/enactor/efference.js — the efference copy (add-on 3 §3, §5).
+// enactor/efference.js — the efference copy (add-on 3 §3, §5).
 //
 // Output is not terminal. At the moment of COMMITMENT the core does two things:
 // it emits the committed proposition to an output organ (to be rendered into the
@@ -50,7 +50,7 @@ export const efferenceCopy = (prop, commitId, { modality = null } = {}) =>
 // efferenceCopiesOf — the copies born from a gate's committed propositions, one
 // per commit, indexed in commitment order (offset by `startId` so a later turn's
 // commits do not collide with an earlier turn's outstanding copies). Each
-// committed item carries its proposition on `.svo` (core/enactor/segment feeds
+// committed item carries its proposition on `.svo` (enactor/segment feeds
 // the gate candidateProps); a bare proposition is accepted too.
 export const efferenceCopiesOf = (committed, { startId = 0, modality = null } = {}) =>
   (committed || []).map((c, i) =>

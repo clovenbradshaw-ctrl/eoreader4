@@ -5,7 +5,7 @@
 // it shows up in the audit's `vetoes` field, and the user can see exactly
 // why an answer was refused or flagged.
 
-import { CONTRADICTION_REFUSE_FLOOR } from '../factcheck/correspond.js';
+import { CONTRADICTION_REFUSE_FLOOR } from '../factcheck/index.js';
 import { CONTACT_FLOOR } from './bind.js';
 
 // How much of a grounded answer must be tied to a source before the coverage

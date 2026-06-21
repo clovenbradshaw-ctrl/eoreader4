@@ -5,7 +5,7 @@ import { createCorefField } from '../src/perceiver/parse/coref.js';
 import { scanDescriptors } from '../src/perceiver/parse/relations.js';
 import { parseText } from '../src/perceiver/parse/index.js';
 import { projectGraph } from '../src/core/index.js';
-import { areDisjoint, typeOf } from '../src/perceiver/relation-types.js';
+import { areDisjoint, typeOf } from '../src/core/index.js';
 
 // The standing-descriptor channel, at the FIELD layer. These exercise the
 // mechanism the pipeline wiring will drive: a role epithet ("his sister")

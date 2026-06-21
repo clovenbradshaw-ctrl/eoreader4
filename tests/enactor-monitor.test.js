@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   createMonitor, efferenceCopiesOf,
   SELF, WORLD, SELF_MISMATCH,
-} from '../src/core/enactor/index.js';
+} from '../src/enactor/index.js';
 
 // The one monitor draws the self/world line in the core, modality-blind, by
 // comparing each sensed proposition against the outstanding efference copies

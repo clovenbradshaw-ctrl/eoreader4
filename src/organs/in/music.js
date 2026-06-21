@@ -18,7 +18,7 @@
 // significant. Those are left for the engine's own γ-mass fold and L3 surprise
 // math to EXTRACT — the same surfaces that read a novel, run over a melody.
 
-import { createLog }         from '../../core/log.js';
+import { createLog }         from '../../core/index.js';
 import { projectGraph }      from '../../core/index.js';
 import { createConventions } from '../../core/conventions/index.js';
 import { tok }               from '../../perceiver/parse/index.js';

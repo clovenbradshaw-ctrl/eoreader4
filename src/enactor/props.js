@@ -1,4 +1,4 @@
-// core/enactor/props.js — the proposition unit and the RELATIONAL correspondence
+// enactor/props.js — the proposition unit and the RELATIONAL correspondence
 // (the enactor's EVA measure, modality-blind; add-on 3 §1).
 //
 // The unit of grounding moves from the claim-string to the proposition, because
@@ -21,10 +21,10 @@
 // forming surface; the basis runs it over the document's own stops. One parser,
 // two directions.
 
-import { segmentSentences }   from '../../perceiver/parse/sentences.js';
-import { parseRelations }     from '../../perceiver/parse/relations.js';
-import { documentFieldAt }    from '../../factcheck/correspond.js';
-import { typeOf }             from '../../perceiver/relation-types.js';
+import { segmentSentences }   from '../perceiver/parse/index.js';
+import { parseRelations }     from '../perceiver/parse/index.js';
+import { documentFieldAt }    from '../factcheck/index.js';
+import { typeOf }             from '../core/index.js';
 
 // Parse a stretch of text into normalized propositions, resolving endpoints
 // through the DOCUMENT field at `cursor` (the same binding of record the

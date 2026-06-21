@@ -9,7 +9,7 @@ export { eoAddressOfEvent, eoNotation } from './address.js';
 export { projectGraph, projectionStats, DEFAULT_PROJECTION_RULES } from './project.js';
 export { VERDICTS } from './verdicts.js';
 export { STANCES, TERRAINS, stanceOf, terrainOf, grainOfStance, grainOfTerrain,
-         cellOf, DIAGONAL_CELLS, coherence, isDiagonal,
+         cellOf, DIAGONAL_CELLS, coherence, isDiagonal, terrainInfo,
          SIGNATURES, signatureOf,
          OPERATOR_ALIASES, STANCE_ALIASES, aliasOperator, aliasStance, aliasCellKey } from './cube.js';
 // The two floors (reshape §1/§2). The bare unit is the input membrane (the floor
@@ -17,6 +17,21 @@ export { STANCES, TERRAINS, stanceOf, terrainOf, grainOfStance, grainOfTerrain,
 // meaning). Both frozen as contracts here, in the genome everything depends on.
 export { makeUnit, isUnit, sameUnit, streamDistance, unitStream, isOrdered } from './unit.js';
 export { PROPOSITION_SLOTS, makeProposition, isProposition, propositionOfEdge } from './proposition.js';
+// The shared significance primitives — modality-agnostic, used by every faculty, so
+// they live in the genome, not in any one of them. The derived null (the Born-rule
+// VOID boundary, voidnull.js) and the one surprise (D_KL over a γ-decayed profile,
+// surprise.js): a perceiver reads forward surprise, a surfer derives a null, an
+// enactor's gate derives a null, the probe derives a null — one engine, one home.
+export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
+export { surpriseAt, forwardDist, NOVELTY_RESERVE } from './surprise.js';
+// The shared relation ontology — relation primitives, their disjointness and
+// symmetry. The perceiver constitutes with it, but the factcheck, the enactor, the
+// answer reader and the input organs all read it too, so it lives in the genome,
+// not in any one faculty (its only dependency is VERDICTS, imported down).
+export {
+  PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,
+  relationPrior, areDisjoint, functionalClash, checkRelationConflict,
+} from './relation-types.js';
 // The learning layer (reshape §5): one defeasible ledger, priors + learned, same
 // slot. It lives in the core because the built-in reading knowledge is inherited
 // sediment, the same substance the DEF·EVA·REC loop deposits while reading.

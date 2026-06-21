@@ -1,4 +1,4 @@
-// core/enactor/gate.js — the collapse (§5). DEF·EVA·REC over propositions.
+// enactor/gate.js — the collapse (§5). DEF·EVA·REC over propositions.
 //
 // The enactor's COMMIT step, modality-blind (add-on 3 §1): the gate runs over
 // propositions, so the same collapse commits a spoken proposition, a pass, or a
@@ -35,7 +35,7 @@
 //   on-question, unsupported (the dangerous one)  relevance>0, support=0
 //                                                 → product=0 → blocked, VOIDs
 
-import { deriveNull } from '../../perceiver/voidnull.js';
+import { deriveNull } from '../core/index.js';
 import { correspondProp, propKey } from './props.js';
 import { efferenceCopiesOf } from './efference.js';
 

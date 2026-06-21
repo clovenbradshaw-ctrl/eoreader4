@@ -11,8 +11,8 @@
 // configuration needs to be applied to multiple texts in sequence, or
 // when state ownership matters for testing.
 
-import { createLog }            from '../../core/log.js';
-import { VERDICTS }             from '../../core/verdicts.js';
+import { createLog }            from '../../core/index.js';
+import { VERDICTS }             from '../../core/index.js';
 import { segmentSentences }     from './sentences.js';
 import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';

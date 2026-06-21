@@ -20,7 +20,7 @@
 //     chase the snow (max surprisal, inert); it rides what persists. That is the
 //     circle, recovered by counting alone.
 
-import { createLog }         from '../../core/log.js';
+import { createLog }         from '../../core/index.js';
 import { projectGraph }      from '../../core/index.js';
 import { createConventions } from '../../core/conventions/index.js';
 

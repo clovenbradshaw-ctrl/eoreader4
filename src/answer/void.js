@@ -7,7 +7,7 @@
 // the measured verdict, the way a mechanical answerer renders a lookup. NUL holds
 // the field; the response is a DEF to VOID.
 
-import { fieldVerdict } from '../perceiver/index.js';
+import { fieldVerdict } from '../surfer/index.js';
 
 // Render the measured verdict as plain prose. Each terrain renders as itself:
 // never-set carries a scan receipt; elsewhere names the referent that is not here.

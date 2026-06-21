@@ -11,7 +11,7 @@
 // the syntax beneath it.
 //
 // So this runs the SAME enacted DEF·EVA·REC loop the significance engine runs
-// (enact/loop.js), pointed down at the boundary convention instead of the figure
+// (core/enacted/loop.js), pointed down at the boundary convention instead of the figure
 // field:
 //
 //   DEF   the boundary set begins at the floor `.!?` (the seed commitment).
@@ -28,7 +28,7 @@
 // in the text, to fit the tokens that exist — it can move where a unit ends, never
 // invent one. The witness deposits, the convention layer decides (it RECs itself).
 
-import { createEnactedLoop } from '../../enact/loop.js';
+import { createEnactedLoop } from '../../core/enacted/index.js';
 import { segmentSentences } from './sentences.js';
 
 // The marks the reader is allowed to promote — punctuation that, in some dialects,

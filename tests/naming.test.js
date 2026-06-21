@@ -5,7 +5,7 @@ import { parseText } from '../src/perceiver/parse/pipeline.js';
 import { scanVocatives } from '../src/perceiver/parse/relations.js';
 import { discoverNamings } from '../src/perceiver/parse/naming.js';
 import { projectGraph } from '../src/core/project.js';
-import { areDisjoint, typeOf } from '../src/perceiver/relation-types.js';
+import { areDisjoint, typeOf } from '../src/core/index.js';
 
 // The naming-scene discovery: a role epithet ("his sister") and a name ("Grete")
 // are the same referent, learned from the dialogue turn — the mother cries the NAME

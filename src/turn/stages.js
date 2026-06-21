@@ -11,12 +11,13 @@
 import { answerSmalltalk, answerMath, answerVoid } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold, namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
+import { surfFold } from '../surfer/index.js';
+import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
-import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';
-import { bindCitations, renderBound } from '../ground/bind.js';
-import { runVetoes }        from '../ground/veto.js';
+import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
+import { bindCitations, renderBound } from '../ground/index.js';
+import { runVetoes }        from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak } from '../organs/out/speech/index.js';
 import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
@@ -188,7 +189,7 @@ export const stages = {
   //
   // Two paths, one default. The GOLDEN path is phrase()+veto, unchanged: the model
   // samples the whole reply, the binder cites it, the veto flags it. The GATED path
-  // (core/enactor/gate.js, driven via the speech renderer) is taken only behind RULES_REV AND when the backend exposes
+  // (enactor/gate.js, driven via the speech renderer) is taken only behind RULES_REV AND when the backend exposes
   // `propose` (logit access) AND the surfer's reading is in hand — grounded speech at
   // the proposition, the answer SELECTED by grounding rather than flagged after it. Its
   // emitted surface flows down the SAME bind/factcheck/veto stages, so veto is now the
