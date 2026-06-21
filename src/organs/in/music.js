@@ -84,11 +84,14 @@ export const ingestMusic = (score = {}) => {
     projectGraph: (frame = {}) => projectGraph(log, frame),
   };
 
-  let vecPromise = null;
+  // Cached per embedder organ — hash-space and MiniLM-space vectors are not
+  // interchangeable, so a single unkeyed cache would return the wrong space to a
+  // later caller (see organs/in/text.js).
+  const vecByOrgan = new Map();
   doc.sentenceEmbeddings = async (embedder) => {
-    if (vecPromise) return vecPromise;
-    vecPromise = Promise.all(sentences.map(s => embedder.embed(s)));
-    return vecPromise;
+    const key = embedder?.id || 'default';
+    if (!vecByOrgan.has(key)) vecByOrgan.set(key, Promise.all(sentences.map(s => embedder.embed(s))));
+    return vecByOrgan.get(key);
   };
 
   return doc;

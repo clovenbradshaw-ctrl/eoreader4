@@ -26,11 +26,16 @@ export const ingestText = async (file, opts = {}) => {
   // Sentence embeddings are computed lazily and cached on the doc itself.
   // First caller pays the warmup; subsequent callers (retrieve, impression,
   // form) re-use the cache. The hot lexical path never invokes this.
-  let vecPromise = null;
+  //
+  // Cached PER EMBEDDER ORGAN: hash-space and MiniLM-space vectors are not
+  // interchangeable, so a single cache keyed by nothing would hand a later MiniLM
+  // caller the stale hash vectors the first caller computed — silently defeating the
+  // retrieval upgrade. Key by organ id so each space is memoised independently.
+  const vecByOrgan = new Map();
   doc.sentenceEmbeddings = async (embedder) => {
-    if (vecPromise) return vecPromise;
-    vecPromise = Promise.all(doc.sentences.map(s => embedder.embed(s)));
-    return vecPromise;
+    const key = embedder?.id || 'default';
+    if (!vecByOrgan.has(key)) vecByOrgan.set(key, Promise.all(doc.sentences.map(s => embedder.embed(s))));
+    return vecByOrgan.get(key);
   };
 
   return doc;

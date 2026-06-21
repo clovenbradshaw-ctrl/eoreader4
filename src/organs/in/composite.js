@@ -230,18 +230,20 @@ export const createCompositeDoc = (docs, { crossDocSyn = true } = {}) => {
   const log = compositeLog(events, parts.map(p => p.docId).join(' + '));
 
   // Lazy, cached concatenation of each document's sentence embeddings, in axis order.
-  let embPromise = null;
+  // Keyed per embedder organ so the hash→MiniLM retrieval upgrade is not masked by a
+  // stale hash-space concatenation (see organs/in/text.js).
+  const embByOrgan = new Map();
   const sentenceEmbeddings = async (embedder) => {
-    if (embPromise) return embPromise;
-    embPromise = (async () => {
+    const key = embedder?.id || 'default';
+    if (!embByOrgan.has(key)) embByOrgan.set(key, (async () => {
       const out = [];
       for (const part of parts) {
         const vecs = part.doc.sentenceEmbeddings ? await part.doc.sentenceEmbeddings(embedder) : [];
         for (const v of vecs) out.push(v);
       }
       return out;
-    })();
-    return embPromise;
+    })());
+    return embByOrgan.get(key);
   };
 
   const admission = compositeAdmission(parts);
