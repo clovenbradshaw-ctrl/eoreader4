@@ -13,8 +13,8 @@
 // We read "Frère Jacques", every phrase stated twice, so a reader that learns
 // should be surprised by each phrase the first time and ANTICIPATE its repeat.
 
-import { ingestMusic } from '../src/ingest/music.js';
-import { predictiveSequenceReading, readingAt } from '../src/read/index.js';
+import { ingestMusic } from '../src/organs/in/music.js';
+import { predictiveSequenceReading, readingAt } from '../src/perceiver/index.js';
 
 const tune = {
   name: 'frere-jacques.mid',

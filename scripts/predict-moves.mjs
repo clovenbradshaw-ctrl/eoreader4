@@ -16,7 +16,7 @@
 
 import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { ingestText } from '../src/ingest/index.js';
+import { ingestText } from '../src/organs/in/index.js';
 import {
   buildMoveLog, moveNotation, predictNextMove, scoreSeries,
   persistenceAccuracy, marginalAccuracy, shuffleMoves,

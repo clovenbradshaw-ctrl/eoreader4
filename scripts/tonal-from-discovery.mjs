@@ -17,10 +17,10 @@
 // octaves exactly 2:1 — not the reader's knowledge. The reader never sees a note
 // name, a pitch class, or the number 12; it sees frequencies and their overtones.)
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
-import { ingestMusic }       from '../src/ingest/music.js';
-import { discoverEquivalences } from '../src/read/index.js';
-import { predictiveSequenceReading } from '../src/read/index.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
+import { ingestMusic }       from '../src/organs/in/music.js';
+import { discoverEquivalences } from '../src/perceiver/index.js';
+import { predictiveSequenceReading } from '../src/perceiver/index.js';
 
 const A4 = 440, NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const NOTE_HZ = {};   // the instrument's tuning, used only to synthesise the input

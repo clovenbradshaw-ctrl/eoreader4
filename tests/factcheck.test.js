@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
 import { projectGraph } from '../src/core/index.js';
 import { createPhasepostClassifier, createCellAdjacency } from '../src/classify/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
-import { createCorefField } from '../src/parse/coref.js';
+import { createCorefField } from '../src/perceiver/parse/coref.js';
 import { runVetoes } from '../src/ground/veto.js';
 import { TALKER } from '../src/converse/index.js';
 import {

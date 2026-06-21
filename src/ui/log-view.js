@@ -16,7 +16,7 @@
 // "the spec is the notation" literal: every line is a point on the EO cube.
 
 import { eoNotation, eoAddressOfEvent } from '../core/index.js';
-import { positionElements } from '../parse/index.js';
+import { positionElements } from '../perceiver/parse/index.js';
 
 const LEVELS = [
   { key: 'p0', name: 'Pass 0 · conventions', note: 'what this document taught the reader',

@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
 import { answerRelation, answerWho } from '../src/answer/mechanical.js';
-import { editWithin, fuzzyMatches, fuzzCeiling } from '../src/parse/fuzzy.js';
+import { editWithin, fuzzyMatches, fuzzCeiling } from '../src/perceiver/parse/fuzzy.js';
 
 // A relational "who" is a one-hop graph surf, not a definition lookup. The document
 // logs the kinship as a typed CON edge (Gregor --sister--> Grete); the answer is the

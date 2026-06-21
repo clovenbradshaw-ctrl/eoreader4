@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 
 import {
   parseText, segmentClauses, argumentSpansHold,
-} from '../src/parse/index.js';
-import { parseRelations } from '../src/parse/relations.js';
-import { createEntityAdmission } from '../src/parse/entities.js';
-import { createConventions } from '../src/conventions/index.js';
+} from '../src/perceiver/parse/index.js';
+import { parseRelations } from '../src/perceiver/parse/relations.js';
+import { createEntityAdmission } from '../src/perceiver/parse/entities.js';
+import { createConventions } from '../src/core/conventions/index.js';
 import { projectGraph } from '../src/core/index.js';
 
 const cons = (doc) => doc.log.filter(e => e.op === 'CON');

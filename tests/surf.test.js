@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/index.js';
-import { surfFold, readingAt } from '../src/read/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
+import { surfFold, readingAt } from '../src/perceiver/index.js';
 import { stages } from '../src/turn/stages.js';
 import { runTurn } from '../src/turn/pipeline.js';
 import { createAuditLog } from '../src/audit/index.js';

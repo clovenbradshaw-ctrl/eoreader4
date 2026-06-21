@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { ingestText } from '../src/ingest/index.js';
+import { ingestText } from '../src/organs/in/index.js';
 import {
   MOVE_ALPHABET, buildMoveLog, recurrencePrior, structuralPrior,
   learnGrammar, grammarPrior, DEFAULT_GRAMMAR, predictNextMove,

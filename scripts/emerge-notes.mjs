@@ -9,8 +9,8 @@
 // supplied and not even thresholded — it is whatever the overlap field, read by
 // rank alone, turns out to group.
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
-import { discoverEquivalences, mutualNearestPairs } from '../src/read/index.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
+import { discoverEquivalences, mutualNearestPairs } from '../src/perceiver/index.js';
 
 const hzOf = (doc, i) => doc.noteHz[i];
 const showClasses = (doc, classes) => classes

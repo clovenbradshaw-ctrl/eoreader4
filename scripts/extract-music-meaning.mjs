@@ -8,8 +8,8 @@
 // reported here is read back OUT of the engine's own γ-mass fold and L3
 // surprise math — the surfaces that read a novel, run over a melody.
 
-import { ingestMusic } from '../src/ingest/music.js';
-import { readingAt }   from '../src/read/index.js';
+import { ingestMusic } from '../src/organs/in/music.js';
+import { readingAt }   from '../src/perceiver/index.js';
 
 // "Twinkle, Twinkle, Little Star" — two phrases. The bare notes, nothing else.
 const melody = {

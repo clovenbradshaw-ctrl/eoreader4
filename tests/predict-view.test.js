@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { ingestText } from '../src/ingest/index.js';
+import { ingestText } from '../src/organs/in/index.js';
 import { buildMoveLog } from '../src/predict/index.js';
 import { defaultCursor, postRow, chip } from '../src/ui/predict-view.js';
 

@@ -5,7 +5,7 @@ import {
   surfaceNote, scoreProbe, aggregateTarget, aggregateBattery,
   runBattery, chargeValenceRegression, TARGETS,
 } from '../src/bench/index.js';
-import { ingestText } from '../src/ingest/index.js';
+import { ingestText } from '../src/organs/in/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 
 // docs/surfing-success.md — the talker is out of the loop. The bench scores the

@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/index.js';
-import { parseProps, correspondProp, propKey } from '../src/talker/props.js';
+import { parseText } from '../src/perceiver/parse/index.js';
+import { parseProps, correspondProp, propKey } from '../src/core/enactor/props.js';
 
 // The unit of grounding is the PROPOSITION, and the correspondence is RELATIONAL
 // (subject id · relation type · object id), not lexical overlap. Paraphrase

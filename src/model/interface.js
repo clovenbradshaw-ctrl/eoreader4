@@ -12,8 +12,8 @@
 // backend without logit access — the talker falls back to it transparently.
 //
 // `propose` is the new, OPTIONAL capability the grounded-speech gate drives
-// (talker/gate.js). It exposes the next-token distribution at the current
-// position WITHOUT the backend sampling — the talker drives sampling through
+// (core/enactor/gate.js). It exposes the next-token distribution at the current
+// position WITHOUT the backend sampling — the enactor drives sampling through
 // the gate, one proposition past the committed edge, and rolls back what fails
 // to ground. A backend that cannot expose its distribution simply omits
 // `propose`; the talker detects its absence (model.propose == null) and uses

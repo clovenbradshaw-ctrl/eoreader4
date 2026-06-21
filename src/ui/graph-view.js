@@ -14,7 +14,7 @@
 // 600×460 coordinate space that the SVG scales to fit, so it renders the same
 // whether the pane is visible or hidden when first built.
 
-import { readingAt, structureSurface, predictNext } from '../read/index.js';
+import { readingAt, structureSurface, predictNext } from '../perceiver/index.js';
 import { enactedReadingTo, enactedReadingMeaning } from '../enact/index.js';
 
 const NS = 'http://www.w3.org/2000/svg';

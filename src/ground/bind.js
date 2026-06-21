@@ -25,7 +25,7 @@
 // idf weights flatten to 1 and the field tilt vanishes, and bestMatch
 // reduces exactly to the old overlap/claimTokens.size against MIN_OVERLAP.
 
-import { tok } from '../parse/tokenize.js';
+import { tok } from '../perceiver/parse/tokenize.js';
 import { documentFieldAt } from '../factcheck/correspond.js';
 
 export const MIN_OVERLAP = 0.25;   // the citation bar — the null the lexical posterior beats to CITE

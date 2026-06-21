@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   parseText, positionElements, argumentSpansHold, SVO_EXTRACTOR,
-} from '../src/parse/index.js';
+} from '../src/perceiver/parse/index.js';
 import { projectGraph } from '../src/core/index.js';
 
 const argspans = (doc) => doc.log.filter(e => e.op === 'SEG' && e.kind === 'argspan');
@@ -98,7 +98,7 @@ test('the argument-span SEG does not perturb the graph projection', () => {
 
 // The headVerb offset extension stays backward-compatible for its other consumer.
 test('headVerb still reports verb/rest/copular and now the offsets too', async () => {
-  const { headVerb } = await import('../src/parse/relations.js');
+  const { headVerb } = await import('../src/perceiver/parse/relations.js');
   const h = headVerb(' greeted Gregor Pike.');
   assert.equal(h.verb, 'greeted');
   assert.equal(h.copular, false);

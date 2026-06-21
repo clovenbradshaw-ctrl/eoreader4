@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { parseText } from '../src/parse/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
 import { enactedReadingTo } from '../src/enact/index.js';
 
 // THE METAMORPHOSIS BATTERY — Test 7, the decisive CONTROLS (docs/metamorphosis-battery.md §7).

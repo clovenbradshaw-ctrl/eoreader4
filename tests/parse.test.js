@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/pipeline.js';
-import { isChrome } from '../src/parse/chrome.js';
-import { createEntityAdmission } from '../src/parse/entities.js';
-import { segmentSentences } from '../src/parse/sentences.js';
-import { tok } from '../src/parse/tokenize.js';
+import { parseText } from '../src/perceiver/parse/pipeline.js';
+import { isChrome } from '../src/perceiver/parse/chrome.js';
+import { createEntityAdmission } from '../src/perceiver/parse/entities.js';
+import { segmentSentences } from '../src/perceiver/parse/sentences.js';
+import { tok } from '../src/perceiver/parse/tokenize.js';
 import { projectGraph } from '../src/core/project.js';
 
 test('chrome gate holds only degenerate structure — roles are semantic', () => {

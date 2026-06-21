@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseText } from '../src/parse/index.js';
-import { surfFold } from '../src/read/surf.js';
-import { buildBasis } from '../src/talker/basis.js';
+import { parseText } from '../src/perceiver/parse/index.js';
+import { surfFold } from '../src/surfer/surf.js';
+import { buildBasis } from '../src/core/enactor/basis.js';
 
 // The surf → grounded basis adapter (§4): the props read at the surfer's stops,
 // each carrying the stop's amplitude (the strain that made it a stop), plus the

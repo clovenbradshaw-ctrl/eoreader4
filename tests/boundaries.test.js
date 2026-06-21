@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { induceBoundaries, segmentSentences, parseText } from '../src/parse/index.js';
-import { structureSurface } from '../src/read/index.js';
+import { induceBoundaries, segmentSentences, parseText } from '../src/perceiver/parse/index.js';
+import { structureSurface } from '../src/perceiver/index.js';
 import { projectGraph } from '../src/core/index.js';
 
 // docs: presence is bedrock, but where a sentence ENDS is an interpretation — the
