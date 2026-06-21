@@ -155,6 +155,76 @@ export const buildGroundedMessages = ({
   ];
 };
 
+// ── The cursor contract (SPEC §5, §11) ───────────────────────────────────────
+// The generation membrane. Where the reading path answers a question, the writing
+// path realizes ONE beat of a longer piece: the substrate hands the model a locally
+// resolved impression — the integral name per argument Site (identity fixed), the
+// open questions held OUT (unsettled, do not assert), the typed edge in surface, the
+// grounded spans — and the model collapses it to one fluent sentence. The substrate
+// OVER-specifies the input (full integral, to kill mis-binding); the model
+// UNDER-specifies the output (natural form, he/Gregor, no repetition). Same relaxed
+// renderer posture as SYSTEM_GROUND; the surface discipline (§3) governs the whole
+// prompt — no hashes, no codes, no indices ever reach the model.
+export const SYSTEM_CURSOR = `You are a sharp reading companion writing one beat of a longer piece. You've read this document. Write in your OWN WORDS — synthesize, don't quote the passage back. Use what you've established so far; you don't need to reintroduce people already named. Refer to people naturally once they're established (he, she, by name) — don't repeat their full description.
+
+Write natural prose. Don't write citations, tags, or codes; those are added for you.`;
+
+// buildCursorMessages — assemble the prompt for ONE cell from the cursor's slots.
+// Every argument Site arrives as its INTEGRAL (full standing name, surface form);
+// the open (void) attributes arrive named as unsettled. A void-resolved beat (§3b)
+// carries a HEDGE instruction so the renderer withholds rather than overclaims. The
+// returned shape is the {system,user} pair model.phrase(messages, opts) consumes.
+export const buildCursorMessages = ({
+  orientation = '',
+  established = '',
+  integrals = [],          // [{ name }] — the full integral per argument Site (surface)
+  open = [],               // [string]  — void attributes, held open
+  edge = '',               // the typed relation in surface: A --tends--> B
+  beat = '',               // OR a beat instruction (free prose target)
+  spans = [],              // grounded substance for this beat (exafference)
+  target = '',             // the shape instruction ("one plain past-tense sentence…")
+  band = 'firm',           // 'void' → hedge; 'firm' → assert (the propagated Resolution)
+} = {}) => {
+  const blocks = [];
+  if (orientation) blocks.push(`You are reading ${orientation}. Read what is here; do not name or place the work.`);
+  if (established)  blocks.push(`Established so far: ${established}.`);
+
+  // Identity, collapsed AT THE CURSOR — the integral per argument Site (§5). A lone
+  // referent is the Focus (cursor.mjs); a relation labels Subject / Object so the
+  // model binds each slot to the right integral.
+  if (integrals.length) {
+    const focusLines = integrals
+      .map((g, i) => {
+        const label = integrals.length === 1 ? 'Focus'
+          : i === 0 ? 'Subject' : i === integrals.length - 1 ? 'Object' : 'Also';
+        return `  ${label}: ${g.name}`;
+      })
+      .join('\n');
+    blocks.push(`Who this beat is about (already established — refer to them naturally):\n${focusLines}`);
+  }
+  // The void attributes, named as unsettled — do not assert (§2 FIRM-ONLY, §5).
+  if (open.length)
+    blocks.push(`Unsettled — do NOT assert as fact, leave open: ${open.join('; ')}.`);
+
+  // The beat itself: a typed edge in surface, or a free instruction.
+  if (edge) blocks.push(`What happens (from the document):\n  ${edge}`);
+  if (beat) blocks.push(`The beat: ${beat}`);
+
+  if (spans.length)
+    blocks.push(`${EXCERPTS_HEADER}\n${spans.map(s => s.text).join('\n')}`);
+
+  // The SOFT gate, surfaced as posture (§3b): a void synthesis must hedge.
+  if (band === 'void')
+    blocks.push('This connection is not settled by the document — write it as a holding-open (suggests, stages, leaves open), never as a proven claim.');
+
+  if (target) blocks.push(`Write: ${target}.`);
+
+  return [
+    { role: 'system', content: SYSTEM_CURSOR },
+    { role: 'user',   content: blocks.filter(Boolean).join('\n\n') },
+  ];
+};
+
 // The chat (no-doc) path: a chat model wants turns as turns, so the recent verbatim
 // window rides as real {role,content} message history and the surfed recap folds into
 // the system message (docs/session-fold.md).
