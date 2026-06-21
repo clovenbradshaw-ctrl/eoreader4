@@ -66,7 +66,7 @@ export const seededRng = (seed = 1) => {
 //   enactment   this continuous enactment's id — the provenance stamp on candidates
 //   maxPasses   a deterministic safety bound (the loop quiesces well before this)
 export const createIdleLoop = ({
-  fold, surf, medianBand = 0.5, rng = seededRng(1), enactment = 'idle', maxPasses = 64,
+  fold, surf, medianBand = 0.5, rng = seededRng(1), enactment = 'idle', maxPasses = 64, resolution = null,
 } = {}) => {
   if (typeof surf !== 'function') throw new Error('createIdleLoop: surf({void,docs}) must be injected');
 
@@ -91,7 +91,9 @@ export const createIdleLoop = ({
 
   // one governed pass (I1 anchored, I5 seeded). Returns { void, rec, candidate, quiesce }.
   const step = () => {
-    const ledger = openLedger(fold);
+    // the open set the loop walks is the SAME the UX shows (§16): pass the resolution
+    // map so HEDGED voids (firm-but-low-p) are fuel too, not just void-band ones (§15).
+    const ledger = openLedger(fold, { resolution });
     const v = pickVoid(ledger, rng);                          // I5 — varies WHICH, never content
     if (!v) return { void: null, rec: 0, candidate: null, quiesce: true };   // nothing open → rest
     const field = surf({ void: v, docs: recent.slice() }) || { rec: 0 };     // I1 — fed by exafference
