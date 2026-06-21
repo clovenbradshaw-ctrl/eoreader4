@@ -10,18 +10,48 @@ note records what has landed and the decisions behind it.
 inward, as faculties:
 
 ```
-  READER   ──▶   SURFER   ──▶   TALKER
+  READER   ──▶   SURFER   ──▶   ENACTOR
   Existence      Structure      Significance
-  constitute     navigate/find  judge/speak
+  constitute     navigate/find  judge/commit
   NUL SIG INS    SEG CON SYN    DEF EVA REC
-  (first)        (the middle)   (last; gate)
+  (first)        (the middle)   (last; gate; modality-blind)
 ```
 
 The surfer is the **middle** by construction: Structure is the relating function,
 so navigating a constituted field to find what bears *is* the relating step
-between bringing-into-being (reader) and committing-to-surface (talker).
+between bringing-into-being (reader) and committing-to-surface (enactor).
 `facultyOfOperator(op)` returns which faculty fired an event, by the operator's
 Domain — so the log already names the faculty.
+
+### The third faculty is the enactor, not the talker (add-on 3)
+
+The committing faculty is **modality-blind**: deciding-and-committing is mostly
+not language (a soccer player runs the full DEF·EVA·REC loop with no speech in
+it). Speech is one output organ among several — a pass, a struck note, a hand
+closing on a ball are equally enactments. So the gate (the DEF·EVA·REC
+commitment) lives in the **core** as the enactor's significance, and output organs
+become bare renderers, symmetric with the bare input ingesters: input organs do
+no structuring (structure emerges in the core), output organs do no judging
+(commitment happens in the core).
+
+This is being landed in tested phases:
+
+1. **done** — rename the faculty `talker → enactor` in the spine (`cognition.js`),
+   modality-blind, in the core.
+2. move the gate (`organs/out/speech/gate` = DEF·EVA·REC commit) into the core as
+   the enactor's commit step; speech becomes a bare renderer.
+3. **efference copy** at commit — the forward model (`predict/`) emits the
+   predicted sensed-consequence of a commit, indexed to it.
+4. **the one monitor** + self/world tagging (`self/`) — compare each sensed P′
+   against outstanding efference copies; a match is tagged SELF and attenuated
+   (me-ness), a miss is WORLD. One monitor, modality-blind → one self. (add-on 3
+   §3–§4: SELF-ATTENUATION test.)
+5. ALTERED-FEEDBACK + ONE-ME tests (add-on 3 §7).
+
+The headline (add-on 3 §4): each output organ does **not** get its own feedback
+mechanism. Efference copies and sensed returns are propositions and the
+comparator is modality-blind, so **one monitor in the core** handles all output —
+one loop, one self.
 
 ## The three faces — operator(Site, Stance) (§B)
 

@@ -22,7 +22,7 @@ export { PROPOSITION_SLOTS, makeProposition, isProposition, propositionOfEdge } 
 // sediment, the same substance the DEF·EVA·REC loop deposits while reading.
 export { createConventions } from './conventions/index.js';
 // The geometry, made first-class (add-on 2). The cognition triad (reader · surfer ·
-// talker, the surfer in the middle), the three faces (Act · Site · Stance) and the
+// enactor, the surfer in the middle), the three faces (Act · Site · Stance) and the
 // operator(Site, Stance) notation, and holonic Site addressing (which place an
 // operation lands on, by path and hashId, grain preserved).
 export { COGNITION, COGNITION_ORDER, facultyOfOperator, facultyOf } from './cognition.js';
