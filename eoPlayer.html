@@ -201,6 +201,7 @@
       <button id="m-cadence" class="on" title="seams → cadences & form">cadence/form: on</button>
       <button id="m-tempo" class="on" title="strain + seams → rubato (slows into ruptures)">tempo arc: on</button>
       <button id="m-bright" class="on" title="entropy → timbral brightness & harmonic openness">brightness: on</button>
+      <button id="m-void" class="on" title="unresolved figures → a held dissonance that never cadences">void: on</button>
       <span class="ctl">motif
         <select id="m-motif"><option value="cipher" selected>name cipher (DNA)</option><option value="degree">scale degree</option></select>
       </span>
@@ -535,6 +536,16 @@ function compose(text, o){
     return rd.inFocus; };
   const leads=units.map((u,i)=>leadOf(u,readings[i]));
 
+  // VOID figures — recurring but never resolved into focus (named, present ≥3 lines,
+  // never the lead, not the tonic/dominant). Sounded as a tritone held against the
+  // section that never cadences — the unresolved thing you hear waiting. (provocation #2)
+  const voidOn = o.voidOn!==false;
+  const leadCount=new Map(); for(const l of leads) if(l!=null) leadCount.set(l,(leadCount.get(l)||0)+1);
+  const presentCount=new Map(); for(const u of units) for(const id of u.present) presentCount.set(id,(presentCount.get(id)||0)+1);
+  const top2=new Set(cast.slice(0,2).map(f=>f.id));
+  const voidSet=new Set( voidOn ? cast.filter(f=> !top2.has(f.id) && !(leadCount.get(f.id)>0) && (presentCount.get(f.id)||0)>=3)
+      .sort((a,b)=>(presentCount.get(b.id)||0)-(presentCount.get(a.id)||0)).slice(0,2).map(f=>f.id) : [] );
+
   // dynamic tempo (rubato): slower into tension and big cadences
   const dyn=ch=>readings.map(r=>r? r[ch] : 0);
 
@@ -547,6 +558,7 @@ function compose(text, o){
       beat+=1.5; unitSpb[i]=1; spans.push({start,end:beat,brk:true,seam:seam[i],surprise:0,strain:0,entropy:0,lead:null,section:sectionOf(sections,i)}); continue; }
     const surprise=rd?rd.surprise:0, entropy=rd?rd.entropy:0, ten=strain[i], surge=surprise>=0.45||seam[i]>=2;
     const B=clamp(Math.round(u.nTok/7),1,4), lead=leads[i];
+    const voidHere = voidSet.size>0 && [...u.present].some(id=>voidSet.has(id));
 
     // HARMONY — functional triad from tension; resolves to the tonic at a cadence
     const bucket = seam[i]>=2 ? 0 : (ten<0.25?0 : ten<0.5?1 : ten<0.75?2 : 3);
@@ -592,6 +604,9 @@ function compose(text, o){
       notes.push({u:i,startBeat:beat,dur:B,midi:tonic,vel:0.22,layer:'melody'});  // narrator breath
     }
 
+    // VOID — a held, un-cadencing dissonance while an unresolved figure is on stage
+    if(voidHere) notes.push({u:i,startBeat:beat,dur:B,midi:tonic+6,vel:0.10,layer:'texture',void:true});
+
     // PULSE — a beat whose density rides arousal (surprise + tension)
     if(beatAmt>0){ const arousal=clamp(0.5*surprise+0.5*ten,0,1), sub=1+Math.round(arousal*3);
       for(let b=0;b<B;b++) for(let s=0;s<sub;s++){ const t=beat+b+s/sub;
@@ -599,7 +614,7 @@ function compose(text, o){
         notes.push({u:i,startBeat:t,dur:0.2,drum:down?'down':(s===0?'beat':'sub'),vel:(acc?0.7:0.4)*beatAmt+0.1,layer:'pulse'}); } }
 
     beat+=B; unitSpb[i]=1;
-    spans.push({start,end:beat,brk:false,seam:seam[i],surprise,strain:ten,entropy,surge,lead,section:sectionOf(sections,i)});
+    spans.push({start,end:beat,brk:false,seam:seam[i],surprise,strain:ten,entropy,surge,lead,void:voidHere,section:sectionOf(sections,i)});
   }
 
   // TEXTURE — the surfer's field as a drone, one per section (tonic + fifth)
@@ -610,7 +625,7 @@ function compose(text, o){
 
   notes.sort((a,b)=> a.startBeat-b.startBeat || (a.layer==='texture'?-1:1));
   return { units, cast, readings, seam, sections, strain, mode, tonic, keyName,
-           pitchOf, roleOf, motifOf, notes, spans, totalBeats:beat, unitStartBeat };
+           pitchOf, roleOf, motifOf, voidSet, notes, spans, totalBeats:beat, unitStartBeat };
 }
 function valence(units){ let p=0,n=0; for(const u of units) for(const t of wordsOf(u.raw).map(w=>w.toLowerCase())){ if(POS.has(t))p++; if(NEG.has(t))n++; } return (p-n)>=0?'major':'minor'; }
 function nearestDeg(dia,semi){ let bi=0; for(let i=1;i<dia.length;i++) if(Math.abs(dia[i]-semi)<Math.abs(dia[bi]-semi)) bi=i; return bi; }
@@ -688,16 +703,22 @@ const SYNTHS={
   acbass:S({tech:'ks',gain:.85,damp:.65,bright:.3}),
 };
 
-let ctx=null, master=null, comp=null, conv=null, wet=null, _noise=null;
+let ctx=null, master=null, comp=null, conv=null, wet=null, _noise=null, buses={};
 function audio(){
   if(ctx) return ctx;
   ctx=new (window.AudioContext||window.webkitAudioContext)();
   master=ctx.createGain(); master.gain.value=0.82;
   comp=ctx.createDynamicsCompressor(); comp.threshold.value=-16; comp.ratio.value=3;
   master.connect(comp); comp.connect(ctx.destination);
+  // per-layer buses with gentle stereo placement — depth without smearing the centre
+  const PAN={melody:-0.06,harmony:0.2,bass:0,texture:-0.24,pulse:0.12,void:0.32};
+  for(const L of Object.keys(PAN)){ const g=ctx.createGain(); g.gain.value=1; let tail=g;
+    if(ctx.createStereoPanner){ const p=ctx.createStereoPanner(); p.pan.value=PAN[L]; g.connect(p); tail=p; }
+    tail.connect(master); buses[L]=g; }
   try{ conv=ctx.createConvolver(); const len=ctx.sampleRate*2.2, b=ctx.createBuffer(2,len,ctx.sampleRate);
     for(let c=0;c<2;c++){ const d=b.getChannelData(c); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.6); }
-    conv.buffer=b; wet=ctx.createGain(); wet.gain.value=0.32; master.connect(conv); conv.connect(wet); wet.connect(ctx.destination);
+    conv.buffer=b; const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=160;   // keep the low end dry
+    wet=ctx.createGain(); wet.gain.value=0.32; master.connect(hp); hp.connect(conv); conv.connect(wet); wet.connect(ctx.destination);
   }catch(e){}
   return ctx;
 }
@@ -709,8 +730,8 @@ function env(param,when,peak,a,dur){ peak=Math.max(.0001,peak); const sus=Math.m
   param.exponentialRampToValueAtTime(sus,t2); param.setValueAtTime(sus,end);
   param.exponentialRampToValueAtTime(.0001,end+(a.r??.3)); }
 
-function voice(id, midi, when, dur, vel){
-  const sp=SYNTHS[id]||SYNTHS.piano, freq=mtof(midi), out=master;
+function voice(id, midi, when, dur, vel, dest){
+  const sp=SYNTHS[id]||SYNTHS.piano, freq=mtof(midi), out=dest||master;
   const stop=when+dur+1.2;
   if(sp.tech==='ks'){
     const delay=ctx.createDelay(1); delay.delayTime.value=Math.min(0.99,1/freq);
@@ -755,8 +776,8 @@ function voice(id, midi, when, dur, vel){
   }
 }
 
-function perc(kind, drum, when, vel){
-  const out=master;
+function perc(kind, drum, when, vel, dest){
+  const out=dest||master;
   const tone=(f0,f1,t,type='sine',g=1)=>{ const o=ctx.createOscillator(); o.type=type; o.frequency.setValueAtTime(f0,when);
     o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),when+t); const a=ctx.createGain();
     a.gain.setValueAtTime(vel*g,when); a.gain.exponentialRampToValueAtTime(.001,when+t); o.connect(a); a.connect(out); o.start(when); o.stop(when+t+.02); };
@@ -785,7 +806,7 @@ async function ensureWAF(){ if(waf) return waf; await loadScript('https://suriko
 async function loadGM(gm){ const file=gm+'_FluidR3_GM_sf2_file', v='_tone_'+file;
   if(sfCache[v]) return sfCache[v]; await ensureWAF(); if(!window[v]) await loadScript(SF_BASE+file+'.js');
   if(!window[v]) throw new Error('no '+v); waf.loader.decodeAfterLoading(ctx,v); sfCache[v]=window[v]; return window[v]; }
-function playSampled(preset,midi,when,dur,vel){ waf.queueWaveTable(ctx,master,preset,when,midi,dur,vel*0.6); }
+function playSampled(preset,midi,when,dur,vel,dest){ waf.queueWaveTable(ctx,dest||master,preset,when,midi,dur,vel*0.6); }
 
 async function refreshHQ(){
   if(!hqOn) return;
@@ -809,7 +830,7 @@ const els={ sample:$('#sample'), paste:$('#paste'), loadFile:$('#load-file'), fi
   transport:$('#transport'), play:$('#play'), stop:$('#stop'), tempo:$('#tempo'), tempoV:$('#tempo-v'),
   vol:$('#vol'), key:$('#key'), mode:$('#mode'), exportBtn:$('#export'), readout:$('#readout'),
   reader:$('#reader'), cast:$('#cast'), form:$('#form'), roll:$('#roll'), curve:$('#curve'), bookTitle:$('#book-title'),
-  mDyn:$('#m-dyn'), mTension:$('#m-tension'), mCadence:$('#m-cadence'), mTempo:$('#m-tempo'), mBright:$('#m-bright'), mMotif:$('#m-motif'),
+  mDyn:$('#m-dyn'), mTension:$('#m-tension'), mCadence:$('#m-cadence'), mTempo:$('#m-tempo'), mBright:$('#m-bright'), mVoid:$('#m-void'), mMotif:$('#m-motif'),
   sRubato:$('#s-rubato'), sTension:$('#s-tension'), sOrn:$('#s-orn'), sBeat:$('#s-beat'), sVerb:$('#s-verb') };
 
 const PRESETS={
@@ -838,7 +859,7 @@ fillPerc($('#i-pulse'), layerInstr.pulse);
 
 function opts(){ return { keyName:els.key.value, modeChoice:els.mode.value, motifSrc:els.mMotif.value,
   dynChannel:els.mDyn.value, tensionOn:els.mTension.classList.contains('on'), cadenceOn:els.mCadence.classList.contains('on'),
-  brightOn:els.mBright.classList.contains('on'), tensionAmt:+els.sTension.value/100*1.1,
+  brightOn:els.mBright.classList.contains('on'), voidOn:els.mVoid.classList.contains('on'), tensionAmt:+els.sTension.value/100*1.1,
   ornAmt:+els.sOrn.value/100, beatAmt: layerOn.pulse? +els.sBeat.value/100 : 0 }; }
 
 function currentText(){ const v=els.sample.value; return v==='paste'? els.paste.value.trim() : (BOOKS[v]?.text||''); }
@@ -887,10 +908,11 @@ function drawCast(){
   els.cast.innerHTML=''; const maxC=Math.max(1,...score.cast.map(f=>f.count));
   score.cast.forEach((f,r)=>{ const li=document.createElement('li'); li.dataset.id=f.id; const hue=168+r*12;
     const motif=score.motifOf.get(f.id).map(d=>d>=0?'+'+d:''+d).join(' ');
-    li.innerHTML=`<span class="swatch" style="background:hsl(${hue} 45% ${56-r*1.3}%)"></span>`+
-      `<span class="who">${f.label}<span class="role">${score.roleOf.get(f.id)}</span></span>`+
+    const isVoid=score.voidSet&&score.voidSet.has(f.id);
+    li.innerHTML=`<span class="swatch" style="background:${isVoid?'var(--strain)':`hsl(${hue} 45% ${56-r*1.3}%)`}"></span>`+
+      `<span class="who">${f.label}<span class="role">${isVoid?'∅ void · unresolved':score.roleOf.get(f.id)}</span></span>`+
       `<span class="motif" title="leitmotif (scale steps)">${motif}</span>`+
-      `<span class="note">${midiName(score.pitchOf.get(f.id))}</span>`;
+      `<span class="note" style="${isVoid?'color:var(--strain)':''}">${isVoid?'tritone':midiName(score.pitchOf.get(f.id))}</span>`;
     els.cast.appendChild(li); });
 }
 
@@ -898,10 +920,10 @@ function drawCast(){
 function schedule(){ const now=ctx.currentTime, until=now+LOOK;
   while(cursor<score.notes.length){ const n=score.notes[cursor], when=t0+noteTime(n);
     if(when>=until) break;
-    if(layerOn[n.layer]){ const w=Math.max(when,now), dur=noteDur(n);
-      if(n.layer==='pulse') perc(layerInstr.pulse, n.drum, w, n.vel);
-      else if(hqOn && layerPreset[n.layer]) playSampled(layerPreset[n.layer], n.midi, w, dur, n.vel);
-      else voice(layerInstr[n.layer], n.midi, w, dur, n.vel); }
+    if(layerOn[n.layer]){ const w=Math.max(when,now), dur=noteDur(n), dest=buses[n.void?'void':n.layer]||master;
+      if(n.layer==='pulse') perc(layerInstr.pulse, n.drum, w, n.vel, dest);
+      else if(hqOn && layerPreset[n.layer]) playSampled(layerPreset[n.layer], n.midi, w, dur, n.vel, dest);
+      else voice(layerInstr[n.layer], n.midi, w, dur, n.vel, dest); }
     cursor++; }
   if(cursor>=score.notes.length && now>t0+totalTime()+0.6) stop();
 }
@@ -935,7 +957,7 @@ function paintPlayhead(sec){
     const lead=score.spans[i].lead; if(lead){ const li=els.cast.querySelector(`li[data-id="${CSS.escape(lead)}"]`); if(li) li.classList.add('lit'); }
     const s=score.spans[i];
     if(!s.brk){ const nm=lead? `${score.cast.find(f=>f.id===lead)?.label} → ${midiName(score.pitchOf.get(lead))}`:'narrator';
-      els.readout.innerHTML=`§${s.section+1} · line ${i} · <b>${nm}</b> · surprise ${(s.surprise*100|0)}% · tension ${(s.strain*100|0)}%`+(s.seam?` · cadence L${s.seam}`:''); }
+      els.readout.innerHTML=`§${s.section+1} · line ${i} · <b>${nm}</b> · surprise ${(s.surprise*100|0)}% · tension ${(s.strain*100|0)}%`+(s.seam?` · cadence L${s.seam}`:'')+(s.void?' · ∅ void':''); }
     lastUnit=i;
   }
   drawForm(sec); drawRoll(sec); drawCurve(sec);
@@ -998,8 +1020,8 @@ document.querySelectorAll('#layerbar button').forEach(b=>{ const l=b.dataset.l; 
 els.hq.onclick=async()=>{ hqOn=!hqOn; els.hq.classList.toggle('on',hqOn); els.hq.textContent='◇ HQ samples: '+(hqOn?'on':'off');
   if(hqOn) await refreshHQ(); else els.sfStatus.textContent=''; };
 // mapping toggles
-[['mTension'],['mCadence'],['mTempo'],['mBright']].forEach(([k])=>{ els[k].onclick=()=>{ els[k].classList.toggle('on');
-  const on=els[k].classList.contains('on'); const lbl={mTension:'tension',mCadence:'cadence/form',mTempo:'tempo arc',mBright:'brightness'}[k];
+[['mTension'],['mCadence'],['mTempo'],['mBright'],['mVoid']].forEach(([k])=>{ els[k].onclick=()=>{ els[k].classList.toggle('on');
+  const on=els[k].classList.contains('on'); const lbl={mTension:'tension',mCadence:'cadence/form',mTempo:'tempo arc',mBright:'brightness',mVoid:'void'}[k];
   els[k].textContent=`${lbl}: ${on?'on':'off'}`; if(k==='mTempo'){ if(score){ buildTimeMap(); } } else if(score) render(); }; });
 els.mDyn.onchange=els.mMotif.onchange=()=>{ if(score) render(); };
 els.sTension.onchange=els.sOrn.onchange=()=>{ if(score) render(); };
@@ -1007,7 +1029,7 @@ els.sRubato.oninput=()=>{ if(score){ const e=elapsed(),frac=totalTime()?e/totalT
 els.sBeat.onchange=()=>{ if(score && layerOn.pulse) render(); };
 els.exportBtn.onclick=()=>{ const data={ key:score.keyName, mode:score.mode, tonic:midiName(score.tonic),
   sections:score.sections.length, instruments:layerInstr,
-  cast:score.cast.map(f=>({figure:f.label,note:midiName(score.pitchOf.get(f.id)),role:score.roleOf.get(f.id),leitmotif:score.motifOf.get(f.id),sightings:f.count})),
+  cast:score.cast.map(f=>({figure:f.label,note:midiName(score.pitchOf.get(f.id)),role:score.roleOf.get(f.id),leitmotif:score.motifOf.get(f.id),unresolved:score.voidSet.has(f.id),sightings:f.count})),
   lines:score.units.map((u,i)=>({line:i,text:u.raw,surprise:+score.spans[i].surprise.toFixed(3),tension:+score.spans[i].strain.toFixed(3),seam:score.spans[i].seam,lead:score.spans[i].lead?score.cast.find(f=>f.id===score.spans[i].lead)?.label:null})),
   notes:score.notes.map(n=>({beat:+n.startBeat.toFixed(2),dur:n.dur,layer:n.layer,note:n.midi!=null?midiName(n.midi):n.drum,midi:n.midi??null,vel:+n.vel.toFixed(2)})) };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a');
