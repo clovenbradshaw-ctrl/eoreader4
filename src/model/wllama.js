@@ -109,14 +109,59 @@ registerBackend('wllama', (opts = {}) => {
     },
     async phrase(messages, opts = {}) {
       if (!inst) throw new Error('wllama: not loaded');
-      const prompt = messages
-        .map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>`)
-        .join('\n') + '\n<|im_start|>assistant\n';
-      const out = await inst.createCompletion(prompt, {
+      const out = await inst.createCompletion(toPrompt(messages), {
         nPredict: opts.maxTokens ?? 256,
         sampling: { temp: opts.temperature ?? 0.7 },
       });
       return String(out || '').trim();
     },
+    // The grounded-speech capability (model/interface.js §). wllama exposes the
+    // decode path, so the talker can drive it under the gate. This is the
+    // GREEDY decode-path read: temperature 0, streamed token-by-token through
+    // onNewToken, each piece yielded as a one-hot Dist (logprob 0). It exposes
+    // the decode WITHOUT temperature sampling — the gate drives collapse and
+    // rollback at the proposition above it. True per-token logprob access (a
+    // real distribution rather than the greedy one-hot) is a follow-up the gate
+    // is already shaped for; until then a one-hot greedy stream is the honest,
+    // non-breaking propose. Absent this method a backend keeps phrase()+veto.
+    async *propose(messages, opts = {}) {
+      if (!inst) throw new Error('wllama: not loaded');
+      const queue = [];
+      let resolve = null;
+      let done = false;
+      const push = (piece) => {
+        if (piece) queue.push(piece);
+        if (resolve) { const r = resolve; resolve = null; r(); }
+      };
+      const completion = inst.createCompletion(toPrompt(messages), {
+        nPredict: opts.maxTokens ?? 256,
+        sampling: { temp: 0 },                 // greedy — no internal sampling
+        onNewToken: (_tok, _piece, currentText, optsCb) => {
+          // wllama hands the running text; emit the delta as the next token.
+          push(currentText);
+          if (optsCb && optsCb.abortSignal) { /* the gate has no abort yet */ }
+        },
+      }).then(() => { done = true; push(null); }, () => { done = true; push(null); });
+
+      let last = '';
+      while (true) {
+        if (!queue.length) {
+          if (done) break;
+          await new Promise((r) => { resolve = r; });
+          continue;
+        }
+        const currentText = String(queue.shift());
+        const delta = currentText.startsWith(last) ? currentText.slice(last.length) : currentText;
+        last = currentText;
+        for (const t of (delta.match(/[A-Za-z0-9'’]+|[^\sA-Za-z0-9]/g) || [])) {
+          yield { tokens: [{ token: t, logprob: 0 }] };
+        }
+      }
+      await completion;
+    },
   };
 });
+
+const toPrompt = (messages) =>
+  messages.map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>`).join('\n') +
+  '\n<|im_start|>assistant\n';

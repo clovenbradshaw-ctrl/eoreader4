@@ -17,6 +17,7 @@ import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';
 import { bindCitations, renderBound } from '../ground/bind.js';
 import { runVetoes }        from '../ground/veto.js';
+import { canGroundedSpeak, groundedSpeak } from '../talker/index.js';
 import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
 
@@ -184,8 +185,25 @@ export const stages = {
 
   // The model. The token ceiling is the task register's max_tokens (the real length
   // bound) — not a fixed 256. Verbatim raw output is captured in `rawOutput` for audit.
+  //
+  // Two paths, one default. The GOLDEN path is phrase()+veto, unchanged: the model
+  // samples the whole reply, the binder cites it, the veto flags it. The GATED path
+  // (talker/gate.js) is taken only behind RULES_REV AND when the backend exposes
+  // `propose` (logit access) AND the surfer's reading is in hand — grounded speech at
+  // the proposition, the answer SELECTED by grounding rather than flagged after it. Its
+  // emitted surface flows down the SAME bind/factcheck/veto stages, so veto is now the
+  // auditory-loop annotation that confirms grounding (§8). Absent any precondition the
+  // talker falls back to phrase(), byte-identical — non-breaking by construction.
   async llm(ctx) {
     const maxTokens = ctx.maxTokens || 384;
+    if (canGroundedSpeak(ctx.model, ctx)) {
+      const gated = await groundedSpeak({
+        model: ctx.model, messages: ctx.messages, doc: ctx.doc,
+        surf: ctx.surf, question: ctx.question,
+        alpha: ctx.alpha ?? undefined, opts: { maxTokens },
+      });
+      return { ...ctx, rawOutput: gated.answer, maxTokens, gated, gatedVoided: gated.voided };
+    }
     const raw = await ctx.model.phrase(ctx.messages, { maxTokens });
     return { ...ctx, rawOutput: raw, maxTokens };
   },
