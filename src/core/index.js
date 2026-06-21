@@ -24,6 +24,14 @@ export { PROPOSITION_SLOTS, makeProposition, isProposition, propositionOfEdge } 
 // enactor's gate derives a null, the probe derives a null — one engine, one home.
 export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
 export { surpriseAt, forwardDist, NOVELTY_RESERVE } from './surprise.js';
+// The shared relation ontology — relation primitives, their disjointness and
+// symmetry. The perceiver constitutes with it, but the factcheck, the enactor, the
+// answer reader and the input organs all read it too, so it lives in the genome,
+// not in any one faculty (its only dependency is VERDICTS, imported down).
+export {
+  PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,
+  relationPrior, areDisjoint, functionalClash, checkRelationConflict,
+} from './relation-types.js';
 // The learning layer (reshape §5): one defeasible ledger, priors + learned, same
 // slot. It lives in the core because the built-in reading knowledge is inherited
 // sediment, the same substance the DEF·EVA·REC loop deposits while reading.

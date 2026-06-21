@@ -22,7 +22,7 @@
 
 import { segmentSentences }       from '../perceiver/parse/index.js';
 import { parseRelations, headVerb } from '../perceiver/parse/index.js';
-import { checkRelationConflict }   from '../perceiver/relation-types.js';
+import { checkRelationConflict }   from '../core/index.js';
 import { coherence, terrainInfo }  from '../core/index.js';
 import { operatorsByDomain }       from '../core/index.js';
 

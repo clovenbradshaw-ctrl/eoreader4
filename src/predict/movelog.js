@@ -11,7 +11,7 @@
 //                        carrying the sentIdx it was read at.
 //   ENACTED (cognition)  the reading's own act — DEF its frame's terms, EVA each
 //                        particular against them, REC when the testing breaks the
-//                        frame (enact/loop.js). The DEF→EVA→…→REC cycle.
+//                        frame (core/enacted/loop.js). The DEF→EVA→…→REC cycle.
 //
 // Both map to a move symbol over a small alphabet via eoAddressOfEvent. The union
 // is ordered by (cursor, register, generation): at each cursor the reader first
@@ -23,8 +23,8 @@
 // the nine transforming operators.
 
 import { eoAddressOfEvent } from '../core/index.js';
-import { readingAt } from '../perceiver/reading.js';
-import { createEnactedLoop } from '../enact/loop.js';
+import { readingAt } from '../perceiver/index.js';
+import { createEnactedLoop } from '../enact/index.js';
 
 // The prediction alphabet: the nine operators plus VOID (the asserted absence).
 // Ordered to read like the ACT face row by row, with VOID last as the refusal.

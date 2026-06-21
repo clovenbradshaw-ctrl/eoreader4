@@ -27,7 +27,7 @@
 
 import { surfFold } from './surf.js';
 import { deriveNull, MIN_SAMPLES } from '../core/index.js';
-import { namedReferents } from '../perceiver/surfaces.js';
+import { namedReferents } from '../perceiver/index.js';
 import { tok } from '../perceiver/parse/index.js';
 
 // The hallucination budget for the turn's void boundary: the tolerated probability

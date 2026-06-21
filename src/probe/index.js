@@ -52,14 +52,19 @@ export const survey = ({ root = 'src', cwd = process.cwd(), alpha = 0.01, commit
       notAssessed.push({ signature, reason: 'distribution too thin to derive a null' });
       continue;
     }
+    // Can a null be derived over this distribution at all? If not (e.g. degenerate),
+    // the signature is not assessed. If yes, it IS assessed — and reports clean when
+    // nothing beats the null. Assessed-and-clean is not the same as not-assessed.
+    const probeNull = deriveNull(background, { scale: 'linear', alpha });
+    if (!Number.isFinite(probeNull)) {
+      notAssessed.push({ signature, reason: 'null underivable over the distribution' });
+      continue;
+    }
+    assessed.push(signature);
     const m = mean(background), s = sd(background);
-
-    let anyGated = false;
     for (const f of raw) {
       const nul = deriveNull(background, { scale: 'linear', alpha, leaveOut: f.strain });
-      if (!Number.isFinite(nul)) continue;     // cannot gate this one — abstain
-      anyGated = true;
-      if (f.strain > nul) {
+      if (Number.isFinite(nul) && f.strain > nul) {
         findings.push(Object.freeze({
           ...f,
           null: Number(nul.toFixed(3)),
@@ -67,9 +72,6 @@ export const survey = ({ root = 'src', cwd = process.cwd(), alpha = 0.01, commit
         }));
       }
     }
-    // If the null was underivable for every candidate, the signature is not assessed.
-    (anyGated ? assessed : notAssessed).push(
-      anyGated ? signature : { signature, reason: 'null underivable over the distribution' });
   }
 
   // Rank by strain beyond the null (z), gravest first — the surfing sweep's peaks.

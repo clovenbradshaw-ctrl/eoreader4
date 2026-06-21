@@ -7,7 +7,7 @@
 import { tok } from '../perceiver/parse/index.js';
 import { editWithin, fuzzCeiling } from '../perceiver/parse/index.js';
 import { projectGraph } from '../core/index.js';
-import { typeOf, areDisjoint } from '../perceiver/relation-types.js';
+import { typeOf, areDisjoint } from '../core/index.js';
 
 export const answerMath = (question) => {
   const m = String(question || '').match(/(-?\d+(?:\.\d+)?)\s*([+\-*/x])\s*(-?\d+(?:\.\d+)?)/);

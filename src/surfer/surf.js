@@ -22,7 +22,7 @@
 
 import { readingAt } from '../perceiver/index.js';
 import { deriveNull } from '../core/index.js';
-import { createEnactedLoop, calibrateReader } from '../enact/loop.js';
+import { createEnactedLoop, calibrateReader } from '../enact/index.js';
 
 // The reach: a little behind the anchor (to read the frame it sits inside), mostly
 // ahead (a surf rides forward, and the arrow of time orders the frame axis).

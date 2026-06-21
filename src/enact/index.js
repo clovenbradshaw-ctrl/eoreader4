@@ -18,13 +18,13 @@
 // live (§11).
 
 import { readingAt } from '../perceiver/index.js';
-import { createEnactedLoop } from './loop.js';
+import { createEnactedLoop } from '../core/enacted/index.js';
 import { replayFrames, loopStats } from './replay.js';
 import { buildMeaningRead } from './meaning.js';
 
-export { createEnactedLoop, calibrateReader, DEFAULT_THRESHOLDS, DEFAULT_CONFIRM_BAND, DEFAULT_IMPULSE, DEFAULT_IMPULSE_QUANTILE } from './loop.js';
+export { createEnactedLoop, calibrateReader, DEFAULT_THRESHOLDS, DEFAULT_CONFIRM_BAND, DEFAULT_IMPULSE, DEFAULT_IMPULSE_QUANTILE } from '../core/enacted/index.js';
 export { replayFrames, loopStats } from './replay.js';
-export { createFrame, snapshotFrame, sameTerms, DEFAULT_STRAIN_LEAK } from './frame.js';
+export { createFrame, snapshotFrame, sameTerms, DEFAULT_STRAIN_LEAK } from '../core/enacted/index.js';
 export { isEnacted, isDepicted, assertSingleRegister } from './register.js';
 export { buildMeaningRead } from './meaning.js';
 

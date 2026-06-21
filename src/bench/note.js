@@ -25,7 +25,7 @@ import { enactedReadingTo, enactedReadingMeaning } from '../enact/index.js';
 export const DEFAULT_FORCES = Object.freeze({
   k: 8,                  // retrieval breadth — how many spans the surfer is set down over
   behind: 4, ahead: 16,  // the surf reach (read/surf.js DEFAULT_REACH)
-  leak: undefined,       // strain leak (enact/frame.js DEFAULT_STRAIN_LEAK when undefined)
+  leak: undefined,       // strain leak (core/enacted/frame.js DEFAULT_STRAIN_LEAK when undefined)
   confirmBand: undefined,// the assimilation band (calibrated to the reach when undefined)
   thresholds: undefined, // per-layer REC thresholds (calibrated when undefined)
   impulse: undefined,    // the shock threshold (DEFAULT_IMPULSE when undefined)

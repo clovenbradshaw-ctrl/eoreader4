@@ -4,7 +4,7 @@
 // This is the prior recurrence cannot carry: a count over the operator stream does
 // not know that a term is strained near threshold, that a figure just entered, that
 // the field has gone flat. The fold does. At each cursor the reading maintains a
-// frame (enact/loop.js) with a running strain against a REC threshold, a γ-mass
+// frame (core/enacted/loop.js) with a running strain against a REC threshold, a γ-mass
 // surprise, and a record of what just entered. The structural prior reads that
 // state and bends the distribution over the next move toward what the frame
 // licenses — no model, only the reading's own standing commitments:

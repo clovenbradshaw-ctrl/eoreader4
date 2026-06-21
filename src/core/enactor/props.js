@@ -23,8 +23,8 @@
 
 import { segmentSentences }   from '../../perceiver/parse/index.js';
 import { parseRelations }     from '../../perceiver/parse/index.js';
-import { documentFieldAt }    from '../../factcheck/correspond.js';
-import { typeOf }             from '../../perceiver/relation-types.js';
+import { documentFieldAt }    from '../../factcheck/index.js';
+import { typeOf }             from '../../core/index.js';
 
 // Parse a stretch of text into normalized propositions, resolving endpoints
 // through the DOCUMENT field at `cursor` (the same binding of record the
