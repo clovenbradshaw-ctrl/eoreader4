@@ -5,7 +5,7 @@
 // must read ORDER, not which sentences are present. Run: node scripts/battery-controls.mjs
 import { readFileSync } from 'node:fs';
 import { parseText } from '../src/parse/index.js';
-import { readingAt } from '../src/read/index.js';
+import { readingAt } from '../src/reader/index.js';
 import { enactedReadingTo } from '../src/enact/index.js';
 
 // seeded PRNG so a future test is deterministic (not flaky)

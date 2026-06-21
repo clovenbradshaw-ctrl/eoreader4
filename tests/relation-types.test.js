@@ -9,8 +9,8 @@ import { factCheck, contradictionRefuses, CONTRADICTION_REFUSE_FLOOR } from '../
 import {
   typeOf, areDisjoint, functionalClash, isFunctional, isSymmetric,
   checkRelationConflict,
-} from '../src/read/relation-types.js';
-import { structureSurface } from '../src/read/index.js';
+} from '../src/reader/relation-types.js';
+import { structureSurface } from '../src/reader/index.js';
 import { createPhasepostClassifier } from '../src/classify/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 

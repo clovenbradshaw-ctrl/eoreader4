@@ -23,7 +23,7 @@
 import { segmentSentences }   from '../../../parse/sentences.js';
 import { parseRelations }     from '../../../parse/relations.js';
 import { documentFieldAt }    from '../../../factcheck/correspond.js';
-import { typeOf }             from '../../../read/relation-types.js';
+import { typeOf }             from '../../../reader/relation-types.js';
 
 // Parse a stretch of text into normalized propositions, resolving endpoints
 // through the DOCUMENT field at `cursor` (the same binding of record the

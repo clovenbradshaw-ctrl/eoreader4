@@ -9,7 +9,7 @@
 // surprise math — the surfaces that read a novel, run over a melody.
 
 import { ingestMusic } from '../src/organs/in/music.js';
-import { readingAt }   from '../src/read/index.js';
+import { readingAt }   from '../src/reader/index.js';
 
 // "Twinkle, Twinkle, Little Star" — two phrases. The bare notes, nothing else.
 const melody = {

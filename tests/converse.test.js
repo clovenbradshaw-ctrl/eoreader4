@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { createCorefField } from '../src/parse/coref.js';
 import { parseText } from '../src/parse/index.js';
-import { readingAt } from '../src/read/index.js';
+import { readingAt } from '../src/reader/index.js';
 import {
   TALKER, SPAN, CONVERSATIONAL_CAP,
   conversationalEvent, witnessOf, isCitableAsDocument,

@@ -22,7 +22,7 @@
 
 import { segmentSentences }       from '../parse/sentences.js';
 import { parseRelations, headVerb } from '../parse/relations.js';
-import { checkRelationConflict }   from '../read/relation-types.js';
+import { checkRelationConflict }   from '../reader/relation-types.js';
 import { coherence, terrainInfo }  from '../core/cube.js';
 import { operatorsByDomain }       from '../core/operators.js';
 

@@ -4,7 +4,7 @@
 
 import { parseText }    from '../../parse/index.js';
 import { projectGraph } from '../../core/index.js';
-import { areDisjoint }  from '../../read/relation-types.js';
+import { areDisjoint }  from '../../reader/relation-types.js';
 
 export const ingestText = async (file, opts = {}) => {
   const text  = typeof file === 'string' ? file : await file.text();

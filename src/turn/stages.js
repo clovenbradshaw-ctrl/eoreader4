@@ -11,7 +11,7 @@
 import { answerSmalltalk, answerMath, answerVoid } from '../answer/index.js';
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold, namedReferents, referentialConfidence, siteIndices } from '../read/index.js';
+import { surfFold, namedReferents, referentialConfidence, siteIndices } from '../reader/index.js';
 import { foldConversation } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';

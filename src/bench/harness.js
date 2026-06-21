@@ -18,7 +18,7 @@ import { surfaceNote } from './note.js';
 import { scoreProbe } from './score.js';
 import { aggregateTarget, aggregateBattery } from './aggregate.js';
 import { TARGETS, CORPUS_PATH } from './battery.js';
-import { structureSurface } from '../read/index.js';
+import { structureSurface } from '../reader/index.js';
 
 // Read-time forces ride the `forces` arg into the note surfacer; parse-time forces
 // (the CONFINEMENT WINDOW, the CHARGE/VALENCE sentinel) change ingestion, so the

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/index.js';
-import { readingAt } from '../src/read/index.js';
+import { readingAt } from '../src/reader/index.js';
 import {
   calibrateReader, enactedReadingTo,
   DEFAULT_CONFIRM_BAND, DEFAULT_THRESHOLDS,

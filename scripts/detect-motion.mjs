@@ -9,7 +9,7 @@
 // snow; it rides what persists" — here, literally.
 
 import { ingestFrames } from '../src/organs/in/video.js';
-import { motionReading, persistentFigures, coherentFigures } from '../src/read/index.js';
+import { motionReading, persistentFigures, coherentFigures } from '../src/reader/index.js';
 
 // --- synthesise the clip (the only input): static + a moving circle. ---------
 const W = 34, H = 20, R = 3, FRAMES = 10, SNOW = 0.05;

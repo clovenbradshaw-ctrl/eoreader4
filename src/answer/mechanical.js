@@ -7,7 +7,7 @@
 import { tok } from '../parse/tokenize.js';
 import { editWithin, fuzzCeiling } from '../parse/fuzzy.js';
 import { projectGraph } from '../core/project.js';
-import { typeOf, areDisjoint } from '../read/relation-types.js';
+import { typeOf, areDisjoint } from '../reader/relation-types.js';
 
 export const answerMath = (question) => {
   const m = String(question || '').match(/(-?\d+(?:\.\d+)?)\s*([+\-*/x])\s*(-?\d+(?:\.\d+)?)/);

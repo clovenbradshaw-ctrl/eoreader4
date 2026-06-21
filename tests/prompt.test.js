@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildGroundedMessages, orientationLine, EXCERPTS_HEADER,
 } from '../src/model/prompt.js';
-import { serializeNotes } from '../src/read/index.js';
+import { serializeNotes } from '../src/reader/index.js';
 import { parseText } from '../src/parse/index.js';
 import { runTurn } from '../src/turn/pipeline.js';
 import { createAuditLog } from '../src/audit/index.js';

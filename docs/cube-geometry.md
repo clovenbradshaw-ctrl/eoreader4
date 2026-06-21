@@ -70,16 +70,34 @@ carrying a stable **hashId** of record (FNV-1a over the canonical path).
 Grain (the operation's resolution band) and holonic depth (the target's nesting)
 are kept as distinct axes; the Site carries both.
 
-## What landed vs. what is next
+## The file tree, conformed to the geometry
 
-Golden parity is the rail — the suite is **457 green** (was 441), all additive.
+The reorg makes the directories the geometry, not just a description of it. Golden
+parity is the rail — every move is verified byte-identical against the suite
+(**457 green**, all additive).
 
-- **Landed:** the cognition triad, the three faces + `operator(Site, Stance)`
-  notation, holonic Site addressing — all in `src/core/`, exported, tested
-  (`tests/geometry.test.js`), guard-respecting.
-- **Next (golden-gated increments):** the full directory reorg into the cognition
-  triad — `read/surf` → `core/surfer` (the middle), the reader and talker
-  subassemblies as full cubes — and threading the holonic Site + Stance onto the
-  event emitters so every logged operation is recorded as `operator(Site, Stance)`
-  at a holonic address. These are the high-fan-out moves staged behind the rail so
-  each is verified against the goldens for function.
+```
+src/
+  organs/
+    in/            the sense organs (was ingest/) — modality → units      [reshape §3]
+    out/speech/    the speech organ (was talker/) — props → language      [reshape §6]
+  core/            the genome + the geometry made first-class:
+    operators · log · cube · address · project   (depends on nothing)
+    unit.js · proposition.js                      (the two floors)
+    conventions/                                  (the learning layer, priors)
+    cognition.js · faces.js · holon.js            (triad · three faces · Site address)
+  reader/          the READER faculty (was read/) — Existence · constitute  [§A]
+  surfer/          the SURFER faculty (the middle) — Structure · navigate    [§A]
+  …                enact/ ground/ etc. — the talker's judging side, next
+```
+
+- **Landed (structure):** `organs/in`, `organs/out/speech`, the `reader` and
+  `surfer` faculties as their own subassemblies, and the geometry spine in `core/`.
+  The reader and surfer were fused in the old `read/` holon; they are split into
+  peer faculties that still import each other (the reader reads forward surprise;
+  the surfer rides the reading) — a real boundary, not a decoupling that would
+  change behavior.
+- **Next (golden-gated):** name the talker's judging faculty (`enact`/`ground`) and
+  the remaining `organs/out` organs (music, action); thread the holonic Site +
+  Stance onto the event emitters so every logged operation is recorded as
+  `operator(Site, Stance)` at a holonic address.

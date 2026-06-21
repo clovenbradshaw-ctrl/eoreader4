@@ -10,7 +10,7 @@
 // rank alone, turns out to group.
 
 import { ingestFrequencies } from '../src/organs/in/frequency.js';
-import { discoverEquivalences, mutualNearestPairs } from '../src/read/index.js';
+import { discoverEquivalences, mutualNearestPairs } from '../src/reader/index.js';
 
 const hzOf = (doc, i) => doc.noteHz[i];
 const showClasses = (doc, classes) => classes

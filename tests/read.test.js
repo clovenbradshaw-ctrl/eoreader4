@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { parseText } from '../src/parse/index.js';
 import { createCorefField } from '../src/parse/coref.js';
-import { readingAt, structureSurface, figureSurface, namedReferents, consciousness, siteRoles, predictNext } from '../src/read/index.js';
+import { readingAt, structureSurface, figureSurface, namedReferents, consciousness, siteRoles, predictNext } from '../src/reader/index.js';
 import { foldNote } from '../src/fold/index.js';
 
 test('coref field is a normalised distribution, strongest first', () => {

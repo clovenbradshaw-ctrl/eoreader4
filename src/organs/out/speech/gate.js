@@ -30,7 +30,7 @@
 //   on-question, unsupported (the dangerous one)  relevance>0, support=0
 //                                                 → product=0 → blocked, VOIDs
 
-import { deriveNull } from '../../../read/voidnull.js';
+import { deriveNull } from '../../../reader/voidnull.js';
 import { correspondProp, propKey } from './props.js';
 
 // The fixed, unrewordable conscience token (§7) — abstention as a collapse

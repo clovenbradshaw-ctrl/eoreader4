@@ -1,5 +1,8 @@
-// The read holon: the three levels of reading and the consciousness that
-// folds them. Pure on (doc, cursor/spans); no model in the loop.
+// reader — the READER faculty (add-on 2 §A): Existence · constitute. It brings the
+// reading into being, constituting structure from the unit stream — the first of
+// the cognition triad (reader → surfer → talker), the one the surfer then
+// navigates. The three levels of reading and the consciousness that folds them.
+// Pure on (doc, cursor/spans); no model in the loop.
 //
 //   existenceSurface     level 1 — raw text
 //   structureSurface     level 2 — the extracted SEG/CON/SIG/SYN graph
