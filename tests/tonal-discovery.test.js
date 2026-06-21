@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
-import { ingestMusic } from '../src/ingest/music.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
+import { ingestMusic } from '../src/organs/in/music.js';
 import { discoverEquivalences, predictiveSequenceReading } from '../src/read/index.js';
 
 // The close: the tonal reading the music adapter got from `midi % 12` comes back

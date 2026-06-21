@@ -8,7 +8,7 @@
 // sentence — with a note's "words" being its partials. Whatever harmonic
 // structure appears was discovered by counting shared overtones, full stop.
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { retrieveLexical }   from '../src/retrieve/index.js';
 
 // ---------------------------------------------------------------------------

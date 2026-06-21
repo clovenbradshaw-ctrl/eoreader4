@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { retrieveLexical } from '../src/retrieve/index.js';
 
 // The frequency adapter hands the engine raw Hz as overtone token sets and lets

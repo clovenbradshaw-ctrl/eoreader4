@@ -17,7 +17,7 @@ import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/prompt.js';
 import { bindCitations, renderBound } from '../ground/bind.js';
 import { runVetoes }        from '../ground/veto.js';
-import { canGroundedSpeak, groundedSpeak } from '../talker/index.js';
+import { canGroundedSpeak, groundedSpeak } from '../organs/out/speech/index.js';
 import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
 
@@ -188,7 +188,7 @@ export const stages = {
   //
   // Two paths, one default. The GOLDEN path is phrase()+veto, unchanged: the model
   // samples the whole reply, the binder cites it, the veto flags it. The GATED path
-  // (talker/gate.js) is taken only behind RULES_REV AND when the backend exposes
+  // (organs/out/speech/gate.js) is taken only behind RULES_REV AND when the backend exposes
   // `propose` (logit access) AND the surfer's reading is in hand — grounded speech at
   // the proposition, the answer SELECTED by grounding rather than flagged after it. Its
   // emitted surface flows down the SAME bind/factcheck/veto stages, so veto is now the

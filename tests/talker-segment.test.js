@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { segment, appendToken, propAmplitude } from '../src/talker/segment.js';
+import { segment, appendToken, propAmplitude } from '../src/organs/out/speech/segment.js';
 
 // SEG cuts the token murmur into candidate propositions at SVO boundaries
 // (clause-final punctuation + a filled unit). It is testable directly on a

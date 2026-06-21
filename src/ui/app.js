@@ -10,7 +10,7 @@
 //   3. The assistant message renders live, updating per stage so the
 //      thinking is visible while the turn is in flight.
 
-import { ingestText }       from '../ingest/index.js';
+import { ingestText }       from '../organs/in/index.js';
 import { runTurn }          from '../turn/index.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';

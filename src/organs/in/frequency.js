@@ -19,9 +19,9 @@
 // set-overlap the engine runs over the words of a sentence, run over the
 // overtones of a note, recovers the harmonic series with no scale in sight.
 
-import { createLog }         from '../core/log.js';
-import { projectGraph }      from '../core/index.js';
-import { createConventions } from '../core/conventions/index.js';
+import { createLog }         from '../../core/log.js';
+import { projectGraph }      from '../../core/index.js';
+import { createConventions } from '../../core/conventions/index.js';
 
 // A partial lands in a bin if it falls within TOL of it — a frequency-resolution
 // grain, the finest distinction the reader is asked to make. It is NOT a scale:

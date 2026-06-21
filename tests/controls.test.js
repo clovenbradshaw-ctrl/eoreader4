@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
-import { ingestMusic } from '../src/ingest/music.js';
-import { ingestFrames } from '../src/ingest/video.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
+import { ingestMusic } from '../src/organs/in/music.js';
+import { ingestFrames } from '../src/organs/in/video.js';
 import { retrieveLexical } from '../src/retrieve/index.js';
 import { predictiveSequenceReading, motionReading, coherentFigures, persistentFigures } from '../src/read/index.js';
 

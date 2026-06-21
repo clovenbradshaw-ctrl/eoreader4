@@ -15,9 +15,9 @@
 //     through time) and the turn-event must DIE. A static circle must persist yet
 //     show no event. Noise sweep: find where snow finally drowns the shape.
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
-import { ingestMusic } from '../src/ingest/music.js';
-import { ingestFrames } from '../src/ingest/video.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
+import { ingestMusic } from '../src/organs/in/music.js';
+import { ingestFrames } from '../src/organs/in/video.js';
 import { retrieveLexical } from '../src/retrieve/index.js';
 import { discoverEquivalences } from '../src/read/index.js';
 import { predictiveSequenceReading } from '../src/read/index.js';

@@ -1,4 +1,6 @@
-// The talker holon — grounded speech at the proposition.
+// organs/out/speech — the speech output organ (reshape §6): props → language,
+// with the gate at the inner face. The talker is the Significance faculty
+// rendering the core's emergent currency back into a modality.
 //
 // Grounding moves from a flag AFTER speech (ground/veto.js standing alone) to
 // the SELECTION of speech (gate.js), and from the claim-string to the

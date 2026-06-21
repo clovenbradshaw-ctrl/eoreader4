@@ -14,8 +14,8 @@
 // So the refusal now leaves a trace. Below: the operator counts in the log on a
 // real signal vs on pure noise, for audio and for video.
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
-import { ingestFrames } from '../src/ingest/video.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
+import { ingestFrames } from '../src/organs/in/video.js';
 import { discoverEquivalences, detectMotion, coherentFigures } from '../src/read/index.js';
 import { retrieveLexical } from '../src/retrieve/index.js';
 

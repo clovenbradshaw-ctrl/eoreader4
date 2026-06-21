@@ -13,7 +13,7 @@
 //             that trips no hard gate on any probe.
 
 import fs from 'node:fs';
-import { ingestText } from '../ingest/index.js';
+import { ingestText } from '../organs/in/index.js';
 import { surfaceNote } from './note.js';
 import { scoreProbe } from './score.js';
 import { aggregateTarget, aggregateBattery } from './aggregate.js';

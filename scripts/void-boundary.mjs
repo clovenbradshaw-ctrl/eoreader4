@@ -13,8 +13,8 @@
 // decisive 35% snow) and a real shape from clean to faint (must hold SYN) — and let
 // the engine derive the boundary every time.
 
-import { ingestFrames } from '../src/ingest/video.js';
-import { ingestFrequencies } from '../src/ingest/frequency.js';
+import { ingestFrames } from '../src/organs/in/video.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { detectMotion, discoverEquivalences, coherentFigures, createNoiseFloor, extremeValueZ } from '../src/read/index.js';
 
 const rng = (s) => () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);

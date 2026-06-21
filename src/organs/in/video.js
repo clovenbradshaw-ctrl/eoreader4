@@ -20,9 +20,9 @@
 //     chase the snow (max surprisal, inert); it rides what persists. That is the
 //     circle, recovered by counting alone.
 
-import { createLog }         from '../core/log.js';
-import { projectGraph }      from '../core/index.js';
-import { createConventions } from '../core/conventions/index.js';
+import { createLog }         from '../../core/log.js';
+import { projectGraph }      from '../../core/index.js';
+import { createConventions } from '../../core/conventions/index.js';
 
 // 8-connected components of a set of "x,y" lit-pixel keys → blobs with centroid.
 const components = (on) => {

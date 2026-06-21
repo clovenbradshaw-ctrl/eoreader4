@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
-import { ingestFrames } from '../src/ingest/video.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
+import { ingestFrames } from '../src/organs/in/video.js';
 import { discoverEquivalences, detectMotion } from '../src/read/index.js';
 import { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from '../src/read/index.js';
 

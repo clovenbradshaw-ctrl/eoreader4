@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ingestMusic } from '../src/ingest/music.js';
+import { ingestMusic } from '../src/organs/in/music.js';
 import { predictiveSequenceReading, unitIdSequence, predictNextUnit } from '../src/read/index.js';
 
 // The learned-sequence reader predicts the next unit from the signal's OWN

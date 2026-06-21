@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ingestFrequencies } from '../src/ingest/frequency.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { discoverEquivalences, mutualNearestPairs } from '../src/read/index.js';
 
 // "The same note" must EMERGE from overtone overlap by rank alone — no threshold,

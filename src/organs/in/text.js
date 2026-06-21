@@ -2,9 +2,9 @@
 // embedding cache. Anything beyond plain text (PDF, audio, OCR) belongs
 // in an adapter that turns its modality into text; the spine stays the same.
 
-import { parseText }    from '../parse/index.js';
-import { projectGraph } from '../core/index.js';
-import { areDisjoint }  from '../read/relation-types.js';
+import { parseText }    from '../../parse/index.js';
+import { projectGraph } from '../../core/index.js';
+import { areDisjoint }  from '../../read/relation-types.js';
 
 export const ingestText = async (file, opts = {}) => {
   const text  = typeof file === 'string' ? file : await file.text();

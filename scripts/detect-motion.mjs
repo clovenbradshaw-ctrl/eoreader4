@@ -8,7 +8,7 @@
 // snow, every grain of which lives one frame. "The reading does not chase the
 // snow; it rides what persists" — here, literally.
 
-import { ingestFrames } from '../src/ingest/video.js';
+import { ingestFrames } from '../src/organs/in/video.js';
 import { motionReading, persistentFigures, coherentFigures } from '../src/read/index.js';
 
 // --- synthesise the clip (the only input): static + a moving circle. ---------

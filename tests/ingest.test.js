@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ingestImage } from '../src/ingest/image.js';
-import { ingestMusic } from '../src/ingest/music.js';
+import { ingestImage } from '../src/organs/in/image.js';
+import { ingestMusic } from '../src/organs/in/music.js';
 import { readingAt } from '../src/read/index.js';
 
 // The image adapter must yield the same doc contract text does, so the graph,

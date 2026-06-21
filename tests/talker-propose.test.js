@@ -9,7 +9,7 @@ import { buildGroundedMessages } from '../src/model/prompt.js';
 import '../src/model/echo.js';
 import { createModel } from '../src/model/interface.js';
 import { runTurn } from '../src/turn/pipeline.js';
-import { groundedSpeak, RULES_REV } from '../src/talker/index.js';
+import { groundedSpeak, RULES_REV } from '../src/organs/out/speech/index.js';
 
 const STORY =
   'Gregor Samsa woke transformed. His sister Grete brought a bowl of milk. ' +

@@ -13,8 +13,8 @@
 // must sit far in the tail. We report the separation, and the false-positive
 // rate on held-out noise, and we report where it degrades.
 
-import { ingestFrames } from '../src/ingest/video.js';
-import { ingestFrequencies } from '../src/ingest/frequency.js';
+import { ingestFrames } from '../src/organs/in/video.js';
+import { ingestFrequencies } from '../src/organs/in/frequency.js';
 import { coherentFigures, motionReading, discoverEquivalences } from '../src/read/index.js';
 import { retrieveLexical } from '../src/retrieve/index.js';
 

@@ -25,7 +25,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ingestText } from '../src/ingest/index.js';
+import { ingestText } from '../src/organs/in/index.js';
 import { readingAt, deriveNull } from '../src/read/index.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));

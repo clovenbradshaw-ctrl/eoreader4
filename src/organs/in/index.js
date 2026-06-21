@@ -1,9 +1,6 @@
-// The ingest holon: a source → a doc with the modality-neutral contract.
-//
-// A doc is { docId, modality, units, log, projectGraph, mentions, ... }. The
-// log carries the nine operators; everything downstream (retrieve, fold,
-// read, ground, the graph view) speaks that contract, not a modality. Adapters
-// turn a modality into it:
+// organs/in — the sense organs (reshape §3). A modality → a doc on the universal
+// contract. An organ INGESTS its modality; it does not understand it. Each adapter
+// turns a source into the modality-neutral spine the core reads:
 //
 //   ingestText(file)            text      → units = sentences
 //   ingestImage(detections)     image     → units = regions  (vision model injected)

@@ -12,10 +12,10 @@
 // "reading cursor": significance predicts the next object and is surprised by
 // one that the layout did not lead it to expect — L3 math, unchanged.
 
-import { createLog }        from '../core/log.js';
-import { projectGraph }     from '../core/index.js';
-import { createConventions }from '../core/conventions/index.js';
-import { tok }              from '../parse/index.js';
+import { createLog }        from '../../core/log.js';
+import { projectGraph }     from '../../core/index.js';
+import { createConventions }from '../../core/conventions/index.js';
+import { tok }              from '../../parse/index.js';
 
 const slug = (s) => String(s || 'thing').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 

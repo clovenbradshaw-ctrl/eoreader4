@@ -10,7 +10,7 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { ingestText } from '../src/ingest/index.js';
+import { ingestText } from '../src/organs/in/index.js';
 import { buildMoveLog, MOVE_ALPHABET, learnGrammar } from '../src/predict/index.js';
 
 const root = new URL('..', import.meta.url);
