@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/pipeline.js';
 import { retrieveLexical } from '../src/retrieve/lexical.js';
-import { retrieveHybrid, fuseConcordance, pickRetrievalEmbedder } from '../src/retrieve/hybrid.js';
+import { retrieveHybrid, fuseConcordance, pickRetrievalEmbedder, selectExcerpts } from '../src/retrieve/hybrid.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import { ingestText } from '../src/organs/in/text.js';
 
@@ -163,4 +163,28 @@ test('ingestText caches sentence embeddings PER ORGAN — the upgrade is not mas
   const vMean = await doc.sentenceEmbeddings(meaningEmbedder(true));  // second caller: must be freshly computed
   assert.equal(vHash[0].length, 64, 'hash organ → 64-dim hash space');
   assert.equal(vMean[0].length, 3,  'meaning organ → its own space, not the cached hash vectors');
+});
+
+// ── Trimming the verbatim shown to the talker ────────────────────────────────
+// The audit dumped ~10 spans into the prompt for a vague follow-up; the model wove
+// them all into a baggy answer. selectExcerpts keeps the relevant few — the fold has
+// already read every span into the notes, so nothing is lost from the impression.
+
+test('selectExcerpts keeps the relevant few and drops the weak / surfed tail', () => {
+  const spans = [
+    { idx: 1, score: 1.0,  text: 'a' },
+    { idx: 2, score: 0.9,  text: 'b' },
+    { idx: 3, score: 0.2,  text: 'c' },
+    { idx: 4, score: 0.05, text: 'd' },
+    { idx: 5, score: 0,    text: 'surfed', via: 'surf' },
+  ];
+  const kept = selectExcerpts(spans).map(s => s.idx);
+  assert.ok(kept.includes(1) && kept.includes(2), 'the strong spans are kept');
+  assert.ok(!kept.includes(4) && !kept.includes(5), 'the weak and significance-only (surfed) spans are dropped');
+  assert.ok(kept.length <= 5, 'respects the cap');
+});
+
+test('selectExcerpts always keeps at least the strongest span', () => {
+  assert.deepEqual(selectExcerpts([{ idx: 7, score: 0.03, text: 'weak' }]).map(s => s.idx), [7]);
+  assert.deepEqual(selectExcerpts([]), []);
 });

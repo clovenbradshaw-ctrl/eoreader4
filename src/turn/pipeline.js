@@ -153,7 +153,9 @@ const summarize = (name, ctx, ms) => {
     case 'route':    return { ...base, route: ctx.route, task: ctx.task, grounding: ctx.grounding };
     case 'converse': return { ...base, recent: ctx.convStats?.recent || 0,
                               folded: ctx.convStats?.folded || 0, notesLen: ctx.convStats?.notesLen || 0 };
-    case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0 };
+    case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0,
+                              // the conversation-resolved query, shown only when it differs from the raw question
+                              ...(ctx.retrievalQuery && ctx.retrievalQuery !== ctx.question ? { q: ctx.retrievalQuery } : {}) };
     case 'fold':     return { ...base, noteLen: ctx.note?.text?.length || 0,
                               referential: ctx.referential || null,
                               surf: ctx.surf ? {

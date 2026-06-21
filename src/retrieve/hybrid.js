@@ -40,6 +40,22 @@ export const pickRetrievalEmbedder = ({ embedder, geometricEmbedder } = {}) =>
     ? geometricEmbedder
     : embedder;
 
+// Trim the verbatim excerpts the talker is SHOWN to the relevant few. The fold has
+// already read EVERY span into the impression (the notes); the talker does not need
+// the long tail of weak or significance-only (surfed, score 0) spans pasted in
+// verbatim — that tail is the noise that makes a small model weave a baggy answer
+// touching all of it. Keep the top few by score, above a floor relative to the best;
+// always keep at least the strongest. Binding still runs over the FULL span set, so
+// trimming the display never costs a citation.
+export const selectExcerpts = (spans = [], { max = 5, ratio = 0.4, floor = 0.1 } = {}) => {
+  const ranked = [...spans].sort((a, b) => (b.score || 0) - (a.score || 0));
+  if (ranked.length <= 1) return ranked;
+  const top = ranked[0].score || 0;
+  const cut = Math.max(floor, top * ratio);
+  const kept = ranked.filter(s => (s.score || 0) >= cut).slice(0, max);
+  return kept.length ? kept : ranked.slice(0, 1);
+};
+
 export const retrieveHybrid = async (doc, query, embedder, k = 8) => {
   const lex = retrieveLexical(doc, query, k);
   const sem = await retrieveSemantic(doc, query, embedder, k);

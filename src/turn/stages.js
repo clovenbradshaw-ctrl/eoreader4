@@ -9,11 +9,11 @@
 // The user sees what the model actually said, with a flag pinned to it.
 
 import { answerSmalltalk, answerMath, answerVoid } from '../answer/index.js';
-import { retrieveHybrid, pickRetrievalEmbedder } from '../retrieve/index.js';
+import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts } from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
-import { foldConversation } from '../converse/index.js';
+import { foldConversation, resolveRetrievalQuery } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
@@ -89,16 +89,21 @@ export const stages = {
     // back to the hash organ. ctx.embedder (hash) is unchanged for every other stage —
     // only retrieval's semantic vectors are upgraded (turn/pipeline threads the organ).
     const re = pickRetrievalEmbedder(ctx);
-    const spans = await retrieveHybrid(ctx.doc, ctx.question, re, 6);
+    // Resolve a follow-up against the conversation: a thin or self-referential question
+    // ("now?", "answer my first question") retrieves on the topic the user is pursuing,
+    // not its literal words. A self-contained question passes through untouched. Only the
+    // user's prior turns feed this — never the talker's answers (converse/focus.js).
+    const query = resolveRetrievalQuery(ctx.question, ctx.history);
+    const spans = await retrieveHybrid(ctx.doc, query, re, 6);
     if (spans.length === 0) {
       // Strict grounded mode never falls through to free generation: it stays on the
       // grounded route and answers the absence ("the document doesn't cover this")
       // rather than inventing from outside knowledge.
-      if (ctx.grounding === 'grounded') return { ...ctx, spans: [] };
+      if (ctx.grounding === 'grounded') return { ...ctx, spans: [], retrievalQuery: query };
       // Auto / default: doc loaded but nothing matches — fall through to ungrounded chat.
-      return { ...ctx, spans: [], route: 'chat' };
+      return { ...ctx, spans: [], route: 'chat', retrievalQuery: query };
     }
-    return { ...ctx, spans };
+    return { ...ctx, spans, retrievalQuery: query };
   },
 
   // Fold the spans into a single note the model can read — the reading. With a doc
@@ -176,11 +181,12 @@ export const stages = {
   // and invents a place; discarding the computed fold here was the generation-side cause
   // of that hallucination (docs/prompt-assembly.md). So the note enters the window again.
   //
-  // The conversation HISTORY stays withheld (the P0.3 split): a document arrow is a reading
-  // of THIS page — pure grounding, no poisoning risk — but feeding back prior turns let a
-  // small model anchor on its own earlier answers, a wrong reply poisoning the follow-ups.
-  // So `conversation: {}` on the grounded path; only the document note rides. The fold is
-  // still recorded in the audit either way.
+  // The conversation carried into a grounded turn is the USER's side only — the thread of
+  // what was asked — never the talker's prior answers. That keeps follow-up continuity
+  // ("now?", "answer my first question") while withholding the one channel that poisons:
+  // a small model re-reading its own earlier (maybe wrong) reply and anchoring on it. The
+  // talker's output is a weaker witness (converse/provenance.js); on this path it is not
+  // carried at all. The document note (the fold's arrows) rides as before.
   async prompt(ctx) {
     // The register is the route the grounding chip selected upstream — not just
     // "did we get spans". A strict-grounded turn with no spans still builds a
@@ -189,12 +195,12 @@ export const stages = {
     const messages = grounded
       ? buildGroundedMessages({
           question:     ctx.question,
-          spans:        ctx.spans || [],
+          spans:        selectExcerpts(ctx.spans || []),  // the relevant few verbatim; the fold read all into the notes
           notes:        ctx.note?.text || '',    // the fold's arrows — the document's reading, fed back in
           orientation:  orientationOf(ctx.doc),
           task:         ctx.task,               // the summary guard rides on a summary task
           budget:       ctx.budget,             // none by default; a caller may impose one
-          conversation: {},                      // P0.3 retained: the history is the poisoning channel, still withheld
+          conversation: groundedConversation(ctx),  // the USER's thread only — never the talker's prior answers
           strict:       ctx.grounding === 'grounded',   // "only from the document" — refusal is the required fallback
         })
       : buildChatMessages({
@@ -311,7 +317,7 @@ export const stages = {
       const supersededVerdicts = (cur.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
       const messages = buildGroundedMessages({
         question:    ctx.question,
-        spans:       ctx.spans,
+        spans:       selectExcerpts(ctx.spans),   // same trimmed excerpts the first pass saw
         notes:       ctx.note?.text || '',   // the refine reads the same notes as the first pass
         orientation: orientationOf(ctx.doc),
         task:        ctx.task,
@@ -400,4 +406,19 @@ const orientationOf = (doc) => {
     type:     doc.modality === 'image' ? 'image' : 'text',
     length:   units.length,
   });
+};
+
+// The conversation the GROUNDED prompt carries: the user's OWN recent turns — the thread
+// of what was ASKED — and never the talker's prior answers. Recent user turns ride from
+// the session fold's verbatim window; older ones from its surfed `#i You:` movers. This
+// restores follow-up continuity without re-feeding the model the replies it anchors on
+// (the poisoning channel). Empty (→ no slot) when the user hasn't asked anything yet.
+const groundedConversation = (ctx) => {
+  const recentUser = (ctx.recentMessages || [])
+    .filter(m => m && m.role === 'user' && m.content).map(m => m.content);
+  const olderUser = String(ctx.conversation?.notes || '')
+    .split('\n').filter(l => /^#\d+\s*You:/.test(l)).map(l => l.replace(/^#\d+\s*You:\s*/, '').trim());
+  const thread = [...olderUser, ...recentUser].filter(Boolean);
+  if (!thread.length) return {};
+  return { notes: thread.map(q => `You asked: ${q}`).join('\n') };
 };
