@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Seam — eoPlayer · transpose a text into music</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ground:#101d1c; --panel:#152625; --panel-2:#1a2e2c; --panel-3:#0e1c1b;
+    --ink:#e9e3d4; --ink-dim:#9aa6a0; --ink-faint:#62716b; --rule:#243634;
+    --wake:#e0a23c;          /* surprise — the prediction-error / IC channel */
+    --strain:#d2706a;        /* tonal tension — the strain channel */
+    --rest:#6fb0a8;          /* the consonant baseline */
+    --lead:#7fd1c6;          /* the figure in focus (the leitmotif sounding) */
+    --entropy:#9b8cd0;       /* uncertainty — the entropy channel */
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --serif:"Newsreader",Georgia,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--ground); color:var(--ink); font-family:var(--serif);
+    line-height:1.5; -webkit-font-smoothing:antialiased;
+    padding:clamp(14px,2.6vw,36px); max-width:1240px; margin:0 auto;}
+  a{color:var(--rest)}
+  .label{font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-faint)}
+  .mono{font-family:var(--mono)}
+
+  header{display:flex; align-items:baseline; justify-content:space-between;
+    gap:16px; flex-wrap:wrap; border-bottom:1px solid var(--rule); padding-bottom:14px}
+  header h1{font-size:22px; font-weight:500; margin:0; letter-spacing:-.01em}
+  header h1::before{content:"◍ "; color:var(--rest)}
+  header h1 span{color:var(--ink-faint); font-style:italic}
+  .back{font-family:var(--mono); font-size:12px; color:var(--ink-faint); text-decoration:none}
+  .back:hover{color:var(--rest)}
+  .lede{color:var(--ink-dim); font-size:14.5px; margin:12px 0 0; max-width:74ch}
+  .lede em{color:var(--ink); font-style:italic}
+
+  .bar{display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin:12px 0 0;
+    padding:10px 12px; background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--rule); border-radius:4px}
+  .bar .label{margin-right:2px}
+  select,button,input[type=range]{font-family:var(--mono)}
+  select{background:var(--panel-3); color:var(--ink); border:1px solid var(--rule);
+    border-radius:4px; padding:5px 7px; font-size:12px; max-width:190px}
+  optgroup{color:var(--ink-faint)} option{color:var(--ink)}
+  button{background:var(--panel-3); color:var(--ink); border:1px solid var(--rule);
+    border-radius:4px; padding:6px 11px; font-size:12px; cursor:pointer; letter-spacing:.03em}
+  button:hover{border-color:var(--rest); color:var(--rest)}
+  button.primary{background:var(--rest); color:#08201d; border-color:var(--rest); font-weight:500}
+  button.primary:hover{background:var(--lead); border-color:var(--lead)}
+  button.play{min-width:96px}
+  button.on{border-color:var(--rest); color:var(--rest); background:#10302c}
+  button:disabled{opacity:.4; cursor:not-allowed}
+  .ctl{display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+  .ctl input[type=range]{width:84px; accent-color:var(--rest)}
+  .ctl b{color:var(--ink-dim); min-width:26px; text-align:right}
+  .sep{flex:1}
+  .now{font-family:var(--mono); font-size:11px; color:var(--ink-dim); white-space:nowrap}
+  .now b{color:var(--lead); font-weight:500}
+  .lyr{display:flex; align-items:center; gap:5px; font-family:var(--mono); font-size:10.5px; color:var(--ink-faint)}
+  .lyr .sw{width:9px;height:9px;border-radius:2px}
+  textarea{width:100%; min-height:108px; margin-top:8px; resize:vertical; background:var(--panel-3);
+    color:var(--ink); border:1px solid var(--rule); border-radius:4px; padding:10px 12px;
+    font-family:var(--serif); font-size:15px; line-height:1.5}
+  .hidden{display:none !important}
+  #sf-status{font-size:10.5px; color:var(--ink-faint)}
+
+  .stage{display:grid; grid-template-columns:1.12fr .88fr; gap:12px; margin-top:12px}
+  @media (max-width:880px){ .stage{grid-template-columns:1fr} }
+  .card{background:var(--panel); border:1px solid var(--rule); border-radius:4px; padding:13px 15px; min-height:0}
+  .card h2{margin:0 0 9px; font-family:var(--mono); font-size:11px; letter-spacing:.13em;
+    text-transform:uppercase; color:var(--ink-faint); font-weight:400; display:flex; gap:8px; align-items:baseline}
+  .card h2 .sub{color:var(--ink-faint); opacity:.7; text-transform:none; letter-spacing:0; font-size:11px}
+
+  #reader{max-height:42vh; overflow:auto; font-size:16px; line-height:1.7}
+  #reader .s{display:inline; cursor:pointer; border-radius:3px; padding:1px 2px;
+    transition:background .12s,color .12s; box-decoration-break:clone}
+  #reader .s:hover{background:#1c302e}
+  #reader .s.now{background:rgba(127,209,198,.16); color:#fff; box-shadow:inset 0 0 0 1px rgba(127,209,198,.35)}
+  #reader .s.surge{color:#f0c987}
+  #reader .s.surge.now{background:rgba(224,162,60,.20); box-shadow:inset 0 0 0 1px rgba(224,162,60,.45)}
+  #reader .seam{color:var(--strain); font-weight:500}
+  #reader .brk{display:block; height:0; margin:7px 0; border-top:1px dashed var(--rule)}
+  #reader .secmark{display:inline-block; color:var(--ink-faint); font-family:var(--mono);
+    font-size:10px; letter-spacing:.1em; border:1px solid var(--rule); border-radius:3px;
+    padding:0 5px; margin:0 6px 0 0; vertical-align:1px}
+
+  #cast{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px}
+  #cast li{display:grid; grid-template-columns:16px 1fr auto auto; align-items:center; gap:7px;
+    padding:3px 5px; border-radius:3px; transition:background .1s}
+  #cast li.lit{background:rgba(127,209,198,.15)}
+  #cast .swatch{width:10px; height:10px; border-radius:2px; justify-self:center}
+  #cast .who{font-family:var(--serif); font-size:13.5px}
+  #cast .who .role{font-family:var(--mono); font-size:9.5px; color:var(--ink-faint); letter-spacing:.03em; margin-left:5px}
+  #cast .motif{font-family:var(--mono); font-size:10px; color:var(--ink-faint)}
+  #cast .note{font-family:var(--mono); font-size:11.5px; color:var(--rest)}
+  #cast li.lit .note{color:var(--lead)}
+
+  canvas{display:block; width:100%; border-radius:3px; background:var(--panel-3); border:1px solid var(--rule)}
+  #form{height:26px; margin-bottom:6px}
+  #roll{height:176px; margin-bottom:6px}
+  #curve{height:74px}
+  .legend{font-family:var(--mono); font-size:10px; color:var(--ink-faint); display:flex; gap:13px; flex-wrap:wrap; margin-top:6px}
+  .legend i{display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:4px; vertical-align:-1px}
+
+  details{margin-top:16px; border-top:1px solid var(--rule); padding-top:12px}
+  summary{font-family:var(--mono); font-size:12px; color:var(--ink-faint); cursor:pointer; letter-spacing:.04em}
+  summary:hover{color:var(--rest)}
+  .how{color:var(--ink-dim); font-size:14px; max-width:80ch}
+  .how h3{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--rest); margin:15px 0 4px; font-weight:400}
+  .how code{font-family:var(--mono); font-size:12px; color:var(--ink); background:var(--panel-3); padding:1px 5px; border-radius:3px}
+  .how table{border-collapse:collapse; margin:8px 0; font-size:13px}
+  .how td{border:1px solid var(--rule); padding:4px 9px; vertical-align:top}
+  .how td:first-child{font-family:var(--mono); font-size:11px; color:var(--lead); white-space:nowrap}
+  .how p{margin:6px 0}
+  footer{margin-top:18px; padding-top:11px; border-top:1px solid var(--rule); font-family:var(--mono); font-size:11px; color:var(--ink-faint)}
+</style>
+</head>
+<body>
+  <header>
+    <h1>The Seam <span>· eoPlayer, an output organ</span></h1>
+    <a class="back" href="index.html">← back to the reader</a>
+  </header>
+  <p class="lede">
+    Transpose a <em>text</em> into <em>music</em> — not by describing music, but by
+    sounding the reading itself. The text is read onto the engine's event spine, and
+    the same three dynamics that drive reading drive the score: <em>prediction</em>
+    becomes melodic expectation, <em>strain</em> becomes tonal tension, and the
+    <em>seams</em> where belief ruptures become the cadences. The form is the
+    document's — discovered, not imposed. You only choose the instruments.
+  </p>
+
+  <!-- SOURCE -->
+  <div class="bar">
+    <span class="label">Source</span>
+    <select id="sample" title="A built-in book, or paste / load your own">
+      <option value="metamorphosis">The Metamorphosis — Kafka (condensed)</option>
+      <option value="esker">Esker — a quarrel in three parts</option>
+      <option value="paste">paste your own…</option>
+    </select>
+    <button id="load-file">load .txt…</button>
+    <input id="file" type="file" accept=".txt,.md,text/plain" class="hidden">
+    <button id="render" class="primary">▶ transpose</button>
+    <span class="sep"></span>
+    <span class="now" id="cast-count"></span>
+  </div>
+  <textarea id="paste" class="hidden" placeholder="Paste a book or any prose, then press “transpose”. More text, more people, more rupture → a richer piece."></textarea>
+
+  <!-- INSTRUMENTS -->
+  <div class="bar" id="instbar">
+    <span class="label">Sound</span>
+    <select id="preset" title="Instrument presets">
+      <option value="chamber">Chamber strings</option>
+      <option value="glass">Glass &amp; bells</option>
+      <option value="musicbox">Music box</option>
+      <option value="reich">Documentary (mallets)</option>
+      <option value="organ">Organ</option>
+      <option value="synth">Synth</option>
+    </select>
+    <span class="sep"></span>
+    <button id="hq" title="Load high-quality sampled instruments (General MIDI). Falls back to synthesis offline.">◇ HQ samples: off</button>
+    <span id="sf-status"></span>
+  </div>
+  <div class="bar" id="layerbar">
+    <span class="lyr"><span class="sw" style="background:var(--lead)"></span>lead<select id="i-melody"></select><button class="on" data-l="melody">on</button></span>
+    <span class="lyr"><span class="sw" style="background:var(--rest);opacity:.6"></span>harmony<select id="i-harmony"></select><button class="on" data-l="harmony">on</button></span>
+    <span class="lyr"><span class="sw" style="background:#3c6f68"></span>bass<select id="i-bass"></select><button class="on" data-l="bass">on</button></span>
+    <span class="lyr"><span class="sw" style="background:var(--entropy)"></span>field<select id="i-texture"></select><button class="on" data-l="texture">on</button></span>
+    <span class="lyr"><span class="sw" style="background:var(--wake)"></span>pulse<select id="i-pulse"></select><button data-l="pulse">off</button></span>
+  </div>
+
+  <!-- TRANSPORT -->
+  <div class="bar" id="transport" style="opacity:.45; pointer-events:none">
+    <button id="play" class="play" disabled>▶ play</button>
+    <button id="stop" disabled>⏹</button>
+    <span class="ctl">tempo <input id="tempo" type="range" min="50" max="170" value="100"><b id="tempo-v">100</b></span>
+    <span class="ctl">vol <input id="vol" type="range" min="0" max="100" value="82"></span>
+    <span class="ctl">key
+      <select id="key"><option>C</option><option selected>D</option><option>E</option><option>F</option><option>G</option><option>A</option><option>B</option></select>
+    </span>
+    <span class="ctl">mode
+      <select id="mode"><option value="auto" selected>auto</option><option value="minor">minor</option><option value="major">major</option></select>
+    </span>
+    <span class="sep"></span>
+    <button id="export" disabled>⤓ score.json</button>
+    <span class="now" id="readout"></span>
+  </div>
+
+  <!-- MAPPING -->
+  <details id="mapping-d">
+    <summary>mapping — which reading channel drives which musical aspect (auto by default)</summary>
+    <div class="bar" style="margin-top:10px">
+      <span class="ctl">dynamics ←
+        <select id="m-dyn"><option value="surprise" selected>surprise (IC)</option><option value="strain">strain</option><option value="entropy">entropy</option></select>
+      </span>
+      <button id="m-tension" class="on" title="strain → tonal tension (chords move off the tonic, resolve at cadences)">tension: on</button>
+      <button id="m-cadence" class="on" title="seams → cadences & form">cadence/form: on</button>
+      <button id="m-tempo" class="on" title="strain + seams → rubato (slows into ruptures)">tempo arc: on</button>
+      <button id="m-bright" class="on" title="entropy → timbral brightness & harmonic openness">brightness: on</button>
+      <span class="ctl">motif
+        <select id="m-motif"><option value="cipher" selected>name cipher (DNA)</option><option value="degree">scale degree</option></select>
+      </span>
+    </div>
+    <div class="bar">
+      <span class="ctl">rubato <input id="s-rubato" type="range" min="0" max="100" value="55"></span>
+      <span class="ctl">tension <input id="s-tension" type="range" min="0" max="100" value="60"></span>
+      <span class="ctl">ornament <input id="s-orn" type="range" min="0" max="100" value="50"></span>
+      <span class="ctl">beat <input id="s-beat" type="range" min="0" max="100" value="45"></span>
+      <span class="ctl">reverb <input id="s-verb" type="range" min="0" max="100" value="32"></span>
+    </div>
+  </details>
+
+  <!-- STAGE -->
+  <div class="stage">
+    <section class="card">
+      <h2>The book <span class="sub" id="book-title"></span></h2>
+      <div id="reader"><p style="color:var(--ink-faint)">Press <b>transpose</b> to read a book onto the spine and hear it.</p></div>
+    </section>
+    <section class="card">
+      <h2>The cast <span class="sub">figures → leitmotifs, by γ-mass</span></h2>
+      <ul id="cast"></ul>
+      <h2 style="margin-top:14px">The form <span class="sub" id="form-sub">discovered from the seams</span></h2>
+      <canvas id="form"></canvas>
+      <canvas id="roll"></canvas>
+      <canvas id="curve"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--wake)"></i>surprise (prediction error / IC)</span>
+        <span><i style="background:var(--strain)"></i>strain (tonal tension)</span>
+        <span><i style="background:var(--entropy)"></i>entropy (uncertainty)</span>
+      </div>
+    </section>
+  </div>
+
+  <details>
+    <summary>how a text becomes music — one loop, no theory imposed</summary>
+    <div class="how">
+      <p>This is a self-contained <em>output organ</em>. Where
+      <code>organs/in/music.js</code> reads a melody and the reader <em>recovers</em> a
+      tonic from γ-mass, The Seam reverses the arrow: it reads a text onto the same
+      spine and renders the reading. The mapping is mostly automatic, because the
+      engine's three dynamics already <em>are</em> the three pillars of music
+      cognition.</p>
+
+      <h3>the one loop — prediction → strain → seam → holon</h3>
+      <p>Prediction projects an expectation (Meyer · Narmour · Huron · IDyOM). The gap
+      between expectation and event is <b>surprise</b> — information content, the
+      reader's own <code>−log p</code> / <code>D_KL</code> channel. That surprise is
+      felt as <b>tension</b>, which also grows with distance from the tonic
+      (Lerdahl's Tonal Pitch Space · Larson's musical forces). When tension
+      accumulates and discharges, that is a <b>seam</b>; where surprise spikes, a
+      boundary forms (Pearce &amp; Wiggins). The nested spectrum of those boundaries is
+      the <b>emergent form</b> (GTTM grouping · Lerdahl's tension tree). Reading runs
+      this loop over a text; music runs it over tones. Same loop, two streams.</p>
+
+      <h3>the operator algebra, sounded</h3>
+      <table>
+        <tr><td>INS — a figure appears</td><td>a <b>leitmotif</b> stated; first appearance is the full motif, later appearances are fragments, varied by all that has happened since (the γ-decayed integral name)</td></tr>
+        <tr><td>CON — two figures relate</td><td><b>counterpoint</b> between two stated themes — and never before both are stated (the arity gate is literally true)</td></tr>
+        <tr><td>γ-mass rank</td><td><b>pitch</b>: the heaviest figure is the tonic, the second the dominant — the very thing the reader extracts from a melody, run backwards</td></tr>
+        <tr><td>surprise (IC)</td><td><b>dynamics</b> &amp; accent, and the cue for a boundary</td></tr>
+        <tr><td>strain</td><td><b>tonal tension</b>: chords move off the tonic and the suspension is held open</td></tr>
+        <tr><td>seam / REC</td><td><b>cadence</b>; magnitude sets its strength — section, phrase, or motivic articulation</td></tr>
+        <tr><td>entropy</td><td><b>brightness</b> &amp; harmonic openness — uncertainty as timbral colour</td></tr>
+        <tr><td>void / unresolved figure</td><td>a <b>held dissonance</b> that colours the section until it resolves</td></tr>
+        <tr><td>affect / valence</td><td><b>mode · key · tempo</b> — the colour, the only thing read from feeling rather than structure</td></tr>
+      </table>
+      <p>So affect sets the palette and structure sets the building — the same
+      content-vs-shape split the reader runs (completing what TransProse began).
+      Leitmotif is the historical proof a referent's accumulated identity can live in
+      sound; sonata form is the proof the dependency order already governs music. The
+      structure is the book's; the player only measures it and lets you hear it.</p>
+      <p>Sound is General-MIDI samples when <b>HQ</b> is on (loaded on demand), and a
+      built-in Web-Audio synthesis engine otherwise — so it always runs, offline.</p>
+    </div>
+  </details>
+
+  <footer>
+    A standalone organ — the reader app <em>links</em> here, it does not embed this. ·
+    No build step; Web Audio; runs offline (HQ samples need the network once). ·
+    See <a href="docs/omnimodal-core.md">docs/omnimodal-core.md</a>.
+  </footer>
+
+<script>
+"use strict";
+/* ====================================================================
+   The Seam — eoPlayer. Text → music as an output organ.
+
+   A self-contained port of the engine's reading math (γ-mass fold, the
+   surprise/strain/entropy channels, seam detection) wired to a Web-Audio
+   instrument engine. It does NOT import from src/ — it is reachable from
+   the main app by a link, not coded into it. The mechanics it mirrors live
+   in src/perceiver/reading.js and src/organs/in/music.js.
+   ==================================================================== */
+
+/* ── built-in books (inlined so it runs from file://) ───────────────── */
+const BOOKS = {
+  metamorphosis: { title:"The Metamorphosis (condensed)", text:
+`Gregor Samsa woke one morning from uneasy dreams to find himself transformed in his bed into a monstrous vermin.
+He lay on his armour-hard back and saw his many thin legs waving helplessly before his eyes.
+Gregor was a travelling salesman, and the case of samples still stood beside his bed.
+A picture hung on the wall above the table where Gregor had sat to read.
+The alarm clock showed that Gregor had already overslept the early train.
+His mother knocked gently on the locked door and called his name in a worried voice.
+The chief clerk arrived at the flat to ask why Gregor had missed the train.
+Gregor tried to answer, but only a strange twittering noise came from behind the door.
+When the door finally opened the chief clerk fled down the stairs in horror.
+His father drove Gregor back into the room with a heavy walking stick.
+Gregor crawled across the floor and hid beneath the couch where the darkness comforted him.
+His sister Grete brought a bowl of milk, the drink Gregor had loved before the change.
+Grete set the food down quietly and watched the bowl from the doorway.
+Gregor turned away from the fresh milk, for the old tastes disgusted him now.
+The next morning Grete brought scraps and rotten vegetables, and these he ate eagerly.
+Grete alone dared to enter the room, and she fed Gregor every day.
+Gregor's sister cleaned the floor and learned which leftovers her brother preferred.
+Grete opened the window each morning so that Gregor could breathe the cool air.
+She decided to remove the furniture so that her brother could crawl freely over the walls.
+The mother protested, fearing that clearing the room would abandon hope of Gregor's recovery.
+Grete and the mother carried the heavy chest of drawers out of the room together.
+Gregor clung to the picture on the wall to save one possession from being taken.
+His mother saw Gregor on the wall and fainted in terror at the sight.
+The father returned and hurled apples at Gregor, and one apple lodged in his back.
+The wound festered for weeks, and Gregor could no longer move as he once had.
+The family took in three lodgers to make money, and the flat grew crowded and tense.
+One evening Grete played the violin for the lodgers in the living room.
+Gregor crept out to hear the music, drawn by the only beauty left to him.
+A lodger spotted the vermin in the doorway and angrily gave notice to leave.
+The father apologised to the lodgers while the mother wept into her hands.
+Grete turned to her parents and said the creature must go before it ruined them all.
+She declared that the family could not keep torturing themselves by calling the thing Gregor.
+The sister insisted they had tried everything humanly possible to bear their burden.
+Grete said they must get rid of it, for keeping it would destroy the whole family.
+The father agreed that the lodger, the wound, and the burden had broken their patience at last.
+Gregor retreated to his room for the final time, weak and resigned to their wish.
+He thought of his family with tenderness even as his breath grew shallow.
+Gregor died quietly before dawn, and the charwoman found his dry husk in the morning.
+The family felt a great relief and took a tram into the country to plan a new life.
+Grete had grown into a healthy young woman, and her parents thought of finding her a husband.` },
+  esker: { title:"Esker", text:
+`I.
+The house at Esker stood above the river, its grey stone darkened by a century of rain.
+Old Mathilde had kept the house for forty years, and her two children had grown beneath its steep roofs.
+Felix was the elder, restless and proud, and Liesl was his sister, gentle and watchful.
+Liesl loved Felix dearly, and as children the two of them were inseparable in the orchard below the house.
+Tomas was the neighbour's son, a quiet boy who worked the land that bordered Esker.
+In the early years Felix and Tomas fished the river together as friends.
+II.
+Mathilde died in the spring, and the house fell silent for a season.
+The will left Esker to Felix, and to Liesl only their mother's garden and a small annuity.
+Felix had expected the whole estate, and the division gnawed at him through the long winter.
+He spoke little at supper, and his silences grew heavier as the months passed.
+The river rose and fell with the rains, and the orchard greened and faded again.
+Felix began to blame Tomas for the falling yields, though Tomas had only ever helped the family.
+He taunted Tomas at the market, calling him a hired hand who reached above his station.
+Liesl begged Felix to let the matter rest, but he would not hear her.
+The grandfather's gold watch, the one treasure the will had not named, went missing from the hall.
+The household whispered that Felix had taken the watch, though no one had seen him do so.
+Felix denied it coldly and turned the blame again upon Tomas.
+He mocked Tomas before the servants, and twice he drove the boy from the door.
+Liesl watched her brother harden into a man she no longer recognised.
+At the harvest supper Felix accused Tomas of the theft before all the guests.
+Felix turned upon Liesl and named her a traitor for defending the hired boy.
+Liesl rose from the table and renounced Felix before the whole house.
+She swore she would never again call Felix her brother, and she left Esker that same night.
+Felix sat alone in the cold hall, the empty watch-stand before him.
+Tomas left the valley before the first snow and never came back.
+III.
+Winter closed over Esker, and the grey stone darkened once more with rain.
+The orchard stood bare, and the river ran black beneath the ice.
+Liesl took a room in the town and let the long years pass without a word.
+Felix kept the house, but not the family that had once filled it.
+Felix and Liesl never reconciled, and the watch was never found.` },
+};
+
+/* ── lexicons (the only priors; the rest is the signal) ─────────────── */
+const STOP = new Set(("the a an and or but if of to in on at by for with from into out up down over under as is was were are be been being am do did does had has have he she it they them him her his hers its their theirs you your we our us i me my mine this that these those who whom which what when where why how not no nor so than too very can could would should will shall may might must one two three only ever never again still yet once before after while because though although about above below beneath beside between there here then new old whole each every all both came come went go gone get got make made take took turn turned said say says saw see seen look looked grew grow grown kept keep let upon among").split(/\s+/));
+const POS = new Set("love loved loving beauty beautiful healthy relief hope hopeful gentle tender tenderness dear dearly friend friends together warm warmth comfort comforted cool calm peace plan new life joy bright light".split(" "));
+const NEG = new Set("uneasy monstrous vermin terror horror helplessly worried disgust disgusted rotten festered wound weak wept ruined destroy destroyed torturing burden broken broke died die death dry husk blame blamed taunted mocked theft traitor renounced cold coldly silent silence black ice bare missing gnawed harden hardened fear fearing fainted hurled angry angrily quarrel empty alone snow grey dark darkened".split(" "));
+
+const NOTE_NAMES=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const KEY_OFFSET={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+const PENT={ minor:[0,3,5,7,10], major:[0,2,4,7,9] };           // melody — always consonant
+const DIA ={ minor:[0,2,3,5,7,8,10], major:[0,2,4,5,7,9,11] };  // harmony — functional
+const DEG_ORDER={ minor:[0,7,3,10,5], major:[0,7,4,9,2] };       // salience order: tonic, dominant, mediant…
+const ROLE=['tonic','dominant','mediant','colour','colour'];
+const FUNC={ minor:[0,8,5,7], major:[0,9,5,7] };                 // i/I, vi/VI, iv/IV, V  (chord roots by tension)
+const GAMMA=0.7, NOVELTY=1.0, MAX_CAST=14, MAX_UNITS=380, RETURN_GAP=6;
+const clamp=(v,lo,hi)=>v<lo?lo:v>hi?hi:v;
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+const midiName=m=>NOTE_NAMES[((m%12)+12)%12]+(Math.floor(m/12)-1);
+const avg=a=>a.reduce((s,x)=>s+x,0)/(a.length||1);
+const std=a=>{const m=avg(a);return Math.sqrt(avg(a.map(x=>(x-m)*(x-m))));};
+
+/* ====================================================================
+   1 · INGEST — text onto the spine
+   ==================================================================== */
+const wordsOf=raw=>raw.match(/[A-Za-z][A-Za-z'’-]*/g)||[];
+const isBreak=raw=>/^[IVXLCDM0-9]+\s*[.)]?$/i.test(raw)||raw.replace(/[^A-Za-z]/g,'').length<2;
+function splitUnits(text){
+  const out=[];
+  for(const para of text.split(/\n\s*\n/)){
+    const line=para.replace(/\s+/g,' ').trim(); if(!line) continue;
+    for(const p of (line.match(/[^.!?]+[.!?]+|[^.!?]+$/g)||[line])){ const r=p.trim(); if(r) out.push(r); }
+  }
+  return out.slice(0,MAX_UNITS);
+}
+function ingest(text){
+  const raw=splitUnits(text), capMid=new Map(), capAny=new Map(), freq=new Map(), toks=[];
+  raw.forEach(r=>{ const ws=wordsOf(r); toks.push(ws.map(w=>w.toLowerCase()));
+    ws.forEach((w,i)=>{ const lc=w.toLowerCase(); freq.set(lc,(freq.get(lc)||0)+1);
+      if(/^[A-Z][a-z'’-]+$/.test(w)){ capAny.set(lc,(capAny.get(lc)||0)+1); if(i>0) capMid.set(lc,(capMid.get(lc)||0)+1); } }); });
+  const names=new Set();
+  for(const [lc,n] of capMid) if(n>=1&&!STOP.has(lc)) names.add(lc);
+  for(const [lc,n] of capAny) if(n>=2&&!STOP.has(lc)) names.add(lc);
+  const S=raw.length, dft=Math.max(2,Math.ceil(S*0.05)), figs=new Map();
+  const add=(lc,label)=>{ if(!figs.has(lc)) figs.set(lc,{id:lc,label,count:0}); };
+  for(const lc of names) add(lc, lc.charAt(0).toUpperCase()+lc.slice(1));
+  for(const [lc,n] of freq) if(n>=dft&&!STOP.has(lc)&&lc.length>2&&!names.has(lc)) add(lc,lc);
+  const units=raw.map((r,i)=>{ const brk=isBreak(r), t=brk?[]:toks[i], present=new Set();
+    for(const w of t) if(figs.has(w)) present.add(w);
+    for(const id of present) figs.get(id).count++;
+    return { raw:r, idx:i, brk, nTok:t.length, present }; });
+  let cast=[...figs.values()].filter(f=>f.count>0).sort((a,b)=>b.count-a.count).slice(0,MAX_CAST);
+  const keep=new Set(cast.map(f=>f.id));
+  units.forEach(u=>{ u.present=new Set([...u.present].filter(id=>keep.has(id))); });
+  return { units, cast };
+}
+
+/* ====================================================================
+   2 · FOLD — γ-mass prior, surprise (IC), entropy (uncertainty)
+   a compact port of src/perceiver/reading.js
+   ==================================================================== */
+function fold(units){
+  const firstSeen=new Map(), seenAt=new Map();
+  units.forEach(u=>{ for(const id of u.present){ if(!firstSeen.has(id)) firstSeen.set(id,u.idx);
+    (seenAt.get(id)||seenAt.set(id,[]).get(id)).push(u.idx); } });
+  const prevBefore=(id,at)=>{ const a=seenAt.get(id)||[]; let r=null; for(const x of a){ if(x<at) r=x; else break; } return r; };
+  const readings=[]; let m=new Map();
+  units.forEach(u=>{
+    const total=[...m.values()].reduce((s,x)=>s+x,0), Z=total+NOVELTY, pNovel=NOVELTY/Z;
+    const pOf=id=>(m.get(id)||0)/Z, present=[...u.present];
+    const entering=present.filter(id=>firstSeen.get(id)===u.idx);
+    let bits=0,n=0;
+    for(const id of present){ const isNew=firstSeen.get(id)===u.idx;
+      const p=isNew?Math.max(pNovel/Math.max(1,entering.length),1e-6):Math.max(pOf(id),pNovel*0.5,1e-6);
+      bits+=-Math.log2(p); n++; }
+    const surprise=n?1-Math.pow(2,-(bits/n)):0;
+    let H=0; for(const v of m.values()){ const p=v/Z; if(p>0) H+=-p*Math.log2(p); }
+    const entropy=clamp(H/Math.log2(Math.max(2,m.size+1)),0,1);
+    const ranked=[...m.entries()].sort((a,b)=>b[1]-a[1]).map(([id])=>id);
+    const inFocus=ranked.find(id=>u.present.has(id))||null;
+    const focusShift=ranked.length>0&&!u.present.has(ranked[0])&&present.length>0;
+    readings.push({ idx:u.idx, surprise, entropy, present, entering, inFocus, focusShift, massBefore:new Map(m) });
+    for(const [k,v] of m) m.set(k,v*GAMMA);
+    for(const id of u.present) m.set(id,(m.get(id)||0)+1);
+  });
+  return { readings, firstSeen, prevBefore, finalMass:m };
+}
+
+/* ── seams → emergent form (boundaries where surprise spikes) ───────── */
+function detectSeams(units, readings){
+  const sup=readings.map(r=>r.surprise), mean=avg(sup), sd=std(sup), seam=new Array(units.length).fill(0);
+  const cand=[];
+  for(let i=1;i<units.length;i++){
+    if(units[i].brk){ cand.push({i, mag:1}); continue; }                       // section heading = hard seam
+    const a=sup[i-1]||0, b=sup[i], c=sup[i+1]||0;
+    if(b>=a && b>=c && b>mean+0.15*sd && b>0.18) cand.push({i, mag:b});
+  }
+  if(!cand.length) return { seam, sections:[{start:0,end:units.length,level:3}] };
+  const mags=cand.map(c=>c.mag).sort((x,y)=>x-y);
+  const q=p=>mags[Math.min(mags.length-1,Math.floor(p*mags.length))];
+  const hi=q(0.8), mid=q(0.5);
+  for(const c of cand){ seam[c.i]= units[c.i].brk||c.mag>=hi?3 : c.mag>=mid?2 : 1; }
+  // sections = spans between level-3 seams
+  const sections=[]; let start=0;
+  for(let i=1;i<units.length;i++) if(seam[i]>=3){ sections.push({start,end:i,level:3}); start=i; }
+  sections.push({start,end:units.length,level:3});
+  return { seam, sections };
+}
+
+/* ── strain (tonal tension): accumulates, discharges at seams ───────── */
+function strainOf(readings, seam, amt){
+  const out=new Array(readings.length).fill(0); let t=0;
+  readings.forEach((r,i)=>{
+    t = t*0.82 + r.surprise*0.6*amt + (r.focusShift?0.12*amt:0);
+    out[i]=clamp(t,0,1);
+    if(seam[i]>=3) t*=0.12; else if(seam[i]===2) t*=0.4; else if(seam[i]===1) t*=0.65;  // the cadence resolves it
+  });
+  return out;
+}
+
+/* ====================================================================
+   3 · COMPOSE — render the reading as a layered score
+   ==================================================================== */
+function cipher(name, len){                       // strand 1 — a name's letters as DNA
+  const ls=name.toLowerCase().replace(/[^a-z]/g,''); const degs=[], seen=new Set();
+  for(const ch of ls){ const d=(ch.charCodeAt(0)-97)%len; if(!seen.has(d)){ seen.add(d); degs.push(d); } if(degs.length>=4) break; }
+  while(degs.length<3) degs.push((degs[degs.length-1]+2)%len);
+  return degs.map(d=>d-degs[0]);                   // offsets in scale steps from the figure's root
+}
+
+function compose(text, o){
+  const { keyName='D', modeChoice='auto', motifSrc='cipher',
+          tensionOn=true, cadenceOn=true, brightOn=true, tensionAmt=0.6, ornAmt=0.5, beatAmt=0.45 } = o;
+  const { units, cast } = ingest(text);
+  const { readings, firstSeen, prevBefore } = fold(units);
+  const { seam, sections } = cadenceOn ? detectSeams(units, readings) : { seam:new Array(units.length).fill(0), sections:[{start:0,end:units.length,level:3}] };
+  const mode = modeChoice==='auto' ? valence(units) : modeChoice;
+  const strain = tensionOn ? strainOf(readings, seam, tensionAmt) : new Array(units.length).fill(0);
+  const tonic = 60 + (KEY_OFFSET[keyName] ?? 2);
+  const pent=PENT[mode], dia=DIA[mode], order=DEG_ORDER[mode];
+
+  // figures → stable pitch + leitmotif
+  const SHIFT=[0,12,-12,24,-24], pitchOf=new Map(), roleOf=new Map(), motifOf=new Map();
+  cast.forEach((f,r)=>{
+    const deg=order[r%order.length], sh=SHIFT[Math.min(Math.floor(r/order.length),4)]||0;
+    pitchOf.set(f.id, tonic+deg+sh);
+    roleOf.set(f.id, ROLE[r%ROLE.length]+(r>=order.length?'·8va':''));
+    motifOf.set(f.id, motifSrc==='cipher' ? cipher(f.label, pent.length) : [0,1,2].slice(0, 2+(r%2)));
+  });
+
+  // a melodic ladder (pentatonic) for snapping + ornament runs
+  const ladder=[]; for(let oct=-1;oct<=2;oct++) for(const d of pent){ const mm=tonic+d+12*oct; if(mm>=40&&mm<=88) ladder.push(mm); }
+  ladder.sort((a,b)=>a-b);
+  const nearIdx=mm=>{ let bi=0; for(let i=1;i<ladder.length;i++) if(Math.abs(ladder[i]-mm)<Math.abs(ladder[bi]-mm)) bi=i; return bi; };
+  const snap=mm=>ladder[nearIdx(mm)];
+
+  // per-line lead figure (the surprise-carrier when one enters/returns, else the in-focus figure)
+  const leadOf=(u,rd)=>{ if(u.brk||!rd) return null;
+    const ev=rd.present.filter(id=> firstSeen.get(id)===u.idx || (u.idx-(prevBefore(id,u.idx)??-99))>=RETURN_GAP);
+    if(ev.length) return ev.reduce((lo,id)=> (rd.massBefore.get(id)||0)<(rd.massBefore.get(lo)||0)?id:lo, ev[0]);
+    return rd.inFocus; };
+  const leads=units.map((u,i)=>leadOf(u,readings[i]));
+
+  // dynamic tempo (rubato): slower into tension and big cadences
+  const dyn=ch=>readings.map(r=>r? r[ch] : 0);
+
+  const notes=[], spans=[]; let beat=0;
+  const unitSpb=[], unitStartBeat=[];                         // for time mapping later
+  for(let i=0;i<units.length;i++){
+    const u=units[i], rd=readings[i], start=beat;
+    unitStartBeat[i]=start;
+    if(u.brk){ notes.push({u:i,startBeat:beat,dur:1.5,midi:tonic-24,vel:0.14,layer:'bass'});
+      beat+=1.5; unitSpb[i]=1; spans.push({start,end:beat,brk:true,seam:seam[i],surprise:0,strain:0,entropy:0,lead:null,section:sectionOf(sections,i)}); continue; }
+    const surprise=rd?rd.surprise:0, entropy=rd?rd.entropy:0, ten=strain[i], surge=surprise>=0.45||seam[i]>=2;
+    const B=clamp(Math.round(u.nTok/7),1,4), lead=leads[i];
+
+    // HARMONY — functional triad from tension; resolves to the tonic at a cadence
+    const bucket = seam[i]>=2 ? 0 : (ten<0.25?0 : ten<0.5?1 : ten<0.75?2 : 3);
+    let rootDeg = FUNC[mode][bucket];
+    if(lead!=null && bucket===0 && seam[i]<2) rootDeg = ((pitchOf.get(lead)-tonic)%12+12)%12; // colour the tonic by who's on stage
+    const rootIdx = nearestDeg(dia, rootDeg);
+    const tri=[ dia[rootIdx%7], dia[(rootIdx+2)%7], dia[(rootIdx+4)%7] ].map(d=>tonic+d);
+    if(mode==='minor'&&bucket===3) tri[1]+=1;                 // raised leading tone → authentic cadence
+    if(brightOn&&entropy>0.62) tri.push(tonic+dia[(rootIdx+6)%7]);   // open 7th when belief is spread
+    if(ten>0.7&&seam[i]<2) tri[1]=tonic+dia[(rootIdx+3)%7];   // sus — tension held open (EVA)
+    const voiced=[...new Set(tri.map(mm=>{ while(mm<50)mm+=12; while(mm>67)mm-=12; return mm; }))];
+    for(const mm of voiced) notes.push({u:i,startBeat:beat,dur:B,midi:mm,vel:0.16+0.06*ten,layer:'harmony'});
+
+    // BASS — chord root; the tonic at a cadence
+    const bassRoot = (seam[i]>=2? tonic : tonic+dia[rootIdx%7]);
+    notes.push({u:i,startBeat:beat,dur:B,midi:36+(((bassRoot-36)%12)+12)%12,vel:0.30,layer:'bass'});
+
+    // MELODY — the lead figure's leitmotif (stated on entrance, fragment on return)
+    if(lead!=null){
+      const base=pitchOf.get(lead), entering=firstSeen.get(lead)===i, gap=i-(prevBefore(lead,i)??-99);
+      let mm=base+((entering||gap>=RETURN_GAP)?12:0); while(mm<55)mm+=12; while(mm>83)mm-=12;
+      const root=nearIdx(snap(mm)), motif=motifOf.get(lead);
+      const vel=clamp(0.34+0.5*(o.dynChannel==='strain'?ten:o.dynChannel==='entropy'?entropy:surprise)+(entering?0.12:0),0.24,0.97);
+      const cells = entering ? motif : motif.slice(0, Math.max(2, motif.length-1));
+      const invert = surprise>0.55;                            // transform the motif under surprise
+      cells.forEach((off,k)=>{
+        const idx=clamp(root+(invert?-off:off),0,ladder.length-1), t=beat+k*0.5;
+        if(t<beat+B) notes.push({u:i,startBeat:t,dur:k===0?Math.min(1,B):0.5,midi:ladder[idx],vel:vel*(k?0.8:1),layer:'melody'});
+      });
+      // ORNAMENT run toward the next lead, scaled by sentence length × the ornament knob
+      const next=leads.slice(i+1).find(x=>x!=null), tIdx=next!=null?nearIdx(snap(pitchOf.get(next))):root;
+      let idx=clamp(root+(cells.length-1<0?0:(invert?-motif[cells.length-1]:motif[cells.length-1])),0,ladder.length-1);
+      const orn=clamp(Math.round(u.nTok/7*ornAmt*1.5)-1,0,Math.max(0,2*B-cells.length));
+      for(let k=0;k<orn;k++){ const t=beat+0.5*(cells.length+k); if(t>=beat+B) break;
+        idx+= idx<tIdx?1:idx>tIdx?-1:(k%2?1:-1); idx=clamp(idx,0,ladder.length-1);
+        notes.push({u:i,startBeat:t,dur:0.5,midi:ladder[idx],vel:clamp(vel*0.5,0.14,0.55),layer:'melody'}); }
+      // COUNTERPOINT — a second stated figure relating to the first (CON), arity-gated
+      const other=rd.present.filter(id=>id!==lead && firstSeen.get(id)<i)
+        .sort((a,b)=>(rd.massBefore.get(b)||0)-(rd.massBefore.get(a)||0))[0];
+      if(other && B>=2){ let cm=pitchOf.get(other); while(cm<52)cm+=12; while(cm>79)cm-=12;
+        notes.push({u:i,startBeat:beat+0.5,dur:Math.min(1,B-0.5),midi:snap(cm),vel:vel*0.55,layer:'melody'}); }
+    } else {
+      notes.push({u:i,startBeat:beat,dur:B,midi:tonic,vel:0.22,layer:'melody'});  // narrator breath
+    }
+
+    // PULSE — a beat whose density rides arousal (surprise + tension)
+    if(beatAmt>0){ const arousal=clamp(0.5*surprise+0.5*ten,0,1), sub=1+Math.round(arousal*3);
+      for(let b=0;b<B;b++) for(let s=0;s<sub;s++){ const t=beat+b+s/sub;
+        const down=(b===0&&s===0), acc=down||surge;
+        notes.push({u:i,startBeat:t,dur:0.2,drum:down?'down':(s===0?'beat':'sub'),vel:(acc?0.7:0.4)*beatAmt+0.1,layer:'pulse'}); } }
+
+    beat+=B; unitSpb[i]=1;
+    spans.push({start,end:beat,brk:false,seam:seam[i],surprise,strain:ten,entropy,surge,lead,section:sectionOf(sections,i)});
+  }
+
+  // TEXTURE — the surfer's field as a drone, one per section (tonic + fifth)
+  sections.forEach(sec=>{ const sB=unitStartBeat[sec.start]??0, eB=(sec.end<units.length?unitStartBeat[sec.end]:beat);
+    if(eB-sB<1) return;
+    notes.push({u:sec.start,startBeat:sB,dur:eB-sB,midi:tonic-12,vel:0.12,layer:'texture'});
+    notes.push({u:sec.start,startBeat:sB,dur:eB-sB,midi:tonic-12+7,vel:0.09,layer:'texture'}); });
+
+  notes.sort((a,b)=> a.startBeat-b.startBeat || (a.layer==='texture'?-1:1));
+  return { units, cast, readings, seam, sections, strain, mode, tonic, keyName,
+           pitchOf, roleOf, motifOf, notes, spans, totalBeats:beat, unitStartBeat };
+}
+function valence(units){ let p=0,n=0; for(const u of units) for(const t of wordsOf(u.raw).map(w=>w.toLowerCase())){ if(POS.has(t))p++; if(NEG.has(t))n++; } return (p-n)>=0?'major':'minor'; }
+function nearestDeg(dia,semi){ let bi=0; for(let i=1;i<dia.length;i++) if(Math.abs(dia[i]-semi)<Math.abs(dia[bi]-semi)) bi=i; return bi; }
+function sectionOf(secs,i){ for(let k=0;k<secs.length;k++) if(i>=secs[k].start&&i<secs[k].end) return k; return secs.length-1; }
+
+/* ====================================================================
+   4 · INSTRUMENTS — a Web-Audio synth engine (+ optional GM samples)
+   ==================================================================== */
+const INSTRUMENTS=[
+  {id:'piano',label:'Grand Piano',fam:'Keys',gm:'0000'},
+  {id:'epiano',label:'Electric Piano',fam:'Keys',gm:'0040'},
+  {id:'celesta',label:'Celesta',fam:'Keys',gm:'0080'},
+  {id:'organ',label:'Church Organ',fam:'Keys',gm:'0190'},
+  {id:'nylon',label:'Nylon Guitar',fam:'Plucked',gm:'0240'},
+  {id:'steel',label:'Steel Guitar',fam:'Plucked',gm:'0250'},
+  {id:'harp',label:'Harp',fam:'Plucked',gm:'0460'},
+  {id:'pizz',label:'Pizzicato Strings',fam:'Plucked',gm:'0450'},
+  {id:'koto',label:'Koto',fam:'Plucked',gm:'1070'},
+  {id:'strings',label:'String Ensemble',fam:'Strings',gm:'0480'},
+  {id:'violin',label:'Violin',fam:'Strings',gm:'0400'},
+  {id:'cello',label:'Cello',fam:'Strings',gm:'0420'},
+  {id:'brass',label:'Brass Section',fam:'Winds',gm:'0610'},
+  {id:'flute',label:'Flute',fam:'Winds',gm:'0730'},
+  {id:'clarinet',label:'Clarinet',fam:'Winds',gm:'0710'},
+  {id:'oboe',label:'Oboe',fam:'Winds',gm:'0680'},
+  {id:'choir',label:'Choir Aah',fam:'Voice',gm:'0520'},
+  {id:'vibes',label:'Vibraphone',fam:'Mallets',gm:'0110'},
+  {id:'marimba',label:'Marimba',fam:'Mallets',gm:'0120'},
+  {id:'glock',label:'Glockenspiel',fam:'Mallets',gm:'0090'},
+  {id:'musicbox',label:'Music Box',fam:'Mallets',gm:'0100'},
+  {id:'bells',label:'Tubular Bells',fam:'Mallets',gm:'0140'},
+  {id:'kalimba',label:'Kalimba',fam:'Mallets',gm:'1080'},
+  {id:'warmpad',label:'Warm Pad',fam:'Pads',gm:'0890'},
+  {id:'glasspad',label:'Glass Pad',fam:'Pads',gm:'0980'},
+  {id:'newage',label:'New Age Pad',fam:'Pads',gm:'0880'},
+  {id:'air',label:'Air / Drone',fam:'Pads',gm:'0950'},
+  {id:'synthlead',label:'Synth Lead',fam:'Synth',gm:'0810'},
+  {id:'contrabass',label:'Contrabass',fam:'Bass',gm:'0430'},
+  {id:'acbass',label:'Acoustic Bass',fam:'Bass',gm:'0320'},
+];
+const INSTR=Object.fromEntries(INSTRUMENTS.map(x=>[x.id,x]));
+
+// synth specs (tech: sub | fm | ks). Parameters chosen by ear, kept terse.
+const S=(o)=>o;
+const SYNTHS={
+  piano:S({tech:'sub',gain:.55,partials:[{r:1,g:.6,t:'triangle'},{r:2,g:.22,t:'sine'},{r:3,g:.1,t:'sine'}],filt:{type:'lowpass',base:4200,env:1.1,a:.005},amp:{a:.004,d:1.0,s:.05,r:.5}}),
+  epiano:S({tech:'fm',gain:.5,ratio:1,index:2.2,iDecay:.28,iSus:.08,amp:{a:.005,d:.5,s:.28,r:.4},trem:5}),
+  celesta:S({tech:'fm',gain:.45,ratio:2.0,index:1.1,iDecay:.4,iSus:0,amp:{a:.002,d:.6,s:.02,r:.4}}),
+  organ:S({tech:'sub',gain:.4,partials:[{r:1,g:.4,t:'sine'},{r:2,g:.3,t:'sine'},{r:3,g:.2,t:'sine'},{r:4,g:.12,t:'sine'}],amp:{a:.02,d:.05,s:.85,r:.12},vib:{rate:5.5,depth:3}}),
+  nylon:S({tech:'ks',gain:.8,damp:.55,bright:.45}),
+  steel:S({tech:'ks',gain:.8,damp:.4,bright:.7}),
+  harp:S({tech:'ks',gain:.75,damp:.35,bright:.6}),
+  pizz:S({tech:'ks',gain:.8,damp:.7,bright:.4}),
+  koto:S({tech:'ks',gain:.8,damp:.5,bright:.75}),
+  strings:S({tech:'sub',gain:.4,partials:[{r:1,g:.5,t:'sawtooth',det:-7},{r:1,g:.5,t:'sawtooth',det:7},{r:2,g:.1,t:'sawtooth'}],filt:{type:'lowpass',base:2600,env:1.0,a:.18},amp:{a:.18,d:.2,s:.82,r:.6},vib:{rate:5,depth:5}}),
+  violin:S({tech:'sub',gain:.4,partials:[{r:1,g:.5,t:'sawtooth',det:-4},{r:1,g:.45,t:'sawtooth',det:4},{r:2,g:.14,t:'sawtooth'}],filt:{type:'lowpass',base:3500,env:1.1,a:.08},amp:{a:.08,d:.15,s:.85,r:.4},vib:{rate:6,depth:7}}),
+  cello:S({tech:'sub',gain:.45,partials:[{r:1,g:.55,t:'sawtooth',det:-3},{r:1,g:.45,t:'sawtooth',det:3},{r:2,g:.1,t:'triangle'}],filt:{type:'lowpass',base:1700,env:1.2,a:.1},amp:{a:.1,d:.2,s:.82,r:.5},vib:{rate:5,depth:6}}),
+  brass:S({tech:'sub',gain:.42,partials:[{r:1,g:.5,t:'sawtooth',det:-4},{r:1,g:.5,t:'sawtooth',det:4}],filt:{type:'lowpass',base:700,env:5,a:.05,q:1},amp:{a:.04,d:.2,s:.8,r:.3},vib:{rate:5,depth:4}}),
+  flute:S({tech:'sub',gain:.45,partials:[{r:1,g:.5,t:'sine'},{r:2,g:.06,t:'sine'}],filt:{type:'lowpass',base:3000,env:1,a:.06},amp:{a:.06,d:.1,s:.85,r:.3},vib:{rate:5,depth:6},noise:{f:2200,q:1,g:.22}}),
+  clarinet:S({tech:'sub',gain:.45,partials:[{r:1,g:.5,t:'sine'},{r:3,g:.2,t:'sine'},{r:5,g:.09,t:'sine'}],filt:{type:'lowpass',base:1800,env:1,a:.04},amp:{a:.03,d:.1,s:.88,r:.3},vib:{rate:4.5,depth:3}}),
+  oboe:S({tech:'sub',gain:.4,partials:[{r:1,g:.4,t:'sawtooth'},{r:2,g:.22,t:'sawtooth'}],filt:{type:'bandpass',base:1500,env:1,a:.03,q:4},amp:{a:.03,d:.1,s:.86,r:.3},vib:{rate:5.5,depth:5}}),
+  choir:S({tech:'sub',gain:.4,partials:[{r:1,g:.45,t:'sawtooth',det:-8},{r:1,g:.45,t:'sawtooth',det:8},{r:2,g:.1,t:'sawtooth'}],filt:{type:'bandpass',base:950,env:1,a:.25,q:3},amp:{a:.25,d:.2,s:.85,r:.7},vib:{rate:4.2,depth:7},noise:{f:1200,q:.8,g:.1}}),
+  vibes:S({tech:'fm',gain:.5,ratio:4,index:1.5,iDecay:.8,iSus:.05,amp:{a:.005,d:1.0,s:.2,r:.9},trem:5}),
+  marimba:S({tech:'fm',gain:.55,ratio:4,index:2,iDecay:.1,iSus:0,amp:{a:.004,d:.35,s:0,r:.2}}),
+  glock:S({tech:'fm',gain:.45,ratio:3,index:3,iDecay:.5,iSus:0,amp:{a:.002,d:.7,s:0,r:.5}}),
+  musicbox:S({tech:'fm',gain:.45,ratio:2,index:1.6,iDecay:.3,iSus:0,amp:{a:.002,d:.55,s:0,r:.4}}),
+  bells:S({tech:'fm',gain:.45,ratio:1.5,index:5,iDecay:3,iSus:.02,amp:{a:.004,d:2.6,s:.02,r:1.6}}),
+  kalimba:S({tech:'fm',gain:.5,ratio:3,index:1.2,iDecay:.15,iSus:0,amp:{a:.003,d:.4,s:0,r:.25}}),
+  warmpad:S({tech:'sub',gain:.34,partials:[{r:1,g:.3,t:'sawtooth',det:-8},{r:1,g:.3,t:'sawtooth',det:8},{r:1.005,g:.2,t:'sawtooth'},{r:2,g:.08,t:'sine'}],filt:{type:'lowpass',base:1300,env:1.3,a:.5},amp:{a:.5,d:.3,s:.85,r:1.4},vib:{rate:3,depth:4}}),
+  glasspad:S({tech:'sub',gain:.32,partials:[{r:1,g:.3,t:'sine',det:-6},{r:1,g:.3,t:'sine',det:6},{r:2.41,g:.12,t:'sine'},{r:3.86,g:.07,t:'sine'}],filt:{type:'lowpass',base:2600,env:1,a:.6},amp:{a:.6,d:.4,s:.8,r:1.6},vib:{rate:3.5,depth:5}}),
+  newage:S({tech:'sub',gain:.34,partials:[{r:1,g:.32,t:'sawtooth',det:-6},{r:1,g:.32,t:'sawtooth',det:6},{r:2,g:.12,t:'sine'},{r:4,g:.05,t:'sine'}],filt:{type:'lowpass',base:1800,env:1.2,a:.5},amp:{a:.45,d:.3,s:.85,r:1.3}}),
+  air:S({tech:'sub',gain:.3,partials:[{r:1,g:.35,t:'sine',det:-5},{r:1,g:.35,t:'sine',det:5},{r:1.5,g:.08,t:'sine'}],filt:{type:'lowpass',base:800,env:1,a:1.2},amp:{a:1.3,d:.6,s:.82,r:2.2},vib:{rate:2,depth:6},noise:{f:1500,q:.6,g:.06}}),
+  synthlead:S({tech:'sub',gain:.42,partials:[{r:1,g:.5,t:'sawtooth'},{r:1,g:.4,t:'sawtooth',det:9},{r:2,g:.15,t:'sawtooth'}],filt:{type:'lowpass',base:1200,env:3.5,a:.02,q:7},amp:{a:.02,d:.2,s:.7,r:.3},vib:{rate:5.5,depth:9}}),
+  contrabass:S({tech:'sub',gain:.5,partials:[{r:1,g:.6,t:'sine'},{r:2,g:.18,t:'triangle'},{r:3,g:.06,t:'sine'}],filt:{type:'lowpass',base:700,env:1,a:.04},amp:{a:.04,d:.2,s:.72,r:.35}}),
+  acbass:S({tech:'ks',gain:.85,damp:.65,bright:.3}),
+};
+
+let ctx=null, master=null, comp=null, conv=null, wet=null, _noise=null;
+function audio(){
+  if(ctx) return ctx;
+  ctx=new (window.AudioContext||window.webkitAudioContext)();
+  master=ctx.createGain(); master.gain.value=0.82;
+  comp=ctx.createDynamicsCompressor(); comp.threshold.value=-16; comp.ratio.value=3;
+  master.connect(comp); comp.connect(ctx.destination);
+  try{ conv=ctx.createConvolver(); const len=ctx.sampleRate*2.2, b=ctx.createBuffer(2,len,ctx.sampleRate);
+    for(let c=0;c<2;c++){ const d=b.getChannelData(c); for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.6); }
+    conv.buffer=b; wet=ctx.createGain(); wet.gain.value=0.32; master.connect(conv); conv.connect(wet); wet.connect(ctx.destination);
+  }catch(e){}
+  return ctx;
+}
+function noiseBuf(){ if(_noise) return _noise; const n=ctx.sampleRate*1; _noise=ctx.createBuffer(1,n,ctx.sampleRate);
+  const d=_noise.getChannelData(0); for(let i=0;i<n;i++) d[i]=Math.random()*2-1; return _noise; }
+function env(param,when,peak,a,dur){ peak=Math.max(.0001,peak); const sus=Math.max(.0001,peak*(a.s??.6));
+  const t1=when+(a.a??.01), t2=t1+(a.d??.1), end=Math.max(t2+.001,when+dur);
+  param.setValueAtTime(.0001,when); param.exponentialRampToValueAtTime(peak,t1);
+  param.exponentialRampToValueAtTime(sus,t2); param.setValueAtTime(sus,end);
+  param.exponentialRampToValueAtTime(.0001,end+(a.r??.3)); }
+
+function voice(id, midi, when, dur, vel){
+  const sp=SYNTHS[id]||SYNTHS.piano, freq=mtof(midi), out=master;
+  const stop=when+dur+1.2;
+  if(sp.tech==='ks'){
+    const delay=ctx.createDelay(1); delay.delayTime.value=Math.min(0.99,1/freq);
+    const fb=ctx.createGain(); fb.gain.setValueAtTime(0.99-0.12*sp.damp,when);
+    const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500+8500*sp.bright;
+    delay.connect(lp); lp.connect(fb); fb.connect(delay);
+    const ex=ctx.createBufferSource(); ex.buffer=noiseBuf();
+    const eg=ctx.createGain(); eg.gain.setValueAtTime(vel*sp.gain,when); eg.gain.exponentialRampToValueAtTime(.001,when+.02);
+    ex.connect(eg); eg.connect(delay);
+    const o=ctx.createGain(); o.gain.value=.9; delay.connect(o); o.connect(out);
+    fb.gain.setValueAtTime(fb.gain.value,when+dur*0.55); fb.gain.linearRampToValueAtTime(0,when+dur+0.35);
+    ex.start(when); ex.stop(when+.05);
+  } else if(sp.tech==='fm'){
+    const car=ctx.createOscillator(); car.type='sine'; car.frequency.value=freq;
+    const mod=ctx.createOscillator(); mod.type='sine'; mod.frequency.value=freq*(sp.ratio||1);
+    const mg=ctx.createGain(); const idx=(sp.index||3)*freq;
+    mg.gain.setValueAtTime(idx,when); mg.gain.exponentialRampToValueAtTime(Math.max(1,idx*(sp.iSus??.1)),when+(sp.iDecay||.4));
+    mod.connect(mg); mg.connect(car.frequency);
+    const amp=ctx.createGain(); car.connect(amp); amp.connect(out);
+    env(amp.gain,when,vel*(sp.gain||.5),sp.amp||{a:.005,d:.4,s:.1,r:.4},dur);
+    if(sp.trem){ const l=ctx.createOscillator(); l.frequency.value=sp.trem; const lg=ctx.createGain(); lg.gain.value=vel*.12;
+      l.connect(lg); lg.connect(amp.gain); l.start(when); l.stop(stop); }
+    mod.start(when); car.start(when); mod.stop(stop); car.stop(stop);
+  } else {
+    const amp=ctx.createGain(); let head=amp;
+    if(sp.filt){ const f=ctx.createBiquadFilter(); f.type=sp.filt.type||'lowpass'; f.Q.value=sp.filt.q||0.7;
+      const base=sp.filt.base||1500; f.frequency.setValueAtTime(Math.max(120,base),when);
+      if(sp.filt.env){ f.frequency.linearRampToValueAtTime(base*sp.filt.env,when+(sp.filt.a||.05));
+        f.frequency.exponentialRampToValueAtTime(Math.max(180,base*0.6),when+dur+.1); }
+      amp.connect(f); f.connect(out); } else amp.connect(out);
+    const oscs=[];
+    for(const p of (sp.partials||[{r:1,g:1,t:'sawtooth'}])){ const o=ctx.createOscillator(); o.type=p.t||'sawtooth';
+      o.frequency.value=freq*p.r; if(p.det) o.detune.value=p.det; const g=ctx.createGain(); g.gain.value=p.g;
+      o.connect(g); g.connect(amp); o.start(when); o.stop(stop); oscs.push(o); }
+    if(sp.vib){ const l=ctx.createOscillator(); l.frequency.value=sp.vib.rate||5; const lg=ctx.createGain(); lg.gain.value=sp.vib.depth||4;
+      l.connect(lg); oscs.forEach(o=>lg.connect(o.detune)); l.start(when); l.stop(stop); }
+    if(sp.noise){ const nb=ctx.createBufferSource(); nb.buffer=noiseBuf(); nb.loop=true;
+      const nf=ctx.createBiquadFilter(); nf.type='bandpass'; nf.frequency.value=sp.noise.f||2000; nf.Q.value=sp.noise.q||1;
+      const ng=ctx.createGain(); nb.connect(nf); nf.connect(ng); ng.connect(amp);
+      env(ng.gain,when,vel*(sp.noise.g||.2),sp.amp||{a:.05,d:.1,s:.6,r:.3},dur); nb.start(when); nb.stop(stop); }
+    env(amp.gain,when,vel*(sp.gain||.5),sp.amp||{a:.02,d:.1,s:.7,r:.3},dur);
+  }
+}
+
+function perc(kind, drum, when, vel){
+  const out=master;
+  const tone=(f0,f1,t,type='sine',g=1)=>{ const o=ctx.createOscillator(); o.type=type; o.frequency.setValueAtTime(f0,when);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),when+t); const a=ctx.createGain();
+    a.gain.setValueAtTime(vel*g,when); a.gain.exponentialRampToValueAtTime(.001,when+t); o.connect(a); a.connect(out); o.start(when); o.stop(when+t+.02); };
+  const noise=(f,q,t,type='highpass',g=.6)=>{ const n=ctx.createBufferSource(); n.buffer=noiseBuf();
+    const bf=ctx.createBiquadFilter(); bf.type=type; bf.frequency.value=f; bf.Q.value=q; const a=ctx.createGain();
+    a.gain.setValueAtTime(vel*g,when); a.gain.exponentialRampToValueAtTime(.001,when+t); n.connect(bf); bf.connect(a); a.connect(out); n.start(when); n.stop(when+t+.02); };
+  switch(kind){
+    case 'kick': tone(130,45,.13,'sine',1); noise(3000,1,.02,'lowpass',.3); break;
+    case 'frame': tone(96,52,.2,'sine',.9); noise(1200,1,.06,'lowpass',.3); break;
+    case 'woodblock': tone(900,820,.05,'square',.5); noise(1100,6,.03,'bandpass',.5); break;
+    case 'rim': noise(1700,3,.04,'bandpass',.7); break;
+    case 'shaker': noise(7000,1,drum==='down'?.06:.04,'highpass',.5); break;
+    case 'hat': noise(9000,1,drum==='sub'?.02:.035,'highpass',.5); break;
+    case 'clave': tone(2500,2400,.04,'sine',.6); break;
+    default: noise(6000,1,.03,'highpass',.4);
+  }
+}
+
+/* ── optional HQ sampled instruments (WebAudioFont / FluidR3 GM) ─────── */
+const SF_BASE='https://surikov.github.io/webaudiofontdata/sound/';
+let waf=null; const sfCache={}; let hqOn=false;
+const layerPreset={melody:null,harmony:null,bass:null,texture:null};   // pulse stays synth
+function loadScript(src){ return new Promise((ok,no)=>{ const s=document.createElement('script'); s.src=src; s.async=true;
+  s.onload=ok; s.onerror=()=>no(new Error(src)); document.head.appendChild(s); }); }
+async function ensureWAF(){ if(waf) return waf; await loadScript('https://surikov.github.io/webaudiofont/npm/dist/WebAudioFontPlayer.js'); waf=new WebAudioFontPlayer(); return waf; }
+async function loadGM(gm){ const file=gm+'_FluidR3_GM_sf2_file', v='_tone_'+file;
+  if(sfCache[v]) return sfCache[v]; await ensureWAF(); if(!window[v]) await loadScript(SF_BASE+file+'.js');
+  if(!window[v]) throw new Error('no '+v); waf.loader.decodeAfterLoading(ctx,v); sfCache[v]=window[v]; return window[v]; }
+function playSampled(preset,midi,when,dur,vel){ waf.queueWaveTable(ctx,master,preset,when,midi,dur,vel*0.6); }
+
+async function refreshHQ(){
+  if(!hqOn) return;
+  els.sfStatus.textContent='loading instruments…'; audio();
+  let ok=0, fail=0;
+  for(const layer of ['melody','harmony','bass','texture']){
+    const inst=INSTR[layerInstr[layer]]; layerPreset[layer]=null;
+    if(!inst||!inst.gm){ fail++; continue; }
+    try{ layerPreset[layer]=await loadGM(inst.gm); ok++; }catch(e){ fail++; }
+  }
+  els.sfStatus.textContent = ok? `samples: ${ok} layers HQ${fail?` · ${fail} on synth`:''}` : 'samples unavailable — using synth';
+  if(!ok){ hqOn=false; els.hq.classList.remove('on'); els.hq.textContent='◇ HQ samples: off'; }
+}
+
+/* ====================================================================
+   5 · TRANSPORT + UI
+   ==================================================================== */
+const $=s=>document.querySelector(s);
+const els={ sample:$('#sample'), paste:$('#paste'), loadFile:$('#load-file'), file:$('#file'), render:$('#render'),
+  castCount:$('#cast-count'), preset:$('#preset'), hq:$('#hq'), sfStatus:$('#sf-status'),
+  transport:$('#transport'), play:$('#play'), stop:$('#stop'), tempo:$('#tempo'), tempoV:$('#tempo-v'),
+  vol:$('#vol'), key:$('#key'), mode:$('#mode'), exportBtn:$('#export'), readout:$('#readout'),
+  reader:$('#reader'), cast:$('#cast'), form:$('#form'), roll:$('#roll'), curve:$('#curve'), bookTitle:$('#book-title'),
+  mDyn:$('#m-dyn'), mTension:$('#m-tension'), mCadence:$('#m-cadence'), mTempo:$('#m-tempo'), mBright:$('#m-bright'), mMotif:$('#m-motif'),
+  sRubato:$('#s-rubato'), sTension:$('#s-tension'), sOrn:$('#s-orn'), sBeat:$('#s-beat'), sVerb:$('#s-verb') };
+
+const PRESETS={
+  chamber:{melody:'violin',harmony:'strings',bass:'cello',texture:'air',pulse:'frame'},
+  glass:{melody:'glock',harmony:'glasspad',bass:'acbass',texture:'air',pulse:'shaker'},
+  musicbox:{melody:'musicbox',harmony:'harp',bass:'pizz',texture:'air',pulse:'woodblock'},
+  reich:{melody:'vibes',harmony:'piano',bass:'contrabass',texture:'air',pulse:'woodblock'},
+  organ:{melody:'organ',harmony:'organ',bass:'organ',texture:'air',pulse:'frame'},
+  synth:{melody:'synthlead',harmony:'newage',bass:'acbass',texture:'air',pulse:'hat'},
+};
+const PERC_OPTS=['frame','kick','woodblock','rim','shaker','hat','clave'];
+let layerInstr={...PRESETS.chamber};
+let layerOn={melody:true,harmony:true,bass:true,texture:true,pulse:false};
+
+let score=null, playing=false, t0=0, baseSpb=60/100, tempoScale=1, cursor=0, timer=null, raf=null, pausedT=0;
+const LOOK=0.32, TICK=25;
+
+/* build instrument dropdowns */
+function fillInstrSelect(sel, val){ const fams={}; INSTRUMENTS.forEach(x=>{ (fams[x.fam]=fams[x.fam]||[]).push(x); });
+  sel.innerHTML=''; for(const fam of Object.keys(fams)){ const og=document.createElement('optgroup'); og.label=fam;
+    for(const x of fams[fam]){ const o=document.createElement('option'); o.value=x.id; o.textContent=x.label; og.appendChild(o); } sel.appendChild(og); }
+  sel.value=val; }
+function fillPerc(sel,val){ sel.innerHTML=''; for(const p of PERC_OPTS){ const o=document.createElement('option'); o.value=p; o.textContent=p; sel.appendChild(o); } sel.value=val; }
+['melody','harmony','bass','texture'].forEach(l=>fillInstrSelect($('#i-'+l), layerInstr[l]));
+fillPerc($('#i-pulse'), layerInstr.pulse);
+
+function opts(){ return { keyName:els.key.value, modeChoice:els.mode.value, motifSrc:els.mMotif.value,
+  dynChannel:els.mDyn.value, tensionOn:els.mTension.classList.contains('on'), cadenceOn:els.mCadence.classList.contains('on'),
+  brightOn:els.mBright.classList.contains('on'), tensionAmt:+els.sTension.value/100*1.1,
+  ornAmt:+els.sOrn.value/100, beatAmt: layerOn.pulse? +els.sBeat.value/100 : 0 }; }
+
+function currentText(){ const v=els.sample.value; return v==='paste'? els.paste.value.trim() : (BOOKS[v]?.text||''); }
+
+function render(){
+  const text=currentText(); if(!text){ els.paste.classList.remove('hidden'); els.paste.focus(); return; }
+  stop();
+  score=compose(text, opts());
+  baseSpb=60/Number(els.tempo.value);
+  buildTimeMap();
+  drawReader(); drawCast(); drawForm(0);
+  els.castCount.textContent=`${score.cast.length} figures · ${score.units.length} lines · ${score.sections.length} sections · ${score.mode}`;
+  els.bookTitle.textContent= els.sample.value==='paste'?'your text':(BOOKS[els.sample.value]?.title||'');
+  els.transport.style.opacity=1; els.transport.style.pointerEvents='auto';
+  els.play.disabled=false; els.stop.disabled=false; els.exportBtn.disabled=false;
+  cursor=0; pausedT=0; paintPlayhead(0); els.readout.textContent='ready — press play (or space)';
+}
+
+/* time map: per-unit spb (rubato), absolute seconds per note */
+let unitTime=[], unitSpbArr=[];
+function buildTimeMap(){
+  const rubato=+els.sRubato.value/100, arc=els.mTempo.classList.contains('on');
+  unitSpbArr=score.spans.map((sp)=>{ let spb=baseSpb*tempoScale;
+    if(arc){ spb*=1+rubato*(0.28*sp.strain); if(sp.seam>=3) spb*=1+0.5*rubato; else if(sp.seam===2) spb*=1+0.22*rubato; }
+    return spb; });
+  unitTime=new Array(score.units.length+1); let t=0;
+  for(let i=0;i<score.units.length;i++){ unitTime[i]=t; const dur=(score.spans[i].end-score.spans[i].start); t+=dur*unitSpbArr[i]; }
+  unitTime[score.units.length]=t;
+}
+function noteTime(n){ const i=n.u; return unitTime[i] + (n.startBeat-score.unitStartBeat[i])*unitSpbArr[i]; }
+function noteDur(n){ return n.dur*unitSpbArr[n.u]; }
+function totalTime(){ return unitTime[score.units.length]||0; }
+
+function drawReader(){
+  els.reader.innerHTML='';
+  score.units.forEach((u,i)=>{
+    if(u.brk){ const wrap=document.createElement('span'); const hr=document.createElement('span'); hr.className='brk'; els.reader.appendChild(hr);
+      const mk=document.createElement('span'); mk.className='secmark'; mk.textContent='§ '+u.raw.replace(/[^A-Za-z0-9]/g,''); mk.dataset.i=i; els.reader.appendChild(mk); return; }
+    const s=document.createElement('span'); const sp=score.spans[i];
+    s.className='s'+(sp.surge?' surge':'')+(sp.seam>=2?' seam':''); s.dataset.i=i; s.textContent=u.raw+' ';
+    s.title=`line ${i} · surprise ${(sp.surprise*100|0)}% · tension ${(sp.strain*100|0)}%`+(sp.seam?` · seam L${sp.seam}`:'');
+    s.onclick=()=>seekUnit(i); els.reader.appendChild(s);
+  });
+}
+function drawCast(){
+  els.cast.innerHTML=''; const maxC=Math.max(1,...score.cast.map(f=>f.count));
+  score.cast.forEach((f,r)=>{ const li=document.createElement('li'); li.dataset.id=f.id; const hue=168+r*12;
+    const motif=score.motifOf.get(f.id).map(d=>d>=0?'+'+d:''+d).join(' ');
+    li.innerHTML=`<span class="swatch" style="background:hsl(${hue} 45% ${56-r*1.3}%)"></span>`+
+      `<span class="who">${f.label}<span class="role">${score.roleOf.get(f.id)}</span></span>`+
+      `<span class="motif" title="leitmotif (scale steps)">${motif}</span>`+
+      `<span class="note">${midiName(score.pitchOf.get(f.id))}</span>`;
+    els.cast.appendChild(li); });
+}
+
+/* scheduler (time-based) */
+function schedule(){ const now=ctx.currentTime, until=now+LOOK;
+  while(cursor<score.notes.length){ const n=score.notes[cursor], when=t0+noteTime(n);
+    if(when>=until) break;
+    if(layerOn[n.layer]){ const w=Math.max(when,now), dur=noteDur(n);
+      if(n.layer==='pulse') perc(layerInstr.pulse, n.drum, w, n.vel);
+      else if(hqOn && layerPreset[n.layer]) playSampled(layerPreset[n.layer], n.midi, w, dur, n.vel);
+      else voice(layerInstr[n.layer], n.midi, w, dur, n.vel); }
+    cursor++; }
+  if(cursor>=score.notes.length && now>t0+totalTime()+0.6) stop();
+}
+function loop(){ if(!playing) return; paintPlayhead(elapsed()); raf=requestAnimationFrame(loop); }
+const elapsed=()=> playing? (ctx.currentTime-t0) : pausedT;
+
+function play(){ if(!score) return; audio(); if(ctx.state==='suspended') ctx.resume(); if(playing) return;
+  if(hqOn && wet) wet.gain.value=+els.sVerb.value/100;
+  playing=true; els.play.textContent='⏸ pause'; t0=ctx.currentTime+0.08-pausedT;
+  cursor=score.notes.findIndex(n=>noteTime(n)>=pausedT); if(cursor<0) cursor=score.notes.length;
+  timer=setInterval(schedule,TICK); schedule(); raf=requestAnimationFrame(loop); }
+function pause(){ if(!playing) return; pausedT=ctx.currentTime-t0; playing=false; els.play.textContent='▶ play';
+  clearInterval(timer); cancelAnimationFrame(raf); }
+function stop(){ playing=false; if(els.play){ els.play.textContent='▶ play'; } clearInterval(timer); cancelAnimationFrame(raf);
+  pausedT=0; cursor=0; if(score) paintPlayhead(0);
+  document.querySelectorAll('#reader .s.now').forEach(e=>e.classList.remove('now'));
+  document.querySelectorAll('#cast li.lit').forEach(e=>e.classList.remove('lit')); }
+function seekUnit(i){ if(!score) return; pausedT=unitTime[i];
+  if(playing){ t0=ctx.currentTime+0.04-pausedT; cursor=score.notes.findIndex(n=>noteTime(n)>=pausedT); if(cursor<0) cursor=score.notes.length; }
+  else paintPlayhead(pausedT); }
+
+/* painting */
+let lastUnit=-1;
+function unitAtTime(sec){ for(let i=0;i<score.units.length;i++) if(sec>=unitTime[i] && sec<unitTime[i+1]) return i; return sec<=0?0:score.units.length-1; }
+function paintPlayhead(sec){
+  const i=unitAtTime(sec);
+  if(i!==lastUnit){
+    document.querySelectorAll('#reader .s.now').forEach(e=>e.classList.remove('now'));
+    const sp=els.reader.querySelector(`.s[data-i="${i}"]`); if(sp){ sp.classList.add('now'); sp.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+    document.querySelectorAll('#cast li.lit').forEach(e=>e.classList.remove('lit'));
+    const lead=score.spans[i].lead; if(lead){ const li=els.cast.querySelector(`li[data-id="${CSS.escape(lead)}"]`); if(li) li.classList.add('lit'); }
+    const s=score.spans[i];
+    if(!s.brk){ const nm=lead? `${score.cast.find(f=>f.id===lead)?.label} → ${midiName(score.pitchOf.get(lead))}`:'narrator';
+      els.readout.innerHTML=`§${s.section+1} · line ${i} · <b>${nm}</b> · surprise ${(s.surprise*100|0)}% · tension ${(s.strain*100|0)}%`+(s.seam?` · cadence L${s.seam}`:''); }
+    lastUnit=i;
+  }
+  drawForm(sec); drawRoll(sec); drawCurve(sec);
+}
+function fit(cv){ const r=cv.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(r.width*dpr)||cv.height!==Math.round(r.height*dpr)){ cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr); }
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); return {g,w:r.width,h:r.height}; }
+
+function drawForm(sec){ const {g,w,h}=fit(els.form); g.clearRect(0,0,w,h); const T=totalTime()||1;
+  score.sections.forEach((s,k)=>{ const x0=unitTime[s.start]/T*w, x1=(unitTime[s.end]||T)/T*w;
+    g.fillStyle=`hsl(${172+k*16} 30% ${20+(k%2)*6}%)`; g.fillRect(x0,2,Math.max(1,x1-x0-1),h-4);
+    g.fillStyle='rgba(233,227,212,.55)'; g.font='10px IBM Plex Mono'; g.fillText('§'+(k+1), x0+4, h-7); });
+  // seam ticks
+  score.spans.forEach((s,i)=>{ if(s.seam>=2){ const x=unitTime[i]/T*w; g.strokeStyle= s.seam>=3?'#d2706a':'rgba(210,112,106,.5)';
+    g.lineWidth=s.seam>=3?2:1; g.beginPath(); g.moveTo(x,0); g.lineTo(x,h); g.stroke(); } });
+  const x=sec/T*w; g.strokeStyle='#e0a23c'; g.lineWidth=1.5; g.beginPath(); g.moveTo(x,0); g.lineTo(x,h); g.stroke(); }
+
+const LCOL={melody:'#7fd1c6',harmony:'rgba(111,176,168,.45)',bass:'#3c6f68',texture:'rgba(155,140,208,.35)',pulse:'#e0a23c'};
+function drawRoll(sec){ const {g,w,h}=fit(els.roll); g.clearRect(0,0,w,h);
+  const beatNow=secToBeat(sec), view=12, x0=beatNow-2.5, bx=b=>(b-x0)/view*w;
+  const lo=34,hi=86, yOf=m=>h-((clamp(m,lo,hi)-lo)/(hi-lo))*(h-8)-4;
+  g.strokeStyle='rgba(36,54,52,.6)'; g.lineWidth=1;
+  score.spans.forEach(s=>{ if(s.start<x0-1||s.start>x0+view) return; g.beginPath(); g.moveTo(bx(s.start),0); g.lineTo(bx(s.start),h); g.stroke(); });
+  for(const n of score.notes){ if(n.layer==='pulse'||!layerOn[n.layer]) continue;
+    const x=bx(n.startBeat), wpx=Math.max(2,(n.dur/view)*w-1); if(x>w||x+wpx<0) continue;
+    g.fillStyle=LCOL[n.layer]; g.globalAlpha=n.layer==='texture'?.6:1; const bh=n.layer==='harmony'?5:n.layer==='texture'?4:7;
+    rr(g,x,yOf(n.midi)-bh/2,wpx,bh,2); g.fill(); g.globalAlpha=1; }
+  g.strokeStyle='#e0a23c'; g.lineWidth=1.5; g.beginPath(); g.moveTo(bx(beatNow),0); g.lineTo(bx(beatNow),h); g.stroke(); }
+function secToBeat(sec){ const i=unitAtTime(sec); return score.spans[i].start + (sec-unitTime[i])/unitSpbArr[i]; }
+
+function drawCurve(sec){ const {g,w,h}=fit(els.curve); g.clearRect(0,0,w,h); const n=score.spans.length; if(!n) return;
+  const xOf=i=>i/(n-1||1)*w; const line=(key,col)=>{ g.beginPath(); score.spans.forEach((s,i)=>{ const x=xOf(i),y=h-3-s[key]*(h-6); i?g.lineTo(x,y):g.moveTo(x,y); }); g.strokeStyle=col; g.lineWidth=1.4; g.stroke(); };
+  line('entropy','rgba(155,140,208,.85)'); line('strain','#d2706a'); line('surprise','#e0a23c');
+  score.spans.forEach((s,i)=>{ if(s.seam>=2){ g.fillStyle=s.seam>=3?'#d2706a':'rgba(210,112,106,.6)'; g.fillRect(xOf(i)-1,0,2,h); } });
+  const ci=unitAtTime(sec); g.strokeStyle='rgba(224,162,60,.85)'; g.lineWidth=1.2; g.beginPath(); g.moveTo(xOf(ci),0); g.lineTo(xOf(ci),h); g.stroke(); }
+function rr(g,x,y,w,h,r){ r=Math.min(r,h/2,w/2); g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
+
+/* wiring */
+els.sample.onchange=()=>{ els.paste.classList.toggle('hidden',els.sample.value!=='paste'); };
+els.loadFile.onclick=()=>els.file.click();
+els.file.onchange=async()=>{ const f=els.file.files[0]; if(!f) return; els.sample.value='paste'; els.paste.classList.remove('hidden'); els.paste.value=await f.text(); render(); };
+els.render.onclick=render;
+els.play.onclick=()=> playing?pause():play();
+els.stop.onclick=stop;
+els.tempo.oninput=()=>{ els.tempoV.textContent=els.tempo.value; const e=elapsed(); const frac=totalTime()?e/totalTime():0;
+  baseSpb=60/Number(els.tempo.value); if(score){ buildTimeMap(); pausedT=frac*totalTime(); if(playing) t0=ctx.currentTime-pausedT; } };
+els.vol.oninput=()=>{ if(master) master.gain.value=+els.vol.value/100; };
+els.sVerb.oninput=()=>{ if(wet) wet.gain.value=+els.sVerb.value/100; };
+els.key.onchange=els.mode.onchange=()=>{ if(score) render(); };
+els.preset.onchange=()=>{ layerInstr={...PRESETS[els.preset.value]};
+  ['melody','harmony','bass','texture'].forEach(l=>$('#i-'+l).value=layerInstr[l]); $('#i-pulse').value=layerInstr.pulse;
+  if(hqOn) refreshHQ(); };
+['melody','harmony','bass','texture'].forEach(l=>{ $('#i-'+l).onchange=e=>{ layerInstr[l]=e.target.value; if(hqOn) loadGM(INSTR[layerInstr[l]].gm).then(p=>layerPreset[l]=p).catch(()=>layerPreset[l]=null); }; });
+$('#i-pulse').onchange=e=>{ layerInstr.pulse=e.target.value; };
+document.querySelectorAll('#layerbar button').forEach(b=>{ b.onclick=()=>{ const l=b.dataset.l; layerOn[l]=!layerOn[l];
+  b.classList.toggle('on',layerOn[l]); b.textContent=layerOn[l]?'on':'off';
+  if(l==='pulse' && score){ /* beat amount feeds compose */ render(); } }; });
+// init layer button states
+document.querySelectorAll('#layerbar button').forEach(b=>{ const l=b.dataset.l; b.classList.toggle('on',layerOn[l]); b.textContent=layerOn[l]?'on':'off'; });
+els.hq.onclick=async()=>{ hqOn=!hqOn; els.hq.classList.toggle('on',hqOn); els.hq.textContent='◇ HQ samples: '+(hqOn?'on':'off');
+  if(hqOn) await refreshHQ(); else els.sfStatus.textContent=''; };
+// mapping toggles
+[['mTension'],['mCadence'],['mTempo'],['mBright']].forEach(([k])=>{ els[k].onclick=()=>{ els[k].classList.toggle('on');
+  const on=els[k].classList.contains('on'); const lbl={mTension:'tension',mCadence:'cadence/form',mTempo:'tempo arc',mBright:'brightness'}[k];
+  els[k].textContent=`${lbl}: ${on?'on':'off'}`; if(k==='mTempo'){ if(score){ buildTimeMap(); } } else if(score) render(); }; });
+els.mDyn.onchange=els.mMotif.onchange=()=>{ if(score) render(); };
+els.sTension.onchange=els.sOrn.onchange=()=>{ if(score) render(); };
+els.sRubato.oninput=()=>{ if(score){ const e=elapsed(),frac=totalTime()?e/totalTime():0; buildTimeMap(); pausedT=frac*totalTime(); if(playing) t0=ctx.currentTime-pausedT; } };
+els.sBeat.onchange=()=>{ if(score && layerOn.pulse) render(); };
+els.exportBtn.onclick=()=>{ const data={ key:score.keyName, mode:score.mode, tonic:midiName(score.tonic),
+  sections:score.sections.length, instruments:layerInstr,
+  cast:score.cast.map(f=>({figure:f.label,note:midiName(score.pitchOf.get(f.id)),role:score.roleOf.get(f.id),leitmotif:score.motifOf.get(f.id),sightings:f.count})),
+  lines:score.units.map((u,i)=>({line:i,text:u.raw,surprise:+score.spans[i].surprise.toFixed(3),tension:+score.spans[i].strain.toFixed(3),seam:score.spans[i].seam,lead:score.spans[i].lead?score.cast.find(f=>f.id===score.spans[i].lead)?.label:null})),
+  notes:score.notes.map(n=>({beat:+n.startBeat.toFixed(2),dur:n.dur,layer:n.layer,note:n.midi!=null?midiName(n.midi):n.drum,midi:n.midi??null,vel:+n.vel.toFixed(2)})) };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=(els.sample.value||'score')+'.theseam.json'; a.click(); };
+window.addEventListener('resize',()=>{ if(score) paintPlayhead(elapsed()); });
+window.addEventListener('keydown',e=>{ if(e.code==='Space'&&score&&e.target.tagName!=='TEXTAREA'){ e.preventDefault(); playing?pause():play(); } });
+
+render();   // alive on load
+</script>
+</body>
+</html>
