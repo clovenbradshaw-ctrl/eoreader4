@@ -93,9 +93,32 @@ const ragNominate = async (doc, text) => {
   return { topSpan: spans[0]?.text || '∅', nominated: [...ids].map(labelOf) };
 };
 
+// The γ-mass of figure `id` at cursor `at` over the line's log — the same heat
+// kernel readingAt folds (γ=0.7), so this reads the warmth readingAt would read.
+const massAt = (line, id, at, gamma = 0.7) => {
+  let m = 0;
+  for (const e of (line.log.snapshot ? line.log.snapshot() : line.log.events))
+    if (e.op === 'INS' && e.id === id && e.sentIdx != null && e.sentIdx < at)
+      m += Math.pow(gamma, at - 1 - e.sentIdx);
+  return m;
+};
+// The figures the CONVERSATION named (INS at sentIdx >= convStart), warmest first —
+// the cast the conversation put on the line, the document body excluded.
+const convWarm = (line, convStart, at) => {
+  const ids = new Set();
+  const label = new Map();
+  for (const e of (line.log.snapshot ? line.log.snapshot() : line.log.events)) {
+    if (e.op !== 'INS') continue;
+    if (!label.has(e.id)) label.set(e.id, e.label);
+    if (e.sentIdx != null && e.sentIdx >= convStart && e.sentIdx <= at) ids.add(e.id);
+  }
+  return [...ids].map(id => ({ id, label: label.get(id) || id, mass: massAt(line, id, at) }))
+                 .sort((a, b) => b.mass - a.mass);
+};
+
 const runPolicy = async (label, withTalker) => {
   console.log(`\n=== policy: ${label} ===`);
-  console.log('turn                                  pivots  parse-warmest        entity-horizon       RAG-nominates / top-hit');
+  console.log('turn                                  piv  recency-warmest    conv-warmest       RAG-nominee        resolved (conv⊕nom)');
   let prefix = DOC;
   let prev = nDoc;
   const pivotCounts = [];
@@ -107,18 +130,29 @@ const runPolicy = async (label, withTalker) => {
     const surf = surfFold(line, lo, { behind: 0, ahead: span + 1, maxStops: 5 });
     const stopsIn = (surf.stops || []).filter(s => s >= lo && s <= hi);
     pivotCounts.push(stopsIn.length || 1);
-    const recFigs    = readingAt(line, hi).predicted.figures;
-    const entFigs    = readingAt(line, hi, { horizon: 'entity' }).predicted.figures;
-    const rag         = await ragNominate(baseDoc, t.user);
+    const recFigs = readingAt(line, hi).predicted.figures;
+    const rag     = await ragNominate(baseDoc, t.user);
+    const cw      = convWarm(line, nDoc, hi);
 
-    const warmest = surf.focus ? [surf.focus] : recFigs;
-    const okParse = hit(warmest, t.expect) ? '✓' : '·';
-    const okEnt   = hit(entFigs, t.expect)  ? '✓' : '·';
-    const okRag   = hit(rag.nominated, t.expect) ? '✓' : '·';
+    // The resolution rule the evidence supports, in one line and no regex:
+    //   prefer the RAG nominee the CONVERSATION has also warmed (embedding points
+    //   at a referent the conversation already holds — this resolves the correction:
+    //   "no the musician" re-nominates Monk, who is conv-warm, over the talker's
+    //   just-committed wrong answer); else the conversation's warmest figure (the
+    //   pronoun case, where embedding would mislead); else the RAG nominee (the
+    //   definite description the conversation has not yet named).
+    const norm = (s) => String(s || '').toLowerCase();
+    const cwLabels = new Set(cw.map(c => norm(c.label)));
+    const nomInConv = rag.nominated.find(n => cwLabels.has(norm(n)));
+    const resolved = nomInConv ?? cw[0]?.label ?? rag.nominated[0] ?? recFigs[0] ?? null;
+
+    const ok = (v) => (hit(Array.isArray(v) ? v : [v], t.expect) ? '✓' : '·');
     console.log(
-      `${t.user.slice(0, 36).padEnd(36)}  ${String(stopsIn.length || 1).padStart(2)}     ` +
-      `${okParse} ${fmt(warmest).slice(0, 18).padEnd(18)} ${okEnt} ${fmt(entFigs).slice(0, 18).padEnd(18)} ` +
-      `${okRag} ${fmt(rag.nominated).slice(0, 22)}`);
+      `${t.user.slice(0, 36).padEnd(36)} ${String(stopsIn.length || 1).padStart(2)}  ` +
+      `${ok(recFigs[0])} ${fmt(recFigs).slice(0, 16).padEnd(16)} ` +
+      `${ok(cw[0]?.label)} ${(cw[0]?.label || '∅').slice(0, 16).padEnd(16)} ` +
+      `${ok(rag.nominated[0])} ${(rag.nominated[0] || '∅').slice(0, 16).padEnd(16)} ` +
+      `${ok(resolved)} ${String(resolved || '∅').slice(0, 18)}`);
 
     prev = line.units.length;
     if (withTalker && t.reply) { prefix += '\n\n' + t.reply; prev = parseText(prefix, { docId: DOC_ID }).units.length; }
@@ -130,6 +164,8 @@ const runPolicy = async (label, withTalker) => {
 await runPolicy('USER turns only on the line', false);
 await runPolicy('USER + TALKER turns on the line', true);
 
-console.log(`\n# legend: ✓ = the expected referent is the warmest/nominated figure; · = it is not.`);
-console.log(`# parse-warmest is the surf focus over the turn span (warmth alone, no RAG assist).`);
-console.log(`# RAG-nominates is what lexical/hybrid retrieval would warm the line with (§3).`);
+console.log(`\n# legend: ✓ = the expected referent leads; · = it does not.`);
+console.log(`# recency-warmest: readingAt(cursor).figures[0] — warmth over the whole line.`);
+console.log(`# conv-warmest:    warmest figure the CONVERSATION named (doc body excluded).`);
+console.log(`# RAG-nominee:     the figure lexical/hybrid retrieval points the line at (§3).`);
+console.log(`# resolved:        conv-warmest ?? RAG-nominee — the rule the evidence supports.`);
