@@ -13,7 +13,7 @@ import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts } from '../retrie
 import { foldNote }         from '../fold/index.js';
 import { surfFold } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
-import { foldConversation, resolveRetrievalQuery } from '../converse/index.js';
+import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine, metadataBlock } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
@@ -95,7 +95,13 @@ export const stages = {
     // ("now?", "answer my first question") retrieves on the topic the user is pursuing,
     // not its literal words. A self-contained question passes through untouched. Only the
     // user's prior turns feed this — never the talker's answers (converse/focus.js).
-    const query = resolveRetrievalQuery(ctx.question, ctx.history);
+    //   Reference by reading (RULES_REV): the SUBJECT is held by the read path (the
+    //   fold reads the conversation cast), so retrieval is the cheap NOMINATION channel
+    //   and rides the question's own words — the regex query-fold is off the path
+    //   (docs/reference-by-reading.md §3, §5). Flag off: byte-identical.
+    const query = RULES_REV
+      ? ctx.question
+      : resolveRetrievalQuery(ctx.question, ctx.history);
     const spans = await retrieveHybrid(ctx.doc, query, re, 6);
     if (spans.length === 0) {
       // Strict grounded mode never falls through to free generation: it stays on the
@@ -117,7 +123,16 @@ export const stages = {
   // read by the consciousness and bindable.
   async fold(ctx) {
     if (!ctx.spans?.length) return { ...ctx, note: null };
-    const anchor = ctx.spans[0]?.idx ?? 0;
+    // Reference by reading (RULES_REV, docs/reference-by-reading.md §2–§3). The turn's
+    // DEF target is read off the CONVERSATION CAST — the warmest figure the conversation
+    // holds, with retrieval nominating a document referent beside it — and the document
+    // surf is seeded at that referent's LOCUS (localeOf), the one hop from the warm
+    // referent to where the document establishes it. So "his name" lands on the line
+    // that NAMES the figure, which the word "name" never reaches by similarity. Flag
+    // off: the anchor is the top retrieval hit and the focus is the named referents of
+    // the question, exactly as before — byte-identical, the read path is dark.
+    const refTarget = RULES_REV ? referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans) : null;
+    const anchor = (refTarget?.locale ?? ctx.spans[0]?.idx) ?? 0;
     const surf   = ctx.doc ? surfFold(ctx.doc, anchor) : null;
 
     let spans = ctx.spans;
@@ -134,7 +149,11 @@ export const stages = {
     // The referents the message named (if any). When it names one, the fold centres
     // the structured reading on that referent — everything tied to it, coref
     // collapsed — instead of the figures the surfed window happened to cross.
-    const focus  = ctx.doc ? namedReferents(ctx.doc, ctx.question) : [];
+    //   Reference by reading (RULES_REV): the referent is READ off the conversation
+    //   cast (refTarget), so a pronoun / definite description / correction centres the
+    //   reading on the figure it refers to, not only one the question names by surface
+    //   form. Flag off: the question's named referents, exactly as before.
+    const focus  = refTarget ? [refTarget.id] : (ctx.doc ? namedReferents(ctx.doc, ctx.question) : []);
     // The RICH NOTES path rides behind RULES_REV (rich-notes §6): with the flag off the
     // fold is byte-identical (flat arrows + significance summary); with it on the note
     // is projected through the reading substrate (settled · held-open · turns), and the
@@ -148,7 +167,7 @@ export const stages = {
     const referential = ctx.doc?.corefField
       ? referentialConfidence(ctx.doc.corefField.fieldGrounded(cursor))
       : null;
-    return { ...ctx, spans, note, surf, focus, referential };
+    return { ...ctx, spans, note, surf, focus, referential, refTarget };
   },
 
   // The answerability gate — is there an answer to give, or is the field VOID?
