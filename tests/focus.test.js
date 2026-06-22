@@ -55,3 +55,35 @@ test('resolveRetrievalQuery with no usable history returns the question unchange
   assert.equal(resolveRetrievalQuery('now?', []), 'now?');
   assert.equal(resolveRetrievalQuery('now?', [{ role: 'assistant', content: 'hi' }]), 'now?');
 });
+
+// The "who is Monk?" failure (eoreader4 audit): a follow-up that referred to the
+// musician only by a dangling pronoun ("but what is his name?") or a correction
+// ("no the musician") re-anchored retrieval on its literal words and drifted to
+// "His name is Curtis Yarvin" / "Old Oedipus". A pronoun with no antecedent, and a
+// correction redirecting the last question, must lean on the conversation so the
+// embedding retrieval rides the referent the prior turn established.
+test('a dangling third-person pronoun leans on the conversation', () => {
+  assert.equal(needsContext('but what is his name?'), true);
+  assert.equal(needsContext("what's her job?"), true);
+  assert.equal(needsContext('what does he do?'), true);
+  // a pronoun ALONGSIDE a real topic still stands on its own — not every "his" leans
+  assert.equal(needsContext('is his Yellowstone theory right?'), false);
+});
+
+test('a correction / redirect opener leans only when it carries no strong query', () => {
+  assert.equal(needsContext('no the musician'), true);
+  assert.equal(needsContext('actually the pianist'), true);
+  assert.equal(needsContext('no, summarize chapter three'), false);   // a real standalone is never polluted
+});
+
+test('the musician follow-ups carry the prior topic into the retrieval query', () => {
+  // The turn before asked "who is the musician?"; the embedding query for the
+  // follow-up must now ride "musician" rather than the bare "name".
+  const history = [
+    { role: 'user',      content: 'who is the musician?' },
+    { role: 'assistant', content: 'An American jazz player.' },
+  ];
+  assert.match(resolveRetrievalQuery('but what is his name?', history), /musician/);
+  assert.match(resolveRetrievalQuery('but what is his name?', history), /name/);  // own words kept
+  assert.match(resolveRetrievalQuery('no the musician', history), /musician/);
+});

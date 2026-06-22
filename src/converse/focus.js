@@ -22,6 +22,28 @@ const STOP = new Set((
   'now then again more next go on continue here there back also too anymore'
 ).split(/\s+/));
 
+// Generic attribute / identity nouns — the kind of thing one asks ABOUT someone,
+// never a topic that stands on its own. "his name", "her age", "their job" each
+// lean on a referent the question itself never supplies; the referent is back in
+// the conversation. (Distinct from STOP: these ARE content words — they just can't
+// anchor a retrieval on their own.)
+const ATTRIBUTE = new Set((
+  'name names age job jobs role roles title titles occupation profession identity ' +
+  'gender nationality deal story point problem problems issue issues'
+).split(/\s+/));
+
+// A bare third-person pronoun whose antecedent lives in the conversation, not the
+// question. "what is HIS name?" names no one — the "his" points back a turn. The
+// possessives (his/its/their/hers/theirs) are NOT in STOP, so they survive
+// `contentWords`; we filter them with PRONOUN_TOKENS before judging topicality.
+const PRONOUN = /\b(he|him|his|she|her|hers|it|its|they|them|their|theirs)\b/;
+const PRONOUN_TOKENS = new Set('he him his she her hers it its they them their theirs'.split(' '));
+
+// A correction / redirect opener — "no, the musician", "actually the other one".
+// The user is amending the LAST question, not posing a fresh one, so the thread is
+// the topic. Only leans when it carries no strong query of its own (guarded below).
+const CORRECTION = /^\s*(no|nope|nah|not|actually|rather|wait|i\s+mean(?:t)?)\b/;
+
 // The content words of a string, in order, deduped — its topic-bearing tokens. Split
 // on the apostrophe too, so a possessive yields the bare noun ("gregor's" → "gregor",
 // the dangling "s" dropped as length-1) — the form the retriever indexes.
@@ -43,6 +65,19 @@ export const needsContext = (question) => {
   if (/\byou\s+(said|asked|told|mentioned|answered|wrote)\b/.test(q)) return true;
   if (/\b(answer|address|finish|repeat|reread|re-read)\s+(my|the|that|it|again)\b/.test(q)) return true;
   if (/\bgo\s+(on|ahead)\b|\bcontinue\b|\bgo back\b|\bback to\b|\bwhat about\b/.test(q)) return true;
+  // Pronoun-led: a third-person pronoun whose only topic-bearing words (the pronoun
+  // itself set aside) are generic attributes ("what is his name?", "what's her job?").
+  // The pronoun has no antecedent in the question — it points back into the conversation.
+  // A pronoun ALONGSIDE a real topic ("is his Yellowstone theory right?") still stands on
+  // its own and is left untouched. This was the "but what is his name?" failure: a lone
+  // "name" looked like a standalone topic, so retrieval re-anchored and found "His name is
+  // Curtis Yarvin" instead of riding the musician the prior turn had already established.
+  if (PRONOUN.test(q) && contentWords(q).filter(t => !PRONOUN_TOKENS.has(t)).every(t => ATTRIBUTE.has(t))) return true;
+  // A correction that redirects the last question rather than posing a new one
+  // ("no, the musician") — only when the words AFTER the opener carry no strong query of
+  // their own, so a real standalone ("no, summarize chapter 3") is never polluted.
+  const corr = q.match(CORRECTION);
+  if (corr && contentWords(q.slice(corr[0].length)).length <= 1) return true;
   return contentWords(q).length === 0;
 };
 
