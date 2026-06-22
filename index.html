@@ -13,19 +13,14 @@
       <h1>eoreader4</h1>
       <span id="status" class="status">booting…</span>
       <span class="spacer"></span>
+      <!-- Allowlist: only the models that download reliably in practice. The other
+           backends (Pleias ONNX/GGUF, wllama SmolLM2-135M) stay registered in code
+           but are not exposed here — wllama in particular fails to fetch its GGUF
+           (Invalid typed array length). See README "Ethical, grounded talkers". -->
       <select id="backend" title="Model backend">
         <option value="echo">echo (instant, deterministic)</option>
         <optgroup label="ONNX · transformers.js (WebGPU/CPU)">
           <option value="smollm2-360m">SmolLM2-360M-Instruct · chat</option>
-          <option value="pleias-pico-onnx">Pleias-Pico · ~350M · grounded</option>
-          <option value="pleias-350m-onnx">Pleias-350m · ~350M · grounded</option>
-          <option value="pleias-1.2b-onnx">Pleias-1.2b · ~1.2B · grounded</option>
-          <option value="pleias-nano-onnx">Pleias-Nano · ~1.2B · grounded</option>
-        </optgroup>
-        <optgroup label="GGUF · wllama (CPU)">
-          <option value="wllama">SmolLM2-135M</option>
-          <option value="pleias-pico">Pleias-Pico · 353M (GGUF)</option>
-          <option value="pleias-rag">Pleias-RAG-1B · Q4 (GGUF)</option>
         </optgroup>
         <optgroup label="WebGPU · MLC">
           <option value="webllm" selected>Llama-3.2-3B</option>
