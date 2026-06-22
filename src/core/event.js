@@ -82,17 +82,26 @@ export const effectiveRes = (resolutions) => {
   return xs.reduce((acc, r) => weaker(acc, r), firm(1));
 };
 
-// ── Site — the holon address r#<id>@<grain> ──────────────────────────────────
+// ── Site — the holon address holder · r#<id>@<grain> ──────────────────────────
 // `grain` is the holon-stack level: 0 at first appearance, +1 each SYN promotion
 // (§3a). It is NOT the cube's named Ground/Figure/Pattern triad (that is the
 // relative focal grain of §9) — here it is a promotion counter on the referent.
-export const makeSite = (hash, grain = 0) =>
-  Object.freeze({ hash, grain: grain | 0 });
+//
+// A Site has a HOLDER ROOT (§1, §2): `holder · r#id@grain`. The same proposition is a
+// different Site under `narrator.*` than under `grete.*` — same content, different
+// root. The single-holder forms used in §3–§8 are the case where holder = reader and
+// is elided; so `holder` is attached only when supplied, and a holderless Site is the
+// elided-reader Site, byte-for-byte what the pre-holder code minted (core/holder.js
+// reads the default with holderOf).
+export const makeSite = (hash, grain = 0, holder = null) =>
+  Object.freeze(holder
+    ? { holder, hash, grain: grain | 0 }
+    : { hash, grain: grain | 0 });
 
-// The formal Site notation, r#a3f@0 — the audit string. The membrane (§5) asserts
-// this never reaches the model.
+// The formal Site notation: `holder · r#a3f@0` (the holder root dropped when elided).
+// The audit string; the membrane (§5) asserts it never reaches the model.
 export const siteNotation = (site) =>
-  site == null ? '' : `${site.hash}@${site.grain ?? 0}`;
+  site == null ? '' : `${site.holder ? `${site.holder} · ` : ''}${site.hash}@${site.grain ?? 0}`;
 
 // A hashId is opaque base36 under the r# prefix (the mint shape of contract.mjs).
 // The membrane test (§5) and the witness rebind (§7) both key on this pattern.

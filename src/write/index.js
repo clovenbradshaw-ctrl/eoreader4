@@ -9,6 +9,7 @@
 // swap the backend without touching parse/ or retrieve/):
 //
 //   fold.js       frontier + integral — the running state, γ-decayed firm dossier (§2)
+//   folds.js      Map<Holder, Fold> — beliefOf, modelOf; the nested instrument root (§3,§9,§20)
 //   scheduler.js  the DAG + the two gates (arity HARD, resolution SOFT) + posture (§3,§4)
 //   cursor.js     the membrane — identity collapses to surface, no hashId leaks (§5)
 //   spurt.js      the write loop — render a beat, surf its seam, advance the fold (§6)
@@ -30,6 +31,10 @@
 export {
   createFold, DEFAULT_GAMMA, DEFAULT_KEEP,
 } from './fold.js';
+export {
+  createFolds, INSTRUMENT, READER, STATUS,
+  beliefNotation, isModeled, canAnchor, beliefValue,
+} from './folds.js';
 export {
   schedule, propagateResolution, arityReady, judge, overclaims, groupByGranularity,
 } from './scheduler.js';

@@ -29,6 +29,14 @@ export { PERCEIVER, ENACTOR, DOORS, EXAFFERENCE, REAFFERENCE, READ_BACK,
          provenance, fromPerceiver, fromEnactor, reenter, classify,
          canOrient, canWitness, isReadBackOfPriorSelf, isMine,
          serializeProvenance, restoreProvenance, restoreOnReload } from './provenance.js';
+// The holder root and the nested-belief type (SPEC §1, §9, §20, Update 4). The system
+// never holds another holder's belief — it holds its belief ABOUT another's, rooted
+// always at the INSTRUMENT, which is the provenance that bars the inference from
+// becoming a fact. The honesty rule is read off canWitness, not asserted. Genome-level
+// because the holder root and the self/world line are the system's, not any faculty's.
+export { INSTRUMENT, READER, isSelf, holderOf, STATUS,
+         makeBelief, selfBelief, isBelief, isModeled, canAnchor, beliefValue,
+         beliefNotation } from './holder.js';
 // The shared significance primitives — modality-agnostic, used by every faculty, so
 // they live in the genome, not in any one of them. The derived null (the Born-rule
 // VOID boundary, voidnull.js) and the one surprise (D_KL over a γ-decayed profile,
