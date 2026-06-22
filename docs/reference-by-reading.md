@@ -60,8 +60,58 @@ spec rather than confirming it whole:
 **Conclusion.** The fix is wiring, but the wiring is *warmth ⊕ embedding
 nomination*, not parse-alone. The reader holds the conversation on the line
 (user **and** talker turns — §1, §4); RAG nominates referents that **warm** the
-same field (§3); the **warmest figure at the question cursor is the single DEF
-target**, which then anchors the document surf at its `localeOf`. Multi-pivot is
-deferred (inert). The me-ness correction ("no the musician") is the documented
-residual: warmth alone picks the talker's just-committed wrong answer, and only
-embedding re-nomination overrides it.
+same field (§3); the **single DEF target** is read off the cast, which then
+anchors the document surf at its `localeOf`. Multi-pivot is deferred (inert). The
+me-ness correction ("no the musician") is **not** a residual after all: embedding
+re-nominates the musician, who is conversation-warm, so the read recovers him over
+the talker's just-committed wrong answer — read, not detected.
+
+## Implementation status
+
+- **P0 — measure.** `scripts/reference-measure.mjs`. Came back with the rule, not
+  a confirmation of parse-alone. Done.
+- **P1 + P2 — read the referent, seed the surf** (`src/converse/reference.js`,
+  wired into `src/turn/stages.js` behind `RULES_REV`). Done.
+  - `conversationCast` — the figures the conversation named, warmest first,
+    conversation-scoped.
+  - `referenceTarget` — the rule, in one line and no regex: *nominee the
+    conversation warmed → conversation-warmest → nominee*.
+  - `localeOf` — the referent's locus in the document (strongest incident edge,
+    else first mention).
+  - `fold` seeds the document surf at `localeOf` and focuses on the read referent;
+    `retrieve` rides the question's own words (the nomination channel) with the
+    `focus.js` query-fold off the path. **Flag off: byte-identical.**
+- **P3 — delete `focus.js`.** Deferred to the `RULES_REV` promotion. While the flag
+  is off-by-default the regex path still serves the flag-off route, and deleting it
+  now would break the byte-identical-flag-off acceptance and `tests/focus.test.js`.
+  When `RULES_REV` flips to default-on the regex path has no caller (§5) and is
+  removed then. The read path already makes it dark when the flag is on (no regex,
+  no wordlist on the flag-on path — the acceptance "by reading alone" holds there).
+
+## Resolution rule, validated (`scripts/reference-measure.mjs`, USER+TALKER policy)
+
+| turn | recency | conv-warmest | RAG nominee | resolved |
+|---|---|---|---|---|
+| who is the musician? | Oedipus · | ∅ | Monk ✓ | **Monk ✓** |
+| but what is his name? | Monk ✓ | Monk ✓ | Yarvin · | **Monk ✓** |
+| no the musician | Yarvin · | Yarvin · | Monk ✓ | **Monk ✓** |
+| …Nietzsche…Dostoevsky | Monk ✓ | Monk ✓ | Dostoevsky ✓ | **Dostoevsky ✓** |
+| summarize | Dostoevsky · | Dostoevsky · | Monk ✓ | **Monk ✓** |
+
+### Open residue
+
+- **Multi-pivot turns.** Pivots/turn measured at 1 across the audit, so the
+  per-pivot flat-map (§2/§3) is inert and the single-target read is enough — built
+  the single target only, per the spec's own P0 gate. A turn that truly pivots
+  across referents (comma-joined clauses) is not segmented into separate units by
+  the current parse, so it would need clause-level boundaries before the multi-pivot
+  path could register. Left as a known gap.
+- **Turn-deixis** ("my first question", "answer my earlier one") refers to a turn,
+  not a character; ordinal selection wants more than warmth (§7). Unaddressed.
+- **The full shared line.** The cast is read from a parse of the conversation alone
+  (cheap, and provably γ-equivalent to the doc-excluded slice of the full line), not
+  from a re-parse of `document + conversation` each turn. The unified-line coref
+  across the document/conversation boundary is therefore approximated by the cast +
+  nomination rule rather than realized by one shared `corefField`. Promoting to the
+  true shared line wants an append API on the parser (so the document is not
+  re-parsed per turn); deferred with `RULES_REV`.
