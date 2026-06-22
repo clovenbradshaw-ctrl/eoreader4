@@ -42,7 +42,7 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, auditLog, onStep, history = [], grounding = 'auto' }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -57,7 +57,11 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // `geometricEmbedder` is the MiniLM organ; the retrieve stage reads it for the
   // semantic channel when it is live, and falls back to `embedder` (the hash organ)
   // otherwise. Threaded like `classifier` — optional, degrading honestly when absent.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, history, grounding };
+  // `stream`/`onToken` arm the streaming-answer path (turn/stages.js `llm`,
+  // docs/streaming-answer.md): a grounded turn realises its answer one sentence per
+  // surfer stop and emits tokens through `onToken` as they decode. Off by default —
+  // the present one-shot path is byte-identical when `stream` is false.
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, history, grounding, stream, onToken, alpha };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -166,7 +170,15 @@ const summarize = (name, ctx, ms) => {
       ? { ...base, verdict: 'answer', terrain: 'void', kind: ctx.voidMeasure.kind, rode: ctx.voidMeasure.rode }
       : { ...base, verdict: 'answer' };
     case 'prompt':   return { ...base, promptLen: ctx.promptText?.length || 0 };
-    case 'llm':      return { ...base, outputLen: ctx.rawOutput?.length || 0, maxTokens: ctx.maxTokens };
+    case 'llm':      return { ...base, outputLen: ctx.rawOutput?.length || 0, maxTokens: ctx.maxTokens,
+                              // the streaming-answer telemetry: one beat per surfer stop, each with
+                              // its measured site and the forward prediction (docs/streaming-answer.md)
+                              ...(ctx.streamed ? { streamed: {
+                                beats: ctx.streamed.beats.length,
+                                sites: ctx.streamed.beats.map(b => b.site),
+                                order: ctx.streamed.order,
+                                flags: ctx.streamed.flags.map(f => f.id),
+                              } } : {}) };
     case 'bind':     return { ...base,
                               claims: ctx.bound?.length || 0,
                               cited:  ctx.bound?.filter(b => b.citation).length || 0 };

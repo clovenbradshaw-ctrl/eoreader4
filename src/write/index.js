@@ -16,6 +16,13 @@
 //   voids.js      the open-Resolution query — the idle fuel + the "Open" ledger (§15,§16)
 //   idle.js       the governed idle loop — reafferent, firewalled, self-terminating (§15)
 //
+// The Streaming Answer (docs/streaming-answer.md) points that same loop at the
+// retrieval subgraph, so a grounded answer is realised one streamed sentence per
+// surfer stop:
+//   plan.js       the span→cell resolver — a surfer stop becomes a cursor cell (§2)
+//   frame.js      the piece-grain frame — each beat's site, measured not declared (§8)
+//   answer.js     the streaming answer loop — beat per stop, bound by the witness (§4)
+//
 // The formal event op(Site, Resolution, Provenance, t) and the me-ness type law live
 // in the genome (core/event.js, core/provenance.js) because the event vocabulary and
 // the self/world line are the system's, not this faculty's.
@@ -28,6 +35,9 @@ export {
 } from './scheduler.js';
 export { buildCursor, assertNoLeak, serialize } from './cursor.js';
 export { witness, rebind, groundedClaim, claimsOf } from './witness.js';
-export { spurt, surfDraft, draftSurprise, writeLoop, stubModel } from './spurt.js';
+export { spurt, surfDraft, draftSurprise, writeLoop, stubModel, advanceFold } from './spurt.js';
 export { openLedger, openResolutions, isOpen, pickVoid, HEDGE_BELOW } from './voids.js';
 export { createIdleLoop, seededRng, RESTING, SURFING } from './idle.js';
+export { surfToPlan, stopToCell } from './plan.js';
+export { frameAt, SITES } from './frame.js';
+export { streamAnswer } from './answer.js';

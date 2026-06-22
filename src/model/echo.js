@@ -9,6 +9,7 @@
 
 import { registerBackend } from './interface.js';
 import { EXCERPTS_HEADER } from './prompt.js';
+import { emitSurface } from './stream.js';
 
 registerBackend('echo', () => {
   return {
@@ -18,8 +19,12 @@ registerBackend('echo', () => {
     async load(onProgress) {
       onProgress?.({ phase: 'ready', pct: 1 });
     },
-    async phrase(messages, _opts) {
-      return echoTarget(messages);
+    // The streaming capability (model/stream.js §): echo's target is the verbatim
+    // excerpts, so it surfaces them token by token through `onToken` when one is
+    // handed — a deterministic decode-grain stream for the answer loop and its
+    // tests. Absent `onToken` it is byte-identical to the old draw-then-return.
+    async phrase(messages, opts = {}) {
+      return emitSurface(echoTarget(messages), opts.onToken);
     },
     // The cleanest backend for the gate (§2): echo is deterministic and its
     // "distribution" is already span-grounded — its target is the verbatim
