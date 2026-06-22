@@ -42,13 +42,15 @@ registerBackend('webllm', (opts = {}) => {
       // callback is handed.
       const onToken = typeof opts.onToken === 'function' ? opts.onToken : null;
       if (onToken) {
-        const chunks = await engine.chat.completions.create({ ...params, stream: true });
-        let text = '';
-        for await (const chunk of chunks) {
-          const piece = chunk.choices?.[0]?.delta?.content || '';
-          if (piece) { text += piece; onToken(piece); }
-        }
-        return text.trim();
+        try {
+          const chunks = await engine.chat.completions.create({ ...params, stream: true });
+          let text = '';
+          for await (const chunk of chunks) {
+            const piece = chunk.choices?.[0]?.delta?.content || '';
+            if (piece) { text += piece; onToken(piece); }
+          }
+          if (text.trim()) return text.trim();
+        } catch { /* a streaming hiccup degrades to the plain draw below — the answer still lands */ }
       }
       const out = await engine.chat.completions.create(params);
       return out.choices?.[0]?.message?.content?.trim() || '';

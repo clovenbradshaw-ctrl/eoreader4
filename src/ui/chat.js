@@ -52,6 +52,7 @@ export const streamThinking = (el, piece) => {
   if (!body) return;
   let stream = body.querySelector('.answer-stream');
   if (!stream) {
+    clearImpression(el);                 // the talker speaks — replace the preview gloss
     el.classList.remove('thinking');
     el.classList.add('streaming');
     const dots  = body.querySelector('.dots');  if (dots)  dots.remove();
@@ -63,6 +64,47 @@ export const streamThinking = (el, piece) => {
   stream.textContent += piece;
   const root = el.parentElement;
   if (root) root.scrollTop = root.scrollHeight;
+};
+
+// Stream the FOLD'S IMPRESSION while the talker warms (docs/streaming-answer.md).
+// The local model is slow to its first token; the substrate has already read the
+// passage, so during the wait we type out its impressionistic gloss — the figures
+// it settled on, the edges it drew, the turn it found — model-free. It is a PREVIEW,
+// muted and italic, never the answer: when the real answer's first token arrives
+// (streamThinking) or the turn finalizes, it is cleared and replaced. The dots keep
+// pulsing beside it so it reads as "still working", not "done".
+export const streamImpression = (el, phrases) => {
+  if (!el || !phrases || !phrases.length) return null;
+  const body = el.querySelector('.body');
+  if (!body) return null;
+  const label = body.querySelector('.label'); if (label) label.remove();  // the impression takes the line
+  let prev = body.querySelector('.impression');
+  if (!prev) {
+    prev = document.createElement('span');
+    prev.className = 'impression';
+    body.insertBefore(prev, body.querySelector('.elapsed'));
+  }
+  el.classList.add('impressing');
+  // Reveal word by word for the streaming feel, over the seconds the talker spends
+  // warming. Types once and rests; if the talker is still going, the gloss simply sits.
+  const tokens = phrases.join('  ').match(/\s+|\S+/g) || [];
+  let i = 0;
+  const timer = setInterval(() => {
+    if (i >= tokens.length) { clearInterval(timer); return; }
+    prev.textContent += tokens[i++];
+    const root = el.parentElement; if (root) root.scrollTop = root.scrollHeight;
+  }, 50);
+  const handle = { stop() { clearInterval(timer); } };
+  el._impression = handle;
+  return handle;
+};
+
+// Stop and remove the impression preview — when the real answer starts, or at finalize.
+const clearImpression = (el) => {
+  if (el && el._impression) { el._impression.stop(); el._impression = null; }
+  const prev = el && el.querySelector && el.querySelector('.impression');
+  if (prev) prev.remove();
+  if (el && el.classList) el.classList.remove('impressing');
 };
 
 export const updateThinking = (el, stageName, data, ctx) => {
@@ -112,6 +154,7 @@ const rawBlock = (label, text) => {
 export const finalizeThinking = (el, text, sources, opts = {}) => {
   if (!el) return;
   if (el._elapsedTimer) { clearInterval(el._elapsedTimer); el._elapsedTimer = null; }
+  clearImpression(el);                  // stop any preview gloss still typing
   el.classList.remove('thinking');
   el.classList.remove('streaming');     // the live stream is replaced by the cited answer
   const body  = el.querySelector('.body');
