@@ -19,5 +19,12 @@ export {
 export { foldConversation } from './history.js';
 
 // Conversation-aware retrieval — resolve a thin / self-referential follow-up against
-// the recent USER turns so it retrieves on the topic, not its literal words.
+// the recent USER turns so it retrieves on the topic, not its literal words. The
+// regex/wordlist path; kept for the RULES_REV-off route (the read path below
+// supersedes it when the flag is on — docs/reference-by-reading.md §5).
 export { needsContext, conversationalFocus, resolveRetrievalQuery, contentWords } from './focus.js';
+
+// Reference by reading — resolve the turn's referent by reading the conversation as
+// the tail of the reading line (the cast), not by classifying its surface form. The
+// RULES_REV path that retires focus.js (docs/reference-by-reading.md).
+export { referenceTarget, conversationCast, localeOf } from './reference.js';
