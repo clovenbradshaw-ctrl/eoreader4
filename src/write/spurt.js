@@ -38,6 +38,7 @@
 // own non-cohering churn throws up by chance.
 
 import { deriveNull } from '../core/index.js';
+import { emitSurface } from '../model/stream.js';
 import { buildCursor } from './cursor.js';
 import { witness } from './witness.js';
 import { schedule, propagateResolution, groupByGranularity } from './scheduler.js';
@@ -155,8 +156,9 @@ export const writeLoop = async (cells, ctx = {}) => {
 // advanceFold — turn a realized cell into a fold update (§6). INS appears its site;
 // a relation appears its arguments and records its edge as a (firm/void) descriptor
 // on the subject; a SYN appears its promoted figure. The Resolution band rides from
-// the propagation so a void synthesis lands in `open`, not the name.
-const advanceFold = (fold, cell, res) => {
+// the propagation so a void synthesis lands in `open`, not the name. Exported so the
+// streaming answer loop (write/answer.js) advances the same fold per beat (§4).
+export const advanceFold = (fold, cell, res) => {
   const op = cell.op ?? cell.kind;
   const hashes = (cell.args ?? sites(cell)).map(h => (typeof h === 'string' ? h : h?.hash)).filter(Boolean);
   const t = cell.t ?? 0;
@@ -184,19 +186,23 @@ const sites = (cell) => {
 // headless runs, the demo, and tests.
 export const stubModel = () => ({
   id: 'stub-writer',
-  async phrase(messages /*, opts */) {
+  async phrase(messages, opts = {}) {
     const user = messages.find(m => m.role === 'user')?.content || '';
     // Pull the established focus/subject/object names the cursor handed in (surface only).
     const names = [...user.matchAll(/(?:Focus|Subject|Object|Also): ([^\n—]+?)(?: —|$)/gm)].map(m => m[1].trim());
-    const edge = user.match(/--(\w+)-->/)?.[1] || null;
+    const edge = user.match(/--([\w-]+)-->/)?.[1] || null;
     const hedged = /holding-open|not settled/.test(user);
     const subj = names[0] || 'They';
     const obj = names[1] || null;
+    let text;
     if (hedged) {
-      return `Taken together, these suggest something the document holds open rather than fixes.`;
-    }
-    if (edge && obj) return `${subj} ${edge} ${obj}.`;
-    if (obj) return `${subj} turns toward ${obj}.`;
-    return `${subj} is at the centre of the scene.`;
+      text = `Taken together, these suggest something the document holds open rather than fixes.`;
+    } else if (edge && obj) text = `${subj} ${edge.replace(/-/g, ' ')} ${obj}.`;
+    else if (obj) text = `${subj} turns toward ${obj}.`;
+    else text = `${subj} is at the centre of the scene.`;
+    // The streaming capability (model/stream.js §): surface the collapsed beat
+    // token by token when a callback is handed, so the stub drives the answer
+    // loop's stream exactly as a real decoder would. Byte-identical otherwise.
+    return emitSurface(text, opts.onToken);
   },
 });

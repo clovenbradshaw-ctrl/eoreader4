@@ -4,6 +4,7 @@
 // External backends call `registerBackend(name, factory)` at load time.
 
 export { registerBackend, availableBackends, createModel } from './interface.js';
+export { streamPhrase, surfaceTokens, emitSurface } from './stream.js';
 export { createHashEmbedder }   from './embed-hash.js';
 export { createMiniLMEmbedder } from './embed.js';
 export { buildGroundedMessages, buildChatMessages, SYSTEM_GROUND, SYSTEM_CHAT,

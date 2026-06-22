@@ -184,6 +184,7 @@ export const buildCursorMessages = ({
   spans = [],              // grounded substance for this beat (exafference)
   target = '',             // the shape instruction ("one plain past-tense sentence…")
   band = 'firm',           // 'void' → hedge; 'firm' → assert (the propagated Resolution)
+  corrective = '',         // a forward correction the previous beat's seam carried (§3c)
 } = {}) => {
   const blocks = [];
   if (orientation) blocks.push(`You are reading ${orientation}. Read what is here; do not name or place the work.`);
@@ -209,6 +210,12 @@ export const buildCursorMessages = ({
   // The beat itself: a typed edge in surface, or a free instruction.
   if (edge) blocks.push(`What happens (from the document):\n  ${edge}`);
   if (beat) blocks.push(`The beat: ${beat}`);
+
+  // A forward correction the prior beat's seam carried (§3c): the reading drifted
+  // past the noise null, so the NEXT sentence acknowledges it in prose rather than
+  // un-saying the last one. Plain language, no machinery — the talker just writes
+  // the qualifier into its own sentence.
+  if (corrective) blocks.push(corrective);
 
   if (spans.length)
     blocks.push(`${EXCERPTS_HEADER}\n${spans.map(s => s.text).join('\n')}`);

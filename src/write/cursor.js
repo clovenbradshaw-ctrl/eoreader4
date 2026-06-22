@@ -79,6 +79,7 @@ export const buildCursor = (cell, fold, spans = [], opts = {}) => {
     spans,
     target: cell.target || '',
     band,
+    corrective: opts.corrective || cell.corrective || '',
   });
 
   // MEMBRANE CHECK — no hashId may reach the model (§5). One act of identity-

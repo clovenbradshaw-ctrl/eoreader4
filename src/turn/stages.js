@@ -21,6 +21,7 @@ import { runVetoes }        from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak } from '../organs/out/speech/index.js';
 import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
+import { streamAnswer }     from '../write/index.js';
 
 export const stages = {
 
@@ -229,6 +230,27 @@ export const stages = {
   // talker falls back to phrase(), byte-identical — non-breaking by construction.
   async llm(ctx) {
     const maxTokens = ctx.maxTokens || 384;
+
+    // The STREAMING ANSWER path (docs/streaming-answer.md §5). When a doc is
+    // grounded, a surfer path exists, and streaming is requested, the answer is
+    // realised one grounded sentence per surfer stop — emitted token by token
+    // through ctx.onToken, each beat aware of the ones behind it (the fold) and
+    // bound backward by the witness (§4). The emitted draft becomes `rawOutput`, so
+    // the downstream bind / factcheck / veto stages annotate it exactly as today.
+    // Falls back to the single phrase() below when any precondition is absent —
+    // non-breaking by construction; the present chat / golden paths are untouched.
+    if (ctx.stream && ctx.route === 'grounded' && ctx.doc && ctx.surf && ctx.spans?.length) {
+      try {
+        const streamed = await streamAnswer({
+          doc: ctx.doc, surf: ctx.surf, model: ctx.model, focus: ctx.focus || [],
+          onToken: ctx.onToken, alpha: ctx.alpha ?? undefined, orientation: orientationOf(ctx.doc),
+        });
+        if (streamed && streamed.draft) {
+          return { ...ctx, rawOutput: streamed.draft, maxTokens, streamed };
+        }
+      } catch { /* a streaming fault degrades to the one-shot path below, never a dead turn */ }
+    }
+
     if (canGroundedSpeak(ctx.model, ctx)) {
       const gated = await groundedSpeak({
         model: ctx.model, messages: ctx.messages, doc: ctx.doc,
@@ -303,6 +325,12 @@ export const stages = {
   // with no model. The grain guard is classifier-free, so this arms even under the hash
   // organ.
   async revise(ctx) {
+    // Retired on the streaming-answer path (docs/streaming-answer.md §3c, §5): the
+    // block rewrite would un-stream tokens the reader has already seen, which the
+    // suppress-never-erase law forbids. On that path a void was hedged prospectively
+    // (band:'void' at the cursor) and any drift rode forward into the next beat — the
+    // correction is already in the trail, so there is nothing to rewrite here.
+    if (ctx.streamed) return ctx;
     if (!ctx.doc || !ctx.spans?.length || !ctx.model || !confabulating(ctx)) return ctx;
     let cur = ctx, attempts = 0;
     const revisions = [];
