@@ -198,6 +198,37 @@ into the log and unioned with the seed set. The high (a learned rule) sets the
 probabilities for the low (how the next thousand sentences classify). Nothing is
 hard-coded true; a convention is whatever the text keeps doing.
 
+### Front matter — metadata, read structurally (a convention too)
+
+A document opens by telling you what it is: `Title:`, `Author:`, `Release date:`
+in a book's front matter; `From: / To: / Subject:` in an email or memo; a
+citation block, a title page. That is a **structural** thing to take note of, not
+a semantic one — a labeled field is a short line whose key is a leading
+capitalized label, whose mark is a **colon**, and whose value is the rest of the
+line. `parse/metadata.js` reads that **shape** off the raw lines (where the layout
+actually lives — a header carries no terminal punctuation, so the sentence
+splitter would glue it into one run), exactly as `frame.js` reads a banner's shape
+rather than the words "Project Gutenberg". The field **labels** are a register in
+the conventions ledger (`field-label`, seeded ∪ learned), so a header that runs on
+`Composer:` or `Stardate:` teaches its own field as a sci-fi text teaches `pinged`
+as a speech verb — and it appears in `conventions.jsonl` like any other. The
+harvested **values** become `doc.metadata` (by canonical key) and are logged as
+`DEF` notes, **addressed under the document's own holon** (`<doc>.meta.<key>`) and
+held **defeasibly** — a theory until the reading proves it. It is conservative by
+construction: with no clear header block (a lone mid-prose `She had one goal:
+survival.`) it harvests nothing.
+
+`metadata` is part of the **universal contract** — every adapter carries it
+(`organs/in`), omnimodal: text harvests it from labeled lines (the case
+human-language input especially carries), an image from EXIF, a score from ID3, a
+clip from container tags. Across documents it is **not collapsed**: a composite
+keeps each member's front matter apart (`metadataByDoc`, provenance retained),
+because the "Darcy" of one document is not the "Darcy" of another until a proof
+unifies them — the same rule the referents follow, and the namespaced holon
+addresses (`A␟…` vs `B␟…`) show it. When you **chat** with a document the turn
+hands this front matter to the talker as facts (`model/prompt.js` `metadataBlock`),
+so "who wrote this?" / "when is it from?" are answerable.
+
 ## The sub-assemblies (each a holon)
 
 | Holon         | Public interface                                            | Depends on |

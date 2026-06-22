@@ -216,6 +216,33 @@ export const SEED_STARTER = Object.freeze([
   'during',
 ]);
 
+// Front-matter field labels — the token (or short phrase) that, leading a set-off
+// line before a colon, introduces a metadata field: "Title:", "Author:", "Release
+// date:". This is a STRUCTURAL convention, the same register shape as every other —
+// the document's bibliographic header read off its SHAPE, not its words. The colon
+// is the mark (as the frame's banner is a mark), the label is the key, the rest of
+// the line is the value. Seeded with the labels a human-language document
+// conventionally opens with — a book's front matter, an email/memo header, a
+// citation block — and LEARNABLE: a text whose header runs on "Composer:" or "DOI:"
+// teaches that label exactly as a sci-fi text teaches "pinged" as a speech verb.
+// Only the LABELS are conventions and live here; the harvested VALUES are the
+// document's own facts (→ doc.metadata, logged as DEF), not a reusable register.
+// Stored normalized (lowercase) — the seeding loop sets keys verbatim and `has`
+// reads them through `norm`, so seeds must already be normalized, like the others.
+export const SEED_FIELD_LABEL = Object.freeze([
+  // bibliographic front matter
+  'title', 'subtitle', 'author', 'authors', 'editor', 'translator', 'illustrator',
+  'contributor', 'credits', 'produced by', 'publisher', 'publication', 'imprint',
+  'edition', 'volume', 'series', 'date', 'release date', 'publication date',
+  'published', 'updated', 'last updated', 'most recently updated', 'revised',
+  'language', 'source', 'origin', 'subject', 'subjects', 'keywords', 'genre',
+  'rights', 'copyright', 'license', 'licence', 'isbn', 'issn', 'doi', 'url',
+  // correspondence / memo header
+  'from', 'to', 'cc', 'bcc', 're', 'sender', 'recipient',
+  // creative-work credits
+  'composer', 'director', 'artist', 'performer', 'writer', 'creator',
+]);
+
 const SEEDS = {
   'attribution-verb': SEED_SPEECH,
   'abbreviation': SEED_ABBREVIATIONS,
@@ -226,6 +253,7 @@ const SEEDS = {
   'role': SEED_ROLE,
   'function': SEED_FUNCTION,
   'starter': SEED_STARTER,
+  'field-label': SEED_FIELD_LABEL,
 };
 
 // The pre-baked strain-history a prior carries: a seed is not an axiom, it is a
@@ -339,6 +367,10 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
     isRole: (v) => has('role', v),
     isFunction: (v) => has('function', v),
     isStarter: (v) => has('starter', v),
+    // A front-matter field label ("Title", "Author", "Release date") — read by the
+    // metadata pass to confirm a labeled line is a bibliographic field, seed ∪ learned.
+    isFieldLabel: (v) => has('field-label', v),
+    learnFieldLabel: (token, weight = 1) => learn('field-label', token, weight),
     // Convention status — the strain-history a consumer or a test can read.
     isDefeated: (kind, v) => { const e = entryOf(kind, v); return !!e && e.defeated; },
     originOf: (kind, v) => entryOf(kind, v)?.origin ?? null,

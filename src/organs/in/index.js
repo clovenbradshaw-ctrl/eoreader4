@@ -10,6 +10,20 @@
 //
 // New modalities (audio, tables, OCR) are new adapters emitting the same
 // operators onto the same log. The spine does not change.
+//
+// Every doc carries a `metadata` slot (by canonical key: title, author, date, …) —
+// the modality-neutral home for its bibliographic facts. It is the document's FRONT
+// MATTER, omnimodal: text harvests it structurally from labeled lines (the case
+// human-language input especially carries — parse/metadata.js), while an image fills
+// it from EXIF, a score from ID3, a clip from container tags. The turn includes it
+// when chatting about the document, so "who wrote this?" / "when is it from?" are
+// answerable whatever the modality.
+//
+// Across documents it is held as a THEORY, not collapsed: a composite keeps each
+// member's front matter apart (`metadataByDoc`, provenance retained) rather than
+// merging a shared title into one — the same rule the referents follow, since the
+// "Darcy" of one document is not the "Darcy" of another until a proof unifies them.
+// Each fact is addressed under its document's holon, so the address carries the scope.
 
 export { ingestText }        from './text.js';
 export { createCompositeDoc, proposeCrossDocSyn, compositeDocIdOf } from './composite.js';

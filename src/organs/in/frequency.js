@@ -74,6 +74,9 @@ export const ingestFrequencies = (spec = {}) => {
     units, sentences, tokensBySentence, partialTokens, noteHz,
     log, mentions,
     conventions: createConventions(),
+    // The universal contract's metadata slot (organs/in: every doc carries one). The
+    // bare spectrum carries none; a caller may pass any it has (a capture's date, source).
+    metadata: spec.metadata || {},
     projectGraph: (frame = {}) => projectGraph(log, frame),
   };
 

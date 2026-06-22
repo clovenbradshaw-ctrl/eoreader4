@@ -103,6 +103,10 @@ export const ingestFrames = (spec = {}) => {
     units: frames.map((_, i) => `frame ${i}`),
     frames, tracks, blobsByFrame,
     log, mentions, conventions: createConventions(),
+    // The universal contract's metadata slot (organs/in: every doc carries one). A
+    // clip's equivalent of front matter is its container metadata (title, creator,
+    // date, duration), passed in by the caller; the raw pixel frames carry none.
+    metadata: spec.metadata || {},
     projectGraph: (frame = {}) => projectGraph(log, frame),
   };
 };

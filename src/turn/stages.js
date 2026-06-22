@@ -15,7 +15,7 @@ import { surfFold } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
-import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
+import { buildGroundedMessages, buildChatMessages, orientationLine, metadataBlock } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
 import { runVetoes }        from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak } from '../organs/out/speech/index.js';
@@ -198,6 +198,7 @@ export const stages = {
           spans:        selectExcerpts(ctx.spans || []),  // the relevant few verbatim; the fold read all into the notes
           notes:        ctx.note?.text || '',    // the fold's arrows — the document's reading, fed back in
           orientation:  orientationOf(ctx.doc),
+          details:      documentDetails(ctx.doc),  // the document's own front matter (title, author, date, …)
           task:         ctx.task,               // the summary guard rides on a summary task
           budget:       ctx.budget,             // none by default; a caller may impose one
           conversation: groundedConversation(ctx),  // the USER's thread only — never the talker's prior answers
@@ -320,6 +321,7 @@ export const stages = {
         spans:       selectExcerpts(ctx.spans),   // same trimmed excerpts the first pass saw
         notes:       ctx.note?.text || '',   // the refine reads the same notes as the first pass
         orientation: orientationOf(ctx.doc),
+        details:     documentDetails(ctx.doc),   // the same front matter the first pass saw
         task:        ctx.task,
         budget:      ctx.budget,
         conversation: {},                     // history still withheld on the grounded path
@@ -394,10 +396,10 @@ const terrainAtLocus = (ctx, cursor) => {
   return 'Entity';
 };
 
-// Orientation WITHOUT recognition (§3): the talker is handed the FILENAME, the
-// type, and the length — never the title the document metadata may carry, never
-// the author or genre. We read the filename off `docId` (the ingest sets it from
-// the file name) and never off any extracted title.
+// The orientation line: the talker is handed the FILENAME, type, and length, read off
+// `docId` (the ingest sets it from the file name). The document's own metadata (title,
+// author, date) no longer rides here — it rides as facts via `documentDetails` (the
+// recognition guard is lifted by the reader's rule; see model/prompt.js).
 const orientationOf = (doc) => {
   if (!doc) return '';
   const units = doc.units || doc.sentences || [];
@@ -406,6 +408,23 @@ const orientationOf = (doc) => {
     type:     doc.modality === 'image' ? 'image' : 'text',
     length:   units.length,
   });
+};
+
+// The document's front matter for the grounded prompt, composite-aware. A single doc
+// renders its own metadata; a composite renders EACH member's apart, never a merged
+// bag — a shared title across documents is a theory, not a fact (organs/in/composite.js),
+// so the chat sees them as distinct works unless a proof unifies them.
+const documentDetails = (doc) => {
+  if (!doc) return '';
+  if (Array.isArray(doc.metadataByDoc) && doc.metadataByDoc.length) {
+    const sections = doc.metadataByDoc
+      .map(({ docId, metadata }) => metadataBlock(metadata, `${docId}:`))
+      .filter(Boolean);
+    return sections.length
+      ? `About these documents (each its own front matter — distinct works unless proven the same):\n\n${sections.join('\n\n')}`
+      : '';
+  }
+  return metadataBlock(doc.metadata);
 };
 
 // The conversation the GROUNDED prompt carries: the user's OWN recent turns — the thread
