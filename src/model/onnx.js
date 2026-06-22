@@ -97,6 +97,7 @@ const makeOnnx = ({ id, modelId, format, minPredict = 0 }) =>
   registerBackend(id, (opts = {}) => {
     let pipe = null;
     let loading = null;
+    let Streamer = null;             // transformers.js TextStreamer, captured at load
     const repo   = opts.modelId || modelId;
     const device = opts.device  || defaultDevice();
     const dtype  = opts.dtype   || defaultDtype();
@@ -110,7 +111,8 @@ const makeOnnx = ({ id, modelId, format, minPredict = 0 }) =>
         if (loading) return loading;
         loading = (async () => {
           onProgress?.({ phase: 'fetch-runtime', pct: 0.02 });
-          const { pipeline } = await import(/* @vite-ignore */ TRANSFORMERS_URL);
+          const { pipeline, TextStreamer } = await import(/* @vite-ignore */ TRANSFORMERS_URL);
+          Streamer = TextStreamer || null;
           pipe = await pipeline('text-generation', repo, {
             device, dtype,
             progress_callback: onProgressShape(onProgress),
@@ -130,6 +132,19 @@ const makeOnnx = ({ id, modelId, format, minPredict = 0 }) =>
           return_full_text: false,   // string inputs: keep only the continuation
         };
         if (temperature > 0) { gen.do_sample = true; gen.temperature = temperature; }
+        // The streaming capability (model/stream.js §): a ChatML model emits clean
+        // continuation tokens, so stream them live through `onToken` via a
+        // TextStreamer. The Pleias formats are NOT streamed — their native schema
+        // wraps the answer in a reasoning scaffold that extractPleiasAnswer strips
+        // only at the end, so a live stream would surface the scaffold; they draw and
+        // the cleaned answer is emitted whole by the loop's draw-then-emit fallback.
+        const onToken = typeof opts.onToken === 'function' ? opts.onToken : null;
+        if (onToken && format === 'chat' && Streamer && pipe.tokenizer) {
+          gen.streamer = new Streamer(pipe.tokenizer, {
+            skip_prompt: true, skip_special_tokens: true,
+            callback_function: (t) => { if (t) onToken(t); },
+          });
+        }
         const out = await pipe(buildOnnxInput(format, messages), gen);
         return readOnnxOutput(format, out);
       },

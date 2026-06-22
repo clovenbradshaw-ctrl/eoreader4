@@ -8,6 +8,8 @@ import { stubModel } from '../src/write/spurt.js';
 import { runTurn } from '../src/turn/pipeline.js';
 import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
+import { createModel } from '../src/model/interface.js';
+import '../src/model/echo.js';
 import { HASHID_RE } from '../src/core/index.js';
 
 // The Streaming Answer §3, §4 — the answer routed through the writer's beat loop:
@@ -120,6 +122,24 @@ test('runTurn streams a grounded answer through onToken and records the beats (�
   // revise is retired on the streaming path — never a block rewrite that un-streams (§3c)
   const rev = audit.turns[0].steps.find(s => s.name === 'revise');
   assert.ok(!rev?.data?.attempts, 'no block rewrite on the streamed answer');
+});
+
+test('plain token streaming: runTurn forwards onToken to the one-shot answer, no beat-loop (the default visible mode)', async () => {
+  // onToken WITHOUT stream:true — the answer fills in token by token through the
+  // ordinary phrase() path; the grounded beat-loop is not engaged. This is the mode
+  // the UI uses by default (docs/streaming-answer.md).
+  const doc = groundedDoc('Alice loves apples. Bob hates broccoli.');
+  const model = createModel('echo'); await model.load();
+  const audit = createAuditLog();
+  const pieces = [];
+  const res = await runTurn({
+    question: 'apples', doc, model, embedder: createHashEmbedder(),
+    auditLog: audit, onToken: (t) => pieces.push(t),
+  });
+  assert.ok(pieces.length > 1, 'the answer streamed token by token, not one chunk');
+  assert.equal(pieces.join(''), res.turn.rawOutput, 'the stream reconstructs the raw model output exactly');
+  const llm = audit.turns[0].steps.find(s => s.name === 'llm');
+  assert.ok(!llm.data.streamed, 'the grounded beat-loop is NOT engaged on the plain path');
 });
 
 test('without stream the turn is byte-identical to the one-shot path (non-breaking, §5)', async () => {

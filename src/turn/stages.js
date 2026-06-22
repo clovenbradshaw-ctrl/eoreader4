@@ -22,6 +22,7 @@ import { canGroundedSpeak, groundedSpeak } from '../organs/out/speech/index.js';
 import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
+import { streamPhrase }     from '../model/index.js';
 
 export const stages = {
 
@@ -259,7 +260,12 @@ export const stages = {
       });
       return { ...ctx, rawOutput: gated.answer, maxTokens, gated, gatedVoided: gated.voided };
     }
-    const raw = await ctx.model.phrase(ctx.messages, { maxTokens });
+    // PLAIN token streaming (the default visible mode, docs/streaming-answer.md):
+    // forward `ctx.onToken` to the ordinary draw so the one-shot answer fills in
+    // token by token where the backend exposes a decode callback (webllm, onnx-chat,
+    // wllama). A backend without one falls back to draw-then-emit — the whole answer
+    // once — and a turn with no `onToken` is byte-identical to the bare phrase().
+    const raw = await streamPhrase(ctx.model, ctx.messages, { maxTokens, onToken: ctx.onToken });
     return { ...ctx, rawOutput: raw, maxTokens };
   },
 

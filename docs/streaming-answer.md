@@ -20,26 +20,47 @@ It is not a new engine. It is `writeLoop` pointed at the retrieval subgraph inst
 of a hand-written cell DAG, with a streaming surface laid over it. Everything
 load-bearing already existed; the four built seams are named below.
 
-## The opt-in surface
+## Two surfaces, one token channel
 
-The path is **off by default** — the present one-shot answer, chat, and golden
-gated-speech paths are byte-identical when streaming is not requested
-(non-breaking by construction).
+Both modes stream through the same `onToken` channel on `runTurn`; what differs is
+*what* decodes behind it.
+
+### Plain token streaming — the visible default
+
+The app passes `onToken` **without** `stream:true`. `turn/stages.js` `llm` forwards
+it to the ordinary one-shot `phrase()` through `streamPhrase`, so the normal answer
+fills in token by token — smooth, continuous, ChatGPT-style. The UI
+(`src/ui/app.js`) appends each piece to the answer bubble via `streamThinking`
+(`src/ui/chat.js`); when the turn finishes, `finalizeThinking` replaces the raw
+stream with the **bound, cited** answer (the `[sN]` tags are added at `bind`, after
+the model is done). The per-sentence grounding/frame machinery still runs in
+`bind` / `factcheck` / `veto` exactly as before — it is just not the visible grain.
 
 ```js
-runTurn({
-  question, doc, model, embedder, auditLog,
-  stream: true,                 // arm the streaming-answer path
-  onToken: (piece) => ui.append(piece),   // the live surface, left to right
-});
+runTurn({ question, doc, model, embedder, auditLog,
+  onToken: (piece) => ui.append(piece) });   // plain streaming — no stream:true
 ```
 
-When `stream` is set, the turn is grounded, a surfer path exists, and spans were
-retrieved, `turn/stages.js` `llm` realises the answer through `streamAnswer`
-(`write/answer.js`) and emits tokens through `onToken` as they decode. The emitted
-draft becomes `rawOutput`, so the downstream `bind` / `factcheck` / `veto` stages
-annotate it exactly as today. Any precondition absent → the single `phrase()` runs
-instead.
+Token streaming engages for any backend that exposes a decode callback: `webllm`
+(the default, via web-llm's `stream:true`), the `onnx` ChatML models (via
+`TextStreamer`), and `wllama`. A backend without one falls back to draw-then-emit
+(the whole answer once). The Pleias ONNX formats are **not** streamed live — their
+native schema wraps the answer in a reasoning scaffold that is only stripped at the
+end, so a live stream would surface the scaffold; they draw and emit the cleaned
+answer whole.
+
+### The grounded beat-loop — opt-in
+
+Setting `stream:true` (with a grounded doc, a surfer path, and retrieved spans)
+routes the answer through `streamAnswer` (`write/answer.js`) instead: one grounded
+sentence per surfer stop, each witness-bound, frame-shaped, and read forward by the
+predictor, with the inter-sentence work in the gap. The emitted draft becomes
+`rawOutput`, annotated downstream as today. Richer grounding per sentence, but N
+model calls → N gaps, so on a small local model it reads as sentence-by-sentence
+rather than a continuous flow. Any precondition absent → the single `phrase()` runs.
+
+Both are **off by default and non-breaking**: a turn with no `onToken` and no
+`stream` is byte-identical to the present one-shot path.
 
 ## The four seams
 
@@ -124,8 +145,8 @@ Attention yes, certification no.
 ## How we know it works
 
 `tests/model-stream.test.js`, `tests/write-frame.test.js`, `tests/write-plan.test.js`,
-`tests/write-answer.test.js` cover the four seams and the integration. The decisive
-properties:
+`tests/write-answer.test.js` cover the four seams, plain token streaming, and the
+integration. The decisive properties:
 
 - **the seam never shows** — the token stream reconstructs the draft exactly, with no
   newline, double space, or index at any join;
