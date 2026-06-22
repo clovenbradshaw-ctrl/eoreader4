@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "write": "node scripts/write-demo.mjs",
+    "belief": "node scripts/belief-demo.mjs",
     "bench": "node scripts/surf-bench.mjs",
     "predict": "node scripts/predict-moves.mjs",
     "learn:grammar": "node scripts/learn-grammar.mjs",
