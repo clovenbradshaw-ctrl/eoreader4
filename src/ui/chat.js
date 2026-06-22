@@ -40,6 +40,31 @@ export const createThinkingMessage = (root, initial = 'thinking…') => {
 const nowMs = () =>
   (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
 
+// Stream a token into the thinking bubble (docs/streaming-answer.md). On the first
+// piece the bubble drops its "thinking" dots and becomes a live answer that the
+// tokens append to; the elapsed counter keeps ticking. finalizeThinking later
+// overwrites this raw stream with the bound, cited answer — so the streamed text is
+// the live surface, the finalized text is the grounded record. Plain text only
+// (no citation linkify mid-stream — the [sN] tags are added at bind).
+export const streamThinking = (el, piece) => {
+  if (!el || !piece) return;
+  const body = el.querySelector('.body');
+  if (!body) return;
+  let stream = body.querySelector('.answer-stream');
+  if (!stream) {
+    el.classList.remove('thinking');
+    el.classList.add('streaming');
+    const dots  = body.querySelector('.dots');  if (dots)  dots.remove();
+    const label = body.querySelector('.label'); if (label) label.remove();
+    stream = document.createElement('span');
+    stream.className = 'answer-stream';
+    body.insertBefore(stream, body.querySelector('.elapsed'));
+  }
+  stream.textContent += piece;
+  const root = el.parentElement;
+  if (root) root.scrollTop = root.scrollHeight;
+};
+
 export const updateThinking = (el, stageName, data, ctx) => {
   if (!el) return;
   const label = el.querySelector('.body .label');
@@ -88,6 +113,7 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   if (!el) return;
   if (el._elapsedTimer) { clearInterval(el._elapsedTimer); el._elapsedTimer = null; }
   el.classList.remove('thinking');
+  el.classList.remove('streaming');     // the live stream is replaced by the cited answer
   const body  = el.querySelector('.body');
   const trail = el.querySelector('.trail');
   if (body) body.innerHTML = linkifyCitations(text || '');

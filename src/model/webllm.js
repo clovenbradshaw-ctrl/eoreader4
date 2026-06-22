@@ -30,11 +30,27 @@ registerBackend('webllm', (opts = {}) => {
     },
     async phrase(messages, opts = {}) {
       if (!engine) throw new Error('webllm: not loaded');
-      const out = await engine.chat.completions.create({
+      const params = {
         messages,
         temperature: opts.temperature ?? 0.7,
         max_tokens:  opts.maxTokens ?? 256,
-      });
+      };
+      // The streaming capability (model/stream.js §): when the turn hands an
+      // `onToken`, drive web-llm's streaming completion and emit each delta as it
+      // decodes, so the answer fills in live. The accumulated text is returned
+      // exactly as the non-streaming call would — byte-identical to before when no
+      // callback is handed.
+      const onToken = typeof opts.onToken === 'function' ? opts.onToken : null;
+      if (onToken) {
+        const chunks = await engine.chat.completions.create({ ...params, stream: true });
+        let text = '';
+        for await (const chunk of chunks) {
+          const piece = chunk.choices?.[0]?.delta?.content || '';
+          if (piece) { text += piece; onToken(piece); }
+        }
+        return text.trim();
+      }
+      const out = await engine.chat.completions.create(params);
       return out.choices?.[0]?.message?.content?.trim() || '';
     },
   };

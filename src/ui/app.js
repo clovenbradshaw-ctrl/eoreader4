@@ -17,7 +17,7 @@ import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/
 import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { renderUserMessage, createThinkingMessage,
-         updateThinking, finalizeThinking } from './chat.js';
+         updateThinking, finalizeThinking, streamThinking } from './chat.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
 import { renderGraph } from './graph-view.js';
 import { renderLog } from './log-view.js';
@@ -311,6 +311,12 @@ const runQuery = async (question) => {
     history:  STATE.history,    // the prior transcript — the session fold reads it
     grounding: STATE.grounding, // the Auto / Chat with document / Free form register (the chip)
     onStep:   (name, ctx, data) => updateThinking(thinking, name, data, ctx),
+    // PLAIN token streaming (docs/streaming-answer.md): the answer fills the bubble
+    // token by token as the model decodes, where the backend exposes a decode
+    // callback (webllm, onnx-chat, wllama). finalizeThinking below then replaces the
+    // raw stream with the bound, cited answer. No `stream:true` — that arms the
+    // grounded beat-loop, which stays available but is not the visible default.
+    onToken:  (piece) => streamThinking(thinking, piece),
   });
   const ms = Math.round(performance.now() - t0);
   const route = result.route || result.turn.route;

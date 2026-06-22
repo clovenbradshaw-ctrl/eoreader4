@@ -131,6 +131,14 @@ section h2 .hint {
 /* Live "thinking" bubble — dots while in flight, per-stage trail underneath. */
 .msg.assistant.thinking { color: #a1a1aa; font-style: italic; }
 .msg.assistant.thinking .label { margin-left: .35rem; }
+/* The live token stream (docs/streaming-answer.md): plain answer text with a
+   blinking caret, until finalizeThinking swaps in the bound, cited answer. */
+.msg.assistant.streaming { color: inherit; font-style: normal; }
+.msg.assistant.streaming .answer-stream { white-space: pre-wrap; }
+.msg.assistant.streaming .answer-stream::after {
+  content: '▋'; margin-left: .1rem; color: #60a5fa;
+  animation: pulse 1.1s ease-in-out infinite;
+}
 .msg.assistant .dots {
   display: inline-block; width: .7rem; height: .7rem;
   border-radius: 50%; background: #60a5fa;
