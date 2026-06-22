@@ -3,5 +3,6 @@
 
 export { createConventions, SEED_SPEECH, SEED_ABBREVIATIONS,
          SEED_COPULA, SEED_MODIFIER, SEED_RELATION_TYPES,
-         SEED_PREPOSITION, SEED_AUXILIARY, SEED_ROLE, SEED_FUNCTION, SEED_STARTER } from './ledger.js';
+         SEED_PREPOSITION, SEED_AUXILIARY, SEED_ROLE, SEED_FUNCTION, SEED_STARTER,
+         SEED_FIELD_LABEL } from './ledger.js';
 export { induceAttributionVerbs }  from './induce.js';

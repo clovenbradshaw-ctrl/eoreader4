@@ -261,6 +261,16 @@ export const createCompositeDoc = (docs, { crossDocSyn = true } = {}) => {
     admission,
     mentions: admission.mentions,
     conventions: compositeConventions(parts),
+    // Metadata is NOT merged across documents. A shared title or author is a THEORY,
+    // not a fact — the same rule the referents follow (Mr. Darcy in one document is not
+    // necessarily Mr. Darcy in another). So provenance is RETAINED: each document keeps
+    // its own front matter under its docId in `metadataByDoc`, and the flat slot stays
+    // EMPTY, asserting no collapsed cross-document metadata. A later proof — a cross-doc
+    // SYN, as `proposeCrossDocSyn` does for referents — could unify two documents'
+    // metadata, defeasibly; until that proof collapses, they are held apart, and the
+    // namespaced holon addresses (`A␟…` vs `B␟…`) show it.
+    metadata: {},
+    metadataByDoc: parts.map(p => ({ docId: p.doc.docId, metadata: p.doc.metadata || {} })),
     corefField: compositeCoref(originAt),
     sentenceEmbeddings,
     projectGraph: (frame = {}) => projectGraph(log, frame),

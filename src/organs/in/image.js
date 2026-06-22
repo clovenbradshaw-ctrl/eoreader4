@@ -72,6 +72,10 @@ export const ingestImage = (detections = {}) => {
     units, sentences, regions: orderedRegions, tokensBySentence,
     log, mentions,
     conventions: createConventions(),
+    // The universal contract's metadata slot (organs/in: every doc carries one). Text
+    // harvests it from labeled front-matter lines; an image's equivalent is its EXIF
+    // (title, author, date, camera, GPS), passed in by the caller that read the file.
+    metadata: detections.metadata || {},
     projectGraph: (frame = {}) => projectGraph(log, frame),
   };
 

@@ -81,6 +81,10 @@ export const ingestMusic = (score = {}) => {
     units, sentences, sequence, tokensBySentence,
     log, mentions,
     conventions: createConventions(),
+    // The universal contract's metadata slot (organs/in: every doc carries one). A
+    // score's equivalent of front matter is its ID3 / sheet header (title, composer,
+    // performer, year), passed in by the caller; the bare note signal carries none.
+    metadata: score.metadata || {},
     projectGraph: (frame = {}) => projectGraph(log, frame),
   };
 

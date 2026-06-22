@@ -17,6 +17,7 @@ import { segmentSentences }     from './sentences.js';
 import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';
 import { frameSpan }            from './frame.js';
+import { extractMetadata }      from './metadata.js';
 import { createEntityAdmission }from './entities.js';
 import { parseRelations, scanDescriptors } from './relations.js';
 import { argumentSpanSeg }      from './proposition.js';
@@ -109,7 +110,45 @@ export const createParser = ({
     for (const { token, count } of induceAttributionVerbs(sentences)) {
       conventions.learnAttribution(token, count);
     }
+
+    // Structural frame: the head and tail OUTSIDE the body the banners bracket (the
+    // licence header, the title block, the boilerplate footer). Read from the
+    // document's own shape, embedder-free (parse/frame.js). The per-line loop below
+    // holds it; the metadata harvest reads the same front matter from raw lines.
+    const frame = frameSpan(sentences);
+
+    // Pass 0 (cont.) — front-matter metadata (parse/metadata.js). Read the title
+    // block's STRUCTURE — labeled fields, "Title:" / "Author:" / "Release date:" —
+    // off the RAW LINES (a header carries no terminal punctuation, so the sentence
+    // splitter would glue the block into one run): learn each field LABEL into the
+    // ledger (the field-label register, so the document's own header vocabulary joins
+    // what it taught the reader) and take note of the VALUES as the document's own
+    // facts. Conservative — it harvests nothing without a clear header block.
+    const metadata = extractMetadata(text, { conventions });
+
     for (const r of conventions.rules) log.append(r);
+
+    // The harvested metadata as DEF notes on the log — a structural fact about the
+    // DOCUMENT ("the title is X"), tagged kind:'meta', distinct from a per-unit role
+    // DEF (key:'role'). Each fact is addressed under the DOCUMENT's own holon —
+    // `<doc>.meta.<key>` — so the holon address reflects WHICH document it belongs to:
+    // the title of one document is not the title of another, and the address keeps them
+    // apart exactly as the namespaced referents do (organs/in/composite.js). Held
+    // DEFEASIBLY: harvested front matter is a held theory, a DEF the reading can still
+    // revise, not a collapsed axiom. The field lines are still held as frame below
+    // (NUL → no figure); this only records what their structure says. The sentIdx is
+    // the sentence carrying the value (for the trail) — best-effort, omitted when the
+    // splitter glued it past recognition.
+    const slugOf = (s) => String(s || '').trim().replace(/[.\s]+/g, '-').replace(/[^\w-]/g, '');
+    const docSlug = slugOf(docId) || 'doc';
+    for (const f of metadata.fields) {
+      const keySlug = slugOf(f.key) || 'field';
+      const sentIdx = f.value ? sentences.findIndex(s => s.includes(f.value)) : -1;
+      log.append({ op: 'DEF', id: `${docSlug}.meta.${keySlug}`, kind: 'meta',
+                   key: f.key, label: f.label, value: f.value, known: f.known,
+                   defeasible: true, line: f.line, ...(sentIdx >= 0 ? { sentIdx } : {}) });
+    }
+
     const isSpeech = (verb) => conventions.isAttributionVerb(verb);
 
     // Coreference is a field, not a decision. Each mention feeds a decaying
@@ -141,14 +180,10 @@ export const createParser = ({
     // rebutter when the surname proves shared by distinct agents (see below).
     const surnameMerges = [];
 
-    // Structural frame: the head and tail OUTSIDE the body the banners bracket (the
-    // licence header, the title block, the boilerplate footer). Read from the document's
-    // own shape, embedder-free (parse/frame.js). Held BEFORE the per-line chrome test so a
-    // block of licence prose — full sentences a per-line test reads as narrative — is held
-    // by the bracket it sits outside. Empty for an unframed document; this changes nothing
-    // there.
-    const frame = frameSpan(sentences);
-
+    // The structural frame (computed in Pass 0 above) is held BEFORE the per-line
+    // chrome test so a block of licence prose — full sentences a per-line test reads
+    // as narrative — is held by the bracket it sits outside. Empty for an unframed
+    // document; this changes nothing there.
     sentences.forEach((sent, sentIdx) => {
       // Frame is held like chrome (NUL → no entities, no edges) AND marked a site (DEF
       // role=site), so retrieval and the fold skip it too — a licence line can no longer
@@ -374,6 +409,8 @@ export const createParser = ({
       tokensBySentence,
       admission,
       conventions,                  // the learned-rules ledger (REC)
+      metadata: metadata.byKey,     // the document's front-matter facts, by canonical key
+      metaFields: metadata.fields,  // the harvested fields in reading order (label · value · sentIdx)
       mentions: admission.mentions, // id → unit indices
       // Modality-neutral contract: `units` is the reading sequence the spine
       // walks (here, sentences). An image adapter fills the same field with

@@ -20,10 +20,17 @@
 // cell names, never sentence indices, never citation tokens. The same reason
 // citations are withheld from the talker — the mechanics are the grounder's job —
 // is the reason codes and indices are withheld. The talker speaks the arrows in
-// words; it does not speak the machinery. And orientation without recognition: it
-// gets the FILENAME, the type, and the length — never the author, title, or
-// genre, because a talker that knows it is reading a famous book answers from the
-// book it remembers rather than the graph it was handed.
+// words; it does not speak the machinery.
+//
+// Orientation now INCLUDES the document's own front-matter metadata — title, author,
+// date — handed to the talker as facts beside the filename and length (`metadataBlock`,
+// from doc.metadata, omnimodal). An earlier discipline WITHHELD these, for fear a
+// talker that recognized a famous book would answer from the book it remembers rather
+// than the graph it was handed. We lift that: the metadata IS the document (its front
+// matter), so when chatting about a document this is exactly the kind of thing to
+// include — and honesty is kept by the grounding check, not a blindfold. A claim the
+// talker makes that the GRAPH also holds is corroborated, not a leak
+// (factcheck/correspond.js); the answer is held to the reading on the way back.
 
 // The verbatim retrieved spans sit under this header, last, where a small model
 // attends hardest. Exported so the echo backend can find them without an [sN]
@@ -83,12 +90,45 @@ export const SYSTEM_FREE = `You are a helpful, knowledgeable assistant. Answer t
 
 (This reply is free-form — it is not grounded in any document the user may have loaded.)`;
 
-// Orientation WITHOUT recognition. Filename, type, length — never the title the
-// document metadata may carry, never the author, never the genre.
+// The orientation line: filename, type, length. The document's front-matter metadata
+// (title, author, date) rides SEPARATELY, as facts — see `metadataBlock` and the
+// header note on why recognition is no longer withheld.
 export const orientationLine = ({ filename, type, length } = {}) => {
   const parts = [filename || 'the document', type || 'text'];
   if (length != null) parts.push(`${length} sentences`);
   return parts.join(' · ');
+};
+
+// The document's own front-matter metadata, rendered as a labeled block for the
+// grounded prompt (doc.metadata, by canonical key — omnimodal: text harvests it from
+// labeled lines, an image from EXIF, a score from ID3). Known keys lead in a stable
+// reading order (title, then author, then the rest); any extra key follows under a
+// title-cased label. Empty string when the document carries no metadata, so the slot
+// simply does not appear.
+const META_LABEL = {
+  title: 'Title', subtitle: 'Subtitle', author: 'Author', editor: 'Editor',
+  translator: 'Translator', illustrator: 'Illustrator', contributor: 'Contributor',
+  composer: 'Composer', director: 'Director', artist: 'Artist', performer: 'Performer',
+  producer: 'Producer', publisher: 'Publisher', date: 'Date', updated: 'Updated',
+  language: 'Language', source: 'Source', subject: 'Subject', genre: 'Genre',
+  series: 'Series', volume: 'Volume', edition: 'Edition', rights: 'Rights',
+  isbn: 'ISBN', doi: 'DOI', from: 'From', to: 'To', cc: 'Cc',
+};
+const META_ORDER = ['title', 'subtitle', 'author', 'editor', 'translator', 'illustrator',
+  'composer', 'director', 'artist', 'performer', 'producer', 'publisher', 'date', 'updated',
+  'language', 'source', 'subject', 'genre', 'series', 'volume', 'edition', 'isbn', 'doi',
+  'from', 'to', 'cc', 'rights'];
+const titleCase = (k) => String(k).replace(/\b\w/g, (c) => c.toUpperCase());
+
+export const metadataBlock = (metadata = {}, header = 'About this document (its own front matter):') => {
+  const keys = Object.keys(metadata || {});
+  if (!keys.length) return '';
+  const ordered = [...META_ORDER.filter(k => k in metadata),
+                   ...keys.filter(k => !META_ORDER.includes(k))];
+  const lines = ordered
+    .filter(k => metadata[k] != null && String(metadata[k]).trim())
+    .map(k => `- ${META_LABEL[k] || titleCase(k)}: ${metadata[k]}`);
+  return lines.length ? `${header}\n${lines.join('\n')}` : '';
 };
 
 const budgetLine = (b) => {
@@ -109,6 +149,7 @@ export const buildGroundedMessages = ({
   spans = [],
   notes = '',
   orientation = '',
+  details = '',
   task = 'answer',
   budget = DEFAULT_BUDGET,
   conversation = {},
@@ -117,7 +158,11 @@ export const buildGroundedMessages = ({
 } = {}) => {
   const blocks = [];
 
-  if (orientation) blocks.push(`You are reading ${orientation}. Read what is here; do not name or place the work.`);
+  if (orientation) blocks.push(`You are reading ${orientation}.`);
+  // The document's own front-matter metadata (title, author, date, …) — handed as
+  // facts so a metadata question is answerable. Content still comes from the notes
+  // and excerpts below; this is the document telling you what it is.
+  if (details) blocks.push(details);
 
   blocks.push(`Here is the chat with the user:\nUser: ${question}`);
 
