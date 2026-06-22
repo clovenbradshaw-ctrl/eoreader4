@@ -8,7 +8,11 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-#app { display: flex; flex-direction: column; height: 100vh; }
+#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+
+/* The mobile pane switcher lives in the markup but is desktop-hidden; only the
+   narrow-screen media query below reveals it. */
+#mobile-nav { display: none; }
 
 header {
   display: flex; align-items: center; gap: 1rem;
@@ -692,3 +696,119 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 .iv-cite:hover { text-decoration: underline; }
 .iv-drive { display: flex; gap: .5rem; margin-top: .6rem; padding-top: .5rem; border-top: 1px solid #1f1f23; }
 .iv-drive button[disabled] { opacity: .4; cursor: default; }
+
+/* ===========================================================================
+   Responsive layer
+   ---------------------------------------------------------------------------
+   Desktop is the three-column grid above. Two adaptations below:
+     • ≤1100px  — a roomy tablet: tighten gaps/padding, keep all three columns.
+     • ≤820px   — phones & narrow tablets: the columns can't coexist, so each
+                  pane becomes a full-screen view reached from the bottom nav.
+   =========================================================================== */
+
+/* Tablet: keep the three columns but reclaim space. */
+@media (max-width: 1100px) {
+  section { padding: .75rem; }
+  main { gap: 1px; }
+  header { gap: .6rem; padding: .55rem .75rem; }
+  .msg { max-width: 96%; }
+}
+
+/* Phones / narrow screens: one pane at a time, switched from the bottom bar. */
+@media (max-width: 820px) {
+  /* Let the page grow with content and rely on the panes' own scroll regions;
+     avoids the iOS "100vh is taller than the visible area" trap. */
+  html, body { height: auto; }
+  #app { height: 100vh; height: 100dvh; }
+
+  /* --- Header: compact, wraps gracefully, status drops to its own line. ----- */
+  header {
+    flex-wrap: wrap;
+    gap: .4rem .6rem;
+    padding: .5rem .7rem calc(.5rem + env(safe-area-inset-top, 0px));
+    padding-top: max(.5rem, env(safe-area-inset-top, 0px));
+  }
+  header h1 { font-size: .95rem; }
+  /* Status takes the full second line so long progress strings don't squash
+     the controls. */
+  .status {
+    order: 10; flex-basis: 100%;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  header .spacer { display: none; }
+  /* The model select grows to fill the row; 16px text stops iOS auto-zoom. */
+  header select {
+    flex: 1; min-width: 0; font-size: 16px; padding: .4rem .5rem;
+  }
+  #player-link { flex-shrink: 0; }
+
+  /* --- Panes: stack into a single switchable column. --------------------- */
+  main {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    gap: 0;
+  }
+  /* Only the active pane is shown; the rest collapse out of the grid. */
+  main > section { display: none; }
+  body[data-pane="doc"]   #doc-pane,
+  body[data-pane="audit"] #audit-pane { display: block; }
+  body[data-pane="chat"]  #chat-pane  { display: flex; }
+  /* Default (no data-pane yet, e.g. first paint) — show chat. */
+  body:not([data-pane]) #chat-pane { display: flex; }
+  body:not([data-pane]) #doc-pane,
+  body:not([data-pane]) #audit-pane { display: none; }
+
+  section { padding: .85rem .85rem 1rem; }
+  section h2 { font-size: .7rem; }
+
+  /* Doc tabs can outgrow the width — let them scroll sideways instead of wrap
+     into a tall block. */
+  section h2 .tabs {
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    max-width: 100%; padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  section h2 .tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: .35rem .7rem; font-size: .8rem; flex-shrink: 0; }
+
+  /* Bigger touch targets and 16px inputs throughout. */
+  .msg { max-width: 100%; font-size: .95rem; }
+  #input { font-size: 16px; padding: .6rem .7rem; }
+  #composer .chip { padding: .6rem .7rem; font-size: .85rem; }
+  #composer #send { padding: .6rem 1.1rem; }
+  .dropzone { padding: 1rem; }
+  .feed-input { font-size: 16px; padding: .5rem .6rem; }
+
+  /* The composer hugs the bottom of the chat pane and clears the home-bar. */
+  #composer { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+  /* The graph gets a sensible portrait height. */
+  .graph-svg { min-height: 16rem; }
+
+  /* --- Bottom navigation bar --------------------------------------------- */
+  #mobile-nav {
+    display: flex;
+    flex-shrink: 0;
+    background: #151518;
+    border-top: 1px solid #27272a;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mnav-btn {
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: .15rem;
+    background: transparent; border: none; border-radius: 0;
+    color: #71717a; padding: .5rem .25rem; cursor: pointer;
+    min-height: 52px; font: inherit;
+  }
+  .mnav-btn:hover { background: transparent; }
+  .mnav-btn.active { color: #93c5fd; background: #11203a; }
+  .mnav-ico { font-size: 1.1rem; line-height: 1; }
+  .mnav-lbl { font-size: .66rem; letter-spacing: .03em; }
+}
+
+/* Very small phones — shave a little more. */
+@media (max-width: 380px) {
+  header h1 { font-size: .9rem; }
+  .mnav-lbl { font-size: .6rem; }
+  section { padding: .7rem .7rem 1rem; }
+}
