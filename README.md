@@ -430,12 +430,17 @@ sources and ground every claim — exactly what this app demands. A model traine
 to cite is a better realiser for a "no figure at a void" system than a general
 chat model we then have to fence in.
 
-| backend       | model            | weights            | loads via |
-|---------------|------------------|--------------------|-----------|
-| `pleias-pico` | Pleias-Pico 353M | 709 MB bf16 GGUF   | wllama WASM, by URL |
-| `pleias-rag`  | Pleias-RAG-1B    | 744 MB Q4_K_M GGUF | wllama WASM, by URL |
-| `wllama`      | SmolLM2-135M     | 138 MB GGUF        | wllama WASM, by URL |
-| `webllm`      | Llama-3.2-3B     | MLC                | WebGPU |
+| backend            | model                 | weights              | loads via |
+|--------------------|-----------------------|----------------------|-----------|
+| `pleias-pico-onnx` | Pleias-Pico ~350M     | ONNX (q4 / q4f16)    | transformers.js, by repo |
+| `pleias-350m-onnx` | Pleias-350m ~350M     | ONNX (q4 / q4f16)    | transformers.js, by repo |
+| `pleias-1.2b-onnx` | Pleias-1.2b ~1.2B     | ONNX (q4 / q4f16)    | transformers.js, by repo |
+| `pleias-nano-onnx` | Pleias-Nano ~1.2B     | ONNX (q4 / q4f16)    | transformers.js, by repo |
+| `smollm2-360m`     | SmolLM2-360M-Instruct | ONNX (q4 / q4f16)    | transformers.js, by repo |
+| `pleias-pico`      | Pleias-Pico 353M      | 709 MB bf16 GGUF     | wllama WASM, by URL |
+| `pleias-rag`       | Pleias-RAG-1B         | 744 MB Q4_K_M GGUF   | wllama WASM, by URL |
+| `wllama`           | SmolLM2-135M          | 138 MB GGUF          | wllama WASM, by URL |
+| `webllm`           | Llama-3.2-3B          | MLC                  | WebGPU |
 
 The Pleias backends load **the same way** the existing wllama backend does — a
 GGUF fetched by URL through the shared `loadWllamaModel` runtime
@@ -446,6 +451,18 @@ rebuilds that structure from the grounded prompt the turn already assembled and
 strips Pleias's scaffolding back off on the way out — the binder receives the
 same clean prose it gets from every other backend, and no citation token the
 user sees ever escapes. SmolLM2 and Llama-3.2 remain selectable for comparison.
+
+The `*-onnx` and `smollm2-360m` backends are the **transformers.js** path
+([`src/model/onnx.js`](src/model/onnx.js)) — the cleanest small models we have,
+published as ONNX by `onnx-community` / `HuggingFaceTB` precisely for this runtime
+(the same transformers.js family the MiniLM embedder already loads). They run on
+**WebGPU when available, CPU/WASM otherwise**, fetching a 4-bit build (`q4f16` on
+GPU, `q4` on CPU) by repo id. The Pleias models reuse the very same native-schema
+builders as the GGUF backend (`pleias.js`): the app's retrieval **is** the RAG —
+drop a `.txt` and its verbatim spans become the sources Pleias grounds on, while
+the SmolLM2 chat model gets those same spans as context through its own chat
+template. transformers.js caches every fetched file in the browser Cache Storage,
+so each model downloads once per profile and reopens from disk thereafter.
 
 Every wllama-loaded model is **cached to OPFS** on first download and reloads
 from disk thereafter (`allowOffline`) — you pay the download once per browser
