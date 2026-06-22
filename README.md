@@ -461,17 +461,25 @@ sources and ground every claim — exactly what this app demands. A model traine
 to cite is a better realiser for a "no figure at a void" system than a general
 chat model we then have to fence in.
 
-| backend            | model                 | weights              | loads via |
-|--------------------|-----------------------|----------------------|-----------|
-| `pleias-pico-onnx` | Pleias-Pico ~350M     | ONNX (q4 / q4f16)    | transformers.js, by repo |
-| `pleias-350m-onnx` | Pleias-350m ~350M     | ONNX (q4 / q4f16)    | transformers.js, by repo |
-| `pleias-1.2b-onnx` | Pleias-1.2b ~1.2B     | ONNX (q4 / q4f16)    | transformers.js, by repo |
-| `pleias-nano-onnx` | Pleias-Nano ~1.2B     | ONNX (q4 / q4f16)    | transformers.js, by repo |
-| `smollm2-360m`     | SmolLM2-360M-Instruct | ONNX (q4 / q4f16)    | transformers.js, by repo |
-| `pleias-pico`      | Pleias-Pico 353M      | 709 MB bf16 GGUF     | wllama WASM, by URL |
-| `pleias-rag`       | Pleias-RAG-1B         | 744 MB Q4_K_M GGUF   | wllama WASM, by URL |
-| `wllama`           | SmolLM2-135M          | 138 MB GGUF          | wllama WASM, by URL |
-| `webllm`           | Llama-3.2-3B          | MLC                  | WebGPU |
+**Selectable in the picker** (the allowlist — the only backends that download
+reliably in practice): `webllm` (Llama-3.2-3B), `smollm2-360m`, and `echo`. The
+remaining backends below stay **registered in code** — and reachable by setting
+the value directly — but are no longer exposed in the picker. `wllama` and the
+GGUF Pleias builds were pulled because the WASM GGUF fetch fails in practice
+(`Invalid typed array length`); the Pleias ONNX builds remain untested at scale.
+
+| backend            | model                 | weights              | loads via | picker |
+|--------------------|-----------------------|----------------------|-----------|--------|
+| `webllm`           | Llama-3.2-3B          | MLC                  | WebGPU | ✅ |
+| `smollm2-360m`     | SmolLM2-360M-Instruct | ONNX (q4 / q4f16)    | transformers.js, by repo | ✅ |
+| `echo`             | (deterministic stub)  | none                 | no download | ✅ |
+| `pleias-pico-onnx` | Pleias-Pico ~350M     | ONNX (q4 / q4f16)    | transformers.js, by repo | — |
+| `pleias-350m-onnx` | Pleias-350m ~350M     | ONNX (q4 / q4f16)    | transformers.js, by repo | — |
+| `pleias-1.2b-onnx` | Pleias-1.2b ~1.2B     | ONNX (q4 / q4f16)    | transformers.js, by repo | — |
+| `pleias-nano-onnx` | Pleias-Nano ~1.2B     | ONNX (q4 / q4f16)    | transformers.js, by repo | — |
+| `pleias-pico`      | Pleias-Pico 353M      | 709 MB bf16 GGUF     | wllama WASM, by URL | — |
+| `pleias-rag`       | Pleias-RAG-1B         | 744 MB Q4_K_M GGUF   | wllama WASM, by URL | — |
+| `wllama`           | SmolLM2-135M          | 138 MB GGUF          | wllama WASM, by URL | — |
 
 The Pleias backends load **the same way** the existing wllama backend does — a
 GGUF fetched by URL through the shared `loadWllamaModel` runtime
