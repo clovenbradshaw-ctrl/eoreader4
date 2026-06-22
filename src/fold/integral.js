@@ -8,6 +8,8 @@
 // source-ordered digest of the spans — still a fold, tighter than a raw dump.
 
 import { consciousness } from '../perceiver/index.js';
+import { buildSubstrate } from './substrate.js';
+import { projectGroupedNote } from './project.js';
 
 export const foldNote = (spans, opts = {}) => {
   if (!spans || spans.length === 0) return { text: '', sources: [] };
@@ -21,6 +23,20 @@ export const foldNote = (spans, opts = {}) => {
     // than on the retrieval window — everything tied to the referent, not whatever
     // the window drifted across.
     const c = consciousness(doc, ordered, opts.cursor ?? null, opts.focus || []);
+    // The RICH NOTES path (rich-notes §1–§3, behind RULES_REV via opts.grouped). The
+    // same level-2/level-3 reading the consciousness folded is projected through the
+    // substrate (settled · held-open · turns) and the membrane, so the Significance
+    // appearances the flat notes drop — the held contradictions and the located turn —
+    // reach the talker. Falls back to the flat composeNote text on an empty projection,
+    // and the whole branch is inert (byte-identical) when the flag is off.
+    if (opts.grouped && c && c.levels) {
+      const substrate = buildSubstrate({
+        structure: c.levels.structure, significance: c.levels.significance,
+        surf: opts.surf || null, cursor: opts.cursor ?? null,
+      });
+      const text = projectGroupedNote(substrate);
+      if (text) return { text, sources, levels: c.levels, substrate };
+    }
     if (c && c.text) return { text: c.text, sources, levels: c.levels };
   }
 
