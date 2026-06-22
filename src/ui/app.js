@@ -109,6 +109,8 @@ const ensureModel = async () => {
 // The graph node → sentence jump: switch to text, highlight the line, and
 // move the reading cursor there so the graph re-focuses around it.
 const selectSentence = (idx) => {
+  // On a phone the text lives behind the Document pane — surface it on a jump.
+  if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('doc');
   setTab('text');
   highlightSources(els.docView, [idx]);
   STATE.graph?.setCursor(idx);
@@ -264,6 +266,8 @@ const setTab = (name) => {
 // an errored turn can offer a one-click retry (re-runs the very same question).
 const runQuery = async (question) => {
   if (!question) return;
+  // On a phone the answer lands in the chat pane — make sure it's the one shown.
+  if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('chat');
   els.send.disabled = true;
   renderUserMessage(els.messages, question);
 
@@ -320,7 +324,11 @@ const runQuery = async (question) => {
     route, ms, flags: result.flags,
     mode: STATE.grounding,
     docNames,
-    onDocSource: (name) => { if (name && STATE.docs.has(name)) viewDoc(name); setTab('text'); },
+    onDocSource: (name) => {
+      if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('doc');
+      if (name && STATE.docs.has(name)) viewDoc(name);
+      setTab('text');
+    },
     onRetry: () => runQuery(question),
   });
   // Highlight only when grounding a single document — composite indices don't map onto
@@ -421,6 +429,33 @@ els.docTabs.addEventListener('click', (e) => {
   const b = e.target.closest('.tab');
   if (b) setTab(b.dataset.tab);
 });
+
+// Mobile pane switcher — the three panes can't share a phone screen, so a bottom
+// bar shows one at a time. Desktop ignores this (the bar is hidden in CSS, and
+// the panes lay out as a grid). The choice is held on <body data-pane> which the
+// CSS reads to reveal the active pane.
+const mobileNav = document.getElementById('mobile-nav');
+const setPane = (name) => {
+  document.body.dataset.pane = name;
+  for (const b of mobileNav.querySelectorAll('.mnav-btn')) {
+    b.classList.toggle('active', b.dataset.pane === name);
+  }
+  // The graph/canvas views measure their container; reveal then re-fit so they
+  // don't render at zero width while hidden.
+  if (name === 'doc') {
+    if (STATE.activeTab === 'graph') STATE.graph?.reheat?.();
+    if (STATE.activeTab === 'idle')  STATE.idle?.refresh?.();
+  }
+};
+mobileNav.addEventListener('click', (e) => {
+  const b = e.target.closest('.mnav-btn');
+  if (b) setPane(b.dataset.pane);
+});
+// Default to Chat — the primary interaction. (CSS only consults data-pane on
+// narrow screens, so this is inert on desktop.)
+setPane('chat');
+// Expose so the turn path can pull the user back to chat when a query starts.
+STATE.setPane = setPane;
 
 // Clicking a sentence moves the reading cursor (and highlights it). The
 // graph re-projects around that position with γ-decay.
