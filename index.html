@@ -15,8 +15,21 @@
       <span class="spacer"></span>
       <select id="backend" title="Model backend">
         <option value="echo">echo (instant, deterministic)</option>
-        <option value="wllama">wllama · SmolLM2-135M (CPU)</option>
-        <option value="webllm" selected>webllm · Llama-3.2-3B (WebGPU)</option>
+        <optgroup label="ONNX · transformers.js (WebGPU/CPU)">
+          <option value="smollm2-360m">SmolLM2-360M-Instruct · chat</option>
+          <option value="pleias-pico-onnx">Pleias-Pico · ~350M · grounded</option>
+          <option value="pleias-350m-onnx">Pleias-350m · ~350M · grounded</option>
+          <option value="pleias-1.2b-onnx">Pleias-1.2b · ~1.2B · grounded</option>
+          <option value="pleias-nano-onnx">Pleias-Nano · ~1.2B · grounded</option>
+        </optgroup>
+        <optgroup label="GGUF · wllama (CPU)">
+          <option value="wllama">SmolLM2-135M</option>
+          <option value="pleias-pico">Pleias-Pico · 353M (GGUF)</option>
+          <option value="pleias-rag">Pleias-RAG-1B · Q4 (GGUF)</option>
+        </optgroup>
+        <optgroup label="WebGPU · MLC">
+          <option value="webllm" selected>Llama-3.2-3B</option>
+        </optgroup>
       </select>
       <!-- A standalone output organ, reachable by a link — not coded into the app.
            Ingests a text and emerges music (book → music). See eoPlayer.html. -->
