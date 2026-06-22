@@ -218,9 +218,39 @@ export const serializeNotes = (structure, { max = 8 } = {}) => {
 // A relation label the talker may read: the edge's own verb, plain, hyphenated
 // so it reads as one arrow label ("originated in" → "originated-in"). Never a
 // code; the generic stands only when the graph carried no verb.
-const plainRel = (via) => {
+export const plainRel = (via) => {
   const v = String(via || '').trim().replace(/[.!?]+$/, '').replace(/\s+/g, '-');
   return v || 'linked-to';
+};
+
+// The three group headers (docs/spec rich-notes §1). The "(do not settle these)"
+// rider is the plain-language carrier of the void band — the talker reads the
+// instruction the void produced, never the word "void". Exported so the membrane
+// (fold/project.js) and the leak guard share one source of truth for the literals.
+export const NOTE_GROUPS = Object.freeze({
+  settled:  'What the document settles:',
+  heldOpen: 'What the document holds open (do not settle these):',
+  turns:    'Where the reading turns:',
+});
+
+// The grouped serializer (rich-notes §1, P0). Renders the Significance triad made
+// legible — three plain groups, each a list of already-rendered plain-language lines
+// (the membrane in fold/project.js produces the lines; this only formats). An empty
+// group is omitted entirely, so a document with nothing held open and no turn reads
+// as the settled group alone — today's flat arrows under one header. No operator code,
+// no cell name, no index, no citation token, no referent id crosses here: the inputs
+// are already surface (the membrane stripped the graph), and this only joins them.
+export const composeGroupedNote = ({ settled = [], heldOpen = [], turns = [] } = {}, { max = 1200 } = {}) => {
+  const block = (header, lines) => (lines && lines.length) ? `${header}\n${lines.join('\n')}` : '';
+  const parts = [
+    block(NOTE_GROUPS.settled,  settled),
+    block(NOTE_GROUPS.heldOpen, heldOpen),
+    block(NOTE_GROUPS.turns,    turns),
+  ].filter(Boolean);
+  if (parts.length === 0) return '';
+  let text = parts.join('\n');
+  if (text.length > max) text = text.slice(0, max).replace(/\s+\S*$/, '') + '…';
+  return text;
 };
 
 // Replace the count headline with the arrows (the structured reading), and keep

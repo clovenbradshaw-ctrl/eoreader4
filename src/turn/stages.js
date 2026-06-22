@@ -18,7 +18,7 @@ import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine, metadataBlock } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
 import { runVetoes }        from '../ground/index.js';
-import { canGroundedSpeak, groundedSpeak } from '../organs/out/speech/index.js';
+import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
 import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
@@ -135,7 +135,12 @@ export const stages = {
     // the structured reading on that referent — everything tied to it, coref
     // collapsed — instead of the figures the surfed window happened to cross.
     const focus  = ctx.doc ? namedReferents(ctx.doc, ctx.question) : [];
-    const note   = foldNote(spans, { doc: ctx.doc, cursor, focus });
+    // The RICH NOTES path rides behind RULES_REV (rich-notes §6): with the flag off the
+    // fold is byte-identical (flat arrows + significance summary); with it on the note
+    // is projected through the reading substrate (settled · held-open · turns), and the
+    // surfer's located RECs feed the turns group, so the Significance face the flat
+    // notes drop reaches the talker.
+    const note   = foldNote(spans, { doc: ctx.doc, cursor, focus, surf: RULES_REV ? surf : null, grouped: RULES_REV });
     // The reader's confidence about WHO this passage concerns — read off the
     // grounded coref posterior at the cursor (the same field the fold rode). No
     // longer measured and discarded: it rides the turn, and a diffuse field
