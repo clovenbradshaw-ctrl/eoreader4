@@ -41,3 +41,4 @@ export { createIdleLoop, seededRng, RESTING, SURFING } from './idle.js';
 export { surfToPlan, stopToCell } from './plan.js';
 export { frameAt, SITES } from './frame.js';
 export { streamAnswer } from './answer.js';
+export { foldImpression } from './impression.js';

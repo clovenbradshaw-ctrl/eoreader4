@@ -17,7 +17,8 @@ import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/
 import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { renderUserMessage, createThinkingMessage,
-         updateThinking, finalizeThinking, streamThinking } from './chat.js';
+         updateThinking, finalizeThinking, streamThinking, streamImpression } from './chat.js';
+import { foldImpression } from '../write/index.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
 import { renderGraph } from './graph-view.js';
 import { renderLog } from './log-view.js';
@@ -310,12 +311,20 @@ const runQuery = async (question) => {
     auditLog: STATE.audit,
     history:  STATE.history,    // the prior transcript — the session fold reads it
     grounding: STATE.grounding, // the Auto / Chat with document / Free form register (the chip)
-    onStep:   (name, ctx, data) => updateThinking(thinking, name, data, ctx),
+    onStep:   (name, ctx, data) => {
+      updateThinking(thinking, name, data, ctx);
+      // As soon as the fold has read the passage, type its IMPRESSION into the bubble
+      // while the talker warms — model-free streaming during the long time-to-first-
+      // token (docs/streaming-answer.md). Cleared when the real answer begins.
+      if (name === 'fold' && ctx?.surf && !thinking._impression) {
+        try { streamImpression(thinking, foldImpression(ctx).phrases); } catch { /* preview only */ }
+      }
+    },
     // PLAIN token streaming (docs/streaming-answer.md): the answer fills the bubble
     // token by token as the model decodes, where the backend exposes a decode
-    // callback (webllm, onnx-chat, wllama). finalizeThinking below then replaces the
-    // raw stream with the bound, cited answer. No `stream:true` — that arms the
-    // grounded beat-loop, which stays available but is not the visible default.
+    // callback (webllm, onnx-chat, wllama). The first real token clears the impression
+    // preview; finalizeThinking then replaces the raw stream with the bound, cited
+    // answer. No `stream:true` — that arms the grounded beat-loop, not the default.
     onToken:  (piece) => streamThinking(thinking, piece),
   });
   const ms = Math.round(performance.now() - t0);
