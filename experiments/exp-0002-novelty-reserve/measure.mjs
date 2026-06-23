@@ -6,10 +6,10 @@
 // exists; unset = the live/fixed engine), so the SAME script runs before and after
 // the fix and the two runs are directly comparable.
 //
-// Run:  node campaign/experiments/p001-novelty-reserve/measure.mjs
-//       RESERVE=signal node campaign/experiments/p001-novelty-reserve/measure.mjs
+// Run:  node experiments/exp-0002-novelty-reserve/measure.mjs
+//       RESERVE=signal node experiments/exp-0002-novelty-reserve/measure.mjs
 
-import { readingAt } from '../../../src/perceiver/reading.js';
+import { readingAt } from '../../src/perceiver/reading.js';
 import { items } from './stimulus.mjs';
 
 const MODE = process.env.RESERVE === 'signal' ? 'signal' : 'fixed';

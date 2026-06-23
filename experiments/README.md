@@ -37,3 +37,16 @@ read-only **measure** that emits per-item channels over prior context only, a he
 **key** with the predicted dissociation + control + mechanism tag, and a
 channel-agnostic **scorer** that reads the per-item split and the control. The measure
 never reads the key.
+
+## Layout & tooling
+
+The four files of an experiment may be scattered (named in the archive's `files`
+map) or kept self-contained in a per-experiment subdir, e.g.
+`exp-0002-novelty-reserve/{claim,stimulus,key,measure,score}` — either way the archive
+points at them. Locks live in `tests/` and are named by each ledger line's `lock`.
+
+- `lib/seed.mjs` — the random-Wikipedia **seed source**. It draws one or more random
+  articles and persists `{title, revision, extract}` to `seeds.json` as the *seed of
+  record*, so a draw replays exactly (offline). `node experiments/lib/seed.mjs [n]` to
+  draw, `--list` to show the recorded seeds.
+- `seeds.json` — the recorded seeds of record (the replay cache).

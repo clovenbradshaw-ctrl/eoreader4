@@ -296,7 +296,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
     // The figure-field PROTENTION the surprisal channel holds: P(the next arrival is
     // an unseen figure), and the prior MASS it was read against. Read-only surfacing of
     // quantities already computed above — the channel a novelty-reserve experiment reads
-    // (campaign/experiments/p001). Behind opts.forward (off by default) → byte-identical.
+    // (experiments/exp-0002). Behind opts.forward (off by default) → byte-identical.
     out.reserveFig = pNovel;
     out.totalFig   = round(total);
     out.noveltyReserve = round(novFig);   // the reserve AMPLITUDE (constant, or signal-derived)

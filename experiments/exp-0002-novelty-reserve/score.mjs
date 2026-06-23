@@ -3,7 +3,7 @@
 // first (did the trivial mass explanation get caught), then the per-item split,
 // then stability across the control. Channel-agnostic: it reads `reserveFig`.
 //
-// Run:  node campaign/experiments/p001-novelty-reserve/score.mjs
+// Run:  node experiments/exp-0002-novelty-reserve/score.mjs
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

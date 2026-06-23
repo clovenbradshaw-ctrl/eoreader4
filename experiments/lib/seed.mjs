@@ -1,4 +1,4 @@
-// The seed source — random Wikipedia, the variation the campaign channels.
+// The seed source — random Wikipedia, the variation the selection loop channels.
 //
 // Do NOT draw phenomena from imagination; that keeps the engine inside the
 // designer's head. Pull the seed from outside it. Each cycle fetches one or two
@@ -13,8 +13,8 @@
 // located a gap can be replayed exactly. We also persist the `extract` so replay
 // is deterministic offline (a later revision would drift).
 //
-// Run: node campaign/lib/seed.mjs [n]        draw n fresh seeds, persist to seeds.json
-//      node campaign/lib/seed.mjs --list     show the recorded seeds of record
+// Run: node experiments/lib/seed.mjs [n]        draw n fresh seeds, persist to seeds.json
+//      node experiments/lib/seed.mjs --list     show the recorded seeds of record
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

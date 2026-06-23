@@ -54,9 +54,9 @@ at the amplitude; the law (square, normalize) stays put. **Layer:** interior
 ## Run
 
 ```
-node campaign/experiments/p001-novelty-reserve/measure.mjs                 # fixed (live) — the gap
-RESERVE=signal node campaign/experiments/p001-novelty-reserve/measure.mjs  # signal — the fix
-node campaign/experiments/p001-novelty-reserve/score.mjs                   # blind adjudication (8/8)
+node experiments/exp-0002-novelty-reserve/measure.mjs                 # fixed (live) — the gap
+RESERVE=signal node experiments/exp-0002-novelty-reserve/measure.mjs  # signal — the fix
+node experiments/exp-0002-novelty-reserve/score.mjs                   # blind adjudication (8/8)
 ```
 
 ## Scope

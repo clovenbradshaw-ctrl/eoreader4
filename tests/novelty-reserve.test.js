@@ -6,7 +6,7 @@ import { noveltyReserve, NOVELTY_RESERVE } from '../src/core/surprise.js';
 import { readingAt } from '../src/perceiver/reading.js';
 import { ingestMusic } from '../src/organs/in/music.js';
 
-// REGRESSION LOCK — campaign p001 (the signal-derived novelty reserve).
+// REGRESSION LOCK — experiments/exp-0002 (the signal-derived novelty reserve).
 //
 // The fixed reserve is blind to whether newcomers have been arriving: at matched
 // prior MASS the reader's surprise at a newcomer is identical whether the recent

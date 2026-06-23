@@ -24,9 +24,9 @@
 // that fires here is reading mass, not the mechanism. The matched-mass items are
 // the real test: only a novelty-RATE reader separates them.
 
-import { createLog } from '../../../src/core/log.js';
-import { ingestMusic } from '../../../src/organs/in/music.js';
-import { parseText } from '../../../src/perceiver/parse/pipeline.js';
+import { createLog } from '../../src/core/log.js';
+import { ingestMusic } from '../../src/organs/in/music.js';
+import { parseText } from '../../src/perceiver/parse/pipeline.js';
 
 // The cast, drawn from the seed's domain (Greek-revolution era). Distinct labels
 // are the dense newcomers; one label is the barren repeater; one is held back as
