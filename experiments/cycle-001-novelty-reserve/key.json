@@ -1,0 +1,36 @@
+{
+  "experiment": "cycle-001-novelty-reserve",
+  "held": "This file is NOT read by measure.mjs. score.mjs reads it to grade the blind channels.",
+  "claim": "The probability the reader reserves for an unseen atom — forwardDist().reserve, and the surprise it therefore assigns to a genuine newcomer — should TRACK THE RECENT NOVELTY RATE: high right after a burst of newcomers, low after a stretch of confirmation. The live engine fails this: its reserve is novelty/(mass+novelty) with a CONSTANT novelty, so it depends only on total mass and is blind to whether newcomers have lately been arriving.",
+  "identities": {
+    "s1": { "sense": "A", "pattern": "RECENT",  "gloss": "office endures, then a burst of 3 new deans (newcomers at steps 5,6,7)" },
+    "s5": { "sense": "A", "pattern": "EARLY",   "gloss": "3 new deans first, then the office endures (newcomers at steps 0,1,2)" },
+    "s3": { "sense": "A", "pattern": "CONFIRM", "gloss": "one long tenure — the office only (newcomer at step 0 only)" },
+    "s4": { "sense": "B", "pattern": "RECENT",  "gloss": "drone, then 3 new pitches (newcomers at steps 5,6,7)" },
+    "s2": { "sense": "B", "pattern": "EARLY",   "gloss": "3 new pitches first, then the drone (newcomers at steps 0,1,2)" },
+    "s6": { "sense": "B", "pattern": "CONFIRM", "gloss": "one held drone (newcomer at step 0 only)" }
+  },
+  "predicted_dissociation": {
+    "channel": "reserve_tracked (and inversely newcomerSurprise_tracked)",
+    "per_sense_order": "RECENT > EARLY > CONFIRM",
+    "pairs": [["s1",">","s5"],["s5",">","s3"],["s4",">","s2"],["s2",">","s6"]]
+  },
+  "controls": {
+    "loud_surface_is_flat": {
+      "channel": "reserve_const",
+      "predict": "reserve_const(RECENT) == reserve_const(EARLY) == reserve_const(CONFIRM) within 1e-9, in BOTH senses",
+      "why": "Every step deposits exactly one unit, so total gamma-mass at the probe is identical across conditions. The CONSTANT-novelty reserve is a function of that mass alone — so it is provably flat here. A method that 'wins' on this stimulus via mass is therefore caught: mass cannot tell these conditions apart."
+    },
+    "recency_not_count": {
+      "channels": ["distinctCount"],
+      "predict": "RECENT and EARLY have EQUAL distinctCount (4 in sense A, 4 in sense B); only CONFIRM is lower (1).",
+      "why": "RECENT > EARLY under the tracked reserve cannot be a cumulative-distinct-count effect, because RECENT and EARLY carry the same count. The only thing that differs between them is WHEN the newcomers arrived — recency."
+    }
+  },
+  "mechanism": "reserve = the gamma-decayed recent newcomer RATE: noveltyAmplitude(firstSeen, now, {gamma}) = sum over prior atoms of gamma^(now-1-firstSeen), fed as `novelty` into the UNCHANGED forwardDist/surpriseAt. Context enters at the amplitude; the Born step (square-and-normalize / the KL normalization) is fixed and identical for every sense. Interior, modality-agnostic: the SAME helper and the SAME law produce the dissociation over text-proposition atoms (sense A) and tonal-pitch atoms (sense B).",
+  "verdict_rule": {
+    "gap_located": "reserve_const is FLAT across RECENT/EARLY/CONFIRM (fails predicted_dissociation) — the live engine cannot discriminate recent novelty from mass.",
+    "capability_confirmed": "reserve_tracked satisfies per_sense_order strictly in BOTH senses AND the recency_not_count control holds.",
+    "interior_confirmed": "capability_confirmed holds in sense A AND sense B (two different front-end maps, one law)."
+  }
+}

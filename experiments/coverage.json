@@ -1,0 +1,15 @@
+{
+  "note": "Which interior/organ sites the campaign's experiments have exercised. The inside-out draw is biased toward the COLD regions below — the sites no experiment has stressed yet, where untested assumptions (and hand-set constants) hide.",
+  "exercised": {
+    "src/core/surprise.js": ["forwardDist", "surpriseAt (reserve term)", "noveltyAmplitude (added cycle-001)"],
+    "src/perceiver/reading.js": ["reserve amplitude — figure channel (pNovel)", "reserve amplitude — proposition channel (surpriseAt/forwardDist)", "SIGNAL_RESERVE gate"]
+  },
+  "cold_regions": {
+    "src/core/voidnull.js": ["deriveNull", "createNoiseFloor", "extremeValueZ", "the alpha knob — the OTHER human constant in the Born/null path (spec-one-surprise Track B)"],
+    "src/core/enacted/loop.js": ["the impulse threshold (absolute 0.95 on a scale the meaning-reader never reaches — a named-but-untaken constant fix)"],
+    "src/perceiver/reading.js": ["GAMMA=0.7 (the horizon constant)", "the surprisal floors 1e-6 / pNovel*0.5", "entity vs recency horizon"],
+    "src/predict/predictor.js": ["the three-prior geometric-mean weights (music move-surprise)"],
+    "src/classify/bands.js": ["the band thresholds (8:3 ratio)"],
+    "src/core/cube.js": ["the 27 cells — EVA/REC and the empty SYN-by-Ground are the thin cells the corpus shows impoverished"]
+  }
+}

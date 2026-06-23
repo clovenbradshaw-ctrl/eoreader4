@@ -1,0 +1,23 @@
+{
+  "experiment": "cycle-001-novelty-reserve",
+  "blind": true,
+  "note": "Opaque condition ids (s1..s6). The measurer must emit channels per id WITHOUT reading key.json and WITHOUT branching on condition identity. Each `steps[i]` is the set of basis-atom keys deposited at step i; a 'newcomer' is an atom appearing for the first time. Every step deposits exactly ONE unit of mass, so the total gamma-decayed mass at the probe is IDENTICAL across all conditions of equal length — the loud surface signal held flat by construction. `probe` is a genuinely-unseen atom delivered at the final step.",
+  "seed_of_record": {
+    "source": "en.wikipedia.org/api/rest_v1/page/random/summary",
+    "draws": [
+      { "title": "Dean of Ely", "revision": "1313694173", "role": "sense A content — an ecclesiastical succession: a persisting office (the See) attested across steps, with new office-holders (deans) as newcomers" },
+      { "title": "Swing Street", "revision": "1354076665", "role": "sense B content — a tonal stream: a sustained tone, with new pitches as newcomers" }
+    ],
+    "collision": "an ecclesiastical succession (Dean of Ely) and a music album (Swing Street) forced into one shape: a stream whose RECENT NOVELTY RATE varies — a burst of newcomers at the end vs. at the start vs. none — read once as figures-over-an-office (text/proposition basis) and once as pitches-over-a-drone (tonal basis)."
+  },
+  "gamma": 0.7,
+  "probeStep": 8,
+  "conditions": [
+    { "id": "s1", "sense": "A", "steps": [["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:dean_robert"],["f:dean_humphrey"],["f:dean_william"]], "probe": "f:dean_NEW" },
+    { "id": "s2", "sense": "B", "steps": [["tone:277.2"],["tone:329.6"],["tone:392.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"]], "probe": "tone:NEW" },
+    { "id": "s3", "sense": "A", "steps": [["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:see_ely"]], "probe": "f:dean_NEW" },
+    { "id": "s4", "sense": "B", "steps": [["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:277.2"],["tone:329.6"],["tone:392.0"]], "probe": "tone:NEW" },
+    { "id": "s5", "sense": "A", "steps": [["f:dean_robert"],["f:dean_humphrey"],["f:dean_william"],["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:see_ely"],["f:see_ely"]], "probe": "f:dean_NEW" },
+    { "id": "s6", "sense": "B", "steps": [["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"],["tone:220.0"]], "probe": "tone:NEW" }
+  ]
+}

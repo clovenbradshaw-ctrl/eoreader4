@@ -96,4 +96,32 @@ export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
   return { dist, reserve: novelty / Z, Z };
 };
 
+// THE NOVELTY AMPLITUDE — the reserve made signal-derived (docs/spec-one-surprise.md: the
+// "reserve tracks the recent novelty rate" discipline). The hand-set reserve constant
+// (NOVELTY_RESERVE) is BLIND to whether newcomers have been arriving: 1/(mass+1) reserves
+// the same mass for an unseen atom right after a burst of newcomers as after a long stretch
+// of confirmation. That is the reader failing to learn from its own signal. This replaces the
+// CONSTANT amplitude with the γ-decayed count of first-appearances — each prior atom deposits
+// γ^(now-1-firstSeen) under the SAME γ the figure/proposition field decays under — so the
+// amplitude is high right after newcomers and falls toward zero over a confirmation run. Fed
+// as `novelty` into the UNCHANGED surpriseAt / forwardDist (the law), the reserve nu/(mass+nu)
+// becomes the recent novelty RATE. Context enters at the amplitude; the Born step stays put.
+//
+// Modality-agnostic by construction: it reads each prior atom's first-seen step and the
+// cursor, nothing of any sense, so the same helper serves text propositions, tonal moves, or
+// any basis. Strictly positive for any non-empty prior (the most-recent first-appearance
+// always contributes), so the KL stays absolutely continuous on a newcomer with no hand-set
+// floor. It returns 0 only at the literal opening (no prior), where there is no signal yet to
+// learn the rate from; the caller falls back to the uninformative unit there, which is also
+// where the flag-off path reserves all mass for the unseen — so the opening is unchanged.
+//
+//   firstSeen  Map<atom, step>  the step each PRIOR atom first appeared (its admission line)
+//   now        the cursor step the reserve is read at
+//   gamma      the recency-decay kernel (the horizon the field already decays under)
+export const noveltyAmplitude = (firstSeen, now, { gamma }) => {
+  let nu = 0;
+  for (const s of firstSeen.values()) if (s < now) nu += Math.pow(gamma, now - 1 - s);
+  return nu;
+};
+
 const round = (x) => Math.round(x * 100) / 100;

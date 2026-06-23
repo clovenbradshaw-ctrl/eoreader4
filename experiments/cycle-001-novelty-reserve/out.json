@@ -1,0 +1,113 @@
+{
+  "experiment": "cycle-001-novelty-reserve",
+  "gamma": 0.7,
+  "probeStep": 8,
+  "items": [
+    {
+      "id": "s1",
+      "sense": "A",
+      "surface": {
+        "totalMass": 3.14,
+        "distinctCount": 4
+      },
+      "reserve_const": 0.241477,
+      "reserve_tracked": 0.419755,
+      "nu_tracked": 2.272354,
+      "newcomerSurprise_const": 2.05,
+      "newcomerSurprise_tracked": 1.25,
+      "bayes_const": 0.28,
+      "bayes_tracked": 0.11
+    },
+    {
+      "id": "s2",
+      "sense": "B",
+      "surface": {
+        "totalMass": 3.14,
+        "distinctCount": 4
+      },
+      "reserve_const": 0.241477,
+      "reserve_tracked": 0.162208,
+      "nu_tracked": 0.608173,
+      "newcomerSurprise_const": 2.05,
+      "newcomerSurprise_tracked": 2.62,
+      "bayes_const": 0.28,
+      "bayes_tracked": 0.43
+    },
+    {
+      "id": "s3",
+      "sense": "A",
+      "surface": {
+        "totalMass": 3.14,
+        "distinctCount": 1
+      },
+      "reserve_const": 0.241477,
+      "reserve_tracked": 0.025548,
+      "nu_tracked": 0.082354,
+      "newcomerSurprise_const": 2.05,
+      "newcomerSurprise_tracked": 5.29,
+      "bayes_const": 0.28,
+      "bayes_tracked": 1.25
+    },
+    {
+      "id": "s4",
+      "sense": "B",
+      "surface": {
+        "totalMass": 3.14,
+        "distinctCount": 4
+      },
+      "reserve_const": 0.241477,
+      "reserve_tracked": 0.419755,
+      "nu_tracked": 2.272354,
+      "newcomerSurprise_const": 2.05,
+      "newcomerSurprise_tracked": 1.25,
+      "bayes_const": 0.28,
+      "bayes_tracked": 0.11
+    },
+    {
+      "id": "s5",
+      "sense": "A",
+      "surface": {
+        "totalMass": 3.14,
+        "distinctCount": 4
+      },
+      "reserve_const": 0.241477,
+      "reserve_tracked": 0.162208,
+      "nu_tracked": 0.608173,
+      "newcomerSurprise_const": 2.05,
+      "newcomerSurprise_tracked": 2.62,
+      "bayes_const": 0.28,
+      "bayes_tracked": 0.43
+    },
+    {
+      "id": "s6",
+      "sense": "B",
+      "surface": {
+        "totalMass": 3.14,
+        "distinctCount": 1
+      },
+      "reserve_const": 0.241477,
+      "reserve_tracked": 0.025548,
+      "nu_tracked": 0.082354,
+      "newcomerSurprise_const": 2.05,
+      "newcomerSurprise_tracked": 5.29,
+      "bayes_const": 0.28,
+      "bayes_tracked": 1.25
+    }
+  ],
+  "instrument": {
+    "reserves_in_open_interval": true,
+    "not_all_zero": true,
+    "tracked_varies": true,
+    "const_mass_is_flat_within_sense": true
+  },
+  "liveness": {
+    "off": {
+      "RECENT": 0.253732,
+      "EARLY": 0.253732
+    },
+    "on": {
+      "RECENT": 0.388434,
+      "EARLY": 0.296764
+    }
+  }
+}

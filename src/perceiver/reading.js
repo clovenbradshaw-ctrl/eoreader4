@@ -17,10 +17,22 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyAmplitude } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
-const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
+const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure (the flag-off CONSTANT)
+
+// The signal-derived RESERVE gate (docs/spec-one-surprise.md): off by default, golden-parity.
+// When on, the novelty reserve stops being the constant above and becomes signal-derived — the
+// γ-decayed recent newcomer rate (noveltyAmplitude) fed through the UNCHANGED surpriseAt/
+// forwardDist. Read once from the env. It honours the umbrella RULES_REV bench flag, and also a
+// dedicated NOVELTY_RATE flag that flips THIS capability alone (so the experiment can isolate it
+// from the other RULES_REV-gated paths). Default (neither set) keeps the 649-test text golden
+// byte-identical — the parity gate.
+const flag = (v) => /^(1|true|on)$/i.test(v || '');
+const SIGNAL_RESERVE =
+  (typeof process !== 'undefined' && process.env &&
+    (flag(process.env.RULES_REV) || flag(process.env.NOVELTY_RATE))) || false;
 
 export const readingAt = (doc, cursor, opts = {}) => {
   const units = doc.units || doc.sentences || [];
@@ -48,7 +60,13 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // what the Bayesian-surprise channel reads, so an EVENT on a standing figure (the
   // apple in the back, the disowning) is significant, not only a change of cast.
   const priorProp = new Map(); // atom → γ-decayed presence before `at`
+  const firstProp = new Map(); // atom → first prior step it appeared (its admission line) — the
+                               // signal the novelty amplitude reads (RULES_REV). Events arrive in
+                               // ascending sentIdx (append-only log), so the first set wins.
   const bump = (m, k, v = 1) => m.set(k, (m.get(k) || 0) + v);
+  // Deposit into the proposition field AND date the atom's first appearance, so the reserve
+  // can be made to track the recent newcomer rate without disturbing the field itself.
+  const bumpP = (k, idx, w) => { if (!firstProp.has(k)) firstProp.set(k, idx); bump(priorProp, k, w); };
 
   const insAt = [];            // entity ids instantiated at `at`
   const relAt = [];            // { op, src, tgt, via } at `at`
@@ -94,17 +112,17 @@ export const readingAt = (doc, cursor, opts = {}) => {
       if (e.op === 'INS') {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
         priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
-        bump(priorProp, `f:${e.id}`, w);
+        bumpP(`f:${e.id}`, e.sentIdx, w);
       } else if (e.op === 'CON' || e.op === 'SIG') {
         priorBond.add(`${e.src}|${e.tgt}`);
         // The bond's participants (incl. an NP referent target) and the proposition
         // itself enter the belief field — the relation is part of what is the case.
-        bump(priorProp, `f:${e.src}`, w);
-        bump(priorProp, `f:${e.tgt}`, w);
-        bump(priorProp, `p:${e.src}|${e.via || ''}|${e.tgt}`, w);
+        bumpP(`f:${e.src}`, e.sentIdx, w);
+        bumpP(`f:${e.tgt}`, e.sentIdx, w);
+        bumpP(`p:${e.src}|${e.via || ''}|${e.tgt}`, e.sentIdx, w);
       } else if (e.op === 'DEF' && e.key === 'predicate') {
-        bump(priorProp, `f:${e.id}`, w);
-        bump(priorProp, `d:${e.id}|${e.value}`, w);
+        bumpP(`f:${e.id}`, e.sentIdx, w);
+        bumpP(`d:${e.id}|${e.value}`, e.sentIdx, w);
       }
     } else if (e.sentIdx === at) {
       if (e.op === 'INS')                               insAt.push(e.id);
@@ -138,11 +156,34 @@ export const readingAt = (doc, cursor, opts = {}) => {
   }
 
   // --- Prediction (REC): a probability distribution over who acts next. ----
-  // P(figure) ∝ γ-mass; a reserve of NOVELTY holds probability for someone
-  // not yet seen. Prediction = the expectation: the top of this distribution.
+  // P(figure) ∝ γ-mass; a reserve holds probability for someone not yet seen.
+  // Prediction = the expectation: the top of this distribution.
+  //
+  // THE RESERVE AMPLITUDE. Flag-off it is the CONSTANT NOVELTY (1.0) → reserve 1/(mass+1),
+  // blind to whether newcomers have been arriving. Flag-on (RULES_REV) it is the γ-decayed
+  // recent newcomer rate (noveltyAmplitude over each atom's admission line, same γ as the
+  // field) → reserve nu/(mass+nu), high right after newcomers, low after a confirmation run.
+  // Context enters HERE, at the amplitude; the Born step (Z, pNovel, surpriseAt, forwardDist)
+  // is untouched. The figure channel dates a figure to its first INS; the proposition channel
+  // dates an atom to firstProp.
   const total = [...priorMass.values()].reduce((s, m) => s + m, 0);
-  const Z = total + NOVELTY;
-  const pNovel = NOVELTY / Z;
+  let novFig = NOVELTY, novProp = NOVELTY;
+  // Active under the env gate (SIGNAL_RESERVE) unless an explicit per-call opt OVERRIDES it: a
+  // boolean opts.signalReserve wins (force on OR off), else the env decides. So a regression lock
+  // can pin either path deterministically, in-process, regardless of env. Omitted → env →
+  // default off, so a plain readingAt stays byte-identical.
+  const useSignalReserve = typeof opts.signalReserve === 'boolean' ? opts.signalReserve : SIGNAL_RESERVE;
+  if (useSignalReserve) {
+    const firstFig = new Map();
+    for (const id of priorMass.keys()) { const s = firstIns.get(id); if (s != null) firstFig.set(id, s); }
+    const nf = noveltyAmplitude(firstFig,  at, { gamma: γ });
+    const np = noveltyAmplitude(firstProp, at, { gamma: γ });
+    // 0 only at the opening (no prior); fall back to the uninformative unit, matching flag-off.
+    novFig  = nf > 0 ? nf : NOVELTY;
+    novProp = np > 0 ? np : NOVELTY;
+  }
+  const Z = total + novFig;
+  const pNovel = novFig / Z;
   const pOf = (id) => (priorMass.get(id) || 0) / Z;
 
   const ranked = [...priorMass.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
@@ -217,7 +258,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: novProp, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -272,7 +313,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: novProp });
   return out;
 };
 
