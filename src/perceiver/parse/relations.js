@@ -18,20 +18,22 @@
 //     owner to the named relative through the kin term.
 
 import { scanEntities } from './entities.js';
-import { segmentClauses } from './clauses.js';
-import { SEED_COPULA, SEED_MODIFIER, SEED_SPEECH } from '../../core/conventions/index.js';
+import { segmentClauses, SEED_CLAUSE_BOUNDARY } from './clauses.js';
+import { SEED_COPULA, SEED_MODIFIER, SEED_SPEECH, SEED_CONJUNCTION } from '../../core/conventions/index.js';
 
 // The verb-classification word-lists live in the conventions ledger (the home for
 // the language-specific stuff), seeded and learnable. The parser holds NO list of
 // its own: it takes predicates, defaulting to the ledger's seeds so a standalone
 // call (the edge-grounding veto) still works. The pipeline hands it the live
 // conventions, so a document's learned dialect flows straight in.
-const COPULA_SEED   = new Set(SEED_COPULA);     // is/am/was/… → DEF, never a relation
-const SPEECH_SEED   = new Set(SEED_SPEECH);     // said/asked/… → SIG
-const MODIFIER_SEED = new Set(SEED_MODIFIER);   // adverbs/intensifiers/auxiliaries to step over
-const defIsCopula   = (w) => COPULA_SEED.has(w);
-const defIsSpeech   = (w) => SPEECH_SEED.has(w);
-const defIsModifier = (w) => MODIFIER_SEED.has(w);
+const COPULA_SEED      = new Set(SEED_COPULA);       // is/am/was/… → DEF, never a relation
+const SPEECH_SEED      = new Set(SEED_SPEECH);       // said/asked/… → SIG
+const MODIFIER_SEED    = new Set(SEED_MODIFIER);     // adverbs/intensifiers/auxiliaries to step over
+const CONJUNCTION_SEED = new Set(SEED_CONJUNCTION);  // and/or/nor → joins coordinated subjects
+const defIsCopula      = (w) => COPULA_SEED.has(w);
+const defIsSpeech      = (w) => SPEECH_SEED.has(w);
+const defIsModifier    = (w) => MODIFIER_SEED.has(w);
+const defIsConjunction = (w) => CONJUNCTION_SEED.has(w);
 
 const SUBJECT_PRONOUN = new Set(['He', 'She', 'They', 'We', 'It', 'I', 'You']);
 
@@ -115,6 +117,14 @@ const KIN_RE = new RegExp(
 // it could move to a conventions register like the rest.
 const LEAD_COORD = /^\s*(?:and|but|now|so|then|or|nor|yet|for|therefore|thus)\b[\s,]*/i;
 
+// A colon introduces an independent clause ("The filings told the real story: Delgado
+// and Reyes had each…"), so under coordinated-subject reading it is a clause boundary
+// too — otherwise a framing head ("…: ") buries the coordinated subjects mid-clause and
+// the reading misses them. Held WITH the coordinated-subject switch (it widens
+// segmentation, so it ships behind the same gate that keeps the default byte-identical),
+// and appended to the seeded boundary list — a text-organ token, not an engine fact.
+const COORD_CLAUSE_BOUNDARY = [...SEED_CLAUSE_BOUNDARY, ': '];
+
 const leadingSubject = (sentence, admission, coref) => {
   const lead = (sentence.match(LEAD_COORD) || [''])[0].length;   // skip a leading coordinator
   const rest = sentence.slice(lead);
@@ -137,6 +147,44 @@ const leadingSubject = (sentence, admission, coref) => {
              text: rest.slice(first.start, first.end), kind: 'name', w: 1 };
   }
   return null;
+};
+
+// Coordinated subjects at a clause head: "Name and Name <predicate>", "Name, Name
+// and Name <predicate>". Returns the FULL list of admitted-name subjects sharing
+// the clause's predicate, or null if the head is not a coordination of names. This
+// is the symmetric partner to `running` (one subject across many clauses); here it
+// is many subjects in one clause. Pronoun and inherited subjects are NOT coordinated
+// here — only admitted names, so the path stays a figure-to-figure structure and no
+// guessing enters. The end offset is the LAST conjunct's end, so the caller seeks the
+// verb after the whole subject coordination, not after the first name.
+//
+// `isConjunction` is the LEDGER's coordinator predicate, injected like every other
+// word-class the parser asks (isCopula/isSpeech/isModifier): the parser holds NO
+// coordinator list of its own. The gap between two conjuncts must be orthography
+// (list comma, the "&" logogram, whitespace) carrying at most ONE conjunction word,
+// and that word's class is decided by the ledger, never by a literal typed here.
+const coordinatedSubjects = (sentence, admission, isConjunction) => {
+  const lead = (sentence.match(LEAD_COORD) || [''])[0].length;
+  const rest = sentence.slice(lead);
+  const ents = scanEntities(rest);
+  if (!ents.length || ents[0].start > 1) return null;        // must be clause-initial
+  // Walk conjuncts while the gap between consecutive names is ONLY coordinator
+  // material — strip the orthography (commas, "&", whitespace); what remains must be
+  // empty or a single LEDGER conjunction. That, and only that, is subject coordination.
+  const subjects = [];
+  let prevEnd = null;
+  for (const e of ents) {
+    if (prevEnd !== null) {
+      const word = rest.slice(prevEnd, e.start).replace(/[\s,&]/g, '').toLowerCase();
+      if (word !== '' && !isConjunction(word)) break;         // not a coordinator → run ends
+    }
+    if (!admission.isAdmitted(e.label)) break;                // every conjunct must be a figure
+    subjects.push({ id: admission.idOf(e.label),
+                    start: lead + e.start, end: lead + e.end,
+                    text: rest.slice(e.start, e.end) });
+    prevEnd = e.end;
+  }
+  return subjects.length >= 2 ? { subjects, end: subjects[subjects.length - 1].end } : null;
 };
 
 // Round a coupling weight for the log; only sub-unit (inferred) weights are
@@ -389,6 +437,7 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // Speech / copula / modifier classification comes from the conventions ledger
   // when one is supplied (its seed ∪ Pass-0 learned), falling back to the seeds.
   const isSpeech = opts.isSpeech || defIsSpeech;
+  const isConjunction = opts.isConjunction || defIsConjunction;   // ledger coordinator predicate
   const verbOpts = { isCopula: opts.isCopula || defIsCopula, isModifier: opts.isModifier || defIsModifier };
   const npGuards = { isSpeech, isCopula: verbOpts.isCopula, isModifier: verbOpts.isModifier };
   // The NP referent object slot (move 2) is ON for the page (the pipeline asks for
@@ -407,8 +456,48 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // to. A genealogy's "And he begat… and begat… and begat…" is exactly this — one
   // patriarch, held active, gathering sons across subjectless clauses.
   let running = null;
-  for (const clause of segmentClauses(s)) {
+  for (const clause of segmentClauses(s, opts.coordSubjects ? { boundaries: COORD_CLAUSE_BOUNDARY } : undefined)) {
     const base = clause.offset;                       // clause-relative offset → `s`
+
+    // Coordinated subjects: read every conjunct, seek the verb after the WHOLE
+    // coordination, and bond each conjunct to the shared object — two subjects on one
+    // object is a length-two path between them, the structural signature of
+    // convergence the single-subject scan (first conjunct only) drops. Gated by
+    // `opts.coordSubjects` so the legacy single-subject graph is byte-identical when
+    // off; the conjunction word-class is asked of the ledger, never hard-listed.
+    if (opts.coordSubjects) {
+      const coord = coordinatedSubjects(clause.text, admission, isConjunction);
+      if (coord) {
+        const after = clause.text.slice(coord.end);
+        const head  = headVerb(after, verbOpts);
+        if (head && !head.copular) {
+          const op = isSpeech(head.verb) ? 'SIG' : 'CON';
+          const restBase = base + coord.end + head.restStart;
+          // Shared object: a named patient if present (excluding the subjects), else
+          // the NP head — the SAME object both conjuncts converge on. One edge per
+          // conjunct to it.
+          const named = objectEntities(head.rest, admission, null)
+                          .filter(o => !coord.subjects.some(su => su.id === o.id));
+          const targets = named.length
+            ? named.map(o => ({ id: o.id, start: o.start, end: o.end, kind: undefined }))
+            : (() => { const np = wantReferents ? npObject(head.rest, npGuards) : null;
+                       return np ? [{ id: np.lemma, start: np.start, end: np.end, kind: 'np' }] : []; })();
+          for (const t of targets) {
+            const oStart = restBase + t.start, oEnd = restBase + t.end;
+            const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: t.id };
+            const verb   = { text: head.verb, start: base + coord.end + head.at, end: restBase };
+            for (const su of coord.subjects) {
+              const subject = { text: su.text, start: base + su.start, end: base + su.end, id: su.id };
+              out.push({ op, src: su.id, tgt: t.id, via: head.verb,
+                         ...(t.kind ? { tgtKind: t.kind } : {}), ...polmod(head),
+                         coord: true, args: { subject, verb, object, op } });
+            }
+          }
+          if (targets.length) { running = { id: coord.subjects[coord.subjects.length - 1].id, w: 1 }; continue; }
+        }
+      }
+    }
+
     let subj = leadingSubject(clause.text, admission, coref);
     if (!subj || !subj.id) {
       // No subject token, but a head verb after any coordinator → DEFAULT TO THE
