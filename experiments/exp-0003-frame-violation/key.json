@@ -1,0 +1,47 @@
+{
+  "capability": "expectation-violation significance (the EVA/REC frame-break)",
+  "claim": "A predication that contradicts an entity's established kind should move belief more than a fresh, frame-consistent predication of equal surface novelty.",
+  "dissociation": "some significance channel (bayes/surprisal/bridge) ranks violation > consistent, per pair.",
+  "control": "violation and consistent lines each add exactly one new predicate atom (matched surface novelty) → the mass channels cannot separate them by surface.",
+  "positiveControl": "pc-bridge is a connectivity reveal where bridge>0 — proves the instrument is live.",
+  "mechanismTag": "expectation violation / predicate contradiction (slotless predicates carry no contradiction marker)",
+  "items": {
+    "shrike-V": {
+      "role": "violation",
+      "pair": "shrike"
+    },
+    "shrike-C": {
+      "role": "consistent",
+      "pair": "shrike"
+    },
+    "johnson-V": {
+      "role": "violation",
+      "pair": "johnson"
+    },
+    "johnson-C": {
+      "role": "consistent",
+      "pair": "johnson"
+    },
+    "bird-V": {
+      "role": "violation",
+      "pair": "bird"
+    },
+    "bird-C": {
+      "role": "consistent",
+      "pair": "bird"
+    },
+    "mem-V": {
+      "role": "violation",
+      "pair": "mem"
+    },
+    "mem-C": {
+      "role": "consistent",
+      "pair": "mem"
+    },
+    "pc-bridge": {
+      "role": "positive-control",
+      "pair": "pc",
+      "expect": "bridge>0"
+    }
+  }
+}

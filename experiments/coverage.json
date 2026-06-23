@@ -2,15 +2,22 @@
   "updated": "2026-06-23",
   "sites_exercised": {
     "src/core/surprise.js": ["NOVELTY_RESERVE", "surpriseAt(novelty)", "forwardDist(novelty)", "noveltyAmplitude (new)"],
-    "src/perceiver/reading.js": ["NOVELTY constant", "figure-field reserve pNovel/Z", "priorProp first-appearance tracking", "forward reserve pNext.reserve"]
+    "src/core/bridge.js": ["bridgeSurprise (exp-0001, from main)"],
+    "src/perceiver/reading.js": ["NOVELTY constant", "figure-field reserve pNovel/Z", "priorProp first-appearance tracking", "forward reserve pNext.reserve", "DEF predicate channel (exp-0003: bayes/surprisal/bridge on copular predication)"]
   },
-  "organs_exercised": ["membrane (synthetic INS-only stream)", "music (ingestMusic)", "text (ingestText)"],
+  "organs_exercised": ["membrane (synthetic INS / DEF / CON operator log)", "music (ingestMusic)", "text (ingestText)"],
+  "cells_exercised": {
+    "CON (connectivity)": "exp-0001 — bridgeSurprise, confirmed + shipped (from main)",
+    "INS/REC (the reserve)": "exp-0002 — context-sensitive reserve, mechanism confirmed, generalization flat, gated",
+    "EVA/REC (frame violation)": "exp-0003 — GAP located + named: no contradiction significance channel"
+  },
   "cold_regions_remaining": [
-    "src/core/voidnull.js — GAP=2.5, alpha, MIN_SAMPLES=4 constants in the predictive path",
-    "src/perceiver/reading.js — GAMMA=0.7 horizon constant (hand-set decay)",
+    "src/perceiver/reading.js — GAMMA=0.7 horizon constant (hand-set decay; the optimal horizon is set by the signal's autocorrelation length)",
+    "src/core/voidnull.js — GAP=2.5, MIN_SAMPLES=4 structural constants (alpha is a legitimate policy knob)",
     "src/predict/* — TRUST_K and fusion weight constants",
-    "EVA / REC thin cells; the empty SYN by Ground",
-    "image / frequency / video organs (untouched by EXP-001)"
+    "the empty SYN by Ground; NUL (abstention) discrimination",
+    "image / frequency / video organs (untouched so far)",
+    "the EVA contradiction channel sketched by exp-0003 (a multi-layer build: kind/attribute slotting + a revision significance channel)"
   ],
-  "notes": "P-001 was an inside-out constant hunt on the novelty reserve (the task's named exemplar). Next draws bias toward the cold regions above and toward an outside-in orthogonal collision."
+  "notes": "exp-0002 (inside-out constant hunt, the reserve) and exp-0003 (outside-in orthogonal collision, the EVA frame-break) both done on this branch. exp-0003's seed — the contradiction significance sibling — is the strongest next build. Bias future draws toward GAMMA (the horizon constant) and the abstention/SYN cells."
 }

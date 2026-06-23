@@ -1,0 +1,97 @@
+{
+  "items": [
+    {
+      "id": "shrike-V",
+      "modality": "text",
+      "input": "Pim is a songbird. Pim is a songbird. Pim is a predator."
+    },
+    {
+      "id": "shrike-C",
+      "modality": "text",
+      "input": "Pim is a songbird. Pim is a songbird. Pim is quiet."
+    },
+    {
+      "id": "johnson-V",
+      "modality": "text",
+      "input": "Hale is a Republican. Hale is a Republican. Hale is a Democrat."
+    },
+    {
+      "id": "johnson-C",
+      "modality": "text",
+      "input": "Hale is a Republican. Hale is a Republican. Hale is tall."
+    },
+    {
+      "id": "bird-V",
+      "modality": "text",
+      "input": "Wren is a sparrow. Wren is a sparrow. Wren is a hawk."
+    },
+    {
+      "id": "bird-C",
+      "modality": "text",
+      "input": "Wren is a sparrow. Wren is a sparrow. Wren is brown."
+    },
+    {
+      "id": "mem-V",
+      "modality": "membrane",
+      "input": [
+        {
+          "op": "INS",
+          "id": "x",
+          "label": "x"
+        },
+        {
+          "op": "DEF",
+          "id": "x",
+          "key": "predicate",
+          "value": "A"
+        },
+        {
+          "op": "DEF",
+          "id": "x",
+          "key": "predicate",
+          "value": "A"
+        },
+        {
+          "op": "DEF",
+          "id": "x",
+          "key": "predicate",
+          "value": "B"
+        }
+      ]
+    },
+    {
+      "id": "mem-C",
+      "modality": "membrane",
+      "input": [
+        {
+          "op": "INS",
+          "id": "x",
+          "label": "x"
+        },
+        {
+          "op": "DEF",
+          "id": "x",
+          "key": "predicate",
+          "value": "A"
+        },
+        {
+          "op": "DEF",
+          "id": "x",
+          "key": "predicate",
+          "value": "A"
+        },
+        {
+          "op": "DEF",
+          "id": "x",
+          "key": "predicate",
+          "value": "C"
+        }
+      ]
+    },
+    {
+      "id": "pc-bridge",
+      "modality": "text",
+      "input": "Ada studies. Ada studies. Ben travels. Ben travels. Ada knows Ben."
+    }
+  ]
+}

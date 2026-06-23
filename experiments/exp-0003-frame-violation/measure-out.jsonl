@@ -1,0 +1,9 @@
+{"id":"shrike-V","modality":"text","at":2,"bayes":0.2,"surprisal":0.67,"bridge":0}
+{"id":"shrike-C","modality":"text","at":2,"bayes":0.2,"surprisal":0.67,"bridge":0}
+{"id":"johnson-V","modality":"text","at":2,"bayes":0.2,"surprisal":0.67,"bridge":0}
+{"id":"johnson-C","modality":"text","at":2,"bayes":0.2,"surprisal":0.67,"bridge":0}
+{"id":"bird-V","modality":"text","at":2,"bayes":0.2,"surprisal":0.67,"bridge":0}
+{"id":"bird-C","modality":"text","at":2,"bayes":0.2,"surprisal":0.67,"bridge":0}
+{"id":"mem-V","modality":"membrane","at":3,"bayes":0.22,"surprisal":1.58,"bridge":0}
+{"id":"mem-C","modality":"membrane","at":3,"bayes":0.22,"surprisal":1.58,"bridge":0}
+{"id":"pc-bridge","modality":"text","at":4,"bayes":0.12,"surprisal":2.01,"bridge":1}
