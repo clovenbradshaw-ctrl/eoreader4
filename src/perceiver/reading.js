@@ -17,10 +17,10 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, createNoveltyReserve } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
-const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
+const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure (the constant default)
 
 export const readingAt = (doc, cursor, opts = {}) => {
   const units = doc.units || doc.sentences || [];
@@ -137,12 +137,28 @@ export const readingAt = (doc, cursor, opts = {}) => {
     }
   }
 
+  // THE NOVELTY RESERVE. Constant by default (byte-identical to every existing caller);
+  // SIGNAL-DERIVED under opts.signalReserve, exactly the opt-in shape of opts.forward /
+  // opts.gamma / opts.horizon above. The reserved amplitude then tracks the γ-decayed
+  // recent newcomer rate — floored by this reading's own long-run rate — instead of a
+  // hand-set 1.0, and runs through the SAME fixed Born normalization below. Causal: it
+  // observes only the units BEFORE the cursor, the same window priorMass was built from,
+  // derived from firstIns (a figure is a newcomer at the unit it was first instantiated).
+  let novelty = NOVELTY;
+  if (opts.signalReserve) {
+    const newAt = new Array(at).fill(0);
+    for (const u of firstIns.values()) if (u < at) newAt[u] += 1;
+    const reserve = createNoveltyReserve({ gamma: γ });
+    for (let u = 0; u < at; u++) reserve.observe(newAt[u]);
+    novelty = reserve.mass;                          // ≡ NOVELTY at the opening (at=0, unseeded)
+  }
+
   // --- Prediction (REC): a probability distribution over who acts next. ----
-  // P(figure) ∝ γ-mass; a reserve of NOVELTY holds probability for someone
+  // P(figure) ∝ γ-mass; the reserve `novelty` holds probability for someone
   // not yet seen. Prediction = the expectation: the top of this distribution.
   const total = [...priorMass.values()].reduce((s, m) => s + m, 0);
-  const Z = total + NOVELTY;
-  const pNovel = NOVELTY / Z;
+  const Z = total + novelty;
+  const pNovel = novelty / Z;
   const pOf = (id) => (priorMass.get(id) || 0) / Z;
 
   const ranked = [...priorMass.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
@@ -217,7 +233,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -272,7 +288,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty });
   return out;
 };
 

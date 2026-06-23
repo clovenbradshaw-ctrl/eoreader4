@@ -1,0 +1,14 @@
+{
+  "note": "interior sites the archive's runs have exercised; bias inside-out draws toward the cold (unlisted) regions",
+  "sites": {
+    "src/core/surprise.js#NOVELTY_RESERVE": { "pressures": ["P-0001"], "status": "fix-shipped (replaced by signal-derived amplitude under opt-in; constant kept as cold-start fallback)" },
+    "src/core/surprise.js#createNoveltyReserve": { "pressures": ["P-0001", "P-0002"], "status": "new interior primitive; floor is the open gap (P-0002)" },
+    "src/core/surprise.js#forwardDist.reserve": { "pressures": ["P-0001"], "status": "exercised — reserve channel scored across two senses + real material" },
+    "src/perceiver/reading.js#novelty": { "pressures": ["P-0001"], "status": "threaded to signal reserve under opts.signalReserve; default constant (parity)" }
+  },
+  "cold_regions_next": [
+    "src/core/surprise.js#surpriseAt (the KL/bayesBy channel under signal reserve — does novelty change WHICH axis a REC restructures along? P-0003)",
+    "src/core/voidnull.js#deriveNull (the alpha policy — is alpha the last human constant, or can the reading set its own false-positive tolerance from the cost of a missed vs spurious structure?)",
+    "src/core/surprise.js#createNoveltyReserve.floor (closed-vocabulary relaxation — Good–Turing under γ-forgetting, P-0002)"
+  ]
+}

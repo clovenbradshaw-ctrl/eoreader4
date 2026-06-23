@@ -96,4 +96,95 @@ export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
   return { dist, reserve: novelty / Z, Z };
 };
 
+// The NOVELTY reserve as a SIGNAL-DERIVED amplitude, not a constant.
+//
+// `surpriseAt`/`forwardDist` reserve a mass `novelty` for an as-yet-unseen atom —
+// the Born amplitude for "something new arrives next", read off by the same fixed
+// normalization every incumbent goes through: p(unseen) = novelty / (Σmass + novelty).
+// Held CONSTANT (NOVELTY_RESERVE = 1.0) that amplitude is blind to whether newcomers
+// have actually been arriving: p(unseen) then decays purely with accumulated mass, so
+// the reader grows equally certain that nothing new will come whether it just saw a
+// burst of newcomers or a long stretch of confirmation. That is the reader failing to
+// learn from its own signal — a hand-rolled constant standing in for a rate the signal
+// could teach.
+//
+// This is the fix the design prescribes: make the reserved AMPLITUDE track the recent
+// novelty rate under the SAME γ the figure field decays by, then run it through the
+// SAME fixed Born step. Context enters at the amplitude; the law stays put.
+//
+//   R_t = γ · R_{t-1} + newcomers_t
+//
+// R is a mass in the figure field's own units — a γ-accumulated count of newcomer
+// events, deposited exactly as a sighting deposits γ⁰ = 1 to a figure and decayed by
+// the same γ — so p(unseen) = R / (Σmass + R) is the fraction of recent deposits that
+// were new. High after newcomers, low after a long stretch of confirmation, with no
+// constant anywhere in the path.
+//
+// Absolute continuity (the property the constant was there to guarantee — a newcomer
+// must never have probability exactly zero, or the KL diverges) is preserved WITHOUT a
+// constant: seed R with the opening burst (at step 0 every atom is a newcomer, so
+// R_0 = newcomers_0 ≥ 1 for any non-empty stream), and since R_t = γ·R_{t-1} + … ≥
+// γ·R_{t-1} > 0 with 0 < γ < 1, R stays strictly positive for the whole reading. How
+// low it falls in a confirmation tail is set by the opening novelty and the tail
+// length — both signal, no designer number.
+//
+// ONE TIMESCALE IS NOT ENOUGH. A reserve that is only the γ-recent newcomer mass
+// over-reacts at a regime change it has not yet seen: after a long confirmation
+// stretch it has decayed near zero, so the FIRST newcomer of the next burst lands as
+// a near-infinite surprise (a per-regime trace puts the entire deficit of the naive
+// form on exactly this stretch→burst transition). The reactive estimator cannot
+// anticipate a burst it has no recent evidence for.
+//
+// The fix keeps the law and stays signal-derived: anchor the fast γ-recent newcomer
+// mass with a FLOOR at the reading's OWN long-run newcomer rate, so the reserve never
+// falls below what a typical window of THIS reading carries. Both timescales are the
+// signal's own counts — a γ-decayed recent count and a cumulative all-history rate —
+// combined by the same `max` the void boundary uses (voidnull.js). No constant, no
+// `+1` pseudo-count (the very "one over mass plus one" the design warns against):
+//
+//   dNew  = γ·dNew + newcomers      (fast: reactive recent newcomer mass)
+//   dSteps= γ·dSteps + 1            (the decayed window size, → 1/(1−γ))
+//   rate  = cumNewcomers / cumSteps (slow: the reading's own long-run newcomer rate)
+//   R     = max(dNew, rate · dSteps)
+//
+// During a burst dNew dominates and R is reactive; during a stretch dNew decays out
+// and R is HELD at `rate·dSteps` — the decayed-window newcomer mass this reading
+// averages — so the next burst's opener is surprising in proportion to how overdue it
+// was, never catastrophically. p(unseen) = R/(Σmass+R) is high after newcomers, low
+// after a long stretch, and floored by the reading's own novelty rate. Absolute
+// continuity holds without a constant: the opening deposits ≥1 newcomer, so cumNewcomers
+// ≥ 1 thereafter and the floor is strictly positive for the whole reading.
+//
+// Streaming and modality-agnostic, the sibling of `createNoiseFloor` (voidnull.js):
+// the driver `observe`s the newcomer count each step and hands `.mass` to the next
+// step's Born normalization as `novelty`.
+export const createNoveltyReserve = ({ gamma } = {}) => {
+  if (!Number.isFinite(gamma) || gamma <= 0 || gamma >= 1) {
+    throw new Error('createNoveltyReserve needs a decay 0 < gamma < 1');
+  }
+  let dNew = 0, dSteps = 0, cumNew = 0, cumSteps = 0;
+  let seeded = false;
+  return {
+    // Advance one step. `newcomers` = atoms arriving this step that were never seen
+    // before. The opening step seeds the fast accumulators (no decay before the first
+    // deposit); thereafter the γ-decayed counts advance exactly as a figure's mass does.
+    observe(newcomers = 0) {
+      const n = Math.max(0, newcomers);
+      dNew   = seeded ? gamma * dNew + n : n;
+      dSteps = seeded ? gamma * dSteps + 1 : 1;
+      cumNew += n; cumSteps += 1;
+      seeded = true;
+      return this.mass;
+    },
+    // The reserve amplitude as it stands — the mass to hand surpriseAt/forwardDist as
+    // `novelty` for the NEXT step's Born normalization. Before the first observation a
+    // cold caller falls back to the constant so absolute continuity always holds.
+    get mass() {
+      if (!seeded) return NOVELTY_RESERVE;
+      const floor = (cumNew / cumSteps) * dSteps;   // the reading's own long-run newcomer mass
+      return Math.max(dNew, floor);
+    },
+  };
+};
+
 const round = (x) => Math.round(x * 100) / 100;
