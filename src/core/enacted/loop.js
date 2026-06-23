@@ -73,9 +73,9 @@ export const DEFAULT_CONFIRM_BAND = 0.25;
 //
 // A FIXED 0.95 is a shock gate set on the raw [0,1] range — but the live surprise
 // rides a COMPRESSED scale (the γ-mass band clusters under 0.1; the meaning 1−cos
-// clusters far below 1, sentence cosines rarely orthogonal), so an absolute 0.95 is
+// clusters far below 1, proposition cosines rarely orthogonal), so an absolute 0.95 is
 // an off switch in disguise on the very path that matters: it passes any synthetic
-// high-surprise test and never fires on real text. So under causal calibration the
+// high-surprise test and never fires on a real signal. So under causal calibration the
 // impulse, like the band, is fit to THIS reader's own scale — a high quantile of the
 // surprises seen so far (DEFAULT_IMPULSE_QUANTILE). A shock is then "far above what
 // this reader normally sees," not "above 0.95," so it fires when a clause is
@@ -246,8 +246,8 @@ export const createEnactedLoop = ({
   };
 
   // Test the particular at `cursor` against the frame at `layer` — an enacted EVA.
-  // testLayer is where the particular originates (the base layer: every sentence is
-  // a proposition-grain particular). `cross` is true when the frame tested sits at
+  // testLayer is where the particular originates (the base layer: every particular
+  // is proposition-grain). `cross` is true when the frame tested sits at
   // a HIGHER layer than the particular — the cross-layer EVA, a lower particular
   // bearing on a higher frame (§4). Its verdict carries BOTH directions of
   // influence: a confirm is the high holding the low (the document frame

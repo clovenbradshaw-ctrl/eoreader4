@@ -1,11 +1,11 @@
 // Pass 0 — attribution-verb induction.
 //
-// Before the per-sentence loop reads a word, it learns how *this* document
+// Before the reading loop reads a word, it learns how *this* document
 // marks speech. A fixed whitelist ("said", "asked") misses a text whose
 // dialogue runs on "transmitted", "pinged", "signed". So we look at the verbs
 // that sit against quotation marks and let the document teach us its own
 // convention. The high (a learned rule) sets the probabilities for the low
-// (how the next thousand sentences are classified).
+// (how the next thousand segments are classified).
 //
 // This is induction, not decision: every candidate carries a count that
 // becomes a weight. Nothing is hard-coded true; the convention is whatever the
@@ -27,14 +27,14 @@ const NOT_VERB = new Set([
 const verbish = (w) =>
   /(?:ed|s|t)$/.test(w) || ['say', 'ask', 'cry', 'tell', 'add', 'go', 'reply'].includes(w);
 
-export const induceAttributionVerbs = (sentences) => {
+export const induceAttributionVerbs = (segments) => {
   const counts = new Map();
   const bump = (w) => {
     const t = w.toLowerCase();
     if (NOT_VERB.has(t) || !verbish(t)) return;
     counts.set(t, (counts.get(t) || 0) + 1);
   };
-  for (const s of sentences) {
+  for (const s of segments) {
     if (!new RegExp(QUOTE).test(s)) continue;
     let m;
     const pre = new RegExp(PRE.source, 'g');

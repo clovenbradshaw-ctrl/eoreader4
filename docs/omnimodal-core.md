@@ -71,16 +71,26 @@ parser via `parseText(text, { conventionsOpts })`.
 
 ## What landed vs. what is gated
 
-Golden parity on text is the rail: the existing suite (now 447 tests) must stay
+Golden parity on text is the rail: the existing suite (now 734 tests) must stay
 byte-identical green, and it does.
 
 - **Landed:** the bare-unit and proposition contracts; the learning layer moved
   into the core with priors/defeasibility/inheritance and the DEF·EVA·REC API;
-  the injectable conventions path; the falsifiability tests.
-- **Gated (future work, behind golden parity):** thinning `ingest/text` to a pure
-  mark-ingester and renaming `ingest/` → `organs/in/`, `organs/out/`; replacing
-  every `doc.sentences` / "per sentence" with unit/proposition stream-distance
-  across the ~71 files that count sentences today; moving `read/surf` →
-  `core/surfer`. These are mechanical, high-fan-out moves the proposal explicitly
-  gates behind byte-identical text parity, so they are staged separately rather
-  than risked in the same pass that establishes the contracts.
+  the injectable conventions path; the falsifiability tests; the `ingest/` →
+  `organs/in/`, `organs/out/` rename; and **the core's own vocabulary** — the
+  genome (`src/core/`) now measures reach in `streamDistance` (units) and never
+  says "sentence." It speaks units, propositions, boundaries, and segments — terms
+  that hold whether the stream came from the text, audio, or vision organ. Where
+  the word survives in the core it is a *tombstone*: `unit.js` and `project.js`
+  name "sentence" only to mark it OUT — "a learned text convention, not a core
+  primitive" — so a future hand does not quietly reintroduce it.
+- **Gated (future work, behind golden parity):** thinning `organs/in/text` to a
+  pure mark-ingester; carrying the same `doc.sentences` / "per sentence" →
+  unit/proposition stream-distance replacement OUTWARD across the ~70 downstream
+  files that still count sentences (the text organ legitimately keeps the word —
+  "sentence" is fine BELOW the membrane, in `perceiver/parse/`, where the modality
+  is already known; it is only the modality-blind interior that must not assume
+  it); moving `read/surf` → `core/surfer`. These are mechanical, high-fan-out
+  moves the proposal explicitly gates behind byte-identical text parity, so they
+  are staged separately rather than risked in the same pass that establishes the
+  contracts.

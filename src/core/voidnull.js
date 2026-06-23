@@ -5,7 +5,7 @@
 // (run many noise instances, take the max) and passed in. A constant is a number
 // you invent. This module replaces it with a number the signal computes for you.
 //
-// The rule is one sentence: a proposed structure must exceed what the void would
+// The rule is one line: a proposed structure must exceed what the void would
 // produce on its own, or it is void. The "void" is the field's own non-cohering
 // background — the also-ran overlaps, the snow chains, the noise that did not
 // cohere. Their scores are samples of what chance produces. The boundary is a
