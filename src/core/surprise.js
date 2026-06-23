@@ -18,7 +18,29 @@
 // Operations and their ORDER are preserved exactly from reading.js so the text path stays
 // byte-identical: the parity gate is `node --test tests/*.test.js` (docs/spec-one-surprise.md).
 
-export const NOVELTY_RESERVE = 1.0;   // reserved prior mass for an as-yet-unseen atom
+export const NOVELTY_RESERVE = 1.0;   // reserved prior mass for an as-yet-unseen atom — the SEED
+
+// noveltyAmplitude — the SIGNAL-DERIVED reserve (the protention learning its own amplitude).
+//
+// The constant above is a hand-rolled prior: it reserves the SAME mass for an unseen atom
+// whether newcomers are pouring in or the cast has long since closed. The reserve SHARE
+// `novelty/(ΣmassΒ+novelty)` then moves only as accumulated mass grows — blind to the RATE at
+// which genuine newcomers actually arrive. This derives the reserve from the signal instead:
+// the γ-decayed count of recent FIRST-appearances. An atom first seen at step `f` contributes
+// γ^(at−1−f); a flurry of newcomers lifts the reserve (the unseen is plausible), a long drought
+// lets it decay (a newcomer becomes a shock). `firstSeen` is the collection of first-appearance
+// steps of the atoms in the prior; only those strictly before `at` count, so the reserve is
+// strictly CAUSAL — a reading never reads its own future. Returns 0 at the opening (no prior);
+// callers fall back to NOVELTY_RESERVE as the cold-start seed rather than collapsing to zero.
+//
+// Measured aggregate-flat against its controls (experiments/exp-0002): it helps signals with
+// positively-autocorrelated novelty and regresses anti-correlated ones, so it ships OPT-IN and
+// is NOT promoted. Kept here, in the genome, as the recorded variant the next cycle improves on.
+export const noveltyAmplitude = (firstSeen, at, gamma) => {
+  let amp = 0;
+  for (const f of firstSeen) if (f != null && f < at) amp += Math.pow(gamma, at - 1 - f);
+  return amp;
+};
 
 // surpriseAt(prior, arrival, { gamma, novelty, axisLabel }) → { bayesBits, bayesBy }
 //
@@ -39,6 +61,11 @@ export const surpriseAt = (prior, arrival, { gamma, novelty = NOVELTY_RESERVE, a
   // The profile's own reserve probability — co-entrants split it, so the reserve is
   // never multiply-counted (a single newcomer gets all of it).
   const sumPrior  = [...prior.values()].reduce((s, m) => s + m, 0);
+  // Opening guard: with no prior mass AND no reserve there is nothing to move belief
+  // against — return the honest zero rather than divide by zero. A signal-derived
+  // reserve is 0 at the opening; the default reserve (NOVELTY_RESERVE > 0) never trips
+  // this, so the text path stays byte-identical (the parity gate).
+  if (sumPrior + novelty <= 0) return { bayesBits: 0, bayesBy: {} };
   const reserve   = novelty / (sumPrior + novelty);
   const newShare  = newcomers.length ? reserve / newcomers.length : 0;
 
@@ -90,6 +117,7 @@ export const surpriseAt = (prior, arrival, { gamma, novelty = NOVELTY_RESERVE, a
 export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
   const sum = [...profile.values()].reduce((s, m) => s + m, 0);
   const Z = sum + novelty;                       // reserve mass keeps it proper over an open basis
+  if (Z <= 0) return { dist: [], reserve: 0, Z: 0 };  // opening guard — empty profile, zero reserve
   const dist = [...profile.entries()]
     .map(([atom, m]) => [atom, m / Z])
     .sort((a, b) => b[1] - a[1]);                // ranked — the heaviest incumbents lead the draw

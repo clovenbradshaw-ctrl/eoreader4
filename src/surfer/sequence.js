@@ -23,10 +23,12 @@
 // reader hold enough context to anticipate the repeat. `gamma` sets how long the
 // memory lasts; at 1 it counts flat (full recall across a whole piece).
 
+import { noveltyAmplitude } from '../core/index.js';
+
 const GAMMA = 0.9;     // recency decay along the reading line (slower than the
                        // graph's 0.7 — a learner must outlast a phrase to recall it)
 const ORDER = 2;       // context length; 1 = Markov chain, the order reading.js implies
-const NOVELTY = 1.0;   // reserve mass for an as-yet-unobserved continuation
+const NOVELTY = 1.0;   // reserve mass for an as-yet-unobserved continuation (the SEED)
 
 const snapshot = (log) =>
   typeof log.snapshot === 'function' ? log.snapshot() : (log.events || []);
@@ -55,12 +57,14 @@ export const unitIdSequence = (doc, repOf = (x) => x) => {
 // ago each was seen. `grams[j]` maps a length-j context (the last j units, keyed)
 // to the distribution of what followed it; `uni` is the order-0 backoff (the same
 // γ-mass prior reading.js builds).
-const foldBefore = (seq, at, gamma, order) => {
+const foldBefore = (seq, at, gamma, order, signalReserve = false) => {
   const grams = Array.from({ length: order + 1 }, () => new Map());
   const uni = new Map();
+  const firstSeen = new Map();           // id → first position (the protention's birth record)
   for (let i = 0; i < at; i++) {
     const recency = Math.pow(gamma, at - 1 - i);
     uni.set(seq[i], (uni.get(seq[i]) || 0) + recency);
+    if (!firstSeen.has(seq[i])) firstSeen.set(seq[i], i);
     for (let j = 1; j <= order && i - j >= 0; j++) {
       const ctx = seq.slice(i - j, i).join('>');
       const row = grams[j].get(ctx) || new Map();
@@ -68,7 +72,13 @@ const foldBefore = (seq, at, gamma, order) => {
       grams[j].set(ctx, row);
     }
   }
-  return { grams, uni, order };
+  // The SIGNAL-DERIVED reserve (the same protention reading.js grows) — the γ-decayed rate of
+  // first-appearances over the open basis, applied to the order-0 backoff. OFF → the SEED →
+  // byte-identical. Cold-start falls back to the SEED so the open basis is never zero-reserve.
+  const reserve = signalReserve
+    ? (noveltyAmplitude([...firstSeen.values()], at, gamma) || NOVELTY)
+    : NOVELTY;
+  return { grams, uni, order, reserve };
 };
 
 // The predictive distribution over the next unit given the recent context. Starts
@@ -78,10 +88,11 @@ const foldBefore = (seq, at, gamma, order) => {
 // continuation never seen, so the model is never certain and surprise stays finite.
 const distribution = (model, ctx) => {
   const { grams, uni, order } = model;
-  const Zuni = sum(uni.values()) + NOVELTY;
+  const reserve = model.reserve ?? NOVELTY;      // signal-derived (foldBefore) or the SEED
+  const Zuni = sum(uni.values()) + reserve;
   let p = new Map();
   for (const [id, w] of uni) p.set(id, w / Zuni);
-  let pNovel = NOVELTY / Zuni;
+  let pNovel = reserve / Zuni;
 
   for (let j = 1; j <= order && j <= ctx.length; j++) {
     const key = ctx.slice(ctx.length - j).join('>');
@@ -115,12 +126,12 @@ export const predictNextUnit = (model, context) => {
 // counterpart of readingAt's recency surprise: −log₂ of the probability the
 // LEARNED model gave the unit that landed, squashed to [0,1). `learned` is true
 // once the current context has led somewhere before (a recollection, not a guess).
-export const predictiveSequenceReading = (doc, { gamma = GAMMA, order = ORDER, repOf } = {}) => {
+export const predictiveSequenceReading = (doc, { gamma = GAMMA, order = ORDER, repOf, signalReserve = false } = {}) => {
   const seq = unitIdSequence(doc, repOf);
   const labelOf = labelMap(doc);
   const steps = [];
   for (let at = 1; at < seq.length; at++) {
-    const model = foldBefore(seq, at, gamma, order);
+    const model = foldBefore(seq, at, gamma, order, signalReserve);
     const ctx = seq.slice(Math.max(0, at - order), at);
     const actual = seq[at];
     const { ranked, top, pNovel } = predictNextUnit(model, ctx);

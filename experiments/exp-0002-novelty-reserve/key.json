@@ -1,0 +1,12 @@
+{
+  "capability": "the novelty reserve tracks the recent RATE of newcomers (γ-decayed count of first-appearances) instead of the hand-rolled constant NOVELTY_RESERVE",
+  "claim": "a rate-derived reserve improves predictive surprise where novelty is positively autocorrelated (bursts) and regresses it where novelty is anti-correlated (maximally-spaced newcomers), because it adapts to the RATE of newcomers but is blind to their AUTOCORRELATION",
+  "predictions": {
+    "stream-01": { "novelty_structure": "positively autocorrelated (burst/drought)", "predict": "signal_helps",     "direction": "deltaSurprisal < 0" },
+    "stream-02": { "novelty_structure": "anti-correlated (spaced newcomers)",         "predict": "signal_regresses", "direction": "deltaSurprisal > 0" }
+  },
+  "dissociation": "sign(deltaSurprisal[stream-01]) != sign(deltaSurprisal[stream-02]) — the SAME mechanism helps one regime and hurts the other; the net sign over any corpus is set by that corpus's novelty autocorrelation, which a blanket reserve cannot know",
+  "control": "opts.signalReserve OFF must reproduce the text goldens byte-for-byte (the parity gate); the deltas above are measured strictly against that off baseline, so a non-zero delta is the on-path's own effect and nothing else",
+  "mechanism": "reserve = noveltyAmplitude(firstSeen, at, gamma) = Sum_{f<at} gamma^(at-1-f); fed as `novelty` into surpriseAt/forwardDist (proposition field) and into the figure-field Z/pNovel; cold-start falls back to the SEED NOVELTY_RESERVE",
+  "disposition": "NOT PROMOTED — (1) ON breaks byte-identical parity on the 202 text goldens (the cardinal gate), and (2) a blanket default would regress anti-correlated corpora; ships OPT-IN behind opts.signalReserve and is kept as the recorded variant the next cycle (an autocorrelation-aware reserve) improves on"
+}
