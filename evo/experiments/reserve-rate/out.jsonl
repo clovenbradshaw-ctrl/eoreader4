@@ -1,0 +1,8 @@
+{"id":"item-01","sense":"frequency","probe":4,"organLive":true,"reserveAmp":1.37,"sumPrior":10.13,"newBins":4,"constBayes":1.4,"signalBayes":1.23,"surprisal":null,"engConst":null,"engSignal":null,"crosscheck":null}
+{"id":"item-02","sense":"text","probe":4,"organLive":true,"reserveAmp":2.53,"sumPrior":2.53,"newBins":1,"constBayes":0.26,"signalBayes":0.09,"surprisal":1.82,"engConst":0.26,"engSignal":0.09,"crosscheck":true}
+{"id":"item-03","sense":"frequency","probe":4,"organLive":true,"reserveAmp":10.13,"sumPrior":10.13,"newBins":0,"constBayes":0.13,"signalBayes":0.07,"surprisal":null,"engConst":null,"engSignal":null,"crosscheck":null}
+{"id":"item-04","sense":"text","probe":4,"organLive":true,"reserveAmp":0.34,"sumPrior":2.53,"newBins":0,"constBayes":0,"signalBayes":0,"surprisal":0.48,"engConst":0,"engSignal":0,"crosscheck":true}
+{"id":"item-05","sense":"frequency","probe":4,"organLive":true,"reserveAmp":10.13,"sumPrior":10.13,"newBins":4,"constBayes":1.4,"signalBayes":0.36,"surprisal":null,"engConst":null,"engSignal":null,"crosscheck":null}
+{"id":"item-06","sense":"text","probe":4,"organLive":true,"reserveAmp":2.53,"sumPrior":2.53,"newBins":0,"constBayes":0.1,"signalBayes":0.07,"surprisal":1.82,"engConst":0.1,"engSignal":0.07,"crosscheck":true}
+{"id":"item-07","sense":"frequency","probe":4,"organLive":true,"reserveAmp":1.37,"sumPrior":10.13,"newBins":0,"constBayes":0,"signalBayes":0,"surprisal":null,"engConst":null,"engSignal":null,"crosscheck":null}
+{"id":"item-08","sense":"text","probe":4,"organLive":true,"reserveAmp":0.34,"sumPrior":2.53,"newBins":1,"constBayes":0.26,"signalBayes":0.63,"surprisal":1.82,"engConst":0.26,"engSignal":0.63,"crosscheck":true}

@@ -1,0 +1,32 @@
+{
+  "capability": "signal-derived novelty reserve tracks recent novelty rate",
+  "mechanism": "noveltyRateProfile — the γ-decayed count of newcomer atoms over prior steps, carried as the `novelty` amplitude through the FIXED Born step (surpriseAt). Context enters at the amplitude; the squaring/normalization law is unchanged. src/core/surprise.js + the opts.reserve='signal' path in src/perceiver/reading.js.",
+  "held": "This file is the answer key. The measure script never reads it; the scorer reads it AFTER the measurement is written.",
+  "conditions": {
+    "item-01": { "sense": "frequency", "condition": "stable",   "probe": "newcomer" },
+    "item-02": { "sense": "text",      "condition": "turnover", "probe": "newcomer" },
+    "item-03": { "sense": "frequency", "condition": "turnover", "probe": "confirm"  },
+    "item-04": { "sense": "text",      "condition": "stable",   "probe": "confirm"  },
+    "item-05": { "sense": "frequency", "condition": "turnover", "probe": "newcomer" },
+    "item-06": { "sense": "text",      "condition": "turnover", "probe": "confirm"  },
+    "item-07": { "sense": "frequency", "condition": "stable",   "probe": "confirm"  },
+    "item-08": { "sense": "text",      "condition": "stable",   "probe": "newcomer" }
+  },
+  "pairs": {
+    "newcomer": [
+      { "sense": "text",      "turnover": "item-02", "stable": "item-08" },
+      { "sense": "frequency", "turnover": "item-05", "stable": "item-01" }
+    ],
+    "confirm": [
+      { "sense": "text",      "turnover": "item-06", "stable": "item-04" },
+      { "sense": "frequency", "turnover": "item-03", "stable": "item-07" }
+    ]
+  },
+  "predicted": {
+    "mechanism": "On a NEWCOMER probe, signal.bayesBits(turnover) < signal.bayesBits(stable): after a burst of newcomers the reserve is high and a further newcomer is expected (belief barely moves); after a long stretch of confirmation the reserve is low and a newcomer is unexpected (belief moves far). Holds in BOTH senses (text + frequency) → interior.",
+    "control": "On the SAME newcomer pair, const.bayesBits(turnover) == const.bayesBits(stable) to rounding: the constant reserve is blind to the turnover/stability of the signal's own history (the stimuli are built so sumPrior and probe-novelty are matched across the pair). For text, the surface channel surprisalBits(turnover) == surprisalBits(stable) too — same probe, same position.",
+    "null": "On a CONFIRM probe, the reserve holds mass for an UNSEEN atom, so it does not move a confirmation: signal.bayesBits(turnover) ≈ signal.bayesBits(stable), and the confirm-pair separation is strictly smaller than the newcomer-pair separation. This rules out 'the signal reserve separates everything'.",
+    "instrument": "reserveAmp(turnover) > reserveAmp(stable) on the matched prefixes — the amplitude is high after newcomers, low after confirmation, exactly the rate it should track."
+  },
+  "verdict_rule": "CONFIRMED iff: control caught (const blind on both newcomer pairs) AND mechanism fires in BOTH senses (signal turnover < stable) AND null holds (confirm separation < newcomer separation, both senses) AND every channel computed."
+}

@@ -39,7 +39,12 @@ export const surpriseAt = (prior, arrival, { gamma, novelty = NOVELTY_RESERVE, a
   // The profile's own reserve probability — co-entrants split it, so the reserve is
   // never multiply-counted (a single newcomer gets all of it).
   const sumPrior  = [...prior.values()].reduce((s, m) => s + m, 0);
-  const reserve   = novelty / (sumPrior + novelty);
+  // When the profile is empty (the opening) the reserve is 1 by the Born limit
+  // novelty/(0+novelty) — pure novelty, nothing has been seen yet. Writing the limit
+  // explicitly is byte-identical for the constant reserve (novelty=1, sumPrior=0 → 1)
+  // AND keeps a SIGNAL-DERIVED amplitude of 0 safe at the opening (it never reaches the
+  // divide). The law is unchanged; only the boundary is made total.
+  const reserve   = sumPrior > 0 ? novelty / (sumPrior + novelty) : 1;
   const newShare  = newcomers.length ? reserve / newcomers.length : 0;
 
   const postMass = new Map();
@@ -94,6 +99,41 @@ export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
     .map(([atom, m]) => [atom, m / Z])
     .sort((a, b) => b[1] - a[1]);                // ranked — the heaviest incumbents lead the draw
   return { dist, reserve: novelty / Z, Z };
+};
+
+// noveltyRateProfile(deposits, gamma) → number[] — THE SIGNAL-DERIVED RESERVE AMPLITUDE.
+//
+// A hand-rolled constant in the predictive path (NOVELTY_RESERVE = 1) is a place where an
+// external assumption stands in for something the signal should teach. The constant reserve
+// is a fixed pseudocount — `one over mass plus one` — blind to whether newcomers have been
+// arriving: the reader grows equally certain that nothing new will come whether it just saw
+// three newcomers or none. That is the reader failing to learn from its own signal.
+//
+// The fix is not a better formula; it is to make the reserved amplitude TRACK THE RECENT
+// NOVELTY RATE under the SAME γ decay the figure field uses, then run it through the same
+// fixed Born step (surpriseAt). The reserve mass at step k is the γ-decayed count of
+// newcomer atoms over the prior steps — the rate at which the signal's own recent history
+// brought something unseen. High after newcomers, low after a long stretch of confirmation,
+// with no constant anywhere in the path.
+//
+// Modality-agnostic by construction: it reads only whether an arrival atom is NEW to the
+// running support, never what the atom is — a proposition for text, an overtone bin for a
+// tone, a cell for the phasepost path. The decay recurrence matches priorProp exactly:
+//   reserve[k] = Σ_{j<k} γ^(k-1-j) · (newcomer atoms at step j)
+// so the reserve ages on the same kernel as the mass it reserves against. deposits[k] is the
+// iterable of atom keys delivered at step k; reserve[k] is the amplitude to pass as `novelty`
+// to surpriseAt when reading step k (causal — it sees only steps before k).
+export const noveltyRateProfile = (deposits, gamma) => {
+  const seen = new Set();
+  const out = [];
+  let decayed = 0;                         // γ-decayed newcomer-atom count
+  for (let k = 0; k < deposits.length; k++) {
+    out.push(decayed);                     // the reserve BEFORE step k (sees steps < k only)
+    let newcomers = 0;
+    for (const a of (deposits[k] || [])) { if (!seen.has(a)) { seen.add(a); newcomers++; } }
+    decayed = gamma * decayed + newcomers;
+  }
+  return out;
 };
 
 const round = (x) => Math.round(x * 100) / 100;

@@ -1,0 +1,15 @@
+{
+  "note": "Which engine sites the archive's runs have exercised. The inside-out draw is biased toward the COLD regions — low counts here are where untested assumptions hide. Updated by evo/lib/record.bumpSite as cycles run.",
+  "sites": {
+    "src/core/surprise.js:surpriseAt": 3,
+    "src/core/surprise.js:noveltyRateProfile": 3,
+    "src/perceiver/reading.js:readingAt": 3,
+    "src/organs/in/frequency.js:ingestFrequencies": 1
+  },
+  "cold": [
+    "src/core/surprise.js:forwardDist (the forward object — pNovel reserve never blind-tested)",
+    "src/perceiver/reading.js pNovel / surprisal floor (reading.js:144-168)",
+    "the entity-horizon reserve path (inHorizon-filtered novelty profile)",
+    "src/organs/in/image.js, video.js, music.js — no reserve-rate experiment has touched these organs"
+  ]
+}

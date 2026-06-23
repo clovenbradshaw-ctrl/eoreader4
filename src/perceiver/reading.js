@@ -17,10 +17,10 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyRateProfile } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
-const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
+const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure (the CONSTANT reserve)
 
 export const readingAt = (doc, cursor, opts = {}) => {
   const units = doc.units || doc.sentences || [];
@@ -211,13 +211,34 @@ export const readingAt = (doc, cursor, opts = {}) => {
     if (k.startsWith('d:')) { const [i, ...v] = k.slice(2).split('|'); return `${name(i)}: ${v.join('|')}`; }
     return k;
   };
+  // THE RESERVE AMPLITUDE. Default: the constant NOVELTY (byte-identical — the goldens).
+  // opts.reserve==='signal' swaps in the SIGNAL-DERIVED reserve (noveltyRateProfile): the
+  // γ-decayed recent novelty rate of THIS reading's own proposition field, so the mass held
+  // for an unseen atom tracks whether newcomers have actually been arriving — high after a
+  // burst of newcomers, low after a long stretch of confirmation. Context enters at the
+  // AMPLITUDE; the fixed Born step (surpriseAt) is unchanged. The deposit atoms and the
+  // horizon filter match priorProp exactly, so the reserve ages on the same γ kernel as the
+  // mass it reserves against (the constant-hunt fix, docs/spec-one-surprise.md).
+  let noveltyAmp = NOVELTY;
+  if (opts.reserve === 'signal') {
+    const deposits = [];
+    for (let s = 0; s <= at; s++) deposits.push([]);
+    for (const e of events) {
+      const s = e.sentIdx;
+      if (s == null || s > at || !inHorizon(e)) continue;
+      if (e.op === 'INS') deposits[s].push(`f:${e.id}`);
+      else if (e.op === 'CON' || e.op === 'SIG') deposits[s].push(`f:${e.src}`, `f:${e.tgt}`, `p:${e.src}|${e.via || ''}|${e.tgt}`);
+      else if (e.op === 'DEF' && e.key === 'predicate') deposits[s].push(`f:${e.id}`, `d:${e.id}|${e.value}`);
+    }
+    noveltyAmp = noveltyRateProfile(deposits, γ)[at];
+  }
   // THE ONE SURPRISE (Track A, docs/spec-one-surprise.md). D_KL(posterior ‖ prior) over
   // the γ-decayed proposition field `priorProp`, with this line's `deposit` as the arrival.
   // The computation is lifted verbatim into the modality-agnostic `surpriseAt` core, which
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: noveltyAmp, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
