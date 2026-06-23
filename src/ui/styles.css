@@ -528,6 +528,12 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 }
 .gnode:hover circle, .gnode.hl circle { fill: #2a3a5e; stroke: #93c5fd; }
 .gnode.sel circle { fill: #3b2a5e; stroke: #c4b5fd; stroke-width: 2; }
+/* The ontological asterisk: a cluster held in an OPEN same_as? candidate paints
+   with a dotted ring in the asterisk's own amber, never the solid stroke a resolved
+   Figure gets — identity unestablished, not asserted (core/asterisk.js). */
+.gnode.asterisk circle { fill: #2a2410; stroke: #d8a64a; stroke-dasharray: 3 2.5; }
+.gnode.asterisk:hover circle, .gnode.asterisk.hl circle { fill: #3a3014; stroke: #f0c060; }
+.gnode.asterisk .glabel { fill: #e8c477; }
 .gnode.dim { opacity: .25; }
 .glabel {
   fill: #c7ccd6; font-size: 10px; text-anchor: middle;

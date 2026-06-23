@@ -144,6 +144,8 @@ const voidDenial = async ({ src, tgt, talkerCell }, { graph, classifier, adj }) 
   if (!voids.length || !adj?.adjacent) return null;
   const rep = graph?.representative || ((id) => id);
   for (const v of voids) {
+    if (v.kind === 'same_as?') continue;            // an IDENTITY void is not a fact-relation void — it holds open
+                                                    // who two names are, not what a relation denies (asterisk.js)
     const node = rep(v.node);
     if (node !== src && node !== tgt) continue;     // the void must touch an endpoint
     if (!v.rel) continue;                           // a void with no relation can't be compared

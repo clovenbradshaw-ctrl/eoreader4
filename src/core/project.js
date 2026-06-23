@@ -17,12 +17,22 @@
 // AND the frame (including rules) is fully serialized into the key —
 // same key, same result.
 
+import { discriminatorIndex, evaluateSameAs, normLabel } from './asterisk.js';
+
 export const DEFAULT_PROJECTION_RULES = Object.freeze({
   // Mass decays at γ per sentence distance from the cursor.
   // engine.js READING_RULES.decay_gamma.value.
   decay_gamma: 0.7,
   // Edges below this weight are pruned from the projection. 0 disables.
   edge_weight_floor: 0,
+  // The ontological asterisk (asterisk.js). A cross-source SYN kind:'same_as?'
+  // candidate is held OUT of the union-find and promoted to a real merge only when
+  // this many shared discriminator CON edges CONVERGE between its two firm clusters
+  // — the shared label itself excluded, because the name is the thing in question
+  // and cannot also be the evidence. A functional discriminator filled by disjoint
+  // targets forks the candidate to a confirmed SPLIT instead. 0 disables promotion
+  // (every candidate stays an asterisk until a bridging source is read).
+  same_as_min_convergence: 1,
 });
 
 const memo = new WeakMap(); // log → { length, frameSig, result }
@@ -65,6 +75,8 @@ const computeProjection = (log, frame) => {
   const entities  = new Map();
   const edges     = [];
   const voidsRaw  = [];
+  const sameAsRaw = [];   // held cross-source identity candidates — a SIDE structure,
+                          // never `parent` (asterisk.js; do not touch find()).
   const parent    = new Map();
   const retracted = new Set();
 
@@ -73,6 +85,12 @@ const computeProjection = (log, frame) => {
     while (p !== (parent.get(p) ?? p)) p = parent.get(p) ?? p;
     return p;
   };
+
+  // A generic union-find over an explicit parent map — used for the SPECULATIVE
+  // identity quotient, which folds open same_as? candidates for DISPLAY ONLY and
+  // never touches the firm `parent` above (asterisk.js; storage stays binary).
+  const ufind = (pm, x) => { let p = pm.get(x) ?? x; while (p !== (pm.get(p) ?? p)) p = pm.get(p) ?? p; return p; };
+  const union = (pm, a, b) => { const ra = ufind(pm, a), rb = ufind(pm, b); if (ra !== rb) pm.set(ra, rb); };
 
   // First pass: collect retractions so a SEG can undo a later-replayed event.
   for (const e of events) {
@@ -145,11 +163,58 @@ const computeProjection = (log, frame) => {
         // text-layer SYN-as-relation-edge ambiguity in engine.js is
         // disambiguated here: relation edges are CON; SYN is for merges.
         if (e.kind === 'merge') parent.set(find(e.from), find(e.to));
+        // A REAFFERENCE same_as? is the reader PROPOSING two names are one. It must
+        // never enter union-find as a hard union — it is HELD as a candidate and
+        // resolved later by discriminator convergence (the asterisk block below).
+        else if (e.kind === 'same_as?')
+          sameAsRaw.push({ from: e.from, to: e.to, seq: e.seq, label: e.label, sentIdx: e.sentIdx ?? null });
         break;
       // NUL: non-transformation — the thing is held as-is, not turned into
       //   graph structure and not cleared. (Voiding would be a DEF to VOID.)
       // SEG: handled in the first pass.
       // EVA, REC: live in the rules ledger (conventions), not in this projection.
+    }
+  }
+
+  // ── The ontological asterisk — EVA · REC on held identity (asterisk.js) ─────
+  // same_as? candidates entered the SIDE list, never `parent`. Now run EVA on each
+  // against the FIRM clusters: a candidate whose clusters CONVERGE on shared
+  // discriminator CON edges is promoted to a real merge (unioned, auditable down to
+  // the discriminators that licensed it); one whose FUNCTIONAL discriminators
+  // conflict is a confirmed split; the rest stay OPEN and each carries an identity
+  // void. Discriminators are read on the firm roots, BEFORE any promotion, so every
+  // pair is judged on its own attested evidence. Empty unless cross-source same_as?
+  // events exist — where they do not, this whole block is inert and the projection
+  // is byte-identical (golden parity).
+  const sameAs = [], splits = [], idMerges = [];
+  const specParent = new Map();
+  if (sameAsRaw.length) {
+    const labelFor = (id) => entities.get(id)?.label ?? id;
+    const discr    = discriminatorIndex(edges, find, labelFor);
+    const minConv  = frame.rules.same_as_min_convergence ?? 1;
+    const fvias    = frame.rules.same_as_functional_vias
+                       ? new Set(frame.rules.same_as_functional_vias) : null;
+    // EVA every candidate on the firm clusters, then REC: apply the earned merges.
+    const decided = sameAsRaw.map(c => {
+      const ra = find(c.from), rb = find(c.to);
+      if (ra === rb) return { c, verdict: 'subsumed' };          // a firm merge already united them
+      const ev = evaluateSameAs(ra, rb,
+        { discriminatorsOf: (r) => discr.get(r), minConvergence: minConv, functionalVias: fvias });
+      return { c, ...ev };
+    });
+    for (const d of decided) if (d.verdict === 'promote') parent.set(find(d.c.from), find(d.c.to));
+    // Classify with FINALIZED (post-promotion) roots, so display and voids are stable.
+    for (const d of decided) {
+      if (d.verdict === 'subsumed') continue;
+      const a = find(d.c.from), b = find(d.c.to);
+      const rec = Object.freeze({
+        a, b, seq: d.c.seq, sentIdx: d.c.sentIdx,
+        norm: normLabel(d.c.label ?? a), label: d.c.label ?? null,
+        shared: d.shared, conflicts: d.conflicts,
+      });
+      if (d.verdict === 'promote')    idMerges.push(rec);
+      else if (d.verdict === 'split') splits.push(rec);
+      else { sameAs.push(rec); union(specParent, a, b); }        // OPEN — fold for speculative display
     }
   }
 
@@ -186,7 +251,16 @@ const computeProjection = (log, frame) => {
 
   // Canonicalise void endpoints through the same union-find the edges use, so a
   // carved absence on a merged referent matches a claim about any of its aliases.
-  const voids = voidsRaw.map(v => Object.freeze({ ...v, node: find(v.node) }));
+  // Then carry the IDENTITY voids: each open same_as? candidate stands a void on
+  // the identity relation, node-anchored to BOTH roots (so a query from either side
+  // finds it), reusing the same first-class absence primitive — no new machinery.
+  const idVoids = [];
+  for (const c of sameAs) {
+    const base = { rel: 'identity', kind: 'same_as?', seq: c.seq, sentIdx: c.sentIdx, label: c.label, norm: c.norm };
+    idVoids.push(Object.freeze({ ...base, node: c.a, counter: c.b }));
+    idVoids.push(Object.freeze({ ...base, node: c.b, counter: c.a }));
+  }
+  const voids = [...voidsRaw.map(v => Object.freeze({ ...v, node: find(v.node) })), ...idVoids];
 
   return Object.freeze({
     entities: merged,
@@ -195,7 +269,16 @@ const computeProjection = (log, frame) => {
     // Canonicalise any id to its merged referent — the binding of record the
     // edge-grounding veto resolves a talker claim's endpoints against, so a claim
     // about an alias lands on the same node its edges do (edge-grounding §5).
-    representative: (id) => find(id),
+    // The default mode stays BINARY (firm clusters only). `{ speculative:true }`
+    // additionally folds open same_as? candidates — for display, never for storage.
+    representative: (id, opts) => (opts && opts.speculative) ? ufind(specParent, find(id)) : find(id),
+    // The asterisk surfaces (asterisk.js): OPEN candidates (identity unestablished —
+    // each also a void above), confirmed SPLITs (conflicting discriminators → two
+    // Figures), and earned MERGEs (convergent discriminators, auditable). All empty
+    // unless the master log carries cross-source same_as? events.
+    sameAs:   Object.freeze(sameAs),
+    splits:   Object.freeze(splits),
+    idMerges: Object.freeze(idMerges),
     frame: Object.freeze({ ...frame }),
     rev: events.length,
   });

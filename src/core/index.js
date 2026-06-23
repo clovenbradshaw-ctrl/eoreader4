@@ -7,6 +7,12 @@ export { MODES, DOMAINS, GRAINS, OPERATORS, isOperator,
 export { createLog, isLog } from './log.js';
 export { eoAddressOfEvent, eoNotation } from './address.js';
 export { projectGraph, projectionStats, DEFAULT_PROJECTION_RULES } from './project.js';
+// The ontological asterisk (asterisk.js): identity held open as a question. The
+// read-only measurement (latentAsterisks), the EVA convergence/conflict decision
+// (evaluateSameAs, discriminatorIndex), the identity attention frontier
+// (identityFrontier), and the shared norm2 key (normLabel). Genome-level because
+// identity — like the void it reuses — is the system's primitive, not a faculty's.
+export { latentAsterisks, evaluateSameAs, discriminatorIndex, identityFrontier, normLabel } from './asterisk.js';
 export { VERDICTS } from './verdicts.js';
 export { STANCES, TERRAINS, stanceOf, terrainOf, grainOfStance, grainOfTerrain,
          cellOf, DIAGONAL_CELLS, coherence, isDiagonal, terrainInfo,

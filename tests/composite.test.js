@@ -55,7 +55,7 @@ test('referents are DISTINCT across documents by default — namespaced, not mer
 
 test('cross-document SYN proactively merges a shared name (defeasible, marked crossDoc)', () => {
   const a = docA(), b = docB();
-  const comp = createCompositeDoc([a, b], { crossDocSyn: true });
+  const comp = createCompositeDoc([a, b], { crossDocSyn: true, heldIdentity: false });
   const syn = comp.crossDocSyn.find(s => /gregor/i.test(s.label || ''));
   assert.ok(syn, 'a cross-document merge was proposed for the shared name');
   assert.equal(syn.crossDoc, true, 'the merge is marked ontologically distinct (crossDoc)');
@@ -66,7 +66,7 @@ test('cross-document SYN proactively merges a shared name (defeasible, marked cr
 
 test('provenance is RETAINED through a cross-document merge', () => {
   const a = docA(), b = docB();
-  const comp = createCompositeDoc([a, b], { crossDocSyn: true });
+  const comp = createCompositeDoc([a, b], { crossDocSyn: true, heldIdentity: false });
   const syn = comp.crossDocSyn.find(s => /gregor/i.test(s.label || ''));
   const g = projectGraph(comp.log, {});
   const prov = comp.provenanceOf(syn.to, g);
@@ -77,7 +77,7 @@ test('provenance is RETAINED through a cross-document merge', () => {
 
 test('a cross-document merge is REVISABLE — a SEG retract splits it again', () => {
   const a = docA(), b = docB();
-  const comp = createCompositeDoc([a, b], { crossDocSyn: true });
+  const comp = createCompositeDoc([a, b], { crossDocSyn: true, heldIdentity: false });
   const syn = comp.crossDocSyn.find(s => /gregor/i.test(s.label || ''));
   const g1 = projectGraph(comp.log, {});
   assert.equal(g1.representative(syn.from), g1.representative(syn.to), 'merged first');
