@@ -425,46 +425,85 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
       }
     }
     if (!subj || !subj.id) continue;
-    running = { id: subj.id, w: subj.kind === 'name' ? 1 : (subj.w ?? 0) };
-    const after = clause.text.slice(subj.end);
+
+    // Compound subjects — "A and B [and C …] verb …" — collect co-subjects by
+    // scanning for "and|or [AdmittedName]" immediately after the leading subject
+    // and before the verb. Only expands for a NAMED initial subject; a pronoun
+    // subject is a single resolved referent, not a conjunction candidate.
+    // When expansion fires, `afterStart` advances past all co-subjects so the verb
+    // scan starts at the right position, and each co-subject gets its own bond.
+    // Single-subject sentences are unaffected: subjects remains [subj], afterStart
+    // stays subj.end, and every downstream calculation is byte-identical.
+    let afterStart = subj.end;
+    const subjects = [subj];
+    if (subj.kind === 'name') {
+      const rest0 = clause.text.slice(subj.end);
+      let conjConsumed = 0;
+      while (true) {
+        const cjM = rest0.slice(conjConsumed).match(/^\s*(?:and|or)\s+/i);
+        if (!cjM) break;
+        const nameStart = conjConsumed + cjM[0].length;
+        const ents = scanEntities(rest0.slice(nameStart));
+        const first = ents.find(e => e.start <= 1);
+        if (!first || !admission.isAdmitted(first.label)) break;
+        const coId = admission.idOf(first.label);
+        if (!coId || coId === subj.id) break;
+        subjects.push({ id: coId, start: subj.end + nameStart + first.start,
+                        end: subj.end + nameStart + first.end, text: first.label, kind: 'name', w: 1 });
+        conjConsumed = nameStart + first.end;
+      }
+      if (subjects.length > 1) afterStart = subj.end + conjConsumed;
+    }
+    running = { id: subjects[subjects.length - 1].id,
+                w: subjects[subjects.length - 1].kind === 'name' ? 1 : (subjects[subjects.length - 1].w ?? 0) };
+
+    const after = clause.text.slice(afterStart);
     const head  = headVerb(after, verbOpts);
     if (!head) continue;
-    const w = coupling(subj);
+
+    // Argument spans — offsets back into `s` (which equals doc.sentences[sentIdx] —
+    // segmentSentences trims), each carrying its verbatim text so the walk is
+    // self-verifying. The pipeline emits these as a logged clause-level SEG before
+    // the bond, so a CON is walkable back to the text its endpoints were read from
+    // (§3). Carried on the rel as `args`; the pipeline strips it after emitting the SEG.
+    const vStart = base + afterStart + head.at, vEnd = base + afterStart + head.restStart;
+    const verb     = { text: s.slice(vStart, vEnd), start: vStart, end: vEnd };
+    const restBase = vEnd;
+
     if (head.copular) {
       const pred = head.rest.replace(/^[\s,]+/, '').replace(/[.!?]+\s*$/, '').trim();
-      if (pred) out.push({ op: 'DEF', id: subj.id, key: 'predicate', value: pred, ...w, ...polmod(head) });
+      if (pred) {
+        for (const csub of subjects) {
+          const cw = coupling(csub);
+          out.push({ op: 'DEF', id: csub.id, key: 'predicate', value: pred, ...cw, ...polmod(head) });
+        }
+      }
       continue;
     }
     const op = isSpeech(head.verb) ? 'SIG' : 'CON';
-    // The argument spans, with offsets back into `s` (which equals
-    // doc.sentences[sentIdx] — segmentSentences trims), each carrying its verbatim
-    // text so the walk is self-verifying. The pipeline emits these as a logged
-    // clause-level SEG before the bond, so a CON is walkable back to the text its
-    // endpoints were read from (§3). Carried on the rel as `args`; the pipeline
-    // strips it from the edge event after emitting the SEG.
-    const vStart = base + subj.end + head.at, vEnd = base + subj.end + head.restStart;
-    const subject  = { text: subj.text, start: base + subj.start, end: base + subj.end, id: subj.id };
-    const verb     = { text: s.slice(vStart, vEnd), start: vStart, end: vEnd };
-    const restBase = vEnd;                            // head.rest begins here in `s`
 
-    let bonded = false;
-    for (const obj of objectEntities(head.rest, admission, subj.id)) {
-      const oStart = restBase + obj.start, oEnd = restBase + obj.end;
-      const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: obj.id };
-      out.push({ op, src: subj.id, tgt: obj.id, via: head.verb, ...w, ...polmod(head), args: { subject, verb, object, op } });
-      bonded = true;
-    }
-    // The NP referent object — only when the page asks for referents, and only when
-    // a named patient did not already bond this clause (a figure is never shadowed by
-    // an incidental noun). The endpoint is the lemma id, tagged `np` so the fold and
-    // the pipeline read it as a referent, never a figure.
-    if (wantReferents && !bonded) {
-      const np = npObject(head.rest, npGuards);
-      if (np) {
-        const oStart = restBase + np.start, oEnd = restBase + np.end;
-        const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: np.lemma };
-        out.push({ op, src: subj.id, tgt: np.lemma, via: head.verb, tgtKind: 'np', ...w, ...polmod(head),
-                   args: { subject, verb, object, op } });
+    for (const csub of subjects) {
+      const cw = coupling(csub);
+      const subject = { text: csub.text, start: base + csub.start, end: base + csub.end, id: csub.id };
+      let bonded = false;
+      for (const obj of objectEntities(head.rest, admission, csub.id)) {
+        const oStart = restBase + obj.start, oEnd = restBase + obj.end;
+        const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: obj.id };
+        out.push({ op, src: csub.id, tgt: obj.id, via: head.verb, ...cw, ...polmod(head), args: { subject, verb, object, op } });
+        bonded = true;
+      }
+      // The NP referent object — only when the page asks for referents, and only when
+      // a named patient did not already bond this clause (a figure is never shadowed
+      // by an incidental noun). The endpoint is the lemma id, tagged `np` so the
+      // fold and the pipeline read it as a referent, never a figure.
+      if (wantReferents && !bonded) {
+        const np = npObject(head.rest, npGuards);
+        if (np) {
+          const oStart = restBase + np.start, oEnd = restBase + np.end;
+          const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: np.lemma };
+          out.push({ op, src: csub.id, tgt: np.lemma, via: head.verb, tgtKind: 'np', ...cw, ...polmod(head),
+                     args: { subject, verb, object, op } });
+        }
       }
     }
   }
