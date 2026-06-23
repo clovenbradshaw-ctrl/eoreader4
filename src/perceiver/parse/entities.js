@@ -20,7 +20,7 @@
 // where it was mentioned.
 
 import {
-  SEED_STARTER, SEED_FUNCTION, SEED_PREPOSITION, SEED_ROLE, SEED_AUXILIARY,
+  SEED_STARTER, SEED_FUNCTION, SEED_PREPOSITION, SEED_ROLE, SEED_AUXILIARY, SEED_DEMONYM,
 } from '../../core/conventions/index.js';
 
 const TITLE = String.raw`(?:Mr|Mrs|Ms|Dr|Miss|Mister|Sir|Madam|Madame|Lady|Lord|Professor|Prof|Capt|Captain|Rev|St|Aunt|Uncle)\.?`;
@@ -38,12 +38,14 @@ const setOf = (seed) => new Set(seed.map(lc));
 const DEFAULT_CONVENTIONS = (() => {
   const starter = setOf(SEED_STARTER), fn = setOf(SEED_FUNCTION);
   const prep = setOf(SEED_PREPOSITION), role = setOf(SEED_ROLE), aux = setOf(SEED_AUXILIARY);
+  const demonym = setOf(SEED_DEMONYM);
   return {
     isStarter:     (w) => starter.has(lc(w)),
     isFunction:    (w) => fn.has(lc(w)),
     isPreposition: (w) => prep.has(lc(w)),
     isRole:        (w) => role.has(lc(w)),
     isAuxiliary:   (w) => aux.has(lc(w)),
+    isDemonym:     (w) => demonym.has(lc(w)),
   };
 })();
 
@@ -86,12 +88,26 @@ const isContent = (w, C) => !!w && /^[a-z][a-z'’]*$/.test(w) && w.length >= 2 
 // are the ledger's. A sighting earns the floor when it sits in an ARGUMENT
 // position; anything else earns nothing (no count backstop, so a recurring
 // clause-opener never accrues its way in).
-const sightingGravity = (sentence, start, end, C) => {
+const sightingGravity = (sentence, start, end, C, label = null) => {
   const after = sentence.slice(end);
-  if (/^['’]s?\b/.test(after)) return 1.0;                            // possessor: "Abram's"
+  if (/^['’]s?\b/.test(after)) return 1.0;                            // possessor: "Abram's" / "the Russian's"
   const before = sentence.slice(0, start);
   const prev = (before.match(/([A-Za-z'’]+)\s*$/) || [])[1];
   const next = (after.match(/^\s*([A-Za-z'’]+)/) || [])[1];
+  // A demonym / proper adjective ("the Russian novelist", "learning about American
+  // television", "their Jewish king") is ATTRIBUTIVE — it modifies the following noun,
+  // it is not a referent in its own right. That holds REGARDLESS of what precedes it,
+  // so this is tested before the role/preposition branch ("about American" must not
+  // read American as the object of "about"; the object is "television"). The check is on
+  // the cleaned LABEL, not the raw span — a leading starter the scanner swept in ("The
+  // French translation") would otherwise hide the demonym. It earns gravity only in a
+  // genuinely NOMINAL frame: a possessor ("the Russian's", handled above) or the subject
+  // of a copula/auxiliary ("Russian is a language"). Everything else fails toward silence
+  // — the system's stance wherever a reading is uncertain, and a far cheaper error than
+  // admitting a nationality as a character (the floor that turned "the Russian novelist"
+  // into a figure the protagonist's first-person "I" then resolved to).
+  if (C.isDemonym && C.isDemonym(label ?? sentence.slice(start, end)))
+    return (next && C.isAuxiliary(next)) ? 1.0 : 0.0;
   if (prev && (C.isRole(prev) || C.isPreposition(prev))) return 1.0;  // "his son Seth" / "unto Noah"
   if (isContent(next, C) || isContent(prev, C)) return 1.0;           // subject ("X walked") / object ("begat X")
   if (next && C.isAuxiliary(next)) return 1.0;                        // subject of a copula/aux ("Alice is …")
@@ -123,6 +139,7 @@ export const createEntityAdmission = ({ conventions } = {}) => {
     isPreposition: (w) => conventions.isPreposition(w),
     isRole:        (w) => conventions.isRole(w),
     isAuxiliary:   (w) => conventions.isAuxiliary(w),
+    isDemonym:     (w) => conventions.isDemonym ? conventions.isDemonym(w) : false,
   } : DEFAULT_CONVENTIONS;
   const counts    = new Map(); // label → count
   const gravity   = new Map(); // label → Σ referential gravity over its sightings
@@ -190,7 +207,7 @@ export const createEntityAdmission = ({ conventions } = {}) => {
       // Accrue this sighting's gravity. A multi-word proper name is referential on
       // its face (it is not a clause-opener accident), so it carries the floor.
       const g = (gravity.get(label) || 0)
-        + (multiword ? GRAVITY_FLOOR : sightingGravity(sentence, m.index, m.index + m[0].length, C));
+        + (multiword ? GRAVITY_FLOOR : sightingGravity(sentence, m.index, m.index + m[0].length, C, label));
       gravity.set(label, g);
 
       if (admitted.has(label)) {

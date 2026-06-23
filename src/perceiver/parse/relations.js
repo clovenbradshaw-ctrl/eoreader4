@@ -37,6 +37,13 @@ const defIsConjunction = (w) => CONJUNCTION_SEED.has(w);
 
 const SUBJECT_PRONOUN = new Set(['He', 'She', 'They', 'We', 'It', 'I', 'You']);
 
+// Relative pronouns that open a clause whose subject is the ANTECEDENT, not the
+// running sentence subject ("…an unspeaking jazz player who refuses to speak" — the
+// one refusing is the player, not the narrator). The clause splitter consumes the
+// pronoun, so the relative clause arrives subjectless; we do not resolve antecedents
+// here, so rather than inherit the WRONG subject we let it fail toward silence.
+const RELATIVE_OPENER = new Set(['who', 'whom', 'whose', 'which', 'that']);
+
 // Words that are not verbs: if the head slot lands on one of these, there is no
 // relation here — better silence than "Grete who Just" or "Gregor --between-->
 // spoke". Prepositions, indefinite pronouns, and bare cardinals are added because
@@ -45,6 +52,11 @@ const SUBJECT_PRONOUN = new Set(['He', 'She', 'They', 'We', 'It', 'I', 'You']);
 // note format forbids in the relation slot.
 const NOT_HEAD = new Set([
   'who', 'whom', 'whose', 'which', 'that', 'what', 'where', 'when', 'why', 'how',
+  // Expletive / deictic adverbs: "there is an unspeaking jazz player", "here stands a
+  // man" front a clause but are no predicate. Without them the head-verb walk took the
+  // existential "there" as the relation ("X --there--> player"), inventing a bond out of
+  // a presentational clause. Same closed-class footing as the wh-adverbs above.
+  'there', 'here',
   'by', 'of', 'in', 'on', 'at', 'to', 'from', 'with', 'for', 'as', 'than', 'about',
   'and', 'but', 'or', 'nor', 'so', 'because', 'although', 'while', 'if', 'unless',
   'a', 'an', 'the', 'his', 'her', 'their', 'its', 'this', 'these', 'those',
@@ -508,7 +520,11 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
       // biggest well. Its weight rides as coupling: a witnessed deposit, not a
       // certain claim.
       const lead = (clause.text.match(LEAD_COORD) || [''])[0].length;
-      if (headVerb(clause.text.slice(lead), verbOpts)) {
+      // A relative clause ("…player WHO refuses…") inherits NOTHING: its subject is
+      // the antecedent the splitter dropped, never the running subject. Attributing it
+      // to the running subject is exactly how "refuses to speak" was pinned on the
+      // narrator. No antecedent resolver here → fail toward silence, lose the edge.
+      if (!RELATIVE_OPENER.has(clause.opener) && headVerb(clause.text.slice(lead), verbOpts)) {
         const inh = running || (coref.lastIns ? coref.lastIns() : null);
         if (inh && inh.id) subj = { id: inh.id, start: lead, end: lead, text: '', kind: 'inherited', w: inh.w ?? 0 };
       }

@@ -241,6 +241,32 @@ export const SEED_CONJUNCTION = Object.freeze([
   'and', 'or', 'nor',
 ]);
 
+// Demonyms / proper adjectives — capitalised words that name a nationality, people,
+// or creed and behave as ADJECTIVES by default ("the Russian novelist", "French
+// translation", "American television", "Jewish king"). They are NOT referents in
+// that attributive position, but entity admission's gravity rule reads a capital +
+// a following content noun as a SUBJECT ("Gregor walked") and so admitted "Russian"
+// as a character — the bug that let the protagonist's first-person "I" resolve to a
+// nationality and a jazz player become "a Russian jazz player". Admission consults
+// this register to deny attributive gravity, while the genuinely NOMINAL uses still
+// admit on their own evidence (a possessor "the Russian's", a copula subject "Russian
+// is a language"). Seeded for English and learnable like every other register; the
+// list errs toward clear nationality/cultural adjectives and omits given-name
+// collisions (Roman, Christian) so a real character is never silently dropped.
+export const SEED_DEMONYM = Object.freeze([
+  'russian', 'french', 'american', 'german', 'english', 'british', 'irish',
+  'scottish', 'welsh', 'italian', 'spanish', 'portuguese', 'dutch', 'belgian',
+  'swiss', 'austrian', 'greek', 'turkish', 'polish', 'czech', 'hungarian',
+  'romanian', 'bulgarian', 'serbian', 'croatian', 'ukrainian', 'swedish',
+  'norwegian', 'danish', 'finnish', 'icelandic', 'chinese', 'japanese', 'korean',
+  'vietnamese', 'thai', 'indian', 'pakistani', 'persian', 'iranian', 'iraqi',
+  'israeli', 'arab', 'arabic', 'egyptian', 'moroccan', 'nigerian', 'kenyan',
+  'ethiopian', 'mexican', 'canadian', 'brazilian', 'argentine', 'argentinian',
+  'chilean', 'peruvian', 'colombian', 'cuban', 'australian', 'european', 'asian',
+  'african', 'jewish', 'hispanic', 'latino', 'latina', 'slavic', 'nordic',
+  'baltic', 'anglo', 'saxon',
+]);
+
 export const SEED_FIELD_LABEL = Object.freeze([
   // bibliographic front matter
   'title', 'subtitle', 'author', 'authors', 'editor', 'translator', 'illustrator',
@@ -267,6 +293,7 @@ const SEEDS = {
   'starter': SEED_STARTER,
   'conjunction': SEED_CONJUNCTION,
   'field-label': SEED_FIELD_LABEL,
+  'demonym': SEED_DEMONYM,
 };
 
 // The pre-baked strain-history a prior carries: a seed is not an axiom, it is a
@@ -380,6 +407,9 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
     isRole: (v) => has('role', v),
     isFunction: (v) => has('function', v),
     isStarter: (v) => has('starter', v),
+    // A demonym / proper adjective ("Russian", "French") — read by entity admission
+    // to deny ATTRIBUTIVE gravity ("Russian novelist" is not a character), seed ∪ learned.
+    isDemonym: (v) => has('demonym', v),
     // A coordinating conjunction joining two like constituents ('and'/'or'/'nor') —
     // read by the relation parser to admit a coordinated subject ("Name and Name …"),
     // seed ∪ learned. NOT the adversative/illative connectives the function class holds.
