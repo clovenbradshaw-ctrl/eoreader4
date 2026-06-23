@@ -240,6 +240,7 @@ so "who wrote this?" / "when is it from?" are answerable.
 | `enact`       | `createEnactedLoop` · `calibrateReader` · `enactedReadingTo` · `replayFrames` · `loopStats` (the enacted DEF·EVA·REC loop) | `read` |
 | `retrieve`    | `retrieveHybrid(doc, q, embedder)`                            | `core`, `parse` |
 | `fold`        | `foldNote(spans, {doc, cursor})` · `impressionQuery`         | `read`     |
+| `rest`        | `reproject` · `reprojectIntegral` · `descend` · `reverseLearn` · `holdAsGround` · `recouple` · `rest` (integration: the helix run backwards — [`docs/how-to-rest.md`](docs/how-to-rest.md)) | `write/fold`, `enact` |
 | `ground`      | `bindCitations(draft, spans, {doc, cursor})` · `runVetoes`    | `core`, `parse`, `factcheck` |
 | `answer`      | `tryMechanical(doc, q)`                                       | `core`, `parse` |
 | `model`       | `createModel(name)` · `createMiniLMEmbedder()`                | nothing (DI) |
