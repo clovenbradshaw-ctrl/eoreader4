@@ -1,0 +1,35 @@
+{
+  "_comment": "BLIND stimulus for the novelty-reserve pressure. Opaque item ids; no labels, no predictions, no condition names. The measurement (scripts/novelty-reserve.mjs) emits per-line channels for every item over PRIOR CONTEXT ONLY and never reads the key. The held key (key.json) is a separate file the run never sees. Every line is the same shape — 'Name entered.' / a single note — so line length, token count and verb are matched across items; only the IDENTITY/NOVELTY timing differs. Cast names and the phenomenon ('figures entering a scene') are drawn from random Wikipedia articles (seeds of record in key.json), not from imagination.",
+  "items": [
+    {
+      "id": "s1",
+      "basis": "text",
+      "units": ["Arna entered.", "Arna entered.", "Arna entered.", "Arna entered.", "Arna entered.", "Arna entered.", "Wieman entered."]
+    },
+    {
+      "id": "s2",
+      "basis": "text",
+      "units": ["Arna entered.", "Dammann entered.", "Keim entered.", "Randolph entered.", "Aelvoet entered.", "Lamprecht entered.", "Wieman entered."]
+    },
+    {
+      "id": "s3",
+      "basis": "text",
+      "units": ["Arna entered.", "Arna entered.", "Arna entered.", "Arna entered.", "Arna entered.", "Arna entered.", "Arna entered."]
+    },
+    {
+      "id": "t1",
+      "basis": "tonal",
+      "units": [60, 60, 60, 60, 60, 60, 67]
+    },
+    {
+      "id": "t2",
+      "basis": "tonal",
+      "units": [60, 62, 64, 65, 66, 69, 67]
+    },
+    {
+      "id": "t3",
+      "basis": "tonal",
+      "units": [60, 60, 60, 60, 60, 60, 60]
+    }
+  ]
+}

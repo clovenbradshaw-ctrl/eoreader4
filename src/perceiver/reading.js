@@ -50,6 +50,22 @@ export const readingAt = (doc, cursor, opts = {}) => {
   const priorProp = new Map(); // atom → γ-decayed presence before `at`
   const bump = (m, k, v = 1) => m.set(k, (m.get(k) || 0) + v);
 
+  // THE SIGNAL-DERIVED NOVELTY RESERVE (opt-in, parity-gated — docs/novelty-reserve.md).
+  // The Bayesian reserve fed to surpriseAt is a hand-rolled constant (NOVELTY=1) by default —
+  // blind to whether newcomers have been arriving. Under opts.signalReserve we replace it with
+  // the recent NOVELTY RATE: ν, the γ-decayed mass of FIRST appearances in the proposition field
+  // (the same γ-decay the figure field rides, deposited-into by newcomers only). It is the
+  // closed form of the core's ν′ = γ·ν + newcomerMass recurrence, unrolled over the prior the
+  // from-scratch scan already rebuilds. Default false → `novelty: NOVELTY`, byte-identical (the
+  // exact-value goldens in tests/surprise.test.js).
+  const signalReserve = opts.signalReserve === true;
+  const seenProp = new Set();   // atoms already counted as a first-appearance (the ν support)
+  let nu = 0;                   // ν — γ-decayed first-appearance mass (the reserve amplitude)
+  const bumpProp = (k, w) => {
+    bump(priorProp, k, w);
+    if (signalReserve && !seenProp.has(k)) { seenProp.add(k); nu += w; }  // first appearance → deposit into ν
+  };
+
   const insAt = [];            // entity ids instantiated at `at`
   const relAt = [];            // { op, src, tgt, via } at `at`
   const defAt = [];            // { id, value } at `at`
@@ -94,17 +110,17 @@ export const readingAt = (doc, cursor, opts = {}) => {
       if (e.op === 'INS') {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
         priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
-        bump(priorProp, `f:${e.id}`, w);
+        bumpProp(`f:${e.id}`, w);
       } else if (e.op === 'CON' || e.op === 'SIG') {
         priorBond.add(`${e.src}|${e.tgt}`);
         // The bond's participants (incl. an NP referent target) and the proposition
         // itself enter the belief field — the relation is part of what is the case.
-        bump(priorProp, `f:${e.src}`, w);
-        bump(priorProp, `f:${e.tgt}`, w);
-        bump(priorProp, `p:${e.src}|${e.via || ''}|${e.tgt}`, w);
+        bumpProp(`f:${e.src}`, w);
+        bumpProp(`f:${e.tgt}`, w);
+        bumpProp(`p:${e.src}|${e.via || ''}|${e.tgt}`, w);
       } else if (e.op === 'DEF' && e.key === 'predicate') {
-        bump(priorProp, `f:${e.id}`, w);
-        bump(priorProp, `d:${e.id}|${e.value}`, w);
+        bumpProp(`f:${e.id}`, w);
+        bumpProp(`d:${e.id}|${e.value}`, w);
       }
     } else if (e.sentIdx === at) {
       if (e.op === 'INS')                               insAt.push(e.id);
@@ -217,7 +233,11 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  // The reserve AMPLITUDE is the only thing that changes under signalReserve — the fixed Born
+  // step inside surpriseAt is identical for both. Constant (NOVELTY) by default; the signal's
+  // own γ-decayed novelty rate (ν) when asked. Context enters at the amplitude, the law stays put.
+  const reserve = signalReserve ? nu : NOVELTY;
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: reserve, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------

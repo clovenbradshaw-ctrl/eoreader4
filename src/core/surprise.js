@@ -70,7 +70,21 @@ export const surpriseAt = (prior, arrival, { gamma, novelty = NOVELTY_RESERVE, a
     if (pPost > 0) bayesBits += pPost * Math.log2(pPost / (novelty / sumW));
   }
   bayesBits = Math.max(0, bayesBits);          // KL ≥ 0 (clamp float noise)
-  return { bayesBits, bayesBy };
+
+  // THE SIGNAL-DERIVED RESERVE (the constant hunt — docs/novelty-reserve.md). `novelty` is a
+  // HAND-ROLLED CONSTANT by default (NOVELTY_RESERVE), so the reserve probability the Born
+  // step holds for the unseen is blind to whether newcomers have actually been arriving — the
+  // reader grows equally certain nothing new will come whether it just saw three newcomers or
+  // none. The honest reserve is the recent NOVELTY RATE: the γ-decayed accumulation of newcomer
+  // mass, the SAME `m′ = γ·m + deposit` recurrence every incumbent atom already obeys (line 48),
+  // but deposited-into by FIRST appearances only. We expose it as `noveltyNext` so a caller can
+  // thread it back as the next step's `novelty`; the fixed Born step above then turns that
+  // context-sensitive AMPLITUDE into a context-sensitive belief — high after newcomers, low after
+  // a long stretch of confirmation, with no constant in the path. Purely additive: `bayesBits`/
+  // `bayesBy` are untouched, so every caller that ignores it stays byte-identical (the goldens).
+  const newcomerMass = newcomers.reduce((s, k) => s + (arrival.get(k) || 0), 0);
+  const noveltyNext  = gamma * novelty + newcomerMass;   // ν′ = γ·ν + (mass that arrived on the unseen)
+  return { bayesBits, bayesBy, noveltyNext };
 };
 
 // p(next | profile) — THE FORWARD DISTRIBUTION (Track A, docs/spec-one-surprise.md).

@@ -1,0 +1,26 @@
+{
+  "_comment": "HELD KEY for the novelty-reserve pressure. A SEPARATE file the measurement never reads. It carries the item identities, the predicted per-channel dissociation, the control's predicted behaviour, and the mechanism tag. The scorer reads this AFTER the blind measurement has emitted its channels.",
+  "capability": "novelty-rate-tracking-reserve",
+  "claim": "The Bayesian-surprise a newcomer produces tracks the recent NOVELTY RATE (how often newcomers have lately arrived), not just the standing mass or the bare fact of being new. A newcomer after a long confirmation stretch (drought) moves belief MORE than the same newcomer after a flurry of newcomers, when standing mass is matched. The hand-rolled constant reserve (NOVELTY_RESERVE = 1.0) cannot tell drought from flurry; the signal-derived reserve (the γ-decayed first-appearance mass, ν) can.",
+  "mechanism": "surpriseAt's reserve AMPLITUDE. Under signalReserve the reserve probability ν/(sumPrior+ν) is fed the γ-decayed novelty rate ν instead of the constant 1.0, then run through the SAME fixed Born step. reserve_prob is high after a flurry (ν≈sumPrior → newcomer is expected → small KL) and low after a drought (ν→0 → newcomer is unexpected → large KL).",
+  "seeds_of_record": [
+    { "title": "Under the Lantern", "revision": "1338193031", "supplies": "the phenomenon (a named cast entering a scene) and the names Arna, Dammann, Wieman, Lamprecht" },
+    { "title": "De Benneville Randolph Keim", "revision": "1356985273", "supplies": "the names Keim, Randolph" },
+    { "title": "Magda Aelvoet", "revision": "1346308122", "supplies": "the name Aelvoet" }
+  ],
+  "items": {
+    "s1": { "condition": "drought", "testIndex": 6, "newcomerAtTest": true,  "predicted": "LOW novelty rate at test → LARGE bayes under signalReserve" },
+    "s2": { "condition": "flurry",  "testIndex": 6, "newcomerAtTest": true,  "predicted": "HIGH novelty rate at test → SMALL bayes under signalReserve; standing mass matched to s1" },
+    "s3": { "condition": "control", "testIndex": 6, "newcomerAtTest": false, "predicted": "re-confirm at test (no newcomer); test line is BYTE-IDENTICAL surface to s1's test line. bayes ≈ 0 under BOTH reserves — the loud-surface null" },
+    "t1": { "condition": "drought", "testIndex": 6, "newcomerAtTest": true,  "predicted": "tonal drought (one pitch recurs, then a new pitch) → LARGE bayes under signalReserve" },
+    "t2": { "condition": "flurry",  "testIndex": 6, "newcomerAtTest": true,  "predicted": "tonal flurry (six distinct pitches, then a new pitch) → SMALL bayes under signalReserve; matched mass" },
+    "t3": { "condition": "control", "testIndex": 6, "newcomerAtTest": false, "predicted": "tonal re-confirm (same pitch) → bayes ≈ 0 under BOTH reserves" }
+  },
+  "control_id": "s3",
+  "dissociation": {
+    "OFF": "constant reserve: bayes(drought) ≈ bayes(flurry) — BLIND to the novelty rate (matched standing mass); control ≈ 0",
+    "ON":  "signal reserve: bayes(drought) ≫ bayes(flurry) — the rate is tracked; bayes(drought) ≫ control; flurry stays small",
+    "surface_controls_held": "surprisal (token improbability) is IDENTICAL between drought and flurry, and standing mass (OFF bayes) is identical — so no surface feature can produce the drought≫flurry split. Only the signal reserve does.",
+    "omnimodal": "the same split appears on the tonal basis (t1≫t2 under ON, t1≈t2 under OFF), driven by the SAME core recurrence — so the capability is interior, not a text fact"
+  }
+}
