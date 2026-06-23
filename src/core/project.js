@@ -20,7 +20,8 @@
 import { discriminatorIndex, evaluateSameAs, normLabel } from './asterisk.js';
 
 export const DEFAULT_PROJECTION_RULES = Object.freeze({
-  // Mass decays at γ per sentence distance from the cursor.
+  // Mass decays at γ per unit of stream-distance from the cursor (unit.js —
+  // the modality-blind measure of reach; never "per sentence", a text convention).
   // engine.js READING_RULES.decay_gamma.value.
   decay_gamma: 0.7,
   // Edges below this weight are pruned from the projection. 0 disables.

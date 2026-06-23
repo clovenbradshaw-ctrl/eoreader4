@@ -8,7 +8,7 @@
 //
 // Two origins, one status. An INHERITED prior (the seeds below) and a LEARNED
 // convention (a sci-fi text whose dialogue runs on "pinged", a journal whose
-// "Inst." is no sentence end) sit in the same store with the same authority. A
+// "Inst." is no boundary) sit in the same store with the same authority. A
 // prior is just a convention with strain-history pre-baked — a HEAD START in
 // confidence, not an exemption from the loop. So every convention is defeasible:
 //
@@ -42,7 +42,7 @@ export const SEED_SPEECH = Object.freeze([
 ]);
 
 // A period after one of these (or a single capital initial, handled at the
-// splitter) abbreviates; it is not a sentence end.
+// splitter) abbreviates; it is not a boundary.
 export const SEED_ABBREVIATIONS = Object.freeze([
   'mr', 'mrs', 'ms', 'dr', 'st', 'mt', 'messrs', 'mme', 'mlle',
   'prof', 'rev', 'hon', 'capt', 'col', 'gen', 'sgt', 'lt', 'cmdr', 'sr', 'jr',
@@ -176,7 +176,7 @@ export const SEED_FUNCTION = Object.freeze([
   ...SEED_PREPOSITION, ...SEED_AUXILIARY,
 ]);
 
-// Sentence-opening words that begin a clause but name no one — stripped from a
+// Opening words that begin a clause but name no one — stripped from a
 // candidate phrase before admission so "Then Alice" admits "Alice". Early-modern
 // openers (Behold, Lo, Verily, Hast, Thou) belong here too: they are the KJV
 // equivalents of "Then"/"He"/"Can", and without them clause-openers masquerade as
@@ -198,9 +198,9 @@ export const SEED_STARTER = Object.freeze([
   'thou', 'thee', 'thy', 'thine', 'ye', 'behold', 'lo', 'verily', 'yea', 'nay',
   'hast', 'hath', 'doth', 'dost', 'art', 'wast', 'wilt', 'shalt', 'unto',
   // Indefinite determiners / quantifiers — they open a clause but name no one, so a
-  // capitalised one at sentence start ("Other travelling salesmen…", "Most of them…",
+  // capitalised one at segment start ("Other travelling salesmen…", "Most of them…",
   // "One morning…") is a stray capital, not a character. Without these the gravity
-  // floor admits them on their sentence-initial subject position.
+  // floor admits them on their segment-initial subject position.
   'one', 'another', 'other', 'some', 'any', 'each', 'every', 'all', 'both',
   'many', 'much', 'more', 'most', 'few', 'fewer', 'several', 'such', 'either', 'neither', 'none',
   // Indefinite pronouns — likewise referential of no one in particular.

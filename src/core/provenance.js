@@ -18,7 +18,7 @@
 //
 // This module is the genome's home for the type law itself — pure, dependency-
 // free, modality-blind (both doors operate BELOW the modality membrane, so a
-// self-generated melody, image, or sentence is me-tagged by the same edge). The
+// self-generated melody, image, or utterance is me-tagged by the same edge). The
 // enactor door EMITS it at commit (enactor/efference.js); the perceiver door tags
 // ingest. The witness READS it as a type (src/write/witness.js, §7), it does not
 // run it as a policy.
