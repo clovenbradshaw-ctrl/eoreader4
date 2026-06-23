@@ -19,7 +19,7 @@
 
 import { scanEntities } from './entities.js';
 import { segmentClauses } from './clauses.js';
-import { SEED_COPULA, SEED_MODIFIER, SEED_SPEECH } from '../../core/conventions/index.js';
+import { SEED_COPULA, SEED_MODIFIER, SEED_SPEECH, SEED_ADJUNCT } from '../../core/conventions/index.js';
 
 // The verb-classification word-lists live in the conventions ledger (the home for
 // the language-specific stuff), seeded and learnable. The parser holds NO list of
@@ -29,9 +29,11 @@ import { SEED_COPULA, SEED_MODIFIER, SEED_SPEECH } from '../../core/conventions/
 const COPULA_SEED   = new Set(SEED_COPULA);     // is/am/was/… → DEF, never a relation
 const SPEECH_SEED   = new Set(SEED_SPEECH);     // said/asked/… → SIG
 const MODIFIER_SEED = new Set(SEED_MODIFIER);   // adverbs/intensifiers/auxiliaries to step over
+const ADJUNCT_SEED  = new Set(SEED_ADJUNCT);    // north/home/dawn → never a referent NP head
 const defIsCopula   = (w) => COPULA_SEED.has(w);
 const defIsSpeech   = (w) => SPEECH_SEED.has(w);
 const defIsModifier = (w) => MODIFIER_SEED.has(w);
+const defIsAdjunct  = (w) => ADJUNCT_SEED.has(w);
 
 const SUBJECT_PRONOUN = new Set(['He', 'She', 'They', 'We', 'It', 'I', 'You']);
 
@@ -305,6 +307,7 @@ const npObject = (rest, guards) => {
   const eligible = (t, allowParticiple) => {
     if (/^[A-Z]/.test(t.w)) return false;       // a name → figure path owns it
     if (NP_NON_HEAD.has(t.lw) || NP_PARTICLE.has(t.lw) || NP_REFLEX.has(t.lw)) return false;
+    if (guards.isAdjunct && guards.isAdjunct(t.lw)) return false;   // north/home/dawn name no referent (ledger)
     if (isVerbish(t.lw) || isAdverbLy(t.lw) || t.lw.length < 2) return false;
     if (!allowParticiple && isParticiple(t.lw)) return false;   // prefer a true-noun head
     return true;
@@ -390,7 +393,8 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // when one is supplied (its seed ∪ Pass-0 learned), falling back to the seeds.
   const isSpeech = opts.isSpeech || defIsSpeech;
   const verbOpts = { isCopula: opts.isCopula || defIsCopula, isModifier: opts.isModifier || defIsModifier };
-  const npGuards = { isSpeech, isCopula: verbOpts.isCopula, isModifier: verbOpts.isModifier };
+  const npGuards = { isSpeech, isCopula: verbOpts.isCopula, isModifier: verbOpts.isModifier,
+                     isAdjunct: opts.isAdjunct || defIsAdjunct };
   // The NP referent object slot (move 2) is ON for the page (the pipeline asks for
   // referents) and OFF for the talker-claim veto (correspond.js): an unanchored
   // common noun is an UNRESOLVED endpoint there, not a node — the veto grounds only

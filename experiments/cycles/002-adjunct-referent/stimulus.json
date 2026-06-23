@@ -1,0 +1,13 @@
+{
+  "note": "BLIND. Each item is one sentence and the post-verb probe word to inspect. Whether the probe is a patient (referent) or an adjunct (direction/time) is held in key.json. Every item has the identical surface shape 'Subject Verb X.' so the object position is a loud surface signal; only referent status differs.",
+  "items": {
+    "it_a": { "text": "Duane carried Morgan.", "probe": "Morgan" },
+    "it_b": { "text": "Duane sailed north.",   "probe": "north" },
+    "it_c": { "text": "Duane guarded Morgan.", "probe": "Morgan" },
+    "it_d": { "text": "Duane sailed home.",    "probe": "home" },
+    "it_e": { "text": "Pike chased Morgan.",   "probe": "Morgan" },
+    "it_f": { "text": "Duane sailed at dawn.", "probe": "dawn" },
+    "it_g": { "text": "Pike marched south.",   "probe": "south" },
+    "it_h": { "text": "Duane drifted west.",   "probe": "west" }
+  }
+}

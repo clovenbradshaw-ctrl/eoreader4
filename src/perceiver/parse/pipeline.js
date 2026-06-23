@@ -267,6 +267,7 @@ export const createParser = ({
         },
       };
       const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier,
+                        isAdjunct: conventions.isAdjunct,   // north/home/dawn name no referent (cycle 002)
                         referents: true };   // open the NP object slot for the page (move 2)
       for (const rel of parseRelations(sent, admission, coref, relOpts)) candidates.push({ rel, sentIdx });
 

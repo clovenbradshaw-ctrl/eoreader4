@@ -1,0 +1,56 @@
+{
+  "it_a": {
+    "probe": "Morgan",
+    "bonded": true,
+    "inField": true,
+    "bonds": [
+      "duane-carried-morgan"
+    ]
+  },
+  "it_b": {
+    "probe": "north",
+    "bonded": false,
+    "inField": false,
+    "bonds": []
+  },
+  "it_c": {
+    "probe": "Morgan",
+    "bonded": true,
+    "inField": true,
+    "bonds": [
+      "duane-guarded-morgan"
+    ]
+  },
+  "it_d": {
+    "probe": "home",
+    "bonded": false,
+    "inField": false,
+    "bonds": []
+  },
+  "it_e": {
+    "probe": "Morgan",
+    "bonded": true,
+    "inField": true,
+    "bonds": [
+      "pike-chased-morgan"
+    ]
+  },
+  "it_f": {
+    "probe": "dawn",
+    "bonded": false,
+    "inField": false,
+    "bonds": []
+  },
+  "it_g": {
+    "probe": "south",
+    "bonded": false,
+    "inField": false,
+    "bonds": []
+  },
+  "it_h": {
+    "probe": "west",
+    "bonded": false,
+    "inField": false,
+    "bonds": []
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "note": "HELD. Never imported by measure.mjs. score.mjs reads this to grade the bond channel.",
+  "mechanism_tag": "adjunct-lifted-as-referent",
+  "expect_bond": {
+    "it_a": true,  "it_c": true,  "it_e": true,
+    "it_b": false, "it_d": false, "it_f": false, "it_g": false, "it_h": false
+  },
+  "kinds": {
+    "it_a": "patient", "it_c": "patient", "it_e": "patient",
+    "it_b": "adjunct-direction", "it_d": "adjunct-direction", "it_f": "adjunct-temporal",
+    "it_g": "adjunct-direction", "it_h": "adjunct-direction"
+  },
+  "control": "the adjunct items (it_b/d/f/g/h) occupy the same 'Subject Verb X.' object slot as the patient items (it_a/c/e); a position-only reader bonds them. Pass = every adjunct abstains AND every patient still bonds (no recall loss).",
+  "predictions": {
+    "live_before_fix": "FALSIFIES: it_b/d/f/g/h forge a bond to the adjunct and seed the field with f:<adjunct>.",
+    "after_fix": "CONFIRMS: adjunct items form no bond and no field atom; patient items still bond."
+  }
+}

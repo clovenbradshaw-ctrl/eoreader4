@@ -243,11 +243,35 @@ export const SEED_FIELD_LABEL = Object.freeze([
   'composer', 'director', 'artist', 'performer', 'writer', 'creator',
 ]);
 
+// Adjunct heads — bare nouns/adverbs that sit in a verb's object position but name no
+// REFERENT: they modify the verb (where/when), they are not a participant. The
+// argument/adjunct distinction, which is lexical (or learnable), never structural: "Duane
+// sailed north" / "sailed home" / "sailed at dawn" have the surface shape of "Duane carried
+// Morgan", yet north·home·dawn are adjuncts and only Morgan is a patient. Without this the
+// NP-object slot (relations.js npObject) lifts them as referent endpoints, forging a bond
+// (CON duane→sailed→north) and seeding the proposition field with a figure that was never
+// admitted — the organ-level fault cycle 002 isolates from the interior reserve gap. Seeded
+// CONSERVATIVELY (the clearest non-patients — cardinal/locative directions and temporal
+// points), and LEARNABLE like every register: a text whose adjuncts run otherwise teaches
+// its own. Words that are sometimes real patients (morning, night) are left OUT of the seed
+// and to the loop. The home for language-specific lists is here, never the parser.
+export const SEED_ADJUNCT = Object.freeze([
+  // directional / locative adverbs (take no object; almost never a verb's patient)
+  'north', 'south', 'east', 'west', 'northward', 'southward', 'eastward', 'westward',
+  'homeward', 'seaward', 'shoreward', 'leeward', 'windward', 'inland', 'ashore', 'aground',
+  'overseas', 'abroad', 'underground', 'downhill', 'uphill', 'downstream', 'upstream',
+  'upstairs', 'downstairs', 'home',
+  // temporal points (a bare time-of-day noun reads as WHEN, not a patient)
+  'dawn', 'dusk', 'noon', 'midnight', 'midday', 'daybreak', 'nightfall', 'sunrise',
+  'sunset', 'twilight', 'noontime', 'midmorning', 'midafternoon',
+]);
+
 const SEEDS = {
   'attribution-verb': SEED_SPEECH,
   'abbreviation': SEED_ABBREVIATIONS,
   'copula': SEED_COPULA,
   'modifier': SEED_MODIFIER,
+  'adjunct': SEED_ADJUNCT,
   'preposition': SEED_PREPOSITION,
   'auxiliary': SEED_AUXILIARY,
   'role': SEED_ROLE,
@@ -361,6 +385,10 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
     isAbbreviation: (v) => has('abbreviation', v),
     isCopula: (v) => has('copula', v),
     isModifier: (v) => has('modifier', v),
+    // An adjunct head — a verb-object-position word that names no referent (north, home,
+    // dawn). Read by the NP-object slot so it is not lifted into a bond. Seed ∪ learned.
+    isAdjunct: (v) => has('adjunct', v),
+    learnAdjunct: (token, weight = 1) => learn('adjunct', token, weight),
     // Registers entity admission reads to weigh a sighting's referential gravity.
     isPreposition: (v) => has('preposition', v),
     isAuxiliary: (v) => has('auxiliary', v) || has('copula', v),
