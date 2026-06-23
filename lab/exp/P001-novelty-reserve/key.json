@@ -1,0 +1,30 @@
+{
+  "pressure": "P001",
+  "claim": "The reader's reserved belief in the unseen (the protention an unfilled NUL·Pattern holds) should track the recent RATE of newcomers, not accumulated mass. High right after newcomers keep arriving; low after a long stretch of confirmation. A newcomer into a novelty-rich stream is expected and should surprise LESS; into a committed confirmation stream, unexpected, and should surprise MORE.",
+  "mechanismTag": "novelty-reserve = γ-decayed first-appearance rate (signal-derived amplitude through the fixed Born step), not a 1/(mass+1) constant",
+  "items": {
+    "t1": { "type": "novel-rich", "recentNewcomers": "high" },
+    "t2": { "type": "confirm-rich", "recentNewcomers": "zero" },
+    "t3": { "type": "recent-novelty", "recentNewcomers": "high (steps 3-5)", "controlPartner": "t4" },
+    "t4": { "type": "stale-novelty", "recentNewcomers": "low (decayed; steps 1-3)", "controlPartner": "t3" },
+    "f1": { "type": "novel-rich", "recentNewcomers": "high" },
+    "f2": { "type": "confirm-rich", "recentNewcomers": "zero" },
+    "f3": { "type": "recent-novelty", "recentNewcomers": "high (steps 4-7)", "controlPartner": "f4" },
+    "f4": { "type": "stale-novelty", "recentNewcomers": "low (decayed; steps 1-4)", "controlPartner": "f3" }
+  },
+  "predictedDissociation": {
+    "mechanismPair": {
+      "items": ["t1", "t2"], "freqItems": ["f1", "f2"],
+      "matched": "stream mass is matched (both ~1 atom/step), so accumulated mass cannot tell them apart",
+      "underRate": "probeSurprise(novel-rich) << probeSurprise(confirm-rich) — the reserve is higher after newcomers, so the newcomer is more expected",
+      "underConst": "probeSurprise(novel-rich) == probeSurprise(confirm-rich) — the constant reserve depends only on the (matched) mass, so it is blind to the novelty rate. THIS IS THE GAP."
+    }
+  },
+  "control": {
+    "pairs": [["t3", "t4"], ["f3", "f4"]],
+    "loudSurface": "atom diversity AND accumulated mass — recent and stale streams contain the SAME atoms in the SAME counts (matched diversity, ~matched mass); only the TIMING of the newcomers differs (recent vs decayed).",
+    "underRate": "probeSurprise(recent) < probeSurprise(stale) — the rate reserve is higher when the newcomers are RECENT, lower when they have decayed. The win is the γ-recency, exactly the 'recent' in the claim.",
+    "underConst": "probeSurprise(recent) == probeSurprise(stale) — the constant reserve sees the matched mass and is blind to recency. A method that faked the mechanism split by counting distinct atoms (diversity) or mass would give recent==stale and be CAUGHT here: it cannot produce the recency dissociation."
+  },
+  "verdictRule": "CONFIRMED iff under the rate reserve, in BOTH senses: (a) the mechanism pair dissociates (novel-rich probeSurprise < confirm-rich by a clear margin), AND (b) the control dissociates by recency (recent < stale); AND under the const reserve BOTH collapse (mechanism pair equal AND control equal — the gap is real and not already solved). GAP/FLAT otherwise, per which clause fails."
+}

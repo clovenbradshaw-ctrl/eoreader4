@@ -1,0 +1,37 @@
+{
+  "verdict": "CONFIRMED",
+  "gapReal": true,
+  "fixWorks": true,
+  "results": {
+    "control": {
+      "text:t3/t4": {
+        "constBlind": true,
+        "rateSplit": true,
+        "r": 0.1047,
+        "s": 0.2201
+      },
+      "frequency:f3/f4": {
+        "constBlind": true,
+        "rateSplit": true,
+        "r": 0.2125,
+        "s": 0.3487
+      }
+    },
+    "mechanism": {
+      "text": {
+        "constBlind": true,
+        "rateSplit": true,
+        "novel": 0.0792,
+        "confirm": 0.9475
+      },
+      "frequency": {
+        "constBlind": true,
+        "rateSplit": true,
+        "novel": 0.1817,
+        "confirm": 1.4692
+      }
+    },
+    "perSense": {}
+  },
+  "band": 0.7
+}

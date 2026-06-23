@@ -1,0 +1,90 @@
+{
+  "pressure": "P001",
+  "gamma": 0.7,
+  "generatedAt": "2026-06-23T06:23:21.245Z",
+  "text": {
+    "t1": {
+      "streamMass": 2.9412,
+      "noveltyRateAmp": 2.9412,
+      "reserveConst": 0.2537,
+      "reserveRate": 0.5,
+      "probeSurpriseConst": 0.274,
+      "probeSurpriseRate": 0.0792,
+      "profileAtoms": 6,
+      "matchesReadingAt": true
+    },
+    "t2": {
+      "streamMass": 2.9412,
+      "noveltyRateAmp": 0.1681,
+      "reserveConst": 0.2537,
+      "reserveRate": 0.0541,
+      "probeSurpriseConst": 0.274,
+      "probeSurpriseRate": 0.9475,
+      "profileAtoms": 1,
+      "matchesReadingAt": true
+    },
+    "t3": {
+      "streamMass": 2.9412,
+      "noveltyRateAmp": 2.3581,
+      "reserveConst": 0.2537,
+      "reserveRate": 0.445,
+      "probeSurpriseConst": 0.274,
+      "probeSurpriseRate": 0.1047,
+      "profileAtoms": 4,
+      "matchesReadingAt": true
+    },
+    "t4": {
+      "streamMass": 2.9412,
+      "noveltyRateAmp": 1.2412,
+      "reserveConst": 0.2537,
+      "reserveRate": 0.2968,
+      "probeSurpriseConst": 0.274,
+      "probeSurpriseRate": 0.2201,
+      "profileAtoms": 4,
+      "matchesReadingAt": true
+    }
+  },
+  "frequency": {
+    "f1": {
+      "streamMass": 6.2,
+      "noveltyRateAmp": 6.2,
+      "reserveConst": 0.1389,
+      "reserveRate": 0.5,
+      "probeSurpriseConst": 0.744,
+      "probeSurpriseRate": 0.1817,
+      "profileAtoms": 15
+    },
+    "f2": {
+      "streamMass": 6.2,
+      "noveltyRateAmp": 0.2,
+      "reserveConst": 0.1389,
+      "reserveRate": 0.0313,
+      "probeSurpriseConst": 0.744,
+      "probeSurpriseRate": 1.4692,
+      "profileAtoms": 2
+    },
+    "f3": {
+      "streamMass": 6.2,
+      "noveltyRateAmp": 5.266,
+      "reserveConst": 0.1389,
+      "reserveRate": 0.4593,
+      "probeSurpriseConst": 0.744,
+      "probeSurpriseRate": 0.2125,
+      "profileAtoms": 10
+    },
+    "f4": {
+      "streamMass": 6.2,
+      "noveltyRateAmp": 3.01,
+      "reserveConst": 0.1389,
+      "reserveRate": 0.3268,
+      "probeSurpriseConst": 0.744,
+      "probeSurpriseRate": 0.3487,
+      "profileAtoms": 11
+    }
+  },
+  "instrument": {
+    "ok": true,
+    "issues": [],
+    "note": "organLive = the intended organ emitted structure; matchesReadingAt = the text front-end reproduces the production reading const channel; a non-empty profile = the channel was fed, not starved."
+  }
+}

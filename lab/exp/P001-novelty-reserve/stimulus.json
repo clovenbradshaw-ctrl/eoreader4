@@ -1,0 +1,25 @@
+{
+  "pressure": "P001",
+  "target": "NUL·Pattern",
+  "modality": "text+frequency",
+  "kind": "discrimination",
+  "recipe": "orthogonal-collision",
+  "seedsOfRecord": [
+    { "title": "Crucifixion Triptych", "revision": 1352548289 },
+    { "title": "Ceriagrion auranticum", "revision": 1314350478 }
+  ],
+  "note": "Raw streams only. Each item is a sequence of units followed by a held-out PROBE unit. The probe is a genuine newcomer in every item. Which items are which is NOT recorded here; it is held in key.json and applied only at scoring time. Do not infer or guess.",
+  "channelsRequested": ["reserveProbBeforeProbe", "probeSurpriseBits", "streamMass"],
+  "text": [
+    { "id": "t1", "units": ["Ada Vale arrived.", "Ben Cole arrived.", "Cid Dorn arrived.", "Eve Frey arrived.", "Gus Holt arrived.", "Ivy Knox arrived."], "probe": "Rex Wynn arrived." },
+    { "id": "t2", "units": ["Ada Vale waited.", "Ada Vale waited.", "Ada Vale waited.", "Ada Vale waited.", "Ada Vale waited.", "Ada Vale waited."], "probe": "Rex Wynn arrived." },
+    { "id": "t3", "units": ["Gus Holt waited.", "Gus Holt waited.", "Gus Holt waited.", "Ada Vale arrived.", "Ben Cole arrived.", "Cid Dorn arrived."], "probe": "Rex Wynn arrived." },
+    { "id": "t4", "units": ["Gus Holt waited.", "Ada Vale arrived.", "Ben Cole arrived.", "Cid Dorn arrived.", "Gus Holt waited.", "Gus Holt waited."], "probe": "Rex Wynn arrived." }
+  ],
+  "frequency": [
+    { "id": "f1", "hz": [196, 261, 349, 220, 415, 165, 294, 330], "probe": 523 },
+    { "id": "f2", "hz": [196, 196, 196, 196, 196, 196, 196, 196], "probe": 523 },
+    { "id": "f3", "hz": [196, 196, 196, 196, 261, 349, 220, 415], "probe": 523 },
+    { "id": "f4", "hz": [196, 261, 349, 220, 415, 196, 196, 196], "probe": 523 }
+  ]
+}

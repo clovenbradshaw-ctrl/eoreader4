@@ -96,4 +96,47 @@ export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
   return { dist, reserve: novelty / Z, Z };
 };
 
+// THE NOVELTY RESERVE AS A SIGNAL, not a constant.
+//
+// NOVELTY_RESERVE is a hand-rolled literal, and the reserve PROBABILITY it produces,
+// `novelty / (mass + novelty)`, is a one-over-mass-plus-one — a function of accumulated
+// mass alone, blind to whether newcomers have actually been ARRIVING. So the reader
+// grows equally certain that nothing new will come whether it just saw six newcomers in
+// a row or none: it cannot learn the newcomer rate from its own signal, which for a
+// system with no teacher is the cardinal error (a fixed number standing in for something
+// the signal should teach).
+//
+// This derives the reserve AMPLITUDE from the signal's own recent history instead: the
+// γ-decayed rate at which the basis has been admitting FIRST appearances, under the SAME
+// recency kernel the figure/proposition field decays by. High right after a burst of
+// newcomers, low after a long stretch of confirmation. The amplitude is then fed through
+// the SAME fixed Born step — `surpriseAt` and `forwardDist` already take it as `novelty`,
+// so the law (square-and-normalise the amplitude into a probability) is untouched and
+// only the amplitude is now context-sensitive. Context enters at the amplitude; the law
+// stays put.
+//
+// Atom-agnostic by construction: it counts first appearances of arbitrary basis keys, so
+// a text figure, a tonal pitch and an image blob run IDENTICAL code. That is what lets
+// the same fix improve more than one sense — the interior's universality claim — rather
+// than being a text fact in an interior costume.
+//
+//   arrivalSets  Array<Iterable<atom>>  the deposit at each PRIOR step, in reading order
+//                (causal: step k sees only steps 0..k-1)
+//   gamma        the same recency kernel the profile decays by (the horizon)
+// Returns R = Σ_s γ^((k-1)-s) · (newcomers first admitted at step s) — the reserve
+// amplitude. It is strictly positive once any atom has been admitted, so the divergence
+// stays defined on a newcomer (absolute continuity); only the empty opening gives 0,
+// where the surprise is already 0 for any reserve and the caller keeps the constant.
+export const noveltyRate = (arrivalSets, { gamma } = {}) => {
+  const seen = new Set();
+  const k = arrivalSets.length;
+  let R = 0;
+  for (let s = 0; s < k; s++) {
+    let c = 0;
+    for (const atom of arrivalSets[s]) if (!seen.has(atom)) { c++; seen.add(atom); }
+    if (c) R += Math.pow(gamma, (k - 1) - s) * c;
+  }
+  return R;
+};
+
 const round = (x) => Math.round(x * 100) / 100;

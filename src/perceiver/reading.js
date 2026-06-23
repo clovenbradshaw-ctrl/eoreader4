@@ -17,10 +17,21 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyRate } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
-const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
+const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure (the flag-off constant)
+
+// THE NOVELTY RESERVE AS A SIGNAL (lab/exp/P001-novelty-reserve). The constant NOVELTY
+// makes the significance channel's reserve a 1/(mass+1): blind to whether newcomers have
+// been ARRIVING, so a newcomer surprises the same whether the reading just admitted six in
+// a row or none. Behind RULES_REV the reserve AMPLITUDE fed to the (significance) Born step
+// becomes `noveltyRate` — the γ-decayed rate of first appearances, under the SAME kernel
+// the proposition field decays by. Context enters at the amplitude; the law (surpriseAt /
+// forwardDist) is untouched. Flag OFF → byte-identical (the constant); flag ON → the
+// significance/forward reserve tracks the signal. opts.rulesRev overrides for a bench/test.
+const RULES_REV = /^(1|true|on)$/i.test((typeof process !== 'undefined' && process.env && process.env.RULES_REV) || '');
+const EMPTY_SET = new Set();   // read-only placeholder for a prior step that deposited nothing (chrome)
 
 export const readingAt = (doc, cursor, opts = {}) => {
   const units = doc.units || doc.sentences || [];
@@ -49,6 +60,12 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // apple in the back, the disowning) is significant, not only a change of cast.
   const priorProp = new Map(); // atom → γ-decayed presence before `at`
   const bump = (m, k, v = 1) => m.set(k, (m.get(k) || 0) + v);
+  // The per-step deposit of proposition-field atoms before `at`, kept in reading order so
+  // the reserve amplitude can be derived as the γ-decayed rate of FIRST appearances (the
+  // novelty-reserve-as-a-signal, used only under the flag). Same atoms the field is built
+  // from; recording the set per prior step adds no output on the flag-off path.
+  const arrivalsBySent = new Map(); // sentIdx → Set<atom> deposited at that prior step
+  const noteArrival = (s, k) => { let set = arrivalsBySent.get(s); if (!set) arrivalsBySent.set(s, set = new Set()); set.add(k); };
 
   const insAt = [];            // entity ids instantiated at `at`
   const relAt = [];            // { op, src, tgt, via } at `at`
@@ -95,6 +112,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
         priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
         bump(priorProp, `f:${e.id}`, w);
+        noteArrival(e.sentIdx, `f:${e.id}`);
       } else if (e.op === 'CON' || e.op === 'SIG') {
         priorBond.add(`${e.src}|${e.tgt}`);
         // The bond's participants (incl. an NP referent target) and the proposition
@@ -102,9 +120,14 @@ export const readingAt = (doc, cursor, opts = {}) => {
         bump(priorProp, `f:${e.src}`, w);
         bump(priorProp, `f:${e.tgt}`, w);
         bump(priorProp, `p:${e.src}|${e.via || ''}|${e.tgt}`, w);
+        noteArrival(e.sentIdx, `f:${e.src}`);
+        noteArrival(e.sentIdx, `f:${e.tgt}`);
+        noteArrival(e.sentIdx, `p:${e.src}|${e.via || ''}|${e.tgt}`);
       } else if (e.op === 'DEF' && e.key === 'predicate') {
         bump(priorProp, `f:${e.id}`, w);
         bump(priorProp, `d:${e.id}|${e.value}`, w);
+        noteArrival(e.sentIdx, `f:${e.id}`);
+        noteArrival(e.sentIdx, `d:${e.id}|${e.value}`);
       }
     } else if (e.sentIdx === at) {
       if (e.op === 'INS')                               insAt.push(e.id);
@@ -211,13 +234,28 @@ export const readingAt = (doc, cursor, opts = {}) => {
     if (k.startsWith('d:')) { const [i, ...v] = k.slice(2).split('|'); return `${name(i)}: ${v.join('|')}`; }
     return k;
   };
+  // The reserve AMPLITUDE for the significance/forward Born step: the constant NOVELTY
+  // (flag off → byte-identical) or, under RULES_REV, the γ-decayed rate of FIRST appearances
+  // over the prior steps — high after a burst of newcomers, low after a stretch of
+  // confirmation (lab/exp/P001-novelty-reserve). It strictly exceeds 0 once any atom has been
+  // admitted, so the divergence stays defined on a newcomer; only the empty opening leaves it
+  // 0, where the surprise is already 0 for any reserve and the constant is kept.
+  const useRateReserve = opts.rulesRev ?? RULES_REV;
+  let noveltyAmp = NOVELTY;
+  if (useRateReserve && at > 0) {
+    const sets = [];
+    for (let s = 0; s < at; s++) sets.push(arrivalsBySent.get(s) || EMPTY_SET);
+    const R = noveltyRate(sets, { gamma: γ });
+    if (R > 0) noveltyAmp = R;
+  }
+
   // THE ONE SURPRISE (Track A, docs/spec-one-surprise.md). D_KL(posterior ‖ prior) over
   // the γ-decayed proposition field `priorProp`, with this line's `deposit` as the arrival.
   // The computation is lifted verbatim into the modality-agnostic `surpriseAt` core, which
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: noveltyAmp, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -272,7 +310,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: noveltyAmp });
   return out;
 };
 
