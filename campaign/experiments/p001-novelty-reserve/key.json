@@ -1,0 +1,30 @@
+{
+  "capability": "novelty-reserve tracks the recent novelty rate (signal-derived protention)",
+  "mechanism": "The belief-mass reserved for an as-yet-unseen atom (pNovel, the protention) is the γ-decayed recent NEWCOMER-arrival rate on the field's own mass scale, run through the fixed Born step — not a constant blind to whether newcomers have been arriving.",
+  "channel": "reserveFig (the figure-field novelty probability the reader holds) and its newcomerBits = -log2(reserveFig)",
+  "items": {
+    "neutral-dense":  { "group": "matched", "noveltyRate": "high",  "mass": "M" },
+    "neutral-mid":    { "group": "matched", "noveltyRate": "mid",   "mass": "M" },
+    "neutral-barren": { "group": "matched", "noveltyRate": "low",   "mass": "M" },
+    "neutral-barren-short": { "group": "control", "noveltyRate": "low", "mass": "small" },
+    "neutral-barren-long":  { "group": "control", "noveltyRate": "low", "mass": "large" },
+    "music-dense":  { "group": "omni", "modality": "music", "noveltyRate": "high", "mass": "M" },
+    "music-barren": { "group": "omni", "modality": "music", "noveltyRate": "low",  "mass": "M" },
+    "text-dense":   { "group": "omni", "modality": "text",  "noveltyRate": "high" },
+    "text-barren":  { "group": "omni", "modality": "text",  "noveltyRate": "low" }
+  },
+  "predictions": {
+    "fixed": {
+      "matched": "reserveFig identical across dense/mid/barren (Δ ≈ 0): the reserve is blind to novelty rate at matched mass — the GAP.",
+      "control": "reserveFig differs by mass (barren-short > barren-long): the instrument is alive and mass-sensitive.",
+      "omni": "reserveFig identical for dense vs barren at matched mass, in BOTH music and text — the gap is interior, not modality-specific."
+    },
+    "signal": {
+      "matched": "reserveFig MONOTONIC in novelty rate: dense > mid > barren (newcomerBits dense < mid < barren). High after newcomers, low after a drought.",
+      "control": "reserveFig still ordered sanely by mass/drought (not reversed, not collapsed): the fix does not destroy the surface relation, it adds the missing one.",
+      "omni": "dense > barren reserveFig (newcomerBits dense < barren) in BOTH music AND text — the SAME interior change helps ≥2 senses (the omnimodal gate)."
+    }
+  },
+  "control_logic": "The cheap surface signal is prior MASS. The control pair (both barren, different length) is separated by the FIXED reserve already — so a detector that fires only there is reading mass. The matched-mass items hold mass constant; only a novelty-RATE reader separates them. A fix that merely rescaled mass would move the control, not open the matched split.",
+  "falsifier": "If under signal the matched gradient is NOT monotonic (dense > mid > barren in reserveFig), or the effect appears in only ONE sense, or the fixed path already shows the matched split, the claim is FALSE."
+}

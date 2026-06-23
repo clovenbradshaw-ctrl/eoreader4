@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyReserve } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -48,7 +48,11 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // what the Bayesian-surprise channel reads, so an EVENT on a standing figure (the
   // apple in the back, the disowning) is significant, not only a change of cast.
   const priorProp = new Map(); // atom → γ-decayed presence before `at`
+  const firstProp = new Map(); // atom → first sentIdx < at (its BIRTH) — the proposition
+                               // field's newcomer record, for the signal-derived reserve.
   const bump = (m, k, v = 1) => m.set(k, (m.get(k) || 0) + v);
+  // bump priorProp AND record the atom's birth (first appearance), in seq order.
+  const seeProp = (k, w, idx) => { bump(priorProp, k, w); if (!firstProp.has(k)) firstProp.set(k, idx); };
 
   const insAt = [];            // entity ids instantiated at `at`
   const relAt = [];            // { op, src, tgt, via } at `at`
@@ -94,17 +98,17 @@ export const readingAt = (doc, cursor, opts = {}) => {
       if (e.op === 'INS') {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
         priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
-        bump(priorProp, `f:${e.id}`, w);
+        seeProp(`f:${e.id}`, w, e.sentIdx);
       } else if (e.op === 'CON' || e.op === 'SIG') {
         priorBond.add(`${e.src}|${e.tgt}`);
         // The bond's participants (incl. an NP referent target) and the proposition
         // itself enter the belief field — the relation is part of what is the case.
-        bump(priorProp, `f:${e.src}`, w);
-        bump(priorProp, `f:${e.tgt}`, w);
-        bump(priorProp, `p:${e.src}|${e.via || ''}|${e.tgt}`, w);
+        seeProp(`f:${e.src}`, w, e.sentIdx);
+        seeProp(`f:${e.tgt}`, w, e.sentIdx);
+        seeProp(`p:${e.src}|${e.via || ''}|${e.tgt}`, w, e.sentIdx);
       } else if (e.op === 'DEF' && e.key === 'predicate') {
-        bump(priorProp, `f:${e.id}`, w);
-        bump(priorProp, `d:${e.id}|${e.value}`, w);
+        seeProp(`f:${e.id}`, w, e.sentIdx);
+        seeProp(`d:${e.id}|${e.value}`, w, e.sentIdx);
       }
     } else if (e.sentIdx === at) {
       if (e.op === 'INS')                               insAt.push(e.id);
@@ -137,12 +141,27 @@ export const readingAt = (doc, cursor, opts = {}) => {
     }
   }
 
+  // THE RESERVE AMPLITUDE. Default: the fixed NOVELTY constant — byte-identical, the
+  // parity gate. opts.reserve==='signal': the SIGNAL-DERIVED reserve (the core helper) —
+  // the γ-decayed recent NEWCOMER-arrival rate on each field's own scale, fed through the
+  // SAME fixed Born step below (the law stays put; context enters at the amplitude). The
+  // figure field (surprisal/forward) and the proposition field (significance) each get
+  // their own field's novelty rate under the same γ. A hand-rolled constant is a signal
+  // the reader was not using; this lets the reader learn its protention from its own
+  // history — high after a burst of newcomers, low after a drought. Parity-gated opt, like
+  // opts.forward / opts.gamma / opts.horizon (the RULES_REV discipline; off by default).
+  const signalReserve = opts.reserve === 'signal';
+  const FLOOR = 1e-9;   // numerical guard only (cf. the 1e-6 floors below) — keeps the
+                        // opening (no prior births) defined; not a modeling constant.
+  const novFig  = signalReserve ? Math.max(noveltyReserve(firstIns,  at, γ), FLOOR) : NOVELTY;
+  const novProp = signalReserve ? Math.max(noveltyReserve(firstProp, at, γ), FLOOR) : NOVELTY;
+
   // --- Prediction (REC): a probability distribution over who acts next. ----
-  // P(figure) ∝ γ-mass; a reserve of NOVELTY holds probability for someone
+  // P(figure) ∝ γ-mass; a reserve of novFig holds probability for someone
   // not yet seen. Prediction = the expectation: the top of this distribution.
   const total = [...priorMass.values()].reduce((s, m) => s + m, 0);
-  const Z = total + NOVELTY;
-  const pNovel = NOVELTY / Z;
+  const Z = total + novFig;
+  const pNovel = novFig / Z;
   const pOf = (id) => (priorMass.get(id) || 0) / Z;
 
   const ranked = [...priorMass.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
@@ -217,7 +236,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: novProp, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -272,7 +291,16 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) {
+    out.pNext = forwardDist(priorProp, { novelty: novProp });
+    // The figure-field PROTENTION the surprisal channel holds: P(the next arrival is
+    // an unseen figure), and the prior MASS it was read against. Read-only surfacing of
+    // quantities already computed above — the channel a novelty-reserve experiment reads
+    // (campaign/experiments/p001). Behind opts.forward (off by default) → byte-identical.
+    out.reserveFig = pNovel;
+    out.totalFig   = round(total);
+    out.noveltyReserve = round(novFig);   // the reserve AMPLITUDE (constant, or signal-derived)
+  }
   return out;
 };
 

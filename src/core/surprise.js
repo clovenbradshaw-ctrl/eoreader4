@@ -96,4 +96,34 @@ export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
   return { dist, reserve: novelty / Z, Z };
 };
 
+// noveltyReserve(firstAt, at, gamma) → the SIGNAL-DERIVED reserve amplitude.
+//
+// The fixed reserve (NOVELTY_RESERVE) is the exemplar of a hand-rolled constant: it
+// is blind to whether newcomers have been ARRIVING. A reader holding 1/(M+1) grows
+// equally certain that nothing new will come whether it just saw three newcomers or
+// none — the reader failing to learn from its own signal. The fix is not a better
+// formula; it is to make the reserved AMPLITUDE track the recent novelty RATE under
+// the same decay the field uses, then run it through the same fixed Born step
+// (surpriseAt / forwardDist). Context enters at the amplitude, the law stays put.
+//
+// The amplitude is the γ-decayed rate at which NEWCOMERS arrive — one deposit of "a
+// newcomer arrived" per birth, decayed exactly as the field decays its own deposits,
+// so it lands on the field's OWN mass scale. High just after a burst of newcomers,
+// low after a long stretch of pure confirmation, with no constant in the path.
+//
+//   firstAt  Map<atom, step>  each atom's first-appearance (birth) step
+//   at       the cursor — EXCLUSIVE, so the arriving newcomer is never folded into
+//            its own prior reserve (only births strictly before `at` count)
+//   gamma    the recency-decay kernel — the same horizon the field decays under
+//
+// Returns Σ_{birth < at} γ^(at-1-birth). Modality-agnostic: `firstAt` is births of
+// figures (text/music/…) or of proposition atoms — the interior never sees which.
+export const noveltyReserve = (firstAt, at, gamma) => {
+  let amp = 0;
+  for (const birth of firstAt.values()) {
+    if (birth < at) amp += Math.pow(gamma, at - 1 - birth);
+  }
+  return amp;
+};
+
 const round = (x) => Math.round(x * 100) / 100;

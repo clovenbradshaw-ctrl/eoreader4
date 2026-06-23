@@ -43,7 +43,7 @@ export { INSTRUMENT, READER, isSelf, holderOf, STATUS,
 // surprise.js): a perceiver reads forward surprise, a surfer derives a null, an
 // enactor's gate derives a null, the probe derives a null — one engine, one home.
 export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
-export { surpriseAt, forwardDist, NOVELTY_RESERVE } from './surprise.js';
+export { surpriseAt, forwardDist, noveltyReserve, NOVELTY_RESERVE } from './surprise.js';
 // The shared relation ontology — relation primitives, their disjointness and
 // symmetry. The perceiver constitutes with it, but the factcheck, the enactor, the
 // answer reader and the input organs all read it too, so it lives in the genome,
