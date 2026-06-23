@@ -72,6 +72,19 @@ export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder, g
   const baseMax = links.reduce((m, l) => Math.max(m, l.weight), 1e-6);
   for (const l of links) { (nodeById.get(l.a)).deg++; (nodeById.get(l.b)).deg++; }
 
+  // The ontological asterisk reaches the glass (core/asterisk.js): a cluster the
+  // projection holds in an OPEN same_as? candidate is NOT silently painted as a
+  // resolved entity. Each side is marked with a '*' and a dotted ring — "identity
+  // unestablished" — and its tooltip reports the held question rather than asserting
+  // a person. Empty whenever the projection carries no candidates, so the firm graph
+  // renders exactly as before (flag off ⇒ byte-identical).
+  const idPartners = new Map();   // node id → Set of candidate-same counterpart ids
+  for (const c of base.sameAs || []) {
+    if (!nodeById.has(c.a) || !nodeById.has(c.b)) continue;
+    (idPartners.get(c.a) || idPartners.set(c.a, new Set()).get(c.a)).add(c.b);
+    (idPartners.get(c.b) || idPartners.set(c.b, new Set()).get(c.b)).add(c.a);
+  }
+
   // ---- dom -----------------------------------------------------------------
   const wrap = document.createElement('div');
   wrap.className = 'graph-wrap';
@@ -107,7 +120,9 @@ export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder, g
   }
   for (const n of nodes) {
     const g = document.createElementNS(NS, 'g');
-    g.setAttribute('class', 'gnode');
+    const ast = idPartners.get(n.id);
+    n.asterisk = ast ? ast.size + 1 : 0;            // candidate clusters (self + partners)
+    g.setAttribute('class', ast ? 'gnode asterisk' : 'gnode');
     const r = 5 + 3.2 * Math.log(1 + n.sightings);
     n.r = r;
     const c = document.createElementNS(NS, 'circle');
@@ -115,7 +130,7 @@ export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder, g
     const t = document.createElementNS(NS, 'text');
     t.setAttribute('class', 'glabel');
     t.setAttribute('dy', -r - 3);
-    t.textContent = n.label;
+    t.textContent = ast ? `${n.label}*` : n.label;   // marked, never collapsed to a winning id
     g.appendChild(c); g.appendChild(t);
     gNodes.appendChild(g);
     n.el = g;
@@ -430,7 +445,8 @@ export const renderGraph = (doc, root, { onSelectSentence, getModel, embedder, g
         return `${dir} ${nodeById.get(other)?.label || other}`;
       });
     tip.innerHTML =
-      `<strong>${escapeHtml(n.label)}</strong> · ${n.sightings} mention${n.sightings === 1 ? '' : 's'}` +
+      `<strong>${escapeHtml(n.label)}${n.asterisk ? '*' : ''}</strong> · ${n.sightings} mention${n.sightings === 1 ? '' : 's'}` +
+      (n.asterisk ? `<br><em>identity unestablished — ${n.asterisk} candidate clusters</em>` : '') +
       (rels.length ? `<br>${rels.map(escapeHtml).join('<br>')}` : '');
     tip.hidden = false;
     const box = root.getBoundingClientRect();

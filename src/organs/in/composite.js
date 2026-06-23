@@ -22,7 +22,18 @@
 // sentence axis, followed by the cross-document SYN merges. projectGraph folds it
 // exactly as before; its union-find performs the merges; a SEG retract undoes one.
 
-import { projectGraph } from '../../core/index.js';
+import { projectGraph, fromEnactor } from '../../core/index.js';
+
+// The held-identity gate — the same revision flag the rest of the system ships
+// experiments behind (speech/index.js RULES_REV). OFF (the default) keeps the
+// cross-source binder emitting a hard SYN kind:'merge', byte-identical to today and
+// golden-gated. ON, the cross-source same-label case becomes a HELD same_as?
+// candidate (core/asterisk.js) — never a union — promoted to a real merge only by
+// discriminator CONVERGENCE at projection time, forked to a split by conflict, and
+// otherwise left as an asterisk with the identity held as a void. Read once at
+// module load, exactly like RULES_REV; overridable per-call for tests and benches.
+const HELD_IDENTITY = (typeof process !== 'undefined' && process.env
+  && /^(1|true|on)$/i.test(process.env.RULES_REV || '')) || false;
 
 // The namespace separator — U+241F (SYMBOL FOR UNIT SEPARATOR). Outside the entity-id
 // charset ([a-z0-9-], see perceiver/parse/entities.js) and outside any filename, so
@@ -56,11 +67,16 @@ const foldDocEvents = (doc, sentOffset, events) => {
   return seqMap;
 };
 
-// Propose cross-document identity merges: same admitted label in two different
-// documents → a defeasible, crossDoc SYN. Conservative on purpose (surface-name
-// match only); the merge is revisable, so over-eager joins are correctable by a SEG
-// rather than baked in. Returns the SYN events (not yet sealed onto the log).
-export const proposeCrossDocSyn = (parts) => {
+// Propose cross-document identity across a shared admitted label. Conservative on
+// purpose (surface-name match only). With `held` OFF (default) this emits the legacy
+// defeasible crossDoc SYN kind:'merge' — a hard union the projection collapses,
+// revisable only by a later SEG. With `held` ON it emits the asterisk's held
+// SYN kind:'same_as?' instead: a REAFFERENCE proposal (the READER is the one saying
+// these two are one) that NEVER enters union-find. The projection holds it as a
+// candidate and earns the merge only by discriminator convergence — the fix for a
+// binder that rewarded verbatim label echo over relational correspondence. Returns
+// the SYN events (not yet sealed onto the log).
+export const proposeCrossDocSyn = (parts, { held = HELD_IDENTITY } = {}) => {
   const byLabel = new Map();   // lowercased label → [{ docId, id }]
   for (const { doc } of parts) {
     const admitted = doc.admission?.admitted;
@@ -81,12 +97,17 @@ export const proposeCrossDocSyn = (parts) => {
     for (let i = 1; i < members.length; i++) {
       const m = members[i];
       if (m.docId === anchor.docId) continue;   // within-doc duplicates are the parser's job
-      out.push({
-        op: 'SYN', kind: 'merge',
+      const base = {
         from: nsId(m.docId, m.id), to: nsId(anchor.docId, anchor.id),
         warrant: 'cross-doc-name', crossDoc: true, defeasible: true,
         rebutter: 'distinct-entity-shares-name', label: anchor.label, sentIdx: null,
-      });
+      };
+      out.push(held
+        // The held candidate: REAFFERENCE — the reader's proposal, not the world's
+        // witness — so the type law itself bars it from witnessing the merge it asks
+        // for (core/provenance.js). It is earned by convergence or it is nothing.
+        ? { op: 'SYN', kind: 'same_as?', ...base, prov: fromEnactor('cross-doc-identity') }
+        : { op: 'SYN', kind: 'merge', ...base });
     }
   }
   return out;
@@ -189,7 +210,7 @@ const compositeCoref = (originAt) => {
 // untouched (the one-doc path is byte-identical to today). Two or more are folded into
 // one doc on the universal contract, with namespaced referents and, by default, the
 // cross-document SYN proposals appended.
-export const createCompositeDoc = (docs, { crossDocSyn = true } = {}) => {
+export const createCompositeDoc = (docs, { crossDocSyn = true, heldIdentity = HELD_IDENTITY } = {}) => {
   const list = (docs || []).filter(Boolean);
   if (list.length === 0) return null;
   if (list.length === 1) return list[0];
@@ -224,7 +245,7 @@ export const createCompositeDoc = (docs, { crossDocSyn = true } = {}) => {
   // The composite event stream: namespaced per-doc events, then the cross-doc merges.
   const events = [];
   for (const part of parts) foldDocEvents(part.doc, part.offset, events);
-  const crossSyn = crossDocSyn ? proposeCrossDocSyn(parts) : [];
+  const crossSyn = crossDocSyn ? proposeCrossDocSyn(parts, { held: heldIdentity }) : [];
   for (const syn of crossSyn) events.push({ ...syn, seq: events.length, t: Date.now() });
 
   const log = compositeLog(events, parts.map(p => p.docId).join(' + '));
