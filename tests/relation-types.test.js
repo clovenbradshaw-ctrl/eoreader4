@@ -165,6 +165,28 @@ test('a NON-relational confirm still takes the token-overlap path unchanged', ()
   assert.doesNotMatch(fell.text, /rules that out/);
 });
 
+test('a non-relational confirm DERIVES its Yes-line from the field, catching an overlap the blunt 0.6 would defer', () => {
+  const doc = parseText([
+    'The harbor master logged three ships at dawn.',
+    'Rain fell steadily over the quiet market square.',
+    'A grey cat slept on the warm stone wall.',
+    'The old clock tower chimed nine times slowly.',
+    'Children chased pigeons across the open plaza.',
+    'The baker sold fresh bread to early travellers.',
+    'Sailors mended torn nets beside the wooden pier.',
+    'A lighthouse beam swept the dark restless sea.',
+  ].join(' '), { docId: 'rich' });
+  // Six content tokens; the best sentence (s0) shares three — overlap 0.50, under
+  // the old 0.6 constant (a defer to the model). But 0.50 towers over THIS field's
+  // own chance overlap (every other sentence ~0), so the derived Born line (~0.37)
+  // confirms it cheaply, no model warmed. The floor moved off the number and onto
+  // the field — the whole point.
+  const a = answerConfirm(doc, 'did the harbor master log ships at the quiet market?');
+  assert.equal(a.route, 'confirm');
+  assert.equal(a.text, 'Yes. [s0]');
+  assert.deepEqual(a.sources, [0]);
+});
+
 // ---------------------------------------------------------------------------
 // 5. The veto wiring — the algebra fires end-to-end, even under the hash organ.
 

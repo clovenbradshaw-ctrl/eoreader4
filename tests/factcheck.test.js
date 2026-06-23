@@ -227,6 +227,37 @@ test('cell adjacency is read off the centroid geometry; unmeasurable under no ce
   assert.equal(none.adjacent('CON_Binding_Link', 'CON_Tending_Field'), null); // hold, never guess
 });
 
+test('cell adjacency DERIVES its line from the centroid set (Born); the constant is only the cold-start fallback', () => {
+  // A rich Pattern set — seven cells, 21 pairwise cosines, well over MIN_SAMPLES
+  // (the three-cell fixtures above fall BELOW it and so ride the constant). Five
+  // cells spread across the band (the chance-pairing bulk) plus two pairs built
+  // deliberately near (a–f, b–g). The boundary is now measured off this geometry,
+  // not declared at 0.6.
+  const RICH = {
+    a: [1,    0,    0,    0],
+    b: [0.35, 1,    0,    0],
+    c: [0.1,  0.4,  1,    0],
+    d: [0,    0.15, 0.45, 1],
+    e: [0.5,  0.5,  0.5,  0.5],
+    f: [0.95, 0.18, 0,    0],   // near a  (cosine ≈ 0.98)
+    g: [0.25, 0.9,  0.2,  0],   // near b  (cosine ≈ 0.98)
+  };
+  const derived = createCellAdjacency(RICH);                  // alpha default → derives
+  const fixed   = createCellAdjacency(RICH, { alpha: null }); // forces the 0.6 constant
+
+  // The genuine adjacencies clear the derived line; a spread cell pair does not.
+  assert.equal(derived.adjacent('a', 'f'), true);
+  assert.equal(derived.adjacent('b', 'g'), true);
+  assert.equal(derived.adjacent('a', 'b'), false);
+
+  // The line is not 0.6, and it is the GEOMETRY that proves it: a mid pair the
+  // blunt constant waves through (cosine ≈ 0.637 ≥ 0.6) sits inside this set's
+  // chance bulk, so the derived reader holds it. Same vectors, two verdicts —
+  // the floor has moved off the number and onto the field.
+  assert.equal(fixed.adjacent('e', 'b'), true,  'the 0.6 constant accepts the mid pair');
+  assert.equal(derived.adjacent('e', 'b'), false, 'the derived line rejects it — the floor moved to the geometry');
+});
+
 // ---------------------------------------------------------------------------
 // The veto battery surfaces the edge-grounding check beside the node one (§8).
 
@@ -298,6 +329,23 @@ test('geometricSecond cannot corroborate under the hash organ (the proposal hold
   const v = await second();
   assert.equal(v.seconds, false);
   assert.equal(v.reason, 'weak-embedder');
+});
+
+test('geometricSecond DERIVES its nearness line from the document background (Born); the constant is the unwired fallback', async () => {
+  // Two spans at a MODERATE cosine (≈ 0.5) — under the 0.6 constant, so a
+  // constant-only second HOLDS — against a document background of low chance span
+  // pairings. The derived line (boundedNull) sits far below 0.6, so the same pair
+  // seconds: a true paraphrase the blunt floor would have missed. (No live caller
+  // hands geometricSecond a background today; this exercises the path that one will.)
+  const embedder = fakeEmbedder({ 'the trooper': [1, 0, 0, 0], 'Sgt. Topps': [0.5, 0.87, 0, 0] });
+  const background = [0.05, 0.1, 0.0, 0.15, 0.08, 0.2, 0.12];   // chance span pairings, all low
+
+  const constOnly = await geometricSecond({ embedder, textA: 'the trooper', textB: 'Sgt. Topps' })();
+  assert.equal(constOnly.seconds, false);          // 0.5 < 0.6 constant → holds
+
+  const derived = await geometricSecond({ embedder, textA: 'the trooper', textB: 'Sgt. Topps', background })();
+  assert.equal(derived.seconds, true);             // 0.5 ≫ the line off a low-cosine field
+  assert.ok(derived.line < 0.6, 'the derived line sits below the blunt constant');
 });
 
 test('a committed coref merge unifies the referents in the document reading', async () => {
