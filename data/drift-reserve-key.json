@@ -1,0 +1,171 @@
+{
+  "about": "HELD KEY for the drift / novelty-reserve pressure. The measure never reads this.",
+  "gamma": 0.7,
+  "roles": [
+    {
+      "i": 0,
+      "role": "warmup",
+      "newcomers": 2
+    },
+    {
+      "i": 1,
+      "role": "warmup",
+      "newcomers": 1
+    },
+    {
+      "i": 2,
+      "role": "warmup",
+      "newcomers": 0
+    },
+    {
+      "i": 3,
+      "role": "steady",
+      "newcomers": 0
+    },
+    {
+      "i": 4,
+      "role": "steady",
+      "newcomers": 0
+    },
+    {
+      "i": 5,
+      "role": "steady",
+      "newcomers": 0
+    },
+    {
+      "i": 6,
+      "role": "steady",
+      "newcomers": 0
+    },
+    {
+      "i": 7,
+      "role": "steady",
+      "newcomers": 0
+    },
+    {
+      "i": 8,
+      "role": "steady",
+      "newcomers": 0
+    },
+    {
+      "i": 9,
+      "role": "event",
+      "newcomers": 1
+    },
+    {
+      "i": 10,
+      "role": "steady",
+      "newcomers": 0
+    },
+    {
+      "i": 11,
+      "role": "steady",
+      "newcomers": 0
+    },
+    {
+      "i": 12,
+      "role": "churn",
+      "newcomers": 1
+    },
+    {
+      "i": 13,
+      "role": "churn",
+      "newcomers": 1
+    },
+    {
+      "i": 14,
+      "role": "churn",
+      "newcomers": 1
+    },
+    {
+      "i": 15,
+      "role": "churn",
+      "newcomers": 1
+    },
+    {
+      "i": 16,
+      "role": "churn",
+      "newcomers": 1
+    },
+    {
+      "i": 17,
+      "role": "churn",
+      "newcomers": 1
+    },
+    {
+      "i": 18,
+      "role": "churn-newcomer",
+      "newcomers": 1
+    },
+    {
+      "i": 19,
+      "role": "churn",
+      "newcomers": 1
+    },
+    {
+      "i": 20,
+      "role": "loud-control",
+      "newcomers": 3
+    },
+    {
+      "i": 21,
+      "role": "churn",
+      "newcomers": 1
+    },
+    {
+      "i": 22,
+      "role": "settle",
+      "newcomers": 0
+    },
+    {
+      "i": 23,
+      "role": "settle",
+      "newcomers": 0
+    }
+  ],
+  "items": {
+    "E1_event": 9,
+    "E2_churn_newcomer": 18,
+    "C_loud": 20,
+    "steady_baseline": [
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      10,
+      11
+    ],
+    "churn_baseline": [
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      19,
+      21
+    ]
+  },
+  "mechanism": "contextual-novelty-reserve: the reserved prior amplitude tracks the γ-decayed newcomer RATE (high after churn, low after a drought) under the same γ the figure field uses, then runs through the FIXED Born step (surpriseAt). A newcomer is surprising in proportion to how UNexpected novelty is right now.",
+  "predict": {
+    "ctx": {
+      "argmax_is": "E1_event",
+      "ctx(E1) >> ctx(E2)": true,
+      "ctx(E1) > ctx(C_loud)": true,
+      "ctx(E2) in churn_baseline": true
+    },
+    "fixed": {
+      "argmax_is": "C_loud",
+      "fixed(E1) ~= fixed(E2)": true,
+      "fixed does NOT argmax E1": true
+    }
+  },
+  "controls": [
+    "C_loud is surface-LOUDER than E1 (3 newcomers vs 1): a magnitude/count detector ranks it first. The mechanism must rank E1 first, or it is using magnitude.",
+    "E2 is surface-IDENTICAL to E1 (1 newcomer, same active-cast size): a rate-blind channel scores them equal. The mechanism must score E1 >> E2, or it is not reading the rate.",
+    "fixed-reserve channel IS the loud-surface control: it is the rate-blind method; its failure to separate E1 from E2 and its argmax on C_loud are the trap the mechanism must avoid."
+  ],
+  "omnimodal": "The identical dissociation must hold in BOTH senses (lexical, tonal). The core reads only atom→mass; a result in one sense only would mean the harness, not the core, did the work."
+}

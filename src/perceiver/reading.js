@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist, bridgeSurprise } from '../core/index.js';
+import { surpriseAt, forwardDist, bridgeSurprise, contextualReserve } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -211,13 +211,36 @@ export const readingAt = (doc, cursor, opts = {}) => {
     if (k.startsWith('d:')) { const [i, ...v] = k.slice(2).split('|'); return `${name(i)}: ${v.join('|')}`; }
     return k;
   };
+  // CONTEXTUAL NOVELTY RESERVE (opt-in via opts.contextualReserve; default byte-identical).
+  // The reserve `novelty` surpriseAt holds for an unseen atom is, by default, the fixed
+  // constant NOVELTY=1.0 — blind to whether newcomers have been arriving. Opt-in, it becomes
+  // the γ-decayed rate at which NEW proposition-field atoms have arrived, under the SAME γ
+  // the figure field uses (core/reserve.js): high after a churn, low after a drought. Context
+  // enters at the AMPLITUDE; the Born step below is the identical law either way. Computed
+  // only when the opt is on, so the default path is untouched (parity gate).
+  let novelty = NOVELTY;
+  if (opts.contextualReserve) {
+    const firstAtomLine = new Map();
+    const seeAtom = (atom, s) => { const p = firstAtomLine.get(atom); if (p == null || s < p) firstAtomLine.set(atom, s); };
+    for (const e of events) {
+      const s = e.sentIdx;
+      if (s == null || s >= at || !inHorizon(e)) continue;          // prior atoms only, same horizon as priorProp
+      if (e.op === 'INS') seeAtom(`f:${e.id}`, s);
+      else if (e.op === 'CON' || e.op === 'SIG') { seeAtom(`f:${e.src}`, s); seeAtom(`f:${e.tgt}`, s); seeAtom(`p:${e.src}|${e.via || ''}|${e.tgt}`, s); }
+      else if (e.op === 'DEF' && e.key === 'predicate') { seeAtom(`f:${e.id}`, s); seeAtom(`d:${e.id}|${e.value}`, s); }
+    }
+    const newcomersPerLine = new Array(at).fill(0);
+    for (const s of firstAtomLine.values()) if (s < at) newcomersPerLine[s] += 1;
+    novelty = contextualReserve(newcomersPerLine, at, { gamma: γ });
+  }
+
   // THE ONE SURPRISE (Track A, docs/spec-one-surprise.md). D_KL(posterior ‖ prior) over
   // the γ-decayed proposition field `priorProp`, with this line's `deposit` as the arrival.
   // The computation is lifted verbatim into the modality-agnostic `surpriseAt` core, which
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -285,6 +308,9 @@ export const readingAt = (doc, cursor, opts = {}) => {
     out.bridge = round(bridge);
     out.bridgeAxis = axis;       // [labelA, labelB] of the bridging pair, or null
   }
+  // The rate-aware reserve amplitude this reading used (opt-in), for the trace/audit — so a
+  // bench can see the reserve breathe with the recent novelty rate. Default omits it.
+  if (opts.contextualReserve) out.reserve = round(novelty);
   return out;
 };
 

@@ -44,6 +44,11 @@ export { INSTRUMENT, READER, isSelf, holderOf, STATUS,
 // enactor's gate derives a null, the probe derives a null — one engine, one home.
 export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
 export { surpriseAt, forwardDist, NOVELTY_RESERVE } from './surprise.js';
+// The contextual novelty reserve — the same NOVELTY reserve surpriseAt holds, but as a
+// Born AMPLITUDE the signal teaches (the γ-decayed newcomer rate) rather than a fixed
+// constant. The law (surpriseAt) is unchanged; only the `novelty` it is handed becomes
+// rate-aware. High after a churn of newcomers, low after a drought. Modality-agnostic.
+export { contextualReserve, RESERVE_SEED } from './reserve.js';
 // The connectivity surprise — the structural sibling of surpriseAt. The mass channel
 // moves on what arrived; this one moves on how a bond COLLAPSES the prior separation
 // between its (coref-resolved) endpoints, the structural reveal the mass KL is blind to.
