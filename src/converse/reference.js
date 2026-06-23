@@ -30,6 +30,7 @@
 
 import { parseText } from '../perceiver/parse/pipeline.js';
 import { namedReferents, figureSurface } from '../perceiver/index.js';
+import { projectGraph } from '../core/index.js';
 
 const GAMMA = 0.7;   // recency decay along the reading line — matches reading.js
 
@@ -55,14 +56,21 @@ export const conversationCast = (history = [], question = '') => {
   if (at < 0) return [];
 
   const events = doc.log.snapshot ? doc.log.snapshot() : doc.log.events;
+  // Pool every surface form onto its appearance CLASS — the projection's union-find
+  // root, not the raw id the mention happened to mint. A referent renamed within the
+  // conversation ("Gregor Samsa" … then bare "Samsa") is ONE warm figure, never two,
+  // and its warmth is the sum over its mentions, not split across aliases and ranked by
+  // whichever form came last. The earliest-INS label leads, so the canonical name shows.
+  const rep = projectGraph(doc.log).representative || ((id) => id);
   const label = new Map();
   const mass  = new Map();
   for (const e of events) {
     if (e.op !== 'INS') continue;
-    if (!label.has(e.id)) label.set(e.id, e.label);
+    const id = rep(e.id);
+    if (!label.has(id)) label.set(id, e.label);
     // Prior mass only: a figure named AT the cursor (the question's own line) does not
     // count as already-warm — the same before-the-cursor discipline readingAt keeps.
-    if (e.sentIdx != null && e.sentIdx < at) mass.set(e.id, (mass.get(e.id) || 0) + Math.pow(GAMMA, at - 1 - e.sentIdx));
+    if (e.sentIdx != null && e.sentIdx < at) mass.set(id, (mass.get(id) || 0) + Math.pow(GAMMA, at - 1 - e.sentIdx));
   }
   return [...mass.entries()]
     .map(([id, m]) => ({ id, label: label.get(id) || id, mass: m }))
@@ -79,10 +87,22 @@ export const localeOf = (doc, refId) => {
   const { relations } = figureSurface(doc, [refId]);
   const edge = relations.find(r => Number.isFinite(r.idx));
   if (edge) return edge.idx;
-  // No bond — fall back to the first line that instantiated the referent.
+  // No bond — fall back to the EARLIEST line that instantiated the referent, read over
+  // its appearance CLASS, not the connected id. A later coref merge can root a referent
+  // on a late-appearing alias (the naming scene folds "his sister" into the late name
+  // Grete — pipeline.js:397), so scanning the raw id alone returns the cursor the
+  // connection landed at, not the birth. The locus is the earliest appearance; the
+  // connection cursor is always later and must never stand in for it.
+  const rep = projectGraph(doc.log).representative || ((id) => id);
+  const target = rep(refId);
   const events = doc.log.snapshot ? doc.log.snapshot() : doc.log.events;
-  for (const e of events) if (e.op === 'INS' && e.id === refId && e.sentIdx != null) return e.sentIdx;
-  return null;
+  let earliest = null;
+  for (const e of events) {
+    if (e.op === 'INS' && e.sentIdx != null && rep(e.id) === target) {
+      if (earliest == null || e.sentIdx < earliest) earliest = e.sentIdx;
+    }
+  }
+  return earliest;
 };
 
 // The document referents retrieval points the line at — the cheap nomination channel
