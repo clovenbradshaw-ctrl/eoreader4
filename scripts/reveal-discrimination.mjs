@@ -271,11 +271,24 @@ function bayesPerLine(docId, lines) {
 // the union-find primitive; BFS runs only when a and b are same-component. Returns the
 // MAX bridge over arrivals where BOTH endpoints existed before line kMin — a fresh
 // isolated entity is new mass, not a bridge, and scores 0.
-function bridgeSurpriseAt(log, kMin) {
+function bridgeSurpriseAt(log, kMin, firstMention) {
   const events = log.snapshot();
-  // firstSeen[node] — the earliest line a node appears (INS id or bond endpoint), so
-  // "existed before line k" is firstSeen < kMin (a first-seen-here endpoint is excluded).
+  // FIGURES — first-class referents (every INS id), read apart from the incidental NP
+  // referents a verb's object can carry (a passing object lemma, never INS'd). A figure
+  // carries mass and recurs; an NP referent is a one-off. This is the omni-modal
+  // figure/referent split the projection already makes — a referent-profile fact, not a
+  // text one (a voice vs a passing tone, a tracked object vs a texture, read the same).
+  const figures = new Set(events.filter(e => e.op === 'INS').map(e => e.id));
+  // firstSeen[node] — the earliest line a node appears, so "existed before line k" is
+  // firstSeen < kMin. SEEDED from the referent's first SPAN (its mention timeline,
+  // doc.mentions), not its first INS: a name read at line 4 but only ADMITTED at line
+  // 9 (its second sighting is what resolved the referent) was PRESENT in the document
+  // at line 4 — the cursor of recognition is later, but the appearance is earlier, and
+  // every span had a referent whether or not the reader had named it yet. Without this
+  // seed a late-admitted endpoint reads as fresh and a real bridge (a standing figure
+  // joined to another) is lost. Events can only LOWER firstSeen, never raise it.
   const firstSeen = new Map();
+  if (firstMention) for (const [id, s] of firstMention) if (s != null) firstSeen.set(id, s);
   const see = (id, s) => {
     if (id == null || s == null) return;
     const p = firstSeen.get(id);
@@ -293,6 +306,14 @@ function bridgeSurpriseAt(log, kMin) {
     adj.get(a).add(b); adj.get(b).add(a);
   };
 
+  // figureNetworked — ids already bonded to ANOTHER figure before line k, i.e. embedded
+  // in the figure NETWORK (not merely attached to an incidental NP referent). The bridge
+  // collapses a separation between REGIONS of that network, so at least one endpoint must
+  // be in it: two figures each attached only to passing objects are co-present SATELLITES,
+  // not separated regions, and joining them is the scene's own structure, not a
+  // reorganization. (long-table's hosts: helen→"two", tom→"story" — neither networked, so
+  // "Helen and Tom signed the papers" is a contradiction's convergence, not a graph bridge.)
+  const figureNetworked = new Set();
   const arrivals  = [];          // [a,b] pairs delivered at line k
   const sharedObj = new Map();   // line-k object → Set(distinct subjects bonded to it)
   for (const e of events) {
@@ -307,6 +328,7 @@ function bridgeSurpriseAt(log, kMin) {
     see(a, s); see(b, s);
     if (s < kMin) {                 // G — the bond graph before line k
       if (a !== b) { union(a, b); link(a, b); }
+      if (isBond && figures.has(a) && figures.has(b)) { figureNetworked.add(a); figureNetworked.add(b); }   // a figure↔figure bond
     } else if (isBond) {            // the line's own bonds (a SYN at k is a merge, not a bond)
       arrivals.push([a, b]);
       if (!sharedObj.has(b)) sharedObj.set(b, new Set());
@@ -345,6 +367,7 @@ function bridgeSurpriseAt(log, kMin) {
   let max = 0;
   for (const [a, b] of arrivals) {
     if (a === b || !existedBefore(a) || !existedBefore(b)) continue;
+    if (!figureNetworked.has(a) && !figureNetworked.has(b)) continue;   // neither endpoint in the network → no region to bridge
     const br = bridge(a, b);
     if (br > max) max = br;
   }
@@ -360,7 +383,7 @@ function bridgePerLine(docId, lines) {
   for (let k = 0; k < lines.length; k++) {
     const prefix = lines.slice(0, k + 1);
     const joined = prefix.join('\n');
-    const doc    = parseText(joined, { docId });
+    const doc    = parseText(joined, { docId, coordSubjects: true });   // convergence reaches the graph
     const ranges = lineRanges(prefix);
     const offs   = unitOffsets(joined, doc.units);
     const unitsOfK = [];
@@ -369,7 +392,12 @@ function bridgePerLine(docId, lines) {
       if (o >= 0 && o >= ranges[k].start && o <= ranges[k].end) unitsOfK.push(c);
     }
     const kMin = unitsOfK.length ? Math.min(...unitsOfK) : doc.units.length - 1;   // last-unit fallback
-    out.push(round3(bridgeSurpriseAt(doc.log, kMin)));
+    // The universe-time seed: each referent's FIRST SPAN (min mention index), read off
+    // doc.mentions (a Map id → unit indices), so a late-admitted figure counts as having
+    // existed from its first appearance, not its admission cursor.
+    const firstMention = new Map();
+    if (doc.mentions) for (const [id, idxs] of doc.mentions) if (idxs && idxs.length) firstMention.set(id, Math.min(...idxs));
+    out.push(round3(bridgeSurpriseAt(doc.log, kMin, firstMention)));
   }
   return out;
 }

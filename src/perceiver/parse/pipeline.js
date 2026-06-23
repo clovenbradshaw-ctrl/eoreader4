@@ -57,6 +57,13 @@ export const createParser = ({
   // units alone (TEST 1), or feed sediment a prior read deposited ({ inherit }).
   // Default undefined → the seeded ledger; a bare parse is unchanged.
   conventionsOpts    = undefined,
+  // Coordinated-subject reading (relations.js): when a clause coordinates two named
+  // subjects onto one predicate ("Delgado and Reyes listed…"), bond EACH conjunct to
+  // the shared object so the convergence reaches the graph as a length-two path. A
+  // RULES_REV-style switch held OFF by default: with it off the single-subject scan is
+  // byte-identical (the goldens are untouched); a harness flips it on to expose the
+  // convergence the bond graph otherwise never sees.
+  coordSubjects      = false,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -267,7 +274,8 @@ export const createParser = ({
         },
       };
       const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier,
-                        referents: true };   // open the NP object slot for the page (move 2)
+                        isConjunction: conventions.isConjunction,   // ledger coordinator predicate
+                        referents: true, coordSubjects };   // open the NP object slot (move 2); coord subjects (gated)
       for (const rel of parseRelations(sent, admission, coref, relOpts)) candidates.push({ rel, sentIdx });
 
       // Standing descriptors — the third coref channel (extraction half). A role
@@ -341,13 +349,17 @@ export const createParser = ({
     for (const [via, n] of viaCount) if (via && n >= 2) conventions.learn('relation', via, n);
 
     for (const { rel, sentIdx } of candidates) {
-      const { args, ...edge } = rel;
+      const { args, coord, ...edge } = rel;   // `coord` is read by the gate below, then dropped (never logged)
       // The recurrence coupling: a one-off relation verb is held weak (×0.5),
       // compounding with any pronoun coupling already on the edge. A bond on a
       // recurrent verb keeps full coupling. The argument-span SEG is still written
       // before the bond and cited by it, so a CON walks back to the text (§3).
       if (edge.op === 'CON' || edge.op === 'SIG') {
-        const recurrent = (viaCount.get(edge.via) || 1) >= 2;
+        // A coordinated-subject convergence edge is held FIRM on a single sighting: a
+        // reveal's verb ("listed") is single by nature, and the edge's warrant is the
+        // construction, not the verb's recurrence — so it is not held weak and dropped
+        // from the firm graph the bridge channel reads.
+        const recurrent = (viaCount.get(edge.via) || 1) >= 2 || coord === true;
         let factor = recurrent ? 1 : 0.5;
         // An NP referent rides the SAME recurrence gate as the verb and the figure: a
         // common noun seen once across the document is held weak, never dropped — the
