@@ -18,7 +18,32 @@
 // Operations and their ORDER are preserved exactly from reading.js so the text path stays
 // byte-identical: the parity gate is `node --test tests/*.test.js` (docs/spec-one-surprise.md).
 
-export const NOVELTY_RESERVE = 1.0;   // reserved prior mass for an as-yet-unseen atom
+export const NOVELTY_RESERVE = 1.0;   // reserved prior mass for an as-yet-unseen atom (the constant default)
+
+// THE NOVELTY AMPLITUDE — the signal-derived reserve, modality-agnostic (the constant hunt).
+//
+// A constant reserve (NOVELTY_RESERVE) run through the Born step `reserve = novelty /
+// (Σmass + novelty)` is blind to whether newcomers have actually been arriving: only the
+// accumulated mass moves it, so the reader grows equally certain that nothing new will come
+// whether it just saw three first-appearances or none. That is the reader failing to learn
+// from its own signal. The fix is not a better formula — it is to make the reserve AMPLITUDE
+// track the recent novelty RATE under the SAME γ-decay kernel the figure field uses, then run
+// it through the SAME fixed Born step. Context enters at the amplitude; the law is untouched.
+//
+//   firstSeenSteps  the reading-step index at which each DISTINCT basis-atom first appeared
+//   at              the cursor step — only first-appearances strictly before it count (causal)
+//   gamma           the same recency kernel the profile decays under (commensurate units)
+//
+// Returns Σ γ^(at-1-j) over first-appearances j < at: a γ-decayed count of newcomers, in the
+// same units as the γ-mass field, so the two are comparable inside the Born ratio. High right
+// after a burst of newcomers; decaying toward zero across a stretch of pure confirmation. The
+// recipe is the SAME for every sense — a proposition for text, a unit for a melody — only the
+// front-end that supplies the first-appearance steps differs.
+export const noveltyAmplitude = (firstSeenSteps, at, gamma) => {
+  let amp = 0;
+  for (const j of firstSeenSteps) if (j < at) amp += Math.pow(gamma, at - 1 - j);
+  return amp;
+};
 
 // surpriseAt(prior, arrival, { gamma, novelty, axisLabel }) → { bayesBits, bayesBy }
 //

@@ -1,0 +1,27 @@
+{
+  "cycle": "0001-novelty-reserve",
+  "claim": "The novelty reserve should track the recent RATE of newcomers. A reader whose reserve amplitude is the γ-decayed rate of first-appearances assigns a newcomer-into-a-settled-context far MORE surprise than the same newcomer-into-a-churning-context; a reader with a constant reserve, blind to novelty history, assigns the SAME surprise to both because the two contexts are matched on total mass.",
+  "mechanism": "noveltyAmplitude (src/core/surprise.js) — Σ γ^(at-1-j) over first-appearances j<at — fed as the `novelty` amplitude through the UNCHANGED Born step reserve = novelty/(Σmass+novelty). Context enters at the amplitude; the law is untouched. The same recipe feeds the text figure-field reader and the n-gram sequence reader.",
+  "items": {
+    "A": { "role": "churn", "context": "six distinct units — every step a newcomer, a high novelty rate", "probe": "a newcomer" },
+    "B": { "role": "settled", "context": "one unit repeated — pure confirmation after step 0, novelty rate → 0", "probe": "a newcomer" },
+    "C": { "role": "control-loud-surface", "context": "one unit repeated — the standing figure carries the MAXIMAL prior mass (loudest surface)", "probe": "a confirmation of that loud figure (zero novelty)" }
+  },
+  "predictions": {
+    "flag_off": {
+      "text.surprisalBits": "A == B (the constant reserve is blind to the novelty rate: matched mass → identical)",
+      "note": "this identity IS the gap the fix closes; it pins the byte-identical default"
+    },
+    "flag_on": {
+      "text.surprisalBits": "B > A by a clear margin (a newcomer shocks a settled reader, barely moves a churning one)",
+      "seq.pNovel": "on raises A's reserve above its flag-off value (stay open) and lowers B's below its flag-off value (settle) — the two-way move a constant cannot make"
+    }
+  },
+  "control": {
+    "item": "C",
+    "predicted": "text.surprisalBits(C) is LOW and far below B under flag on: the quiet newcomer (B's probe) dominates the loud confirmation (C's probe). A method scoring by surface presence/mass would rank C's loud standing figure above B's unseen newcomer — backwards. Catching that is the control.",
+    "trivial_explanation_it_kills": "surprise ∝ total mass / step count / the probe's surface presence"
+  },
+  "verdict": "CONFIRMED",
+  "regression_lock": "tests/novelty-reserve.test.js"
+}

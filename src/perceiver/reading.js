@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyAmplitude } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -49,6 +49,15 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // apple in the back, the disowning) is significant, not only a change of cast.
   const priorProp = new Map(); // atom → γ-decayed presence before `at`
   const bump = (m, k, v = 1) => m.set(k, (m.get(k) || 0) + v);
+  // First-appearance step of each proposition-field atom (the EARLIEST sentIdx it deposited,
+  // before `at`). The γ-decayed count of these is the signal-derived novelty amplitude — what
+  // the reserve should be, instead of a constant — gated below so the default stays identical.
+  const firstProp = new Map(); // atom → earliest sentIdx seen before `at`
+  const bumpPrior = (k, w, sentIdx) => {
+    bump(priorProp, k, w);
+    const p = firstProp.get(k);
+    if (p == null || sentIdx < p) firstProp.set(k, sentIdx);
+  };
 
   const insAt = [];            // entity ids instantiated at `at`
   const relAt = [];            // { op, src, tgt, via } at `at`
@@ -94,17 +103,17 @@ export const readingAt = (doc, cursor, opts = {}) => {
       if (e.op === 'INS') {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
         priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
-        bump(priorProp, `f:${e.id}`, w);
+        bumpPrior(`f:${e.id}`, w, e.sentIdx);
       } else if (e.op === 'CON' || e.op === 'SIG') {
         priorBond.add(`${e.src}|${e.tgt}`);
         // The bond's participants (incl. an NP referent target) and the proposition
         // itself enter the belief field — the relation is part of what is the case.
-        bump(priorProp, `f:${e.src}`, w);
-        bump(priorProp, `f:${e.tgt}`, w);
-        bump(priorProp, `p:${e.src}|${e.via || ''}|${e.tgt}`, w);
+        bumpPrior(`f:${e.src}`, w, e.sentIdx);
+        bumpPrior(`f:${e.tgt}`, w, e.sentIdx);
+        bumpPrior(`p:${e.src}|${e.via || ''}|${e.tgt}`, w, e.sentIdx);
       } else if (e.op === 'DEF' && e.key === 'predicate') {
-        bump(priorProp, `f:${e.id}`, w);
-        bump(priorProp, `d:${e.id}|${e.value}`, w);
+        bumpPrior(`f:${e.id}`, w, e.sentIdx);
+        bumpPrior(`d:${e.id}|${e.value}`, w, e.sentIdx);
       }
     } else if (e.sentIdx === at) {
       if (e.op === 'INS')                               insAt.push(e.id);
@@ -137,12 +146,25 @@ export const readingAt = (doc, cursor, opts = {}) => {
     }
   }
 
+  // THE NOVELTY RESERVE, signal-derived (the constant hunt, docs/spec-one-surprise.md /
+  // the novelty exemplar). OPT-IN via opts.adaptiveNovelty so the default reserve stays the
+  // constant NOVELTY and the goldens are byte-identical. When on, the reserve AMPLITUDE is the
+  // γ-decayed rate of first-appearances under the SAME kernel the figure field decays under —
+  // high after newcomers, low after a confirmation stretch — fed through the unchanged Born
+  // step in surpriseAt/forwardDist below. The figure channel reserves over new FIGURES
+  // (firstIns); the proposition channel over new ATOMS (firstProp): one recipe, each basis.
+  const EPS = 1e-9;             // absolute-continuity floor: keeps the KL finite at cold start
+  const novFig  = opts.adaptiveNovelty
+    ? Math.max(noveltyAmplitude([...firstIns.values()], at, γ), EPS) : NOVELTY;
+  const novProp = opts.adaptiveNovelty
+    ? Math.max(noveltyAmplitude([...firstProp.values()], at, γ), EPS) : NOVELTY;
+
   // --- Prediction (REC): a probability distribution over who acts next. ----
-  // P(figure) ∝ γ-mass; a reserve of NOVELTY holds probability for someone
+  // P(figure) ∝ γ-mass; a reserve of novFig holds probability for someone
   // not yet seen. Prediction = the expectation: the top of this distribution.
   const total = [...priorMass.values()].reduce((s, m) => s + m, 0);
-  const Z = total + NOVELTY;
-  const pNovel = NOVELTY / Z;
+  const Z = total + novFig;
+  const pNovel = novFig / Z;
   const pOf = (id) => (priorMass.get(id) || 0) / Z;
 
   const ranked = [...priorMass.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
@@ -217,7 +239,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: novProp, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -272,7 +294,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: novProp });
   return out;
 };
 
