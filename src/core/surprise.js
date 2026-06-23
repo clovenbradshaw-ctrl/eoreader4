@@ -96,4 +96,33 @@ export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
   return { dist, reserve: novelty / Z, Z };
 };
 
+// recentNoveltyReserve(events, cursor, { gamma }) → nu — the SIGNAL-DERIVED reserve amplitude.
+//
+// `NOVELTY_RESERVE` above is a hand-set constant: the reader's certainty about the unseen is the
+// SAME whether newcomers have been pouring in or the cast has been stable for a hundred lines, so
+// the reader never learns the one thing its own signal already tells it — the RATE at which
+// novelty arrives. This derives that rate from the log instead: the γ-decayed count of FIRST
+// appearances (an INS of an id not seen before) under the SAME kernel the figure field uses
+// (w = γ^(at−1−s)). It runs HIGH right after a burst of newcomers and decays toward zero through a
+// long confirmation stretch — exactly the protention a fixed reserve cannot express.
+//
+// It is an AMPLITUDE only. It is fed to the UNCHANGED Born step (surpriseAt / forwardDist) at the
+// very place the constant sat, so the squaring/normalisation law stays fixed for every sense and
+// only the reserved mass becomes context-sensitive (docs/spec-one-surprise.md: "context enters at
+// the amplitude, the law stays put"). Modality-agnostic: it reads INS operators and nothing else,
+// so any organ that admits entities inherits the same adaptive reserve — the omnimodal contract.
+export const recentNoveltyReserve = (events, cursor, { gamma } = {}) => {
+  const at = cursor | 0;
+  const firstSeen = new Map();                       // id → earliest INS sentIdx (its admission line)
+  for (const e of events) {
+    if (e.op !== 'INS' || e.id == null || e.sentIdx == null) continue;
+    if (!firstSeen.has(e.id)) firstSeen.set(e.id, e.sentIdx);
+  }
+  let nu = 0;
+  for (const s of firstSeen.values()) {
+    if (s < at) nu += Math.pow(gamma, at - 1 - s);   // a newcomer weighted by recency of INTRODUCTION
+  }
+  return nu;                                          // 0 only at a genuine opening (no prior INS at all)
+};
+
 const round = (x) => Math.round(x * 100) / 100;

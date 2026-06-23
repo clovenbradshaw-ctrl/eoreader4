@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist, bridgeSurprise } from '../core/index.js';
+import { surpriseAt, forwardDist, bridgeSurprise, recentNoveltyReserve } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -137,12 +137,25 @@ export const readingAt = (doc, cursor, opts = {}) => {
     }
   }
 
+  // THE RESERVE AMPLITUDE. Default (byte-identical): the fixed NOVELTY unit. Opt-in
+  // (opts.reserve === 'adaptive', behind the same parity gate as opts.bridge/opts.forward):
+  // the γ-decayed newcomer RATE from the log (recentNoveltyReserve), so the reader's
+  // certainty about the unseen tracks whether newcomers have actually been arriving —
+  // high after a burst, low after a long confirmation stretch — instead of a hand-set
+  // constant blind to its own signal. It is an AMPLITUDE: it is threaded to the UNCHANGED
+  // Born step exactly where NOVELTY sat (Z, pNovel, surpriseAt, forwardDist), so the law is
+  // fixed and only the reserved mass becomes context-sensitive. nu === 0 only at a genuine
+  // opening (no prior INS), where the non-informative unit reserve is the honest boundary.
+  const reserveMass = (opts.reserve === 'adaptive')
+    ? (recentNoveltyReserve(events, at, { gamma: γ }) || NOVELTY)
+    : NOVELTY;
+
   // --- Prediction (REC): a probability distribution over who acts next. ----
-  // P(figure) ∝ γ-mass; a reserve of NOVELTY holds probability for someone
+  // P(figure) ∝ γ-mass; a reserve of `reserveMass` holds probability for someone
   // not yet seen. Prediction = the expectation: the top of this distribution.
   const total = [...priorMass.values()].reduce((s, m) => s + m, 0);
-  const Z = total + NOVELTY;
-  const pNovel = NOVELTY / Z;
+  const Z = total + reserveMass;
+  const pNovel = reserveMass / Z;
   const pOf = (id) => (priorMass.get(id) || 0) / Z;
 
   const ranked = [...priorMass.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
@@ -217,7 +230,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: reserveMass, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -272,7 +285,15 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) {
+    out.pNext = forwardDist(priorProp, { novelty: reserveMass });
+    // p(next is a NEWCOMER) over the figure field — the reserve probability itself, the
+    // scalar "mass reserved for the unseen" the reserve amplitude governs. Surfaced (opt-in,
+    // so default stays byte-identical) because it is the cleanest readout of whether the
+    // reserve tracks the signal: under the fixed reserve it depends only on accumulated mass,
+    // under the adaptive reserve it tracks the γ-decayed newcomer rate.
+    out.pNovel = round(pNovel);
+  }
   // The CONNECTIVITY channel (the core's bridgeSurprise) — OPT-IN so default reading
   // stays byte-identical (the parity gate). The mass surprise above moves on what
   // arrived; this moves on how this line's bonds collapse the prior SEPARATION between

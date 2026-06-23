@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "what": "BLIND stimulus for the novelty-reserve pressure. No labels, no answer. The measure (scripts/novelty-reserve.mjs) reads this and emits per-condition channels; only the scorer (scripts/novelty-reserve-score.mjs) reads the held key (data/novelty-reserve-key.json).",
+    "construction": "Each condition is a 7-unit reading in one sense. Units 0-2 are a shared preamble that admits three entities. Units 3-5 are the MANIPULATED WINDOW: 'newcomers' admits three brand-new entities, 'one_recurs' re-mentions one preamble entity three times, 'old_recur' cycles the three preamble entities. Unit 6 is the PROBE: a brand-new entity (new in every condition). Every unit deposits exactly one INS, so accumulated figure mass at the probe is identical across conditions — only the RATE of newcomer arrivals differs.",
+    "drawn_axes": { "target": "INS at Existence × the reserve (the protention atom)", "modality": "text + tonal (two organs)", "kind": "discrimination + invariance", "level": "significance", "horizon": "across-a-window" },
+    "seed_of_record": "inside-out draw on the constant src/core/surprise.js:21 NOVELTY_RESERVE (= src/perceiver/reading.js:23 NOVELTY); content fixed by the sampler, not drawn from a Wikipedia article (a constant-hunt cycle)"
+  },
+  "senses": {
+    "text": {
+      "organ": "parseText",
+      "probe_cursor": "last unit",
+      "conditions": {
+        "newcomers":  ["Olivia waited.", "Owen waited.", "Oscar waited.", "Xena waited.",  "Yara waited.",  "Zane waited.",  "Quinn arrived."],
+        "one_recurs": ["Olivia waited.", "Owen waited.", "Oscar waited.", "Olivia waited.", "Olivia waited.", "Olivia waited.", "Quinn arrived."],
+        "old_recur":  ["Olivia waited.", "Owen waited.", "Oscar waited.", "Olivia waited.", "Owen waited.",  "Oscar waited.",  "Quinn arrived."]
+      }
+    },
+    "music": {
+      "organ": "ingestMusic",
+      "probe_cursor": "last unit",
+      "conditions": {
+        "newcomers":  ["C4", "E4", "G4", "F4", "A4", "D4", "B4"],
+        "one_recurs": ["C4", "E4", "G4", "C4", "C4", "C4", "B4"],
+        "old_recur":  ["C4", "E4", "G4", "C4", "E4", "G4", "B4"]
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{"sense":"text","condition":"newcomers","pNovel_fixed":0.25,"pNovel_adaptive":0.5,"surprise_fixed":0.746,"surprise_adaptive":0.5,"nu":2.941,"insBefore":6,"insAt":1,"units":7}
+{"sense":"text","condition":"one_recurs","pNovel_fixed":0.25,"pNovel_adaptive":0.2,"surprise_fixed":0.746,"surprise_adaptive":0.797,"nu":0.751,"insBefore":6,"insAt":1,"units":7}
+{"sense":"text","condition":"old_recur","pNovel_fixed":0.25,"pNovel_adaptive":0.2,"surprise_fixed":0.746,"surprise_adaptive":0.797,"nu":0.751,"insBefore":6,"insAt":1,"units":7}
+{"sense":"music","condition":"newcomers","pNovel_fixed":0.25,"pNovel_adaptive":0.5,"surprise_fixed":0.839,"surprise_adaptive":0.685,"nu":2.941,"insBefore":6,"insAt":1,"units":7}
+{"sense":"music","condition":"one_recurs","pNovel_fixed":0.25,"pNovel_adaptive":0.2,"surprise_fixed":0.715,"surprise_adaptive":0.743,"nu":0.751,"insBefore":6,"insAt":1,"units":7}
+{"sense":"music","condition":"old_recur","pNovel_fixed":0.25,"pNovel_adaptive":0.2,"surprise_fixed":0.804,"surprise_adaptive":0.824,"nu":0.751,"insBefore":6,"insAt":1,"units":7}

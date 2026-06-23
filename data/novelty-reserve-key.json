@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "what": "HELD KEY for the novelty-reserve pressure. The measure (scripts/novelty-reserve.mjs) never reads this. Only the scorer (scripts/novelty-reserve-score.mjs) does. This is where selection happens.",
+    "claim": "The reserve probability p(novel) — the mass the reader holds for an as-yet-unseen atom — should track the recent RATE of newcomer arrivals. Under the live FIXED reserve (NOVELTY = 1.0) it depends only on accumulated figure mass, which is matched across the three conditions here, so the fixed reader is BLIND: it assigns the same p(novel) to the probe whether it just saw a burst of newcomers or a long confirmation stretch. Under the ADAPTIVE reserve (the γ-decayed newcomer rate, fed as the novelty amplitude through the UNCHANGED Born step) p(novel) is HIGH right after a burst and LOW after a confirmation stretch.",
+    "mechanism": "recentNoveltyReserve (src/core/surprise.js): the γ-decayed count of INS first-appearances under the same kernel the figure field uses, threaded as `novelty` into surpriseAt / forwardDist / pNovel. The law (square-and-normalise) is fixed; only the reserved amplitude becomes context-sensitive."
+  },
+  "channel": "pNovel",
+  "predicted": {
+    "fixed_reserve_is_blind": {
+      "holds": true,
+      "why": "accumulated figure mass is matched across newcomers/one_recurs/old_recur (every unit deposits one INS), and the fixed reserve is a function of that mass alone — so pNovel_fixed is EQUAL across the three conditions within each sense. This is the gap: the live engine cannot tell a burst from a confirmation stretch."
+    },
+    "adaptive_split": {
+      "newcomers":  "HIGH (>= 0.4) — the γ-decayed newcomer rate is large, so the reader expects another newcomer",
+      "one_recurs": "LOW (<= 0.3) — no recent first-appearances, the reader reserves little for the unseen",
+      "old_recur":  "LOW (<= 0.3) — same as one_recurs: the in-window entities are OLD (their first-appearance is in the preamble, γ-decayed away)"
+    },
+    "control_loud_surface": {
+      "condition": "old_recur",
+      "predicted": "groups with one_recurs (LOW), NOT with newcomers",
+      "why": "old_recur has the SAME distinct-entity count and the SAME recent-mention surface activity as newcomers (three distinct names mentioned in the window) — the loud surface signal. Only the recency of INTRODUCTION differs. A method that read distinct-count or surface activity would group old_recur with newcomers; the adaptive reserve groups it with one_recurs, proving it reads the rate of NEW arrivals, not surface activity."
+    },
+    "omnimodal": {
+      "predicted": "the same dissociation holds in BOTH text and music",
+      "why": "the reserve amplitude reads only INS operators (modality-agnostic); text entities and music pitch-classes are the same to the interior. An interior change must help two senses; a fix that helped one would have leaked."
+    }
+  }
+}
