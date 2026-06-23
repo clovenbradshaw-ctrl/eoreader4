@@ -23,5 +23,9 @@ export {
 export { readingAt } from './reading.js';
 export { predictNext } from './predict.js';
 export { mutualNearestPairs, discoverEquivalences } from './equivalence.js';
+export {
+  discoverPropositionEquivalence, attestEquivalenceFrom, mutualNearestPropositions,
+  evaluatePropositionPair, propositionText, propositionPolarity,
+} from './proposition-equivalence.js';
 export { siteRoles, markSites, siteIndices } from './site.js';
 export { referentialConfidence, REFERENT_MARGIN } from './referent.js';
