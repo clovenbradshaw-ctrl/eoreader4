@@ -1,0 +1,27 @@
+{
+  "capability": "novelty-rate-sensitive reserve — surprise at a genuine newcomer tracks how often newcomers have RECENTLY arrived",
+  "claim": "The reserve mass a reading holds for an as-yet-unseen atom should be signal-derived: a γ-decayed estimate of the recent newcomer rate, run through the fixed Born step. So a newcomer arriving after a long stretch of pure confirmation (rate→0, reserve→0) is MUCH more surprising than the identical-surface newcomer arriving in a churn of newcomers (rate high, reserve high). The fixed-constant reserve (1/(mass+1)) is BLIND to the rate — it scores the two newcomers ~equally. The dissociation is newcomer-specific: a repeat-final control shows no such gap under either reserve.",
+  "mechanism": "signal-derived novelty reserve — noveltyReserveMass folds the γ-decayed first-appearance steps (a newcomer's-rate estimate under the SAME γ the field decays by) and feeds it as the `novelty` amplitude through the SAME fixed Born step (reserve = a/(sum+a)) inside surpriseAt. Context enters at the amplitude; the law stays put.",
+  "channels": ["bayes_fixed", "bayes_signal"],
+  "items": {
+    "i01": { "sense": "text", "regime": "settled",  "final": "newcomer", "confirm_len": 10, "role": "probe" },
+    "i02": { "sense": "text", "regime": "settled",  "final": "newcomer", "confirm_len": 15, "role": "probe-long" },
+    "i03": { "sense": "text", "regime": "churning", "final": "newcomer", "confirm_len": 10, "role": "probe" },
+    "i04": { "sense": "text", "regime": "churning", "final": "newcomer", "confirm_len": 15, "role": "probe-long" },
+    "i05": { "sense": "text", "regime": "settled",  "final": "repeat",   "confirm_len": 10, "role": "control" },
+    "i06": { "sense": "text", "regime": "churning", "final": "repeat",   "confirm_len": 10, "role": "control" },
+    "i07": { "sense": "tone", "regime": "settled",  "final": "newcomer", "confirm_len": 10, "role": "probe" },
+    "i08": { "sense": "tone", "regime": "settled",  "final": "newcomer", "confirm_len": 15, "role": "probe-long" },
+    "i09": { "sense": "tone", "regime": "churning", "final": "newcomer", "confirm_len": 10, "role": "probe" },
+    "i10": { "sense": "tone", "regime": "churning", "final": "newcomer", "confirm_len": 15, "role": "probe-long" },
+    "i11": { "sense": "tone", "regime": "settled",  "final": "repeat",   "confirm_len": 10, "role": "control" },
+    "i12": { "sense": "tone", "regime": "churning", "final": "repeat",   "confirm_len": 10, "role": "control" }
+  },
+  "predictions": {
+    "dissociation": "for the newcomer probes, per sense: bayes_signal(settled) > bayes_signal(churning) by a wide margin (> 0.3 bits). bayes_fixed(settled) ~= bayes_fixed(churning) (|Δ| < 0.05): the fixed reserve is blind.",
+    "monotone_length": "more confirmation deepens the settled effect: bayes_signal(settled, len15) >= bayes_signal(settled, len10); the churning side is rate-saturated and stays flat.",
+    "control": "for the repeat-final controls the signal reserve produces NO wide settled-vs-churning gap (|Δ_signal| small, comparable to |Δ_fixed|) — the dissociation is specific to a newcomer, not a generic settled-vs-churning artifact.",
+    "loud_surface_control": "both newcomer finals are equally unseen, so a cheap surface 'is-this-atom-new' detector fires identically on settled and churning and yields ZERO dissociation — exactly what the fixed reserve does. The settled>churning separation cannot come from surface novelty; it requires the rate-tracking reserve.",
+    "omnimodal": "the text sense and the tone sense (a non-text, parser-free operator log) must show the SAME dissociation — the mechanism reads only the membrane."
+  }
+}

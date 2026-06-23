@@ -20,6 +20,34 @@
 
 export const NOVELTY_RESERVE = 1.0;   // reserved prior mass for an as-yet-unseen atom
 
+// noveltyReserveMass — the SIGNAL-DERIVED reserve amplitude (the fix for the constant).
+//
+// NOVELTY_RESERVE is a hand-rolled 1.0, so the reserve surpriseAt holds for an unseen atom
+// is 1/(sumPrior+1). Under a steady deposit rate sumPrior saturates (Σγ^k → 1/(1−γ)), so
+// that reserve saturates to a near-constant — BLIND to whether newcomers have actually been
+// arriving. The reader grows equally certain that nothing new will come whether it just saw
+// three newcomers or none. (Measured: a newcomer after ten confirmations and a newcomer
+// after ten newcomers both score the identical bayesBits.)
+//
+// The fix is not a better constant. It is to make the reserved amplitude TRACK the recent
+// novelty rate under the SAME γ decay the figure field uses: each step at which a newcomer
+// first arrived deposits 1, every prior deposit decays by γ. The amplitude is high after a
+// run of newcomers and falls toward zero after a long stretch of pure confirmation. Fed as
+// the `novelty` amplitude through the SAME fixed Born step (reserve = a/(sum+a)) inside
+// surpriseAt, it makes the reserved BELIEF context-sensitive while the law stays put —
+// context enters at the amplitude, never in the law. Modality-agnostic: it sees only the
+// steps at which newcomers entered and the decay, so any organ that streams arrivals onto
+// the log inherits it, exactly as it inherits the mass surprise.
+//
+//   firstSeenSteps  iterable of the step index at which each DISTINCT atom first arrived
+//   at              the reading cursor; only newcomers strictly before it are in the prior
+//   gamma           the recency-decay kernel (the horizon) — the SAME γ the field decays by
+export const noveltyReserveMass = (firstSeenSteps, { at, gamma }) => {
+  let amp = 0;
+  for (const s of firstSeenSteps) if (s != null && s < at) amp += Math.pow(gamma, at - 1 - s);
+  return amp;
+};
+
 // surpriseAt(prior, arrival, { gamma, novelty, axisLabel }) → { bayesBits, bayesBy }
 //
 //   prior     Map<atom, mass>  the γ-decayed profile BEFORE this step (the backward object)

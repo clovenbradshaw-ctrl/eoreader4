@@ -1,0 +1,23 @@
+{
+  "pressure": "the novelty-reserve constant hunt — does the reader's surprise at a genuine newcomer track the RECENT novelty rate, or is it blind to it?",
+  "blind": "Item ids are opaque. Each item is a stream of units for one sense; the probe is the FINAL unit of each. Regimes, identities and predictions live only in data/novelty-reserve-key.json, which the measure never reads.",
+  "senses": {
+    "text": "items carry `units` (sentences) — parsed by the text organ (parseText); atoms are entities/predicates",
+    "tone": "items carry `steps` (pitch ids) — emitted as a bare INS operator log (no text, no parser); atoms are pitches"
+  },
+  "items": [
+    { "id": "i01", "sense": "text", "units": ["Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Zed ran."] },
+    { "id": "i02", "sense": "text", "units": ["Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Zed ran."] },
+    { "id": "i03", "sense": "text", "units": ["Ada ran.","Ben ran.","Cara ran.","Dan ran.","Eve ran.","Finn ran.","Gail ran.","Hugo ran.","Iris ran.","Jack ran.","Zed ran."] },
+    { "id": "i04", "sense": "text", "units": ["Ada ran.","Ben ran.","Cara ran.","Dan ran.","Eve ran.","Finn ran.","Gail ran.","Hugo ran.","Iris ran.","Jack ran.","Kara ran.","Leo ran.","Mona ran.","Nyle ran.","Opal ran.","Zed ran."] },
+    { "id": "i05", "sense": "text", "units": ["Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran."] },
+    { "id": "i06", "sense": "text", "units": ["Ada ran.","Ben ran.","Cara ran.","Dan ran.","Eve ran.","Finn ran.","Gail ran.","Hugo ran.","Iris ran.","Jack ran.","Jack ran."] },
+
+    { "id": "i07", "sense": "tone", "steps": ["pA","pA","pA","pA","pA","pA","pA","pA","pA","pA","pZ"] },
+    { "id": "i08", "sense": "tone", "steps": ["pA","pA","pA","pA","pA","pA","pA","pA","pA","pA","pA","pA","pA","pA","pA","pZ"] },
+    { "id": "i09", "sense": "tone", "steps": ["p1","p2","p3","p4","p5","p6","p7","p8","p9","p10","pZ"] },
+    { "id": "i10", "sense": "tone", "steps": ["p1","p2","p3","p4","p5","p6","p7","p8","p9","p10","p11","p12","p13","p14","p15","pZ"] },
+    { "id": "i11", "sense": "tone", "steps": ["pA","pA","pA","pA","pA","pA","pA","pA","pA","pA","pA"] },
+    { "id": "i12", "sense": "tone", "steps": ["p1","p2","p3","p4","p5","p6","p7","p8","p9","p10","p10"] }
+  ]
+}
