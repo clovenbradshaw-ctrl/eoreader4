@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist, bridgeSurprise } from '../core/index.js';
+import { surpriseAt, forwardDist, bridgeSurprise, noveltyAmplitude } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -49,6 +49,11 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // apple in the back, the disowning) is significant, not only a change of cast.
   const priorProp = new Map(); // atom → γ-decayed presence before `at`
   const bump = (m, k, v = 1) => m.set(k, (m.get(k) || 0) + v);
+  // The reading-distances of past NEWCOMER admissions — the raw material for the signal-
+  // derived reserve amplitude (noveltyAmplitude). Each first-admission of a figure before
+  // `at` contributes its cursor-distance; the reserve is the γ-decay of these, so the mass
+  // the reader holds for an unseen atom tracks how often newcomers have been arriving.
+  const noveltyDist = [];
 
   const insAt = [];            // entity ids instantiated at `at`
   const relAt = [];            // { op, src, tgt, via } at `at`
@@ -95,6 +100,10 @@ export const readingAt = (doc, cursor, opts = {}) => {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
         priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
         bump(priorProp, `f:${e.id}`, w);
+        // A NEWCOMER admission (the figure's first INS) feeds the reserve amplitude — its
+        // decayed distance, the same `w` the figure field deposits. Keyed on the raw id, the
+        // same newcomer test the surprisal channel uses below (firstIns === at).
+        if (firstIns.get(e.id) === e.sentIdx) noveltyDist.push(at - 1 - e.sentIdx);
       } else if (e.op === 'CON' || e.op === 'SIG') {
         priorBond.add(`${e.src}|${e.tgt}`);
         // The bond's participants (incl. an NP referent target) and the proposition
@@ -141,8 +150,15 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // P(figure) ∝ γ-mass; a reserve of NOVELTY holds probability for someone
   // not yet seen. Prediction = the expectation: the top of this distribution.
   const total = [...priorMass.values()].reduce((s, m) => s + m, 0);
-  const Z = total + NOVELTY;
-  const pNovel = NOVELTY / Z;
+  // THE RESERVE AMPLITUDE. Default: the seed constant NOVELTY (byte-identical to the prior
+  // path). Opt-in (adaptiveReserve): the signal-derived amplitude — the γ-decayed mass of
+  // recent newcomer admissions (noveltyAmplitude, src/core/surprise.js) — so the reserve the
+  // reader holds for an unseen atom tracks how often newcomers have been ARRIVING, not just
+  // how much total mass has piled up. The SAME fixed Born step (reserve = amp/(Σ+amp)) runs
+  // downstream; only this amplitude changes. Context enters here; the law stays put.
+  const reserveAmp = opts.adaptiveReserve ? noveltyAmplitude(noveltyDist, { gamma: γ }) : NOVELTY;
+  const Z = total + reserveAmp;
+  const pNovel = reserveAmp / Z;
   const pOf = (id) => (priorMass.get(id) || 0) / Z;
 
   const ranked = [...priorMass.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
@@ -217,7 +233,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: reserveAmp, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -272,7 +288,16 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: reserveAmp });
+  // The signal-derived reserve, exposed OPT-IN (adaptiveReserve) so the default path is
+  // byte-identical. `reserve` is the share the Born step held for an unseen atom; `noveltyMass`
+  // is the amplitude (nu) behind it; `totalMass` is Σ figure mass. The diagnostic channels the
+  // novelty-reserve pressure reads (experiments/ledger.jsonl).
+  if (opts.adaptiveReserve) {
+    out.reserve     = pNovel;
+    out.noveltyMass = reserveAmp;
+    out.totalMass   = total;
+  }
   // The CONNECTIVITY channel (the core's bridgeSurprise) — OPT-IN so default reading
   // stays byte-identical (the parity gate). The mass surprise above moves on what
   // arrived; this moves on how this line's bonds collapse the prior SEPARATION between

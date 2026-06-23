@@ -18,7 +18,37 @@
 // Operations and their ORDER are preserved exactly from reading.js so the text path stays
 // byte-identical: the parity gate is `node --test tests/*.test.js` (docs/spec-one-surprise.md).
 
-export const NOVELTY_RESERVE = 1.0;   // reserved prior mass for an as-yet-unseen atom
+export const NOVELTY_RESERVE = 1.0;   // SEED reserve mass — the cold-start amplitude only (see noveltyAmplitude)
+
+// noveltyAmplitude — the reserve amplitude DERIVED from the signal's own recent novelty
+// rate, the fix for the hand-rolled NOVELTY_RESERVE constant.
+//
+// THE EXEMPLAR. A reserve fixed at 1.0 makes the reserve SHARE the Born step derives,
+// novelty/(Σmass+novelty), a function of total mass ALONE — blind to whether newcomers
+// have been ARRIVING. The reader grows equally certain that nothing new will come whether
+// it just saw a burst of newcomers or none. That is the reader failing to learn from its
+// own signal. The fix is not a better constant: it is to make the reserved amplitude track
+// the recent novelty rate under the SAME γ-decay the figure field uses, then run it through
+// the SAME fixed Born step. Context enters at the amplitude; the law stays put. High right
+// after newcomers, decaying toward the seed through a long stretch of confirmation.
+//
+// The amplitude is the γ-decayed mass of recent NEWCOMER admissions: each past step that
+// admitted an as-yet-unseen atom deposited γ^(reading-distance) — exactly the weight `w`
+// the figure field already lays down — and this is their sum. Modality-agnostic: it reads
+// only a list of cursor-distances for the newcomer steps, whatever organ produced them.
+//
+//   newcomerDistances  array of (at-1-s) reading-distances, one per past newcomer admission
+//   gamma              the same recency kernel the figure field decays under
+//   seed               cold-start amplitude when there is NO newcomer history. At the opening
+//                      the KL is identically zero for ANY positive reserve (the reserve atom
+//                      sits in both prior and posterior and cancels), so the seed never enters
+//                      a moving prediction — it only keeps the boundary well-defined, the same
+//                      abstain-from-below discipline voidnull.js uses at cold start.
+export const noveltyAmplitude = (newcomerDistances, { gamma, seed = NOVELTY_RESERVE } = {}) => {
+  let nu = 0;
+  for (const d of newcomerDistances) nu += Math.pow(gamma, Math.max(0, d));
+  return nu > 0 ? nu : seed;
+};
 
 // surpriseAt(prior, arrival, { gamma, novelty, axisLabel }) → { bayesBits, bayesBy }
 //

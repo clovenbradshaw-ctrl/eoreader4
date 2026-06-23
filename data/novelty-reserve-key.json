@@ -1,0 +1,30 @@
+{
+  "_comment": "HELD KEY for the novelty-reserve pressure. The measure (scripts/novelty-reserve.mjs) never reads this; scripts/novelty-reserve-score.mjs applies it. Read the CONTROL first, then the per-stream split, then stability.",
+  "cursor": 19,
+  "newcomer": "Stevenson",
+  "roles": {
+    "stream_a": "stable — a sealed 3-name cast recurring; the last newcomer before the cursor was 17 lines ago. Recent novelty rate ~0.",
+    "stream_b": "stale_burst — 11 newcomers front-loaded (lines 0-10), then a quiet recurrence tail. The novelty is real but STALE at the cursor.",
+    "stream_c": "recent_churn — the SAME counts as stream_b (same distinct-name count, intro count, recurrence count, total mass), but the 10 roster newcomers arrive LATE (lines 9-18), right up to the cursor. Recent novelty rate high."
+  },
+  "control": {
+    "count_matched_pair": ["stream_b", "stream_c"],
+    "claim": "stream_b and stream_c are identical under every COUNT-based surface feature — same number of distinct names (12), same intros (12), same recurrences (8), same total γ-mass at the cursor — and differ ONLY in the temporal order of the same events. So (a) the CURRENT reserve 1/(total+1) reads them identically, and (b) any cheat keying on a cumulative count reads them identically. Only a recency-decay-weighted reserve can separate them. If the signal-derived reserve separates b from c, the separation cannot be a count artifact.",
+    "current_path_is_flat": "Under the default (pre-fix) path the observable channels at the cursor — bayesBits, surprisalBits, and the constant reserve 1/(total+1) — are ~equal across ALL THREE streams (the gap: the live engine is blind to the recent novelty rate). 'flat' tolerance: spread < 0.02."
+  },
+  "dissociation": {
+    "channel": "reserve (the signal-derived reserve share nu/(total+nu), emitted under readingAt(.,{adaptiveReserve:true}))",
+    "ordering_at_cursor": ["stream_c", "stream_b", "stream_a"],
+    "claim": "reserve(stream_c) > reserve(stream_b) > reserve(stream_a): the reserved amplitude tracks the recent novelty rate. The count-matched gap is large — reserve(stream_c) >= 3 * reserve(stream_b) — proving recency, not count, drives it.",
+    "amplitude": "noveltyMass(stream_c) > noveltyMass(stream_b) > noveltyMass(stream_a) — the γ-decayed mass of recent newcomer admissions, the amplitude that goes into the fixed Born step."
+  },
+  "consequence": {
+    "channel": "bayesBits at the cursor under {adaptiveReserve:true} (the newcomer's significance)",
+    "claim": "A lower reserve makes the newcomer a larger violation: the sealed-cast newcomer moves belief MORE than the fresh-churn newcomer — bayesBits(stream_a) > bayesBits(stream_c). (b-vs-c on this channel is shape-confounded by the differing incumbent profiles and is NOT asserted; the confound-free statement lives on the reserve channel above and on the core isolation lock in tests/novelty-reserve.test.js.)"
+  },
+  "stability": {
+    "parity": "The DEFAULT path is byte-identical to pre-fix: readingAt(doc, at) with no adaptiveReserve flag returns no reserve/noveltyMass/totalMass fields and the same bayesBits/surprisalBits it always did. The opt-in is the only thing that threads the signal-derived amplitude through the (unchanged) Born step.",
+    "surface_invariance": "The reserve reads novelty STRUCTURE, not the surface verbs: the recurrence lines cycle through different intransitive verbs and the reserve is unaffected — it is a function of newcomer admission timing alone."
+  },
+  "mechanism_tag": "signal-derived-reserve-amplitude: the reserve is the γ-decayed mass of recent NEWCOMER admissions (same γ as the figure field), run through the SAME fixed Born step (reserve = nu/(Σ+nu)). Context enters at the amplitude; the law stays put. Replaces the hand-rolled NOVELTY_RESERVE = 1.0 constant. Layer: interior (src/core/surprise.js noveltyAmplitude), threaded opt-in via src/perceiver/reading.js."
+}

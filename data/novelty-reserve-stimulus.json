@@ -1,0 +1,84 @@
+{
+  "meta": {
+    "purpose": "Novelty-reserve stimulus set. Three streams are each read line by line; at every cursor the measure (scripts/novelty-reserve.mjs) emits, over PRIOR CONTEXT ONLY (causally), the surprise channels and the reserve amplitudes the engine holds. There are NO annotations here on purpose — which stream is which, where the newcomer cursor is, and the predicted ordering are held in a separate key applied only at scoring time (data/novelty-reserve-key.json). Do not infer or guess.",
+    "pressure": "Inside-out constant hunt (the campaign's named exemplar): the hand-rolled NOVELTY_RESERVE = 1.0 in src/core/surprise.js. The reserved amplitude the reader holds for an as-yet-unseen atom is a fixed constant, so the reserve SHARE the Born step derives, NOVELTY/(total+NOVELTY), is a function of total mass alone — blind to whether newcomers have been ARRIVING. Concrete cast supplied by a random Wikipedia draw (structured draw around a seed); the structural pressure is fixed by the constant hunt.",
+    "seed_of_record": {
+      "roster_draw": "https://en.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=18 (rncontinue 0.371316968208|0.371318096934|320819|0) — Enrico Saraceni #32672255, Dmitri Sychev #489970, Mailin Vargas #18901956, Henning Wallgren #32156159, Ron Butler #20523561, Jannie Borst #61665822",
+      "summary_draws": [
+        {"title": "When the Party Ends", "revision": 1355650934, "supplied": "Bimini, Redshank, Harvey Kirkby, Billie Blonde"},
+        {"title": "Minami-Toyama Station", "revision": 1333362938, "supplied": "Toyama (the anchor)"},
+        {"title": "Stevenson screen", "revision": 1346489435, "supplied": "Stevenson (the newcomer at the cursor)"},
+        {"title": "United Nations Security Council Resolution 657", "revision": 1271108503, "supplied": "(orthogonal-collision partner; cast pool)"}
+      ]
+    },
+    "design": "Each stream is 20 lines; the last line (cursor 19) is the SAME newcomer, 'Stevenson arrived.', a name absent from every stream before the cursor. Every line deposits exactly one figure mention, so total γ-mass at the cursor is matched across streams by construction — which forces the CURRENT reserve, 1/(total+1), to read all three identically. The streams differ only in WHEN newcomers arrive. stream_b and stream_c are count-matched (identical distinct-name count, intro count, recurrence count, total mass): they differ ONLY in the temporal order of the same events, so every count-based surface feature is equal and only a recency-weighted reserve can tell them apart."
+  },
+  "streams": {
+    "stream_a": [
+      "Toyama arrived.",
+      "Enrico Saraceni arrived.",
+      "Dmitri Sychev arrived.",
+      "Toyama spoke.",
+      "Enrico Saraceni waited.",
+      "Dmitri Sychev returned.",
+      "Toyama listened.",
+      "Enrico Saraceni paused.",
+      "Dmitri Sychev nodded.",
+      "Toyama watched.",
+      "Enrico Saraceni answered.",
+      "Dmitri Sychev smiled.",
+      "Toyama stood.",
+      "Enrico Saraceni spoke.",
+      "Dmitri Sychev waited.",
+      "Toyama returned.",
+      "Enrico Saraceni listened.",
+      "Dmitri Sychev paused.",
+      "Toyama nodded.",
+      "Stevenson arrived."
+    ],
+    "stream_b": [
+      "Toyama arrived.",
+      "Enrico Saraceni arrived.",
+      "Dmitri Sychev arrived.",
+      "Mailin Vargas arrived.",
+      "Henning Wallgren arrived.",
+      "Ron Butler arrived.",
+      "Jannie Borst arrived.",
+      "Bimini arrived.",
+      "Redshank arrived.",
+      "Harvey Kirkby arrived.",
+      "Billie Blonde arrived.",
+      "Toyama spoke.",
+      "Enrico Saraceni waited.",
+      "Dmitri Sychev returned.",
+      "Mailin Vargas listened.",
+      "Henning Wallgren paused.",
+      "Ron Butler nodded.",
+      "Jannie Borst watched.",
+      "Bimini answered.",
+      "Stevenson arrived."
+    ],
+    "stream_c": [
+      "Toyama arrived.",
+      "Toyama spoke.",
+      "Toyama waited.",
+      "Toyama returned.",
+      "Toyama listened.",
+      "Toyama paused.",
+      "Toyama nodded.",
+      "Toyama watched.",
+      "Toyama answered.",
+      "Enrico Saraceni arrived.",
+      "Dmitri Sychev arrived.",
+      "Mailin Vargas arrived.",
+      "Henning Wallgren arrived.",
+      "Ron Butler arrived.",
+      "Jannie Borst arrived.",
+      "Bimini arrived.",
+      "Redshank arrived.",
+      "Harvey Kirkby arrived.",
+      "Billie Blonde arrived.",
+      "Stevenson arrived."
+    ]
+  }
+}

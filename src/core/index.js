@@ -43,7 +43,7 @@ export { INSTRUMENT, READER, isSelf, holderOf, STATUS,
 // surprise.js): a perceiver reads forward surprise, a surfer derives a null, an
 // enactor's gate derives a null, the probe derives a null — one engine, one home.
 export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
-export { surpriseAt, forwardDist, NOVELTY_RESERVE } from './surprise.js';
+export { surpriseAt, forwardDist, NOVELTY_RESERVE, noveltyAmplitude } from './surprise.js';
 // The connectivity surprise — the structural sibling of surpriseAt. The mass channel
 // moves on what arrived; this one moves on how a bond COLLAPSES the prior separation
 // between its (coref-resolved) endpoints, the structural reveal the mass KL is blind to.
