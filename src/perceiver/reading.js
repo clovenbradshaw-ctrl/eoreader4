@@ -17,12 +17,12 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist, noveltyAmplitude } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyAmplitude, bridgeSurprise } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure (the constant path)
 
-// Context-sensitive novelty reserve (docs/spec-one-surprise.md; experiments/exp-001).
+// Context-sensitive novelty reserve (docs/spec-one-surprise.md; experiments/exp-0002).
 // The reserve the reader holds for an unseen atom should track the recent newcomer RATE,
 // not a fixed constant. The amplitude is signal-derived (noveltyAmplitude); the Born step
 // is unchanged. It rides behind the RULES_REV gate: with the flag off and no explicit
@@ -297,6 +297,18 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
   if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: noveltyProp });
+  // The CONNECTIVITY channel (the core's bridgeSurprise) — OPT-IN so default reading
+  // stays byte-identical (the parity gate). The mass surprise above moves on what
+  // arrived; this moves on how this line's bonds collapse the prior SEPARATION between
+  // their (coref-resolved) endpoints — the structural reveal `bayes` is blind to (a bond
+  // between two standing entities barely moves the mass KL, yet it can merge two regions
+  // of the graph). Reads the same log at the same cursor, causally. Modality-agnostic:
+  // it sees only CON/SIG bonds and the SYN-merge identity quotient.
+  if (opts.bridge) {
+    const { bridge, axis } = bridgeSurprise(doc.log, at);
+    out.bridge = round(bridge);
+    out.bridgeAxis = axis;       // [labelA, labelB] of the bridging pair, or null
+  }
   return out;
 };
 

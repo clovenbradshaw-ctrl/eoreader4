@@ -1,0 +1,49 @@
+{
+  "_meta": {
+    "what": "Blind stimulus for the structural-reveal pressure. No answer key here.",
+    "shape": {
+      "target": "CON (Relate x Structure) at the significance level — the structural reveal",
+      "modality": "text",
+      "kind": "discrimination + invariance",
+      "level": "significance (L3)",
+      "horizon": "across the whole reading"
+    },
+    "seed_of_record": {
+      "source": "en.wikipedia.org/api/rest_v1/page/random/summary",
+      "method": "orthogonal collision of two random draws",
+      "articles": [
+        { "title": "Maryland Tercentenary half dollar", "revision": 1301766513 },
+        { "title": "Marjorie Organ", "revision": 1351797983 }
+      ]
+    },
+    "conditions": {
+      "unmarked": "the reveal stated plainly",
+      "marked": "the SAME reveal bond carrying a salient surface cue (an emphasis adverb) — structure unchanged"
+    },
+    "note": "Two casts are introduced in separate regions of the entity graph (a coin domain and a cartoonist domain). The measure emits per-line channels over prior context only; selection happens in a separate scorer against a held key this stimulus does not contain."
+  },
+  "documents": {
+    "calvert-organ": {
+      "unmarked": [
+        "Cecil Calvert founded the colony of Maryland.",
+        "The United States Mint honored Calvert in 1934.",
+        "Marjorie Organ drew cartoons for the New York Journal.",
+        "Robert Henri married Marjorie Organ in 1908.",
+        "Calvert governed Maryland for decades.",
+        "John Sloan taught a night class in the city.",
+        "The coin circulated widely.",
+        "Calvert commissioned Organ to engrave the obverse."
+      ],
+      "marked": [
+        "Cecil Calvert founded the colony of Maryland.",
+        "The United States Mint honored Calvert in 1934.",
+        "Marjorie Organ drew cartoons for the New York Journal.",
+        "Robert Henri married Marjorie Organ in 1908.",
+        "Calvert governed Maryland for decades.",
+        "John Sloan taught a night class in the city.",
+        "The coin circulated widely.",
+        "Calvert secretly commissioned Organ to engrave the obverse."
+      ]
+    }
+  }
+}

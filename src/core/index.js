@@ -44,6 +44,11 @@ export { INSTRUMENT, READER, isSelf, holderOf, STATUS,
 // enactor's gate derives a null, the probe derives a null — one engine, one home.
 export { deriveNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
 export { surpriseAt, forwardDist, NOVELTY_RESERVE, noveltyAmplitude } from './surprise.js';
+// The connectivity surprise — the structural sibling of surpriseAt. The mass channel
+// moves on what arrived; this one moves on how a bond COLLAPSES the prior separation
+// between its (coref-resolved) endpoints, the structural reveal the mass KL is blind to.
+// Modality-agnostic: it reads only CON/SIG bonds and the SYN-merge identity quotient.
+export { bridgeSurprise, BRIDGE_DINF } from './bridge.js';
 // The shared relation ontology — relation primitives, their disjointness and
 // symmetry. The perceiver constitutes with it, but the factcheck, the enactor, the
 // answer reader and the input organs all read it too, so it lives in the genome,

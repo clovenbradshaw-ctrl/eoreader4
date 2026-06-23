@@ -1,4 +1,4 @@
-// Regression lock for EXP-001 (experiments/exp-001-novelty-reserve).
+// Regression lock for exp-0002 (experiments/exp-0002-novelty-reserve).
 //
 // CONFIRMED capability: the context-sensitive novelty reserve tracks the recent newcomer
 // RATE — high after a burst of first-time atoms, low after a confirmation plateau — and

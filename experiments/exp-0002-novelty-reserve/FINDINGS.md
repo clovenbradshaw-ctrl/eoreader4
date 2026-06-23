@@ -1,4 +1,4 @@
-# EXP-001 · The novelty reserve (the named exemplar)
+# exp-0002 · The novelty reserve (the named exemplar)
 
 **Pressure (inside-out, the constant hunt).** `src/core/surprise.js:21` holds
 `NOVELTY_RESERVE = 1.0` and `src/perceiver/reading.js:23` holds `NOVELTY = 1.0` — a
@@ -50,8 +50,8 @@ right *shape* of fix but an incomplete model.
 ## Reproduce
 
 ```
-node experiments/exp-001-novelty-reserve/build.mjs       # blind stimulus + held key
-node experiments/exp-001-novelty-reserve/measure.mjs      # read-only channels
-node experiments/exp-001-novelty-reserve/score.mjs        # blind scorer (control first)
-node experiments/exp-001-novelty-reserve/generalize.mjs   # fitness across diverse streams
+node experiments/exp-0002-novelty-reserve/build.mjs       # blind stimulus + held key
+node experiments/exp-0002-novelty-reserve/measure.mjs      # read-only channels
+node experiments/exp-0002-novelty-reserve/score.mjs        # blind scorer (control first)
+node experiments/exp-0002-novelty-reserve/generalize.mjs   # fitness across diverse streams
 ```

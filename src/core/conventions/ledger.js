@@ -229,6 +229,18 @@ export const SEED_STARTER = Object.freeze([
 // document's own facts (→ doc.metadata, logged as DEF), not a reusable register.
 // Stored normalized (lowercase) — the seeding loop sets keys verbatim and `has`
 // reads them through `norm`, so seeds must already be normalized, like the others.
+// Coordinating conjunctions — the words that JOIN two like constituents into one
+// (two subjects onto a shared predicate: "Delgado and Reyes listed…"). A STRICT
+// subset of the function words: only the coordinators that yield a plural subject
+// ('and' / 'or' / 'nor'), never the adversative/illative connectives ('but' / 'so' /
+// 'yet') the broader `function` class also holds — "Delgado but Reyes" is not one
+// subject. The comma and the "&" logogram are orthography, read structurally by the
+// parser, not seeded here. Seeded for English; a corpus teaches its own exactly as it
+// does the speech and copula registers.
+export const SEED_CONJUNCTION = Object.freeze([
+  'and', 'or', 'nor',
+]);
+
 export const SEED_FIELD_LABEL = Object.freeze([
   // bibliographic front matter
   'title', 'subtitle', 'author', 'authors', 'editor', 'translator', 'illustrator',
@@ -253,6 +265,7 @@ const SEEDS = {
   'role': SEED_ROLE,
   'function': SEED_FUNCTION,
   'starter': SEED_STARTER,
+  'conjunction': SEED_CONJUNCTION,
   'field-label': SEED_FIELD_LABEL,
 };
 
@@ -367,6 +380,10 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
     isRole: (v) => has('role', v),
     isFunction: (v) => has('function', v),
     isStarter: (v) => has('starter', v),
+    // A coordinating conjunction joining two like constituents ('and'/'or'/'nor') —
+    // read by the relation parser to admit a coordinated subject ("Name and Name …"),
+    // seed ∪ learned. NOT the adversative/illative connectives the function class holds.
+    isConjunction: (v) => has('conjunction', v),
     // A front-matter field label ("Title", "Author", "Release date") — read by the
     // metadata pass to confirm a labeled line is a bibliographic field, seed ∪ learned.
     isFieldLabel: (v) => has('field-label', v),
