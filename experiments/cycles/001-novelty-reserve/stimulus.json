@@ -1,0 +1,25 @@
+{
+  "note": "BLIND. Opaque stream ids; the regime each one realises is held in key.json and never read by measure.mjs. Verbatim recurrence (subject 'X met Morgan') is deliberate: it makes every recurrence step deliver ZERO basis-new atoms, so the per-step novelty signal is exact and the parse-organ adjunct-lifting fault (cycle 002 — a SEPARATE layer) cannot contaminate this interior measurement.",
+  "seed_of_record": {
+    "draw_a": { "title": "USCGC Duane", "revision": 1326789648 },
+    "draw_b": { "title": "The Moment of Truth (1952 film)", "revision": 1341455993 },
+    "recipe": "orthogonal-collision"
+  },
+  "streams": {
+    "stream_t": [
+      "Duane met Morgan.", "Duane met Morgan.", "Gabin met Morgan.", "Duane met Morgan.",
+      "Delannoy met Morgan.", "Duane met Morgan.", "Misraki met Morgan.", "Duane met Morgan.",
+      "Pimenoff met Morgan.", "Duane met Morgan.", "Chiari met Morgan.", "Duane met Morgan."
+    ],
+    "stream_m": [
+      "Duane met Morgan.", "Gabin met Morgan.", "Duane met Morgan.", "Duane met Morgan.",
+      "Gabin met Morgan.", "Duane met Morgan.", "Gabin met Morgan.", "Duane met Morgan.",
+      "Gabin met Morgan.", "Duane met Morgan.", "Gabin met Morgan.", "Duane met Morgan."
+    ],
+    "stream_q": [
+      "Duane met Morgan.", "Gabin met Morgan.", "Delannoy met Morgan.", "Misraki met Morgan.",
+      "Pimenoff met Morgan.", "Chiari met Morgan.", "Duane met Morgan.", "Gabin met Morgan.",
+      "Delannoy met Morgan.", "Misraki met Morgan.", "Pimenoff met Morgan.", "Chiari met Morgan."
+    ]
+  }
+}

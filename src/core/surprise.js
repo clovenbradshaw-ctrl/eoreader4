@@ -96,4 +96,57 @@ export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
   return { dist, reserve: novelty / Z, Z };
 };
 
+// A BORN-RULE, CONTEXTUAL NOVELTY RESERVE (experiments/cycles/001-novelty-reserve).
+//
+// THE GAP. forwardDist's reserve = novelty/(sum+novelty) with a FIXED novelty constant: it
+// decays toward 0 with the profile's accumulated mass NO MATTER how often novelty actually
+// arrives. So the reader grows ever more certain no newcomer will come exactly as newcomers
+// keep coming — the reserve tracks step-count, not the novelty regime (measured: three streams
+// at true recent-novelty rates 0.41 / 0.01 / 0.11 all land at reserve ≈ 0.058).
+//
+// THE FIX — novelty tied to the same Born rule the engine derives for every other boundary
+// (voidnull.js): the reading's own VOID gives the odds, and alpha is the only policy. The void
+// for novelty is the pure RECURRENCE — a step that adds no basis-new mass. The signal is the
+// per-step NOVELTY MAGNITUDE (how many atoms outside the basis-so-far a step delivered: ≈0 on a
+// recurrence, a positive burst on a newcomer or a new proposition). The reserve is the
+// γ-weighted (CONTEXTUAL) fraction of recent steps that EXCEED the void — the reading's own
+// measured rate of becoming-something — bounded to [alpha, 1-alpha].
+//
+// WHY THE VOID IS EXACT, NOT A QUANTILE. voidnull derives its boundary as a high quantile of a
+// noisy background (overlaps, pixel extents — scores chance can fake). Basis-novelty is not
+// noisy: "an atom outside the basis arrived" is exact set membership, so the void is exactly
+// magnitude 0 and needs no extreme-value correction. (Driving deriveNull here in fact MISFIRES
+// once novelty is common — when ~half the steps are novel they are a mode, not a handful of
+// outliers, so the robust bulk-fit swallows them and θ rejects everything: the quantile is for
+// rare structure against a noise majority, which novelty at 0.4-0.5 violates.) So the Born rule
+// contributes its POLICY (alpha, the only knob) and its DISCIPLINE (causal, adaptive, contextual,
+// cold-start humility — early steps are openings, so the rate starts high and relaxes), with the
+// void taken exact. The quantile path returns the moment the magnitude is a noisy score.
+//
+// CONTEXTUAL — γ-weighted over the recent window (the caller passes the causal per-step sequence
+// scoped to the active horizon), so a regime that STOPS introducing newcomers sees its reserve
+// fall and a steady trickle keeps it high. No novelty-rate constant anywhere.
+//
+//   newMassSeq  ordered per-step novelty magnitudes for the steps BEFORE the cursor (causal),
+//               modality-agnostic (proposition deposits for text, tonal moves for music, …).
+// Returns reserve ∈ [alpha, 1-alpha], or null on no context (caller keeps the fixed default).
+export const bornNoveltyReserve = (newMassSeq, { gamma = 0.7, alpha = 0.01 } = {}) => {
+  if (!newMassSeq || !newMassSeq.length) return null;          // no context → caller keeps default
+  let num = 0, den = 0;
+  const n = newMassSeq.length;
+  for (let s = 0; s < n; s++) {
+    const w = Math.pow(gamma, n - 1 - s);
+    den += w;
+    if (newMassSeq[s] > 0) num += w;                           // exceeds the void (exact: recurrence = 0)
+  }
+  const rate = den ? num / den : 0;
+  return Math.min(1 - alpha, Math.max(alpha, rate));
+};
+
+// The novelty MASS to hand forwardDist so its reserve equals `reserve` exactly:
+// reserve = m/(sum+m) ⟺ m = reserve/(1-reserve)·sum. So a calibrated reserve probability
+// becomes the open-basis mass the existing forwardDist already knows how to carry.
+export const reserveMassFor = (reserve, profileSum) =>
+  (profileSum <= 0 ? NOVELTY_RESERVE : (reserve / (1 - reserve)) * profileSum);
+
 const round = (x) => Math.round(x * 100) / 100;

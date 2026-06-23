@@ -1,0 +1,20 @@
+{
+  "note": "HELD. Never imported by measure.mjs. score.mjs reads this to grade the channels.",
+  "mechanism_tag": "forward-reserve-fixed-constant",
+  "regimes": {
+    "stream_t": { "regime": "steady-novelty", "true_recent_rate": "~0.5", "novel_steps": "every other unit" },
+    "stream_m": { "regime": "cast-then-recurrence (LOW)", "true_recent_rate": "->~0.0", "novel_steps": "first two units only" },
+    "stream_q": { "regime": "regime-shift (CONTROL)", "true_recent_rate": "1.0 -> ~0.1", "novel_steps": "first six units, then none" }
+  },
+  "control": "stream_q",
+  "predictions": {
+    "live_engine_fixed_reserve": "FALSIFIES the claim: all three streams land at ~the same reserve at the final cursor (a function of step-count, not novelty rate); the reserve does NOT separate stream_t from stream_m and does NOT fall across stream_q's shift.",
+    "calibrated_reserve": "CONFIRMS the claim: stream_t reserve >> stream_m reserve at the final cursor (separation); stream_q reserve is high through the burst and FALLS after unit 6 (tracks the recency-weighted rate, where a cumulative counter would stay ~0.5).",
+    "fitness": "Forward novelty log-loss -[y log r + (1-y) log(1-r)], y = step-is-novel, r = reserve, aggregated over all cursors of all streams, is LOWER for the calibrated reserve than the fixed reserve. The win must come mostly from stream_t (where the fixed reserve under-reserves a high novelty rate)."
+  },
+  "thresholds": {
+    "separation": "calibrated stream_t final reserve - calibrated stream_m final reserve > 0.3, while |fixed stream_t - fixed stream_m| < 0.02",
+    "control_fall": "calibrated stream_q reserve at unit 11 < 0.5 * its reserve at unit 5",
+    "fitness_gain": "mean calibrated log-loss < mean fixed log-loss"
+  }
+}

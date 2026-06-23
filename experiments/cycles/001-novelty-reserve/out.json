@@ -1,0 +1,263 @@
+{
+  "alpha": 0.05,
+  "streams": {
+    "stream_t": [
+      {
+        "k": 0,
+        "novel": 1,
+        "fixed": 1,
+        "born": 1,
+        "cumRate": 1
+      },
+      {
+        "k": 1,
+        "novel": 0,
+        "fixed": 0.167,
+        "born": 0.95,
+        "cumRate": 0.5
+      },
+      {
+        "k": 2,
+        "novel": 1,
+        "fixed": 0.105,
+        "born": 0.412,
+        "cumRate": 0.667
+      },
+      {
+        "k": 3,
+        "novel": 0,
+        "fixed": 0.084,
+        "born": 0.68,
+        "cumRate": 0.5
+      },
+      {
+        "k": 4,
+        "novel": 1,
+        "fixed": 0.073,
+        "born": 0.412,
+        "cumRate": 0.6
+      },
+      {
+        "k": 5,
+        "novel": 0,
+        "fixed": 0.067,
+        "born": 0.624,
+        "cumRate": 0.5
+      },
+      {
+        "k": 6,
+        "novel": 1,
+        "fixed": 0.064,
+        "born": 0.412,
+        "cumRate": 0.571
+      },
+      {
+        "k": 7,
+        "novel": 0,
+        "fixed": 0.061,
+        "born": 0.604,
+        "cumRate": 0.5
+      },
+      {
+        "k": 8,
+        "novel": 1,
+        "fixed": 0.06,
+        "born": 0.412,
+        "cumRate": 0.556
+      },
+      {
+        "k": 9,
+        "novel": 0,
+        "fixed": 0.059,
+        "born": 0.596,
+        "cumRate": 0.5
+      },
+      {
+        "k": 10,
+        "novel": 1,
+        "fixed": 0.058,
+        "born": 0.412,
+        "cumRate": 0.545
+      },
+      {
+        "k": 11,
+        "novel": 0,
+        "fixed": 0.058,
+        "born": 0.592,
+        "cumRate": 0.5
+      }
+    ],
+    "stream_m": [
+      {
+        "k": 0,
+        "novel": 1,
+        "fixed": 1,
+        "born": 1,
+        "cumRate": 1
+      },
+      {
+        "k": 1,
+        "novel": 1,
+        "fixed": 0.167,
+        "born": 0.95,
+        "cumRate": 1
+      },
+      {
+        "k": 2,
+        "novel": 0,
+        "fixed": 0.105,
+        "born": 0.95,
+        "cumRate": 0.667
+      },
+      {
+        "k": 3,
+        "novel": 0,
+        "fixed": 0.084,
+        "born": 0.543,
+        "cumRate": 0.5
+      },
+      {
+        "k": 4,
+        "novel": 0,
+        "fixed": 0.073,
+        "born": 0.329,
+        "cumRate": 0.4
+      },
+      {
+        "k": 5,
+        "novel": 0,
+        "fixed": 0.067,
+        "born": 0.21,
+        "cumRate": 0.333
+      },
+      {
+        "k": 6,
+        "novel": 0,
+        "fixed": 0.064,
+        "born": 0.139,
+        "cumRate": 0.286
+      },
+      {
+        "k": 7,
+        "novel": 0,
+        "fixed": 0.061,
+        "born": 0.093,
+        "cumRate": 0.25
+      },
+      {
+        "k": 8,
+        "novel": 0,
+        "fixed": 0.06,
+        "born": 0.064,
+        "cumRate": 0.222
+      },
+      {
+        "k": 9,
+        "novel": 0,
+        "fixed": 0.059,
+        "born": 0.05,
+        "cumRate": 0.2
+      },
+      {
+        "k": 10,
+        "novel": 0,
+        "fixed": 0.058,
+        "born": 0.05,
+        "cumRate": 0.182
+      },
+      {
+        "k": 11,
+        "novel": 0,
+        "fixed": 0.058,
+        "born": 0.05,
+        "cumRate": 0.167
+      }
+    ],
+    "stream_q": [
+      {
+        "k": 0,
+        "novel": 1,
+        "fixed": 1,
+        "born": 1,
+        "cumRate": 1
+      },
+      {
+        "k": 1,
+        "novel": 1,
+        "fixed": 0.167,
+        "born": 0.95,
+        "cumRate": 1
+      },
+      {
+        "k": 2,
+        "novel": 1,
+        "fixed": 0.105,
+        "born": 0.95,
+        "cumRate": 1
+      },
+      {
+        "k": 3,
+        "novel": 1,
+        "fixed": 0.084,
+        "born": 0.95,
+        "cumRate": 1
+      },
+      {
+        "k": 4,
+        "novel": 1,
+        "fixed": 0.073,
+        "born": 0.95,
+        "cumRate": 1
+      },
+      {
+        "k": 5,
+        "novel": 1,
+        "fixed": 0.067,
+        "born": 0.95,
+        "cumRate": 1
+      },
+      {
+        "k": 6,
+        "novel": 0,
+        "fixed": 0.064,
+        "born": 0.95,
+        "cumRate": 0.857
+      },
+      {
+        "k": 7,
+        "novel": 0,
+        "fixed": 0.061,
+        "born": 0.673,
+        "cumRate": 0.75
+      },
+      {
+        "k": 8,
+        "novel": 0,
+        "fixed": 0.06,
+        "born": 0.459,
+        "cumRate": 0.667
+      },
+      {
+        "k": 9,
+        "novel": 0,
+        "fixed": 0.059,
+        "born": 0.315,
+        "cumRate": 0.6
+      },
+      {
+        "k": 10,
+        "novel": 0,
+        "fixed": 0.058,
+        "born": 0.218,
+        "cumRate": 0.545
+      },
+      {
+        "k": 11,
+        "novel": 0,
+        "fixed": 0.058,
+        "born": 0.151,
+        "cumRate": 0.5
+      }
+    ]
+  }
+}

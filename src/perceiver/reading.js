@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, bornNoveltyReserve, reserveMassFor } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -272,7 +272,39 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) {
+    // THE NOVELTY RESERVE. Default: the fixed NOVELTY constant → byte-identical to the golden.
+    // Opt-in (opts.calibrateReserve, the RULES_REV promotion path): a Born-rule, CONTEXTUAL
+    // reserve — the reading's own γ-decayed rate of becoming-something against the recurrence
+    // void, so the mass held for the unseen tracks the local novelty regime instead of decaying
+    // with step-count (experiments/cycles/001-novelty-reserve). The per-step novelty magnitudes
+    // are built from the SAME proposition-basis atoms and the SAME horizon filter as the prior,
+    // so the reserve is horizon-scoped for free; the core helper is modality-agnostic.
+    let novelty = NOVELTY;
+    if (opts.calibrateReserve) {
+      const byStep = Array.from({ length: at }, () => new Set());
+      for (const e of events) {
+        const s = e.sentIdx;
+        if (s == null || s < 0 || s >= at || !inHorizon(e)) continue;
+        const dep = byStep[s];
+        if (e.op === 'INS') dep.add(`f:${e.id}`);
+        else if (e.op === 'CON' || e.op === 'SIG') { dep.add(`f:${e.src}`); dep.add(`f:${e.tgt}`); dep.add(`p:${e.src}|${e.via || ''}|${e.tgt}`); }
+        else if (e.op === 'DEF' && e.key === 'predicate') { dep.add(`f:${e.id}`); dep.add(`d:${e.id}|${e.value}`); }
+      }
+      const seenBasis = new Set();
+      const newMassSeq = byStep.map((dep) => {
+        let mag = 0;
+        for (const a of dep) if (!seenBasis.has(a)) { mag++; seenBasis.add(a); }
+        return mag;
+      });
+      const reserve = bornNoveltyReserve(newMassSeq, { gamma: γ, alpha: opts.alpha });
+      if (reserve != null) {
+        const sum = [...priorProp.values()].reduce((s, m) => s + m, 0);
+        novelty = reserveMassFor(reserve, sum);
+      }
+    }
+    out.pNext = forwardDist(priorProp, { novelty });
+  }
   return out;
 };
 
