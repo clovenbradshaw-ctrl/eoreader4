@@ -68,6 +68,26 @@
 //                    meaning-space analogue of bayesSurprise. null when the
 //                    classifier is not live.
 //
+//   bridgeSurprise   surprise over CONNECTIVITY, not mass. The bayes basis (figures,
+//                    propositions, predicates) has no atom for the connectivity of the
+//                    entity graph, so a line that BONDS two entities sitting in separate
+//                    regions deposits almost nothing the KL can move on — both endpoints
+//                    already carry mass, the one new triple is a small deposit. This
+//                    channel reads that gap directly: how much a line's bonds collapse
+//                    the prior SEPARATION between the entities they connect, off graph
+//                    topology alone (the entity bond graph reading.js builds + the SYN
+//                    union-find the engine uses for identity merges). Per line k: G is
+//                    the undirected graph of every CON/SIG/SYN edge with sentIdx<k;
+//                    a line's bonds are its arrivals; bridge(a,b) is maximal (1) when a,b
+//                    were in different components, (δ-1)/D∞ at same-component geodesic δ,
+//                    0 when already adjacent. bridgeSurprise = MAX bridge over arrivals
+//                    whose BOTH endpoints existed before line k. Always on (embedder-
+//                    independent), structural like bayesSurprise but over STRUCTURE not
+//                    mass. STABLE across surface rephrasings (it reads bonds, not cues);
+//                    0 on a fresh-entity line (new mass, the mass channels' job) and on a
+//                    contradiction (an unstated-expectation violation leaves connectivity
+//                    unchanged — the enacted significance loop's province, not this one's).
+//
 // CAUSALITY. Line k sees lines 0..k-1 only; no lookahead.
 //   - surprisal: a causal LM attends left-to-right; one forward over the
 //     concatenation conditions each token on prior tokens only.
@@ -77,6 +97,8 @@
 //   - bayesSurprise: the reader is fed the CUMULATIVE log through line k (re-parse of
 //     lines[0..k]) and read at that cursor — no future line shapes the parse.
 //   - figureBandKL: the prior is the committed-cell histogram of lines 0..k-1.
+//   - bridgeSurprise: same re-parse of lines[0..k]; G is built from bonds with
+//     sentIdx<k, the arrival is line k's own bonds — no future line shapes the parse.
 //
 // THE UNIT IS THE INPUT LINE, not the proposition. Parsed units are mapped back to
 // their source line by character offset (a forward-scanning indexOf, robust to a
@@ -115,6 +137,12 @@ const GAMMA       = 0.7;   // the reading.js prior weight (recency decay)
 const EMBED_MODEL = 'Xenova/paraphrase-multilingual-MiniLM-L12-v2';   // the MiniLM organ (embed.js)
 const GEN_MODEL   = 'HuggingFaceTB/SmolLM2-360M-Instruct';            // the SmolLM2 ONNX path (onnx.js)
 const CONDITIONS  = ['unmarked', 'marked'];
+// bridgeSurprise's one normalizer: the geodesic ceiling D∞ — the distance at which a
+// same-component pair reads as effectively separate (a full bridge). A CONSTANT, not
+// tuned to the stimulus: the dominant signal (different components → 1.0) does not use
+// it at all; D∞ only scales the weaker same-component gradient (δ-1)/D∞. Six is the
+// classic "degrees of separation" ceiling — large for an entity bond graph this size.
+const BRIDGE_DINF = 6;
 
 const round3 = (x) => (x == null ? null : Math.round(x * 1000) / 1000);
 let embedderError = null, lmError = null, surprisalNote = null;
@@ -228,6 +256,122 @@ function bayesPerLine(docId, lines) {
     prop.push(cs.length);
   }
   return { bayes, prop, fallbacks };
+}
+
+// ── bridgeSurprise: the engine's connectivity channel, causally, per line ────────
+// Reads one line's bonds against the bond graph that stood before it. G is the
+// undirected graph of every CON/SIG/SYN edge with sentIdx < kMin (nodes are the entity
+// ids AND object/NP referent ids reading.js logs as bond endpoints). The line's own
+// CON/SIG bonds are the arrivals, PLUS any two distinct subjects that attach to the same
+// object on the line, read as the 2-path (a — object — b) — the load-bearing clause,
+// because the weak SVO parser will not draw that convergence as a direct bond, but a
+// shared object already puts two subjects at distance two in the graph. bridge(a,b) is
+// 1 when a,b were in different components, (δ-1)/D∞ at same-component geodesic δ, 0 when
+// already adjacent (a re-bond confirms, it does not bridge). The disconnected test reuses
+// the union-find primitive; BFS runs only when a and b are same-component. Returns the
+// MAX bridge over arrivals where BOTH endpoints existed before line kMin — a fresh
+// isolated entity is new mass, not a bridge, and scores 0.
+function bridgeSurpriseAt(log, kMin) {
+  const events = log.snapshot();
+  // firstSeen[node] — the earliest line a node appears (INS id or bond endpoint), so
+  // "existed before line k" is firstSeen < kMin (a first-seen-here endpoint is excluded).
+  const firstSeen = new Map();
+  const see = (id, s) => {
+    if (id == null || s == null) return;
+    const p = firstSeen.get(id);
+    if (p == null || s < p) firstSeen.set(id, s);
+  };
+  // The union-find primitive (the engine's SYN identity merge, here over every G edge)
+  // for the O(1) disconnected test; the adjacency for the same-component BFS.
+  const parent = new Map();
+  const find = (x) => { let p = parent.get(x) ?? x; while (p !== (parent.get(p) ?? p)) p = parent.get(p) ?? p; return p; };
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
+  const adj = new Map();
+  const link = (a, b) => {
+    if (!adj.has(a)) adj.set(a, new Set());
+    if (!adj.has(b)) adj.set(b, new Set());
+    adj.get(a).add(b); adj.get(b).add(a);
+  };
+
+  const arrivals  = [];          // [a,b] pairs delivered at line k
+  const sharedObj = new Map();   // line-k object → Set(distinct subjects bonded to it)
+  for (const e of events) {
+    const s = e.sentIdx;
+    if (e.op === 'INS') { see(e.id, s); continue; }
+    const isBond = e.op === 'CON' || e.op === 'SIG';
+    const isSyn  = e.op === 'SYN' && e.from != null && e.to != null;
+    if (!isBond && !isSyn) continue;
+    const a = isSyn ? e.from : e.src;
+    const b = isSyn ? e.to   : e.tgt;
+    if (a == null || b == null || s == null) continue;
+    see(a, s); see(b, s);
+    if (s < kMin) {                 // G — the bond graph before line k
+      if (a !== b) { union(a, b); link(a, b); }
+    } else if (isBond) {            // the line's own bonds (a SYN at k is a merge, not a bond)
+      arrivals.push([a, b]);
+      if (!sharedObj.has(b)) sharedObj.set(b, new Set());
+      sharedObj.get(b).add(a);
+    }
+  }
+  // The shared-object 2-paths: distinct subjects on one object, read as (a — obj — b).
+  for (const subs of sharedObj.values()) {
+    const arr = [...subs];
+    for (let i = 0; i < arr.length; i++)
+      for (let j = i + 1; j < arr.length; j++) arrivals.push([arr[i], arr[j]]);
+  }
+
+  const existedBefore = (id) => { const f = firstSeen.get(id); return f != null && f < kMin; };
+  const bfs = (src, dst) => {     // geodesic hop count; only called when same-component
+    if (src === dst) return 0;
+    const seen = new Set([src]); let frontier = [src], d = 0;
+    while (frontier.length) {
+      d++; const next = [];
+      for (const u of frontier) for (const v of (adj.get(u) || [])) {
+        if (v === dst) return d;
+        if (!seen.has(v)) { seen.add(v); next.push(v); }
+      }
+      frontier = next;
+    }
+    return Infinity;
+  };
+  const bridge = (a, b) => {
+    if (a === b) return 0;
+    if (find(a) !== find(b)) return 1;                          // different components — maximal collapse
+    const dist = bfs(a, b);                                     // same component — geodesic
+    if (dist <= 1) return 0;                                    // already adjacent — confirmation, not a bridge
+    return Math.min(1, Math.max(0, (dist - 1) / BRIDGE_DINF));
+  };
+
+  let max = 0;
+  for (const [a, b] of arrivals) {
+    if (a === b || !existedBefore(a) || !existedBefore(b)) continue;
+    const br = bridge(a, b);
+    if (br > max) max = br;
+  }
+  return max;
+}
+
+// For each line k: re-parse the cumulative prefix lines[0..k] (so no future line shapes
+// the parse), map the line's units back by char offset (the bayes channel's discipline),
+// and read bridgeSurprise with line k's bonds as the arrival and the bonds before it as
+// G. Because line k is the prefix's LAST line, every unit with sentIdx >= kMin is its own.
+function bridgePerLine(docId, lines) {
+  const out = [];
+  for (let k = 0; k < lines.length; k++) {
+    const prefix = lines.slice(0, k + 1);
+    const joined = prefix.join('\n');
+    const doc    = parseText(joined, { docId });
+    const ranges = lineRanges(prefix);
+    const offs   = unitOffsets(joined, doc.units);
+    const unitsOfK = [];
+    for (let c = 0; c < doc.units.length; c++) {
+      const o = offs[c];
+      if (o >= 0 && o >= ranges[k].start && o <= ranges[k].end) unitsOfK.push(c);
+    }
+    const kMin = unitsOfK.length ? Math.min(...unitsOfK) : doc.units.length - 1;   // last-unit fallback
+    out.push(round3(bridgeSurpriseAt(doc.log, kMin)));
+  }
+  return out;
 }
 
 // ── embeddingNovelty: 1 - cos(line, γ-mean of prior lines) ───────────────────────
@@ -363,6 +507,7 @@ if (!lm) console.log(`#   WARNING: SmolLM2 did not load — surprisal + predictS
 console.log(`# classifier: ${classifierLive ? 'geometric reader LIVE (centroids-27 + MiniLM)' : 'NOT live — phasepostMargin + figureBandKL null'}`);
 if (embedder && !classifierLive) console.log('#   WARNING: phasepost columns null (no committing classifier).');
 console.log(`# bayesSurprise: engine channel readingAt().bayesBits (always on, embedder-independent), γ=${GAMMA}`);
+console.log(`# bridgeSurprise: engine channel — connectivity collapse over the entity bond graph (always on, embedder-independent), D∞=${BRIDGE_DINF}`);
 
 const records = [];
 const summaries = [];
@@ -373,6 +518,7 @@ for (const [docId, conds] of Object.entries(stim.documents)) {
     if (!Array.isArray(lines) || !lines.length) continue;
     const { bayes, prop, fallbacks } = bayesPerLine(docId, lines);
     totalFallbacks += fallbacks;
+    const bridge    = bridgePerLine(docId, lines);   // connectivity channel, pure engine
     const novelty   = await embeddingNoveltyPerLine(embedder, lines);
     const surprisal = await surprisalPerLine(lm, lines);
     const meaning   = await meaningSurprisePerLine(embedder, lines);
@@ -386,6 +532,7 @@ for (const [docId, conds] of Object.entries(stim.documents)) {
         surprisal: surprisal[k], embeddingNovelty: novelty[k], meaningSurprise: meaning[k],
         predictSurprise: predict[k], bayesSurprise: bayes[k], figureBandKL: figureBandKL[k],
         phasepostMargin: phasepostMargin[k], calibratedBand: band, propCount: prop[k],
+        bridgeSurprise: bridge[k],
       });
     }
     summaries.push({
@@ -397,11 +544,14 @@ for (const [docId, conds] of Object.entries(stim.documents)) {
       rankByBayesSurprise:    rankDesc(bayes),
       rankByFigureBandKL:     rankDesc(figureBandKL),
       rankByPhasepostMargin:  rankDesc(phasepostMargin),
+      rankByBridgeSurprise:   rankDesc(bridge),
     });
     const commits = phasepostMargin.filter(v => v != null).length;
+    const bridgeFires = bridge.filter(v => v > 0).length;
     console.log(`  ${docId}/${condition}: ${lines.length} lines · band=${band} · ` +
                 `surprisal=${surprisal.every(v => v == null) ? 'null' : 'ok'} · ` +
-                `predict=${predict.every(v => v == null) ? 'null' : 'ok'} · figureCommits=${commits}/${lines.length}`);
+                `predict=${predict.every(v => v == null) ? 'null' : 'ok'} · figureCommits=${commits}/${lines.length} · ` +
+                `bridgeFires=${bridgeFires}/${lines.length}`);
   }
 }
 if (surprisalNote) console.log(`#   NOTE: ${surprisalNote}`);
