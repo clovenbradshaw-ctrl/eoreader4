@@ -1,88 +1,115 @@
 #!/usr/bin/env node
 // reveal-discrimination — a P0 measurement in the one-cursor pattern.
 //
-// READ-ONLY. Touches no production code, changes no rules. It measures THREE
-// independent quantities per line of every document in data/reveal-stimulus.json,
-// over PRIOR CONTEXT ONLY, and emits them to data/reveal-out.jsonl. It selects
-// nothing, scores nothing, flags no "reveal". There is no answer key in the input
-// and this script does not invent one. The selection happens elsewhere, against a
-// held key this script never sees.
+// READ-ONLY. Touches no production code, changes no rules. It emits, per line of
+// every document in data/reveal-stimulus.json, every surprise/novelty quantity the
+// engine already computes at that cursor — over PRIOR CONTEXT ONLY — to
+// data/reveal-out.jsonl. It selects nothing, scores nothing, flags no "reveal".
+// There is no answer key in the input and this script does not invent one. The
+// selection happens elsewhere, against a held key this script never sees.
 //
-// THE THREE CHANNELS measure three genuinely different things:
+// WHY THE SWEEP. The lexical Bayesian channel (bayesSurprise) failed the reveal
+// test under the held key: the planted reveal — a relational bond between two
+// entities already in the cast — barely moves the figure field, which is built from
+// the embedder-free lexical parse, so the reorganization left almost no structural
+// trace. Before building a new meaning KL, this measures whether anything the engine
+// ALREADY computes in MEANING space separates the reveal from the noise. It can come
+// back null; a null sweep is the finding (the honest next move would then be the
+// enacted significance loop, src/enact + docs/significance-loop.md — not another
+// channel). So this run reads off what exists; it invents no measure.
 //
-//   surprisal        token improbability (surface). Mean negative log2 probability
-//                    of the line's tokens under a generative backend, conditioned
-//                    on every prior line in the same condition. bits per token.
-//                    Backend: the transformers.js SmolLM2-360M ONNX path the repo's
-//                    onnx.js names (src/model/onnx.js) — the cheapest local model
-//                    that exposes a next-token distribution. The repo registers it
-//                    with phrase() only, so this script reads its next-token
-//                    distribution directly via the same ONNX causal-LM forward
-//                    (teacher-forced scoring), which is what propose() would expose.
-//                    If it will not load, surprisal is null for every line and a
-//                    warning prints at the top of the run — never a silent proxy.
+// THE CHANNELS, each read off an existing reader.
 //
-//   embeddingNovelty distance from the running meaning centroid (meaning space).
-//                    1 - cosine(embed(line), prior), where prior is the γ-weighted
-//                    mean of the embeddings of all prior lines (γ = 0.7, the
-//                    reading.js prior weight). embed() is the MiniLM organ
-//                    (paraphrase-multilingual-MiniLM-L12-v2 — the SAME model
-//                    src/model/embed.js loads in the browser; here it is loaded for
-//                    Node via the transformers.js npm package, identical weights and
-//                    space). This is the flat-retriever baseline: what a
-//                    novelty-ranking RAG reader treats as "new". It is identical to
-//                    the meaning reader's 1-cos surprise (src/enact/meaning.js).
-//                    If MiniLM will not load, embeddingNovelty is null for every
-//                    line and a warning prints — never a hash-space number, which
-//                    would measure spelling, not meaning.
+//   surprisal        token improbability (surface). Mean -log2 p of the line's
+//                    tokens under SmolLM2-360M (the transformers.js ONNX path
+//                    src/model/onnx.js names), conditioned on every prior line. One
+//                    causal forward per condition (teacher-forced — the next-token
+//                    distribution propose() would expose). null + warning if it
+//                    will not load.
+//
+//   embeddingNovelty 1 - cos(line, γ-weighted mean of prior-line embeddings),
+//                    γ=0.7. embed() is the MiniLM organ (paraphrase-multilingual-
+//                    MiniLM-L12-v2, the same model src/model/embed.js loads). The
+//                    flat-retriever baseline. (Equals meaningSurprise; kept as the
+//                    original named baseline.)
+//
+//   meaningSurprise  the meaning reader's own 1-cos surprise, read straight off
+//                    src/enact/meaning.js (buildMeaningRead): distance from the
+//                    γ-decayed semantic prior to the line, in MiniLM space. Same
+//                    quantity as embeddingNovelty, sourced from the engine reader
+//                    (clamped to [0,1]).
+//
+//   predictSurprise  embedding distance from the model's PREDICTED next line to the
+//                    actual next line, read off src/perceiver/predict.js
+//                    (predictNext): model.phrase predicts line k from lines k-4..k-1,
+//                    1 - cos(embed(prediction), embed(actual)). null at line 0 and
+//                    where the model/embedder are absent.
 //
 //   bayesSurprise    how far the figure-field POSTERIOR moves (graph reorganization).
-//                    D_KL(posterior ‖ prior) over the proposition/figure field, read
-//                    off the engine's own significance channel by stepping the reader
-//                    one line at a time: readingAt(doc, cursor).bayesBits
-//                    (src/perceiver/reading.js, the KL in src/core/surprise.js, per
-//                    docs/bayesian-surprise.md). This channel is built from the
-//                    LEXICAL parse (src/perceiver/parse) and is embedder-independent —
-//                    it is structural, not semantic, and is NOT surprisal in token
-//                    space at all. calibratedBand is the per-document confirm band
-//                    calibrateReader fits to this text's normal step (the scale the
-//                    KL was measured against); it does NOT enter ranking.
+//                    readingAt().bayesBits — D_KL(posterior‖prior) over the
+//                    proposition/figure field (src/core/surprise.js, per
+//                    docs/bayesian-surprise.md). Built from the LEXICAL parse, so it
+//                    is structural, NOT semantic — not in token space at all.
+//                    calibratedBand is the per-document calibrateReader confirm band
+//                    (the scale the KL was measured against); it does NOT rank.
 //
-// The three are designed to dissociate. This script emits all three honestly and
-// lets the held key sort it out. The run can come back negative — that is the point.
+//   phasepostMargin  the line's Figure-band cell-commit margin under the geometric
+//                    reader (src/classify/phasepost.js): own cell similarity minus
+//                    the nearest competitor's, in MiniLM centroid space. null when
+//                    the Figure band does not commit, or when the classifier is not
+//                    live (hash organ / no centroids — a phasepost number off the
+//                    hash organ is spelling, not meaning).
+//
+//   figureBandKL     D_KL over the Figure-band CELL distribution — the same KL core
+//                    (src/core/surprise.js surpriseAt) the bayes channel uses, but
+//                    over the meaning-space cells the classifier commits to: deposit
+//                    at line k is the committed Figure cell, prior is the γ-decayed
+//                    histogram of Figure cells committed on lines 0..k-1. The
+//                    meaning-space analogue of bayesSurprise. null when the
+//                    classifier is not live.
 //
 // CAUSALITY. Line k sees lines 0..k-1 only; no lookahead.
-//   - surprisal: a causal LM attends left-to-right, so one forward over the
-//     concatenated document already conditions each token on prior tokens only.
-//   - embeddingNovelty: the prior is the γ-mean of lines 0..k-1 by construction.
+//   - surprisal: a causal LM attends left-to-right; one forward over the
+//     concatenation conditions each token on prior tokens only.
+//   - embeddingNovelty / meaningSurprise: the prior is the γ-mass of lines 0..k-1.
+//   - predictSurprise: predictNext reads lines k-4..k-1 (context) and line k (the
+//     target) only.
 //   - bayesSurprise: the reader is fed the CUMULATIVE log through line k (re-parse of
-//     lines[0..k]) and read at that cursor, so the KL is posterior-after-k against
-//     prior-before-k, with no future line shaping the parse.
+//     lines[0..k]) and read at that cursor — no future line shapes the parse.
+//   - figureBandKL: the prior is the committed-cell histogram of lines 0..k-1.
 //
-// THE UNIT IS THE INPUT LINE, not the proposition. If the parser segments a line
-// into several propositions, each is mapped back to its source line by character
-// offset, and the line's bayesSurprise is the MAX proposition KL whose span falls
-// inside it (the reveal is one proposition; averaging dilutes it). propCount records
-// how many propositions a line carried.
+// THE UNIT IS THE INPUT LINE, not the proposition. Parsed units are mapped back to
+// their source line by character offset (a forward-scanning indexOf, robust to a
+// line splitting into several propositions); bayesSurprise is the MAX proposition KL
+// inside a line. propCount records how many propositions a line carried. On this
+// stimulus every line is one proposition (propCount = 1), reached via the live
+// offset path — verified at the end of the run by an offset-mapping integrity count
+// (zero fallbacks). (The earlier worry that the mapping silently fell through to the
+// last cursor does not hold here; the count proves it.)
 //
 //   Usage:  node scripts/reveal-discrimination.mjs
-//   Models load CPU-side via the transformers.js npm package; if it is not installed
-//   (it is gitignored, not a repo dependency), install it for this run with:
+//   Models load CPU-side via the transformers.js npm package (gitignored, not a repo
+//   dependency); install it for this run with:
 //       npm install --no-save @huggingface/transformers@4.2.0
-//   Without it, bayesSurprise still runs (pure engine); the two model channels
+//   Without it, bayesSurprise still runs (pure engine); the model/meaning channels
 //   degrade to null with a printed warning.
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { parseText }       from '../src/perceiver/parse/index.js';
-import { readingAt }       from '../src/perceiver/index.js';
-import { calibrateReader } from '../src/core/enacted/index.js';
+import { parseText }                from '../src/perceiver/parse/index.js';
+import { readingAt, predictNext }   from '../src/perceiver/index.js';
+import { calibrateReader }          from '../src/core/enacted/index.js';
+import { surpriseAt }               from '../src/core/index.js';
+import { buildMeaningRead }         from '../src/enact/meaning.js';
+import { createPhasepostClassifier } from '../src/classify/index.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const IN   = join(ROOT, 'data', 'reveal-stimulus.json');
-const OUT  = join(ROOT, 'data', 'reveal-out.jsonl');
+const IN             = join(ROOT, 'data', 'reveal-stimulus.json');
+const OUT            = join(ROOT, 'data', 'reveal-out.jsonl');
+const CELLS_FILE     = join(ROOT, 'data', 'phasepost-cells.json');
+const CENTROIDS_FILE = join(ROOT, 'data', 'centroids-27.json');
 
 const GAMMA       = 0.7;   // the reading.js prior weight (recency decay)
 const EMBED_MODEL = 'Xenova/paraphrase-multilingual-MiniLM-L12-v2';   // the MiniLM organ (embed.js)
@@ -90,10 +117,9 @@ const GEN_MODEL   = 'HuggingFaceTB/SmolLM2-360M-Instruct';            // the Smo
 const CONDITIONS  = ['unmarked', 'marked'];
 
 const round3 = (x) => (x == null ? null : Math.round(x * 1000) / 1000);
+let embedderError = null, lmError = null, surprisalNote = null;
 
 // ── transformers.js (optional, CPU) ──────────────────────────────────────────────
-// Resolved as a bare specifier from the repo's node_modules. Absent → both model
-// channels degrade to null; the engine channel is unaffected.
 let tf = null;
 try {
   tf = await import('@huggingface/transformers');
@@ -102,9 +128,9 @@ try {
   catch { tf = null; }
 }
 
-// The MiniLM organ for Node — same model, space, pooling, and normalization as the
-// browser embedder (src/model/embed.js). measuresMeaning:true: a cosine here is a
-// meaning-distance, the firewall the meaning reader and classifier read.
+// The MiniLM organ for Node — same model, space, pooling, normalization as the
+// browser embedder (src/model/embed.js). measuresMeaning:true is the firewall the
+// meaning reader and the classifier read to decide a cosine means meaning.
 async function loadEmbedder() {
   if (!tf) return null;
   try {
@@ -124,17 +150,38 @@ async function loadEmbedder() {
   } catch (e) { embedderError = e?.message || String(e); return null; }
 }
 
-// The SmolLM2-360M causal LM for Node — teacher-forced per-token scoring (the
-// next-token distribution propose() would expose), raw text, one forward per doc.
-async function loadScorer() {
+// SmolLM2-360M as one text-generation pipeline, serving BOTH:
+//   - teacher-forced logit scoring (surprisal), via pipe.model + pipe.tokenizer;
+//   - greedy generation (predictNext's model.phrase), via pipe(messages).
+async function loadLM() {
   if (!tf) return null;
   try {
-    const tok   = await tf.AutoTokenizer.from_pretrained(GEN_MODEL);
-    const model = await tf.AutoModelForCausalLM.from_pretrained(GEN_MODEL, { dtype: 'q4' });
-    return { id: 'smollm2-360m', model: GEN_MODEL, tok, model_: model };
-  } catch (e) { scorerError = e?.message || String(e); return null; }
+    const pipe = await tf.pipeline('text-generation', GEN_MODEL, { dtype: 'q4' });
+    return {
+      id: 'smollm2-360m', model: GEN_MODEL, tok: pipe.tokenizer, lm: pipe.model,
+      // The model.phrase contract predictNext drives (greedy → deterministic).
+      async phrase(messages, opts = {}) {
+        const out = await pipe(messages, { max_new_tokens: opts.maxTokens ?? 48, do_sample: false, return_full_text: false });
+        const g = Array.isArray(out) ? out[0]?.generated_text : out?.generated_text;
+        if (Array.isArray(g)) return String(g[g.length - 1]?.content || '').trim();
+        return String(g || '').trim();
+      },
+    };
+  } catch (e) { lmError = e?.message || String(e); return null; }
 }
-let embedderError = null, scorerError = null;
+
+// The geometric reader, wired exactly as src/boot/index.js wires it: the 27-cell
+// registry (phasepost-cells.json .CELLS) + the verified centroid bundle
+// (centroids-27.json) + the MiniLM organ. Live only when the embedder measures
+// meaning AND the centroids are present.
+function loadClassifier(embedder) {
+  if (!embedder) return null;
+  let cells = null, centroids = null;
+  try { cells = JSON.parse(readFileSync(CELLS_FILE, 'utf8')).CELLS || null; } catch {}
+  try { centroids = JSON.parse(readFileSync(CENTROIDS_FILE, 'utf8')); } catch {}
+  if (!cells || !centroids) return null;
+  return createPhasepostClassifier({ cells, centroids, embedder });
+}
 
 // ── bayesSurprise: the engine's significance channel, causally, per line ─────────
 // Char ranges of each line within lines.join("\n").
@@ -143,7 +190,8 @@ const lineRanges = (lines) => {
   for (const ln of lines) { r.push({ start: pos, end: pos + ln.length }); pos += ln.length + 1; }
   return r;
 };
-// First character offset of each parsed unit within the joined text, scanned forward.
+// First character offset of each parsed unit within the joined text, scanned forward
+// (handles a line splitting into several units and duplicate text). −1 if not found.
 const unitOffsets = (joined, units) => {
   const offs = []; let from = 0;
   for (const u of units) {
@@ -156,10 +204,11 @@ const unitOffsets = (joined, units) => {
 };
 
 // For each line k: re-parse the cumulative prefix lines[0..k] (so no future line
-// shapes the parse), map the parse's units back to source lines, and take the MAX
-// bayesBits over the units that fall inside line k. Returns per-line { bayes, prop }.
+// shapes the parse), map units back to source lines, and take the MAX bayesBits over
+// the units inside line k. Returns { bayes, prop, fallbacks } — fallbacks counts
+// lines where the offset map found nothing and the last-cursor fallback was used.
 function bayesPerLine(docId, lines) {
-  const bayes = [], prop = [];
+  const bayes = [], prop = []; let fallbacks = 0;
   for (let k = 0; k < lines.length; k++) {
     const prefix = lines.slice(0, k + 1);
     const joined = prefix.join('\n');
@@ -171,15 +220,14 @@ function bayesPerLine(docId, lines) {
       const o = offs[c];
       if (o >= 0 && o >= ranges[k].start && o <= ranges[k].end) cursorsOfK.push(c);
     }
-    // Fallback: if offset mapping found nothing (it never did on this set), the last
-    // unit of the prefix is line k's — the cumulative parse's final cursor.
-    const cs = cursorsOfK.length ? cursorsOfK : [doc.units.length - 1];
+    let cs = cursorsOfK;
+    if (!cs.length) { cs = [doc.units.length - 1]; fallbacks++; }   // last cursor is still a fair posterior-after-k
     let maxKL = 0;
     for (const c of cs) { const b = readingAt(doc, c).bayesBits; if (b > maxKL) maxKL = b; }
     bayes.push(round3(maxKL));
     prop.push(cs.length);
   }
-  return { bayes, prop };
+  return { bayes, prop, fallbacks };
 }
 
 // ── embeddingNovelty: 1 - cos(line, γ-mean of prior lines) ───────────────────────
@@ -200,10 +248,57 @@ async function embeddingNoveltyPerLine(embedder, lines) {
   return out;
 }
 
+// ── meaningSurprise: the engine meaning reader's 1-cos, read off src/enact/meaning.js
+async function meaningSurprisePerLine(embedder, lines) {
+  if (!embedder) return lines.map(() => null);
+  const mr = await buildMeaningRead({ units: lines, sentences: lines }, embedder, { gamma: GAMMA });
+  if (!mr) return lines.map(() => null);
+  return mr.surprise.map(round3);
+}
+
+// ── predictSurprise: 1 - cos(model-predicted next, actual next), via predict.js ──
+async function predictSurprisePerLine(lm, embedder, lines) {
+  if (!lm || !embedder) return lines.map(() => null);
+  const doc = { units: lines, sentences: lines };
+  const out = [null];                                  // line 0 has no prediction
+  for (let k = 1; k < lines.length; k++) {
+    const r = await predictNext(doc, k - 1, { model: lm, embedder, window: 4 });
+    out.push(r ? round3(r.surprise) : null);
+  }
+  return out;
+}
+
+// ── phasepostMargin + figureBandKL: the geometric reader's Figure band ───────────
+// Classify each line once (the classifier memoizes by query). phasepostMargin is the
+// Figure-band commit margin (null on no-commit). figureBandKL is the KL over the
+// committed Figure-cell field — the bayes KL core, in meaning-space cells.
+async function phasepostPerLine(classifier, lines) {
+  const nulls = lines.map(() => null);
+  if (!classifier || !classifier.isLive()) return { phasepostMargin: nulls, figureBandKL: nulls.slice() };
+  const figCell = [], margin = [];
+  for (const ln of lines) {
+    const p = await classifier.classify(ln);
+    figCell.push(p.figure?.cell ?? null);
+    margin.push(p.figure?.margin ?? null);
+  }
+  const figureBandKL = [];
+  for (let k = 0; k < lines.length; k++) {
+    const prior = new Map();
+    for (let j = 0; j < k; j++) {
+      const c = figCell[j]; if (c == null) continue;
+      prior.set(c, (prior.get(c) || 0) + Math.pow(GAMMA, k - 1 - j));
+    }
+    const deposit = new Map();
+    if (figCell[k] != null) deposit.set(figCell[k], 1);
+    figureBandKL.push(round3(surpriseAt(prior, deposit, { gamma: GAMMA }).bayesBits));
+  }
+  return { phasepostMargin: margin.map(round3), figureBandKL };
+}
+
 // ── surprisal: mean -log2 p per line under the causal LM, one forward, exact spans ─
-async function surprisalPerLine(scorer, lines) {
-  if (!scorer) return lines.map(() => null);
-  const { tok, model_ } = scorer;
+async function surprisalPerLine(lm, lines) {
+  if (!lm) return lines.map(() => null);
+  const tok = lm.tok, model = lm.lm;
   const bos = tok.bos_token_id ?? null;
   const enc = (s) => tok.encode(s, { add_special_tokens: false });
   // Cumulative token counts over lines[0..k].join("\n"); verify prefix-monotonic so
@@ -215,7 +310,7 @@ async function surprisalPerLine(scorer, lines) {
     if (cur.length < prev.length) { monotonic = false; break; }
     for (let i = 0; i < prev.length; i++) if (cur[i] !== prev[i]) { monotonic = false; break; }
   }
-  if (!monotonic) { surprisalNote = `tokenizer non-monotonic on a document — surprisal null there`; return lines.map(() => null); }
+  if (!monotonic) { surprisalNote = 'tokenizer non-monotonic on a document — surprisal null there'; return lines.map(() => null); }
 
   const full   = encs[encs.length - 1];
   const ids    = bos != null ? [bos, ...full] : [...full];
@@ -225,7 +320,7 @@ async function surprisalPerLine(scorer, lines) {
 
   const input_ids      = new tf.Tensor('int64', BigInt64Array.from(ids.map(BigInt)), [1, T]);
   const attention_mask = new tf.Tensor('int64', BigInt64Array.from(ids.map(() => 1n)), [1, T]);
-  const out = await model_({ input_ids, attention_mask });
+  const out = await model({ input_ids, attention_mask });
   const [, , V] = out.logits.dims;
   const arr = out.logits.data;
   // logits at position p (0-based) score token at ids[p+1].
@@ -240,14 +335,13 @@ async function surprisalPerLine(scorer, lines) {
   const surprisal = [];
   for (let k = 0; k < lines.length; k++) {
     const sTok = (k === 0 ? 0 : e[k - 1]) + bosOff;   // first ids index of line k
-    const eTok = e[k] + bosOff;                        // one past line k's last token
+    const eTok = e[k] + bosOff;                         // one past line k's last token
     let bits = 0, n = 0;
     for (let j = sTok; j < eTok; j++) { if (j < 1) continue; bits += tokenBits(j - 1, ids[j]); n++; }
     surprisal.push(n ? round3(bits / n) : null);
   }
   return surprisal;
 }
-let surprisalNote = null;
 
 // Descending rank of line indices by a measure; nulls excluded; ties by lineIdx asc.
 const rankDesc = (vals) =>
@@ -256,46 +350,63 @@ const rankDesc = (vals) =>
 
 // ── run ──────────────────────────────────────────────────────────────────────────
 const stim = JSON.parse(readFileSync(IN, 'utf8'));
-const embedder = await loadEmbedder();
-const scorer   = await loadScorer();
+const embedder   = await loadEmbedder();
+const lm         = await loadLM();
+const classifier = loadClassifier(embedder);
+const classifierLive = !!(classifier && classifier.isLive());
 
-console.log('# reveal-discrimination — read-only measurement (one-cursor P0)');
-console.log(`# embedder (embeddingNovelty): ${embedder ? `${embedder.id} · ${embedder.model} · measuresMeaning=true` : 'NONE'}`);
-if (!embedder) console.log(`#   WARNING: MiniLM did not load — embeddingNovelty is null for every line.${embedderError ? ' (' + embedderError + ')' : tf ? '' : ' (transformers.js not installed: npm install --no-save @huggingface/transformers@4.2.0)'}`);
-console.log(`# backend  (surprisal):        ${scorer ? `${scorer.id} · ${scorer.model}` : 'NONE'}`);
-if (!scorer) console.log(`#   WARNING: no propose-capable backend loaded — surprisal is null for every line.${scorerError ? ' (' + scorerError + ')' : ''}`);
+console.log('# reveal-discrimination — read-only meaning-space sweep (one-cursor P0)');
+console.log(`# embedder:   ${embedder ? `${embedder.id} · ${embedder.model} · measuresMeaning=true` : 'NONE'}`);
+if (!embedder) console.log(`#   WARNING: MiniLM did not load — embeddingNovelty/meaningSurprise/predictSurprise/phasepost columns null.${embedderError ? ' (' + embedderError + ')' : tf ? '' : ' (npm install --no-save @huggingface/transformers@4.2.0)'}`);
+console.log(`# backend:    ${lm ? `${lm.id} · ${lm.model} (surprisal + predictSurprise)` : 'NONE'}`);
+if (!lm) console.log(`#   WARNING: SmolLM2 did not load — surprisal + predictSurprise null.${lmError ? ' (' + lmError + ')' : ''}`);
+console.log(`# classifier: ${classifierLive ? 'geometric reader LIVE (centroids-27 + MiniLM)' : 'NOT live — phasepostMargin + figureBandKL null'}`);
+if (embedder && !classifierLive) console.log('#   WARNING: phasepost columns null (no committing classifier).');
 console.log(`# bayesSurprise: engine channel readingAt().bayesBits (always on, embedder-independent), γ=${GAMMA}`);
 
 const records = [];
 const summaries = [];
+let totalFallbacks = 0;
 for (const [docId, conds] of Object.entries(stim.documents)) {
   for (const condition of CONDITIONS) {
     const lines = conds[condition];
     if (!Array.isArray(lines) || !lines.length) continue;
-    const { bayes, prop } = bayesPerLine(docId, lines);
+    const { bayes, prop, fallbacks } = bayesPerLine(docId, lines);
+    totalFallbacks += fallbacks;
     const novelty   = await embeddingNoveltyPerLine(embedder, lines);
-    const surprisal = await surprisalPerLine(scorer, lines);
+    const surprisal = await surprisalPerLine(lm, lines);
+    const meaning   = await meaningSurprisePerLine(embedder, lines);
+    const predict   = await predictSurprisePerLine(lm, embedder, lines);
+    const { phasepostMargin, figureBandKL } = await phasepostPerLine(classifier, lines);
     const band = round3(calibrateReader(bayes).confirmBand);
 
     for (let k = 0; k < lines.length; k++) {
       records.push({
         docId, condition, lineIdx: k, text: lines[k],
-        surprisal: surprisal[k], embeddingNovelty: novelty[k],
-        bayesSurprise: bayes[k], calibratedBand: band, propCount: prop[k],
+        surprisal: surprisal[k], embeddingNovelty: novelty[k], meaningSurprise: meaning[k],
+        predictSurprise: predict[k], bayesSurprise: bayes[k], figureBandKL: figureBandKL[k],
+        phasepostMargin: phasepostMargin[k], calibratedBand: band, propCount: prop[k],
       });
     }
     summaries.push({
       summary: true, docId, condition,
       rankBySurprisal:        rankDesc(surprisal),
       rankByEmbeddingNovelty: rankDesc(novelty),
+      rankByMeaningSurprise:  rankDesc(meaning),
+      rankByPredictSurprise:  rankDesc(predict),
       rankByBayesSurprise:    rankDesc(bayes),
+      rankByFigureBandKL:     rankDesc(figureBandKL),
+      rankByPhasepostMargin:  rankDesc(phasepostMargin),
     });
+    const commits = phasepostMargin.filter(v => v != null).length;
     console.log(`  ${docId}/${condition}: ${lines.length} lines · band=${band} · ` +
                 `surprisal=${surprisal.every(v => v == null) ? 'null' : 'ok'} · ` +
-                `embeddingNovelty=${novelty.every(v => v == null) ? 'null' : 'ok'}`);
+                `predict=${predict.every(v => v == null) ? 'null' : 'ok'} · figureCommits=${commits}/${lines.length}`);
   }
 }
 if (surprisalNote) console.log(`#   NOTE: ${surprisalNote}`);
+console.log(`# offset-mapping integrity: ${totalFallbacks} fallback(s) across ${records.length} lines ` +
+            `(0 = every line mapped by character offset; propCount is the true proposition count).`);
 
 writeFileSync(OUT, [...records, ...summaries].map(r => JSON.stringify(r)).join('\n') + '\n');
-console.log(`\n# wrote ${records.length} line records + ${summaries.length} summaries → ${OUT.replace(ROOT + '/', '')}`);
+console.log(`# wrote ${records.length} line records + ${summaries.length} summaries → ${OUT.replace(ROOT + '/', '')}`);
