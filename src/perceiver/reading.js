@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist, noveltyReserve } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyReserve, bridgeSurprise } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -300,6 +300,18 @@ export const readingAt = (doc, cursor, opts = {}) => {
     out.reserveFig = pNovel;
     out.totalFig   = round(total);
     out.noveltyReserve = round(novFig);   // the reserve AMPLITUDE (constant, or signal-derived)
+  }
+  // The CONNECTIVITY channel (the core's bridgeSurprise) — OPT-IN so default reading
+  // stays byte-identical (the parity gate). The mass surprise above moves on what
+  // arrived; this moves on how this line's bonds collapse the prior SEPARATION between
+  // their (coref-resolved) endpoints — the structural reveal `bayes` is blind to (a bond
+  // between two standing entities barely moves the mass KL, yet it can merge two regions
+  // of the graph). Reads the same log at the same cursor, causally. Modality-agnostic:
+  // it sees only CON/SIG bonds and the SYN-merge identity quotient.
+  if (opts.bridge) {
+    const { bridge, axis } = bridgeSurprise(doc.log, at);
+    out.bridge = round(bridge);
+    out.bridgeAxis = axis;       // [labelA, labelB] of the bridging pair, or null
   }
   return out;
 };

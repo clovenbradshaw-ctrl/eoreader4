@@ -237,6 +237,33 @@
         "Helen waved from the porch until the last car turned the corner.",
         "The dishes waited in the sink until morning."
       ]
+    },
+    "mentor-reveal": {
+      "_note": "Isolation test for bridgeSurprise. Reveal at index 8 is a pure simple-SVO bond between two entities established in separate components in prior context. No compound subjects, no new entities, no implicit connection. This is the ideal case for the bridge channel.",
+      "unmarked": [
+        "Vera founded the organization in 2019.",
+        "Malik joined as its first staff member.",
+        "The office was on Clement Street, in the inner Richmond.",
+        "Vera handled all the grant applications herself.",
+        "Malik wrote the curriculum for the youth program.",
+        "The board approved the second-year budget with some relief.",
+        "She set up the mailing list in January.",
+        "He spent most of February drafting the pilot report.",
+        "Vera trained Malik.",
+        "The pilot launched that spring."
+      ],
+      "marked": [
+        "Vera founded the organization in 2019.",
+        "Malik joined as its first staff member.",
+        "The office was on Clement Street, in the inner Richmond.",
+        "Vera handled all the grant applications herself.",
+        "Malik wrote the curriculum for the youth program.",
+        "The board approved the second-year budget with some relief.",
+        "She set up the mailing list in January.",
+        "He spent most of February drafting the pilot report.",
+        "It was Vera who had trained Malik from the start.",
+        "The pilot launched that spring."
+      ]
     }
   }
 }

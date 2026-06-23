@@ -179,3 +179,43 @@ test('parseText exposes a modality-neutral units list', () => {
   assert.equal(doc.modality, 'text');
   assert.deepEqual(doc.units, doc.sentences);
 });
+
+test('compound subject: "A and B verb O" emits one bond per co-subject to the same object', () => {
+  // "Vera and Malik attended the meeting" — both Vera (established in line 0) and
+  // Malik (line 1) bond to the shared object. Prior context is needed so both names
+  // are admitted before the compound clause is parsed.
+  const doc = parseText(
+    'Vera founded the organization.\nMalik joined the staff.\nVera and Malik attended the meeting.',
+    { docId: 'cs1' });
+  const evs = doc.log.snapshot();
+  const atLine2 = evs.filter(e => e.sentIdx === 2 && (e.op === 'CON' || e.op === 'SIG'));
+  const hasBoth = atLine2.some(e => e.src === 'vera') && atLine2.some(e => e.src === 'malik');
+  assert.ok(hasBoth, 'both co-subjects emit a bond in the compound clause');
+  const targets = atLine2.map(e => e.tgt);
+  assert.ok(targets.filter(t => t === targets[0]).length >= 2 || new Set(targets).size === 1,
+    'both bonds share the same object');
+});
+
+test('compound subject: each co-subject gets its own bond, objects do not cross', () => {
+  // "Delgado and Reyes listed the address" — the shared object produces
+  // CON(delgado, ...) AND CON(reyes, ...), not a cross-subject bond.
+  const doc = parseText(
+    'Delgado chaired the committee.\nReyes attended the sessions.\nDelgado and Reyes listed the address.',
+    { docId: 'cs2' });
+  const evs = doc.log.snapshot();
+  const atReveal = evs.filter(e => e.sentIdx === 2 && (e.op === 'CON' || e.op === 'SIG'));
+  const srcs = atReveal.map(e => e.src);
+  assert.ok(srcs.includes('delgado'), 'Delgado bonds');
+  assert.ok(srcs.includes('reyes'),   'Reyes bonds');
+  assert.ok(!atReveal.some(e => e.src === 'delgado' && e.tgt === 'reyes'), 'no spurious cross-bond');
+  assert.ok(!atReveal.some(e => e.src === 'reyes' && e.tgt === 'delgado'), 'no spurious cross-bond (rev)');
+});
+
+test('compound subject does not fire on a single-subject clause (no regression)', () => {
+  // The fix must not change single-subject behavior.
+  const doc = parseText('Alice met Bob. Alice left. Alice returned.', { docId: 'cs3' });
+  const meets = doc.log.snapshot().filter(e => e.op === 'CON' && e.via === 'met');
+  assert.equal(meets.length, 1, 'exactly one bond for a single-subject "met" clause');
+  assert.equal(meets[0].src, 'alice');
+  assert.equal(meets[0].tgt, 'bob');
+});
