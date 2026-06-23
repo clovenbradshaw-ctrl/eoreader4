@@ -1,0 +1,202 @@
+{
+  "items": [
+    {
+      "id": "m-b1",
+      "modality": "membrane",
+      "input": [
+        "A",
+        "A",
+        "A",
+        "A",
+        "B",
+        "C",
+        "D",
+        "A"
+      ]
+    },
+    {
+      "id": "m-b2",
+      "modality": "membrane",
+      "input": [
+        "P",
+        "P",
+        "P",
+        "P",
+        "P",
+        "Q",
+        "R",
+        "P"
+      ]
+    },
+    {
+      "id": "m-b3",
+      "modality": "membrane",
+      "input": [
+        "X",
+        "X",
+        "X",
+        "X",
+        "Y",
+        "Z",
+        "W",
+        "X"
+      ]
+    },
+    {
+      "id": "m-p1",
+      "modality": "membrane",
+      "input": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "A",
+        "A",
+        "A",
+        "A"
+      ]
+    },
+    {
+      "id": "m-p2",
+      "modality": "membrane",
+      "input": [
+        "P",
+        "Q",
+        "R",
+        "P",
+        "P",
+        "P",
+        "P",
+        "P"
+      ]
+    },
+    {
+      "id": "m-p3",
+      "modality": "membrane",
+      "input": [
+        "X",
+        "Y",
+        "Z",
+        "W",
+        "X",
+        "X",
+        "X",
+        "X"
+      ]
+    },
+    {
+      "id": "mu-b1",
+      "modality": "music",
+      "input": [
+        "C4",
+        "C4",
+        "C4",
+        "C4",
+        "D4",
+        "E4",
+        "F4",
+        "C4"
+      ]
+    },
+    {
+      "id": "mu-b2",
+      "modality": "music",
+      "input": [
+        "G4",
+        "G4",
+        "G4",
+        "G4",
+        "G4",
+        "A4",
+        "B4",
+        "G4"
+      ]
+    },
+    {
+      "id": "mu-b3",
+      "modality": "music",
+      "input": [
+        "E4",
+        "E4",
+        "E4",
+        "E4",
+        "F4",
+        "G4",
+        "A4",
+        "E4"
+      ]
+    },
+    {
+      "id": "mu-p1",
+      "modality": "music",
+      "input": [
+        "C4",
+        "D4",
+        "E4",
+        "F4",
+        "C4",
+        "C4",
+        "C4",
+        "C4"
+      ]
+    },
+    {
+      "id": "mu-p2",
+      "modality": "music",
+      "input": [
+        "G4",
+        "A4",
+        "B4",
+        "G4",
+        "G4",
+        "G4",
+        "G4",
+        "G4"
+      ]
+    },
+    {
+      "id": "mu-p3",
+      "modality": "music",
+      "input": [
+        "E4",
+        "F4",
+        "G4",
+        "A4",
+        "E4",
+        "E4",
+        "E4",
+        "E4"
+      ]
+    },
+    {
+      "id": "t-b1",
+      "modality": "text",
+      "input": "Mara entered the hall. Mara entered the hall. Mara entered the hall. Mara entered the hall. Tomas entered the hall. Yusuf entered the hall. Priya entered the hall. Mara entered the hall."
+    },
+    {
+      "id": "t-b2",
+      "modality": "text",
+      "input": "Ines entered the hall. Ines entered the hall. Ines entered the hall. Ines entered the hall. Ines entered the hall. Bao entered the hall. Caleb entered the hall. Ines entered the hall."
+    },
+    {
+      "id": "t-b3",
+      "modality": "text",
+      "input": "Omar entered the hall. Omar entered the hall. Omar entered the hall. Omar entered the hall. Vera entered the hall. Nadia entered the hall. Kofi entered the hall. Omar entered the hall."
+    },
+    {
+      "id": "t-p1",
+      "modality": "text",
+      "input": "Mara entered the hall. Tomas entered the hall. Yusuf entered the hall. Priya entered the hall. Mara entered the hall. Mara entered the hall. Mara entered the hall. Mara entered the hall."
+    },
+    {
+      "id": "t-p2",
+      "modality": "text",
+      "input": "Ines entered the hall. Bao entered the hall. Caleb entered the hall. Ines entered the hall. Ines entered the hall. Ines entered the hall. Ines entered the hall. Ines entered the hall."
+    },
+    {
+      "id": "t-p3",
+      "modality": "text",
+      "input": "Omar entered the hall. Vera entered the hall. Nadia entered the hall. Kofi entered the hall. Omar entered the hall. Omar entered the hall. Omar entered the hall. Omar entered the hall."
+    }
+  ]
+}

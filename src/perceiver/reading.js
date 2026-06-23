@@ -17,10 +17,18 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyAmplitude } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
-const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
+const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure (the constant path)
+
+// Context-sensitive novelty reserve (docs/spec-one-surprise.md; experiments/exp-001).
+// The reserve the reader holds for an unseen atom should track the recent newcomer RATE,
+// not a fixed constant. The amplitude is signal-derived (noveltyAmplitude); the Born step
+// is unchanged. It rides behind the RULES_REV gate: with the flag off and no explicit
+// opt the constant path runs byte-identical, so the golden suite is untouched.
+const RULES_REV =
+  (typeof process !== 'undefined' && process.env && /^(1|true|on)$/i.test(process.env.RULES_REV || '')) || false;
 
 export const readingAt = (doc, cursor, opts = {}) => {
   const units = doc.units || doc.sentences || [];
@@ -49,6 +57,13 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // apple in the back, the disowning) is significant, not only a change of cast.
   const priorProp = new Map(); // atom → γ-decayed presence before `at`
   const bump = (m, k, v = 1) => m.set(k, (m.get(k) || 0) + v);
+  // First-appearance step of each proposition atom — the only extra bookkeeping the
+  // context reserve needs. Recording it never touches priorProp, so the constant path
+  // stays byte-identical. An explicit opts.reserve forces the amplitude on/off for a
+  // blind measurement; otherwise it follows RULES_REV (default off).
+  const firstProp = new Map(); // atom → first sentIdx seen (for the novelty-rate amplitude)
+  const seeProp = (k, w, s) => { bump(priorProp, k, w); if (!firstProp.has(k)) firstProp.set(k, s); };
+  const useContextReserve = opts.reserve ? opts.reserve === 'context' : RULES_REV;
 
   const insAt = [];            // entity ids instantiated at `at`
   const relAt = [];            // { op, src, tgt, via } at `at`
@@ -94,17 +109,17 @@ export const readingAt = (doc, cursor, opts = {}) => {
       if (e.op === 'INS') {
         // ∫ of presence with an exponential (heat) kernel — the running mass.
         priorMass.set(e.id, (priorMass.get(e.id) || 0) + w);
-        bump(priorProp, `f:${e.id}`, w);
+        seeProp(`f:${e.id}`, w, e.sentIdx);
       } else if (e.op === 'CON' || e.op === 'SIG') {
         priorBond.add(`${e.src}|${e.tgt}`);
         // The bond's participants (incl. an NP referent target) and the proposition
         // itself enter the belief field — the relation is part of what is the case.
-        bump(priorProp, `f:${e.src}`, w);
-        bump(priorProp, `f:${e.tgt}`, w);
-        bump(priorProp, `p:${e.src}|${e.via || ''}|${e.tgt}`, w);
+        seeProp(`f:${e.src}`, w, e.sentIdx);
+        seeProp(`f:${e.tgt}`, w, e.sentIdx);
+        seeProp(`p:${e.src}|${e.via || ''}|${e.tgt}`, w, e.sentIdx);
       } else if (e.op === 'DEF' && e.key === 'predicate') {
-        bump(priorProp, `f:${e.id}`, w);
-        bump(priorProp, `d:${e.id}|${e.value}`, w);
+        seeProp(`f:${e.id}`, w, e.sentIdx);
+        seeProp(`d:${e.id}|${e.value}`, w, e.sentIdx);
       }
     } else if (e.sentIdx === at) {
       if (e.op === 'INS')                               insAt.push(e.id);
@@ -141,8 +156,13 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // P(figure) ∝ γ-mass; a reserve of NOVELTY holds probability for someone
   // not yet seen. Prediction = the expectation: the top of this distribution.
   const total = [...priorMass.values()].reduce((s, m) => s + m, 0);
-  const Z = total + NOVELTY;
-  const pNovel = NOVELTY / Z;
+  // The reserve amplitude. Constant path → NOVELTY (byte-identical). Context path → the
+  // γ-decayed count of figure first-appearances (firstIns), the recent newcomer rate in
+  // the figure basis, falling back to NOVELTY only at the empty opening (where the reserve
+  // is 1 regardless). Same fixed normaliser Z below.
+  const noveltyFig = useContextReserve ? (noveltyAmplitude(firstIns.values(), at, γ) || NOVELTY) : NOVELTY;
+  const Z = total + noveltyFig;
+  const pNovel = noveltyFig / Z;
   const pOf = (id) => (priorMass.get(id) || 0) / Z;
 
   const ranked = [...priorMass.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
@@ -217,7 +237,11 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  // The proposition-basis reserve amplitude — same mechanism as noveltyFig, over the
+  // proposition field's own first-appearances (firstProp). Carried unchanged through the
+  // fixed Born step in surpriseAt and forwardDist.
+  const noveltyProp = useContextReserve ? (noveltyAmplitude(firstProp.values(), at, γ) || NOVELTY) : NOVELTY;
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: noveltyProp, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -272,7 +296,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: noveltyProp });
   return out;
 };
 

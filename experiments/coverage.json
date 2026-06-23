@@ -1,0 +1,16 @@
+{
+  "updated": "2026-06-23",
+  "sites_exercised": {
+    "src/core/surprise.js": ["NOVELTY_RESERVE", "surpriseAt(novelty)", "forwardDist(novelty)", "noveltyAmplitude (new)"],
+    "src/perceiver/reading.js": ["NOVELTY constant", "figure-field reserve pNovel/Z", "priorProp first-appearance tracking", "forward reserve pNext.reserve"]
+  },
+  "organs_exercised": ["membrane (synthetic INS-only stream)", "music (ingestMusic)", "text (ingestText)"],
+  "cold_regions_remaining": [
+    "src/core/voidnull.js — GAP=2.5, alpha, MIN_SAMPLES=4 constants in the predictive path",
+    "src/perceiver/reading.js — GAMMA=0.7 horizon constant (hand-set decay)",
+    "src/predict/* — TRUST_K and fusion weight constants",
+    "EVA / REC thin cells; the empty SYN by Ground",
+    "image / frequency / video organs (untouched by EXP-001)"
+  ],
+  "notes": "P-001 was an inside-out constant hunt on the novelty reserve (the task's named exemplar). Next draws bias toward the cold regions above and toward an outside-in orthogonal collision."
+}

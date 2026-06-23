@@ -20,6 +20,31 @@
 
 export const NOVELTY_RESERVE = 1.0;   // reserved prior mass for an as-yet-unseen atom
 
+// noveltyAmplitude(firstSeen, at, gamma) — the CONTEXT-SENSITIVE reserve amplitude.
+//
+// NOVELTY_RESERVE above is a hand-set constant: a "one over mass plus one" reserve that
+// tracks only TOTAL accumulated mass and is blind to whether newcomers have recently
+// been arriving, so the reader grows equally certain that nothing new will come whether
+// it just saw a burst of newcomers or none. The fix is not a better constant — it is to
+// make the reserved amplitude track the recent novelty RATE. Each atom is a newcomer
+// exactly once, at its first appearance, so the γ-decayed count of first-appearances IS
+// that rate, under the SAME decay the figure field uses:
+//
+//     ν(at) = Σ γ^(at-1-s)   over each distinct atom's first step s < at
+//
+// High right after a burst of newcomers; it decays toward 0 across a long stretch of
+// pure confirmation. Context enters HERE, at the amplitude; the Born step is UNCHANGED —
+// `surpriseAt` and `forwardDist` already take `novelty` and use it identically, so the
+// same fixed law turns this context-sensitive amplitude into a context-sensitive reserve
+// for every sense alike. ν > 0 whenever anything has been seen (the first atom is itself
+// a newcomer), so only the genuine opening (nothing seen, ν = 0) is degenerate, and there
+// the reserve is 1 for any positive fallback (the no-data boundary, not a tuned number).
+export const noveltyAmplitude = (firstSeen, at, gamma) => {
+  let nu = 0;
+  for (const s of firstSeen) if (s < at) nu += Math.pow(gamma, at - 1 - s);
+  return nu;
+};
+
 // surpriseAt(prior, arrival, { gamma, novelty, axisLabel }) → { bayesBits, bayesBy }
 //
 //   prior     Map<atom, mass>  the γ-decayed profile BEFORE this step (the backward object)

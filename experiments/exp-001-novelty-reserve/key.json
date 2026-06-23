@@ -1,0 +1,272 @@
+{
+  "capability": "context-sensitive novelty reserve",
+  "claim": "The mass the reader reserves for an unseen atom tracks the RECENT RATE of newcomer arrivals (high after a burst, low after a confirmation plateau), not merely total accumulated mass. Under the live engine the reserve is the constant NOVELTY_RESERVE=1.0, so it is blind to newcomer recency.",
+  "cursor": 7,
+  "dissociation": "reserveContext(burst) > reserveContext(plateau), within each sense.",
+  "control": "burst/plateau pairs share atom multiset and length, so total prior mass is identical → reserveConstant CANNOT separate the labels (membrane/text exactly tied; music anti-correlated via interval bonds). A channel that separates is reading novelty rate, not mass.",
+  "mechanismTag": "gamma-decayed newcomer amplitude through the fixed Born step",
+  "senses": [
+    "music",
+    "text"
+  ],
+  "items": {
+    "m-b1": {
+      "mechanism": "burst",
+      "anchor": "A",
+      "newcomers": [
+        "B",
+        "C",
+        "D"
+      ],
+      "distinctOrder": {
+        "A": 0,
+        "B": 4,
+        "C": 5,
+        "D": 6
+      }
+    },
+    "m-b2": {
+      "mechanism": "burst",
+      "anchor": "P",
+      "newcomers": [
+        "Q",
+        "R"
+      ],
+      "distinctOrder": {
+        "P": 0,
+        "Q": 5,
+        "R": 6
+      }
+    },
+    "m-b3": {
+      "mechanism": "burst",
+      "anchor": "X",
+      "newcomers": [
+        "Y",
+        "Z",
+        "W"
+      ],
+      "distinctOrder": {
+        "X": 0,
+        "Y": 4,
+        "Z": 5,
+        "W": 6
+      }
+    },
+    "m-p1": {
+      "mechanism": "plateau",
+      "anchor": "A",
+      "newcomers": [
+        "B",
+        "C",
+        "D"
+      ],
+      "distinctOrder": {
+        "A": 0,
+        "B": 1,
+        "C": 2,
+        "D": 3
+      }
+    },
+    "m-p2": {
+      "mechanism": "plateau",
+      "anchor": "P",
+      "newcomers": [
+        "Q",
+        "R"
+      ],
+      "distinctOrder": {
+        "P": 0,
+        "Q": 1,
+        "R": 2
+      }
+    },
+    "m-p3": {
+      "mechanism": "plateau",
+      "anchor": "X",
+      "newcomers": [
+        "Y",
+        "Z",
+        "W"
+      ],
+      "distinctOrder": {
+        "X": 0,
+        "Y": 1,
+        "Z": 2,
+        "W": 3
+      }
+    },
+    "mu-b1": {
+      "mechanism": "burst",
+      "anchor": "C4",
+      "newcomers": [
+        "D4",
+        "E4",
+        "F4"
+      ],
+      "distinctOrder": {
+        "C4": 0,
+        "D4": 4,
+        "E4": 5,
+        "F4": 6
+      }
+    },
+    "mu-b2": {
+      "mechanism": "burst",
+      "anchor": "G4",
+      "newcomers": [
+        "A4",
+        "B4"
+      ],
+      "distinctOrder": {
+        "G4": 0,
+        "A4": 5,
+        "B4": 6
+      }
+    },
+    "mu-b3": {
+      "mechanism": "burst",
+      "anchor": "E4",
+      "newcomers": [
+        "F4",
+        "G4",
+        "A4"
+      ],
+      "distinctOrder": {
+        "E4": 0,
+        "F4": 4,
+        "G4": 5,
+        "A4": 6
+      }
+    },
+    "mu-p1": {
+      "mechanism": "plateau",
+      "anchor": "C4",
+      "newcomers": [
+        "D4",
+        "E4",
+        "F4"
+      ],
+      "distinctOrder": {
+        "C4": 0,
+        "D4": 1,
+        "E4": 2,
+        "F4": 3
+      }
+    },
+    "mu-p2": {
+      "mechanism": "plateau",
+      "anchor": "G4",
+      "newcomers": [
+        "A4",
+        "B4"
+      ],
+      "distinctOrder": {
+        "G4": 0,
+        "A4": 1,
+        "B4": 2
+      }
+    },
+    "mu-p3": {
+      "mechanism": "plateau",
+      "anchor": "E4",
+      "newcomers": [
+        "F4",
+        "G4",
+        "A4"
+      ],
+      "distinctOrder": {
+        "E4": 0,
+        "F4": 1,
+        "G4": 2,
+        "A4": 3
+      }
+    },
+    "t-b1": {
+      "mechanism": "burst",
+      "anchor": "Mara",
+      "newcomers": [
+        "Tomas",
+        "Yusuf",
+        "Priya"
+      ],
+      "distinctOrder": {
+        "Mara": 0,
+        "Tomas": 4,
+        "Yusuf": 5,
+        "Priya": 6
+      }
+    },
+    "t-b2": {
+      "mechanism": "burst",
+      "anchor": "Ines",
+      "newcomers": [
+        "Bao",
+        "Caleb"
+      ],
+      "distinctOrder": {
+        "Ines": 0,
+        "Bao": 5,
+        "Caleb": 6
+      }
+    },
+    "t-b3": {
+      "mechanism": "burst",
+      "anchor": "Omar",
+      "newcomers": [
+        "Vera",
+        "Nadia",
+        "Kofi"
+      ],
+      "distinctOrder": {
+        "Omar": 0,
+        "Vera": 4,
+        "Nadia": 5,
+        "Kofi": 6
+      }
+    },
+    "t-p1": {
+      "mechanism": "plateau",
+      "anchor": "Mara",
+      "newcomers": [
+        "Tomas",
+        "Yusuf",
+        "Priya"
+      ],
+      "distinctOrder": {
+        "Mara": 0,
+        "Tomas": 1,
+        "Yusuf": 2,
+        "Priya": 3
+      }
+    },
+    "t-p2": {
+      "mechanism": "plateau",
+      "anchor": "Ines",
+      "newcomers": [
+        "Bao",
+        "Caleb"
+      ],
+      "distinctOrder": {
+        "Ines": 0,
+        "Bao": 1,
+        "Caleb": 2
+      }
+    },
+    "t-p3": {
+      "mechanism": "plateau",
+      "anchor": "Omar",
+      "newcomers": [
+        "Vera",
+        "Nadia",
+        "Kofi"
+      ],
+      "distinctOrder": {
+        "Omar": 0,
+        "Vera": 1,
+        "Nadia": 2,
+        "Kofi": 3
+      }
+    }
+  }
+}
