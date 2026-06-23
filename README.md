@@ -624,6 +624,14 @@ comments on gates that were on.
   own **VOID**, where it has no grounded expectation). A collapsed controls panel
   carries the falsification battery. The model is never called
   (`ui/predict-view.js`, `docs/cursor-predictor.md`).
+- **Export for Substack** — the conversation as a self-contained HTML file that
+  pastes cleanly into the Substack editor: questions become headings, answers become
+  prose, any Markdown the model emitted is turned into real tags, and the `[sN]`
+  citations are kept as superscripts. HTML, **not** Markdown, because Substack parses
+  pasted HTML and renders pasted Markdown as literal characters — so the file carries
+  a one-click "Copy for Substack" button over the rendered article. The pure builders
+  are DOM-free and unit-tested, mirroring the JSONL exporters. See
+  [`docs/substack-export.md`](docs/substack-export.md).
 
 ## Run
 

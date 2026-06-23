@@ -26,6 +26,7 @@ import { mountFeed } from './feed-view.js';
 import { mountPredict } from './predict-view.js';
 import { mountIdle } from './idle-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
+import { exportSubstack } from './substack.js';
 
 const STATE = {
   doc:       null,       // the document currently shown in the doc pane
@@ -69,6 +70,7 @@ const els = {
   send:      document.getElementById('send'),
   auditView: document.getElementById('audit-view'),
   exportBtn: document.getElementById('export-audit'),
+  exportSubstackBtn: document.getElementById('export-substack'),
   backend:   document.getElementById('backend'),
   groundingChip: document.getElementById('grounding-chip'),
   docChips:  document.getElementById('doc-chips'),
@@ -355,6 +357,7 @@ const runQuery = async (question) => {
   if (route !== 'error') {
     STATE.history.push({ role: 'user', content: question });
     STATE.history.push({ role: 'assistant', content: result.answer || '' });
+    els.exportSubstackBtn.disabled = false;   // there's now a conversation to publish
   }
 
   els.send.disabled = false;
@@ -438,6 +441,16 @@ STATE.audit.subscribe((turn) => {
 });
 els.exportBtn.addEventListener('click', () => exportAudit(STATE.audit));
 renderEmptyAudit(els.auditView);
+
+// Export for Substack: hand back the conversation as a self-contained HTML file
+// that pastes cleanly into the Substack editor (questions as headings, answers as
+// prose, any Markdown the model emitted turned into real tags). Disabled until the
+// first exchange lands, so it never produces an empty post. The grounded documents
+// ride along as the source/provenance line.
+els.exportSubstackBtn.disabled = true;
+els.exportSubstackBtn.addEventListener('click', () => {
+  exportSubstack(STATE.history, { docNames: [...STATE.selected] });
+});
 
 // Document tabs.
 els.docTabs.addEventListener('click', (e) => {
