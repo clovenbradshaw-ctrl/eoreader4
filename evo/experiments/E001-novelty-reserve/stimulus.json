@@ -1,0 +1,134 @@
+{
+  "experiment": "E001-novelty-reserve",
+  "note": "Blind. Opaque item ids and raw unit sequences only. Which item is which is held in key.json and applied only at scoring time. Do not infer.",
+  "items": [
+    {
+      "id": "it-01",
+      "sense": "stream",
+      "sequence": [
+        "e1",
+        "e2",
+        "e3",
+        "e3",
+        "e3",
+        "e3",
+        "e3",
+        "e3",
+        "e9"
+      ],
+      "cursor": 8
+    },
+    {
+      "id": "it-02",
+      "sense": "stream",
+      "sequence": [
+        "e1",
+        "e2",
+        "e3",
+        "e3",
+        "e3",
+        "e3",
+        "e3",
+        "e3",
+        "e1"
+      ],
+      "cursor": 8
+    },
+    {
+      "id": "it-03",
+      "sense": "stream",
+      "sequence": [
+        "e1",
+        "e1",
+        "e1",
+        "e1",
+        "e1",
+        "e1",
+        "e2",
+        "e3",
+        "e9"
+      ],
+      "cursor": 8
+    },
+    {
+      "id": "it-04",
+      "sense": "stream",
+      "sequence": [
+        "e1",
+        "e1",
+        "e1",
+        "e1",
+        "e1",
+        "e1",
+        "e2",
+        "e3",
+        "e1"
+      ],
+      "cursor": 8
+    },
+    {
+      "id": "it-05",
+      "sense": "music",
+      "sequence": [
+        "C4",
+        "D4",
+        "E4",
+        "E4",
+        "E4",
+        "E4",
+        "E4",
+        "E4",
+        "F#4"
+      ],
+      "cursor": 8
+    },
+    {
+      "id": "it-06",
+      "sense": "music",
+      "sequence": [
+        "C4",
+        "D4",
+        "E4",
+        "E4",
+        "E4",
+        "E4",
+        "E4",
+        "E4",
+        "C4"
+      ],
+      "cursor": 8
+    },
+    {
+      "id": "it-07",
+      "sense": "music",
+      "sequence": [
+        "C4",
+        "C4",
+        "C4",
+        "C4",
+        "C4",
+        "C4",
+        "D4",
+        "E4",
+        "F#4"
+      ],
+      "cursor": 8
+    },
+    {
+      "id": "it-08",
+      "sense": "music",
+      "sequence": [
+        "C4",
+        "C4",
+        "C4",
+        "C4",
+        "C4",
+        "C4",
+        "D4",
+        "E4",
+        "C4"
+      ],
+      "cursor": 8
+    }
+  ]
+}

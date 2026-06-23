@@ -39,6 +39,12 @@ export const surpriseAt = (prior, arrival, { gamma, novelty = NOVELTY_RESERVE, a
   // The profile's own reserve probability — co-entrants split it, so the reserve is
   // never multiply-counted (a single newcomer gets all of it).
   const sumPrior  = [...prior.values()].reduce((s, m) => s + m, 0);
+  // Absolute-continuity / opening guard: when there is no prior mass AND no reserve
+  // (an empty profile at the opening read against a SIGNAL-DERIVED reserve that is
+  // zero with nothing yet seen — see noveltyReserve below), belief has nowhere to
+  // move; surprise is zero by definition. With the default reserve (1.0 > 0) this
+  // never triggers, so the text path stays byte-identical (the parity gate).
+  if (sumPrior + novelty <= 0) return { bayesBits: 0, bayesBy: {} };
   const reserve   = novelty / (sumPrior + novelty);
   const newShare  = newcomers.length ? reserve / newcomers.length : 0;
 
@@ -90,10 +96,39 @@ export const surpriseAt = (prior, arrival, { gamma, novelty = NOVELTY_RESERVE, a
 export const forwardDist = (profile, { novelty = NOVELTY_RESERVE } = {}) => {
   const sum = [...profile.values()].reduce((s, m) => s + m, 0);
   const Z = sum + novelty;                       // reserve mass keeps it proper over an open basis
+  if (Z <= 0) return { dist: [], reserve: 0, Z: 0 };   // opening + signal reserve (parity-safe: default 1.0 > 0)
   const dist = [...profile.entries()]
     .map(([atom, m]) => [atom, m / Z])
     .sort((a, b) => b[1] - a[1]);                // ranked — the heaviest incumbents lead the draw
   return { dist, reserve: novelty / Z, Z };
+};
+
+// THE SIGNAL-DERIVED NOVELTY RESERVE — the constant hunt's fix, on the exemplar.
+//
+// A hand-set reserve (NOVELTY_RESERVE = 1.0) is blind to whether newcomers have
+// been arriving: the reader grows equally certain that nothing new will come
+// whether it just saw three newcomers or none. That is the reader failing to learn
+// from its own signal — an external assumption standing in for something the signal
+// should teach.
+//
+// The fix is not a better formula; it is to make the reserved AMPLITUDE track the
+// recent novelty RATE under the SAME decay the figure field uses, then run it
+// through the SAME fixed Born step (surpriseAt / forwardDist, unchanged). Context
+// enters at the amplitude; the law stays put. Each atom first seen at step `f` is
+// one newcomer-event of weight γ^(at-1-f); their sum is the protention the reader
+// reserves for the as-yet-unseen — high right after a burst of newcomers, decaying
+// toward zero through a stretch of pure confirmation. It is strictly positive
+// whenever any atom has been seen (a non-empty prior always carries ≥ one newcomer),
+// and zero only at the opening, where surprise is zero regardless.
+//
+// Modality-agnostic — it reads only step indices and γ, never a token, pitch, or
+// pixel. Every sense's front-end feeds it the same first-seen steps, so the same
+// fixed law turns a context-sensitive amplitude into a context-sensitive belief for
+// every sense alike. This is the interior; the membrane stays the line.
+export const noveltyReserve = (firstSeenSteps, at, gamma) => {
+  let r = 0;
+  for (const f of firstSeenSteps) if (f < at) r += Math.pow(gamma, at - 1 - f);
+  return r;
 };
 
 const round = (x) => Math.round(x * 100) / 100;

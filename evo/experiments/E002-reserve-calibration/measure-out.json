@@ -1,0 +1,18 @@
+{
+  "experiment": "E002-reserve-calibration",
+  "tokens": 1201,
+  "ordered": {
+    "meanSurprisalFixed": 2.626,
+    "meanSurprisalSignal": 2.384,
+    "improvement": 0.2421
+  },
+  "shuffled": {
+    "meanSurprisalFixed": 2.6223,
+    "meanSurprisalSignal": 2.4677,
+    "improvement": 0.1545
+  },
+  "instrument": {
+    "streamLive": true,
+    "nonTrivial": true
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "src/core/surprise.js#noveltyReserve": 2,
+  "src/core/surprise.js#surpriseAt": 1,
+  "src/perceiver/reading.js#readingAt": 1,
+  "cell:REC": 1,
+  "cell:EVA": 1,
+  "organ:stream": 1,
+  "organ:music": 1,
+  "reserve-path": 1,
+  "src/perceiver/reading.js#surprisalBits": 1,
+  "forward-prediction": 1,
+  "generalization-rerun": 1,
+  "seed:wikipedia": 1,
+  "mutation-probe": 1,
+  "load-bearing-analysis": 1,
+  "cold:voidnull": 1,
+  "cold:predictor": 1
+}

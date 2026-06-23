@@ -1,0 +1,62 @@
+{
+  "experiment": "E001-novelty-reserve",
+  "seedOfRecord": {
+    "kind": "code-site",
+    "file": "src/core/surprise.js",
+    "symbol": "NOVELTY_RESERVE",
+    "copy": "src/perceiver/reading.js:NOVELTY"
+  },
+  "items": {
+    "it-01": {
+      "sense": "stream",
+      "context": "early",
+      "probe": "newcomer"
+    },
+    "it-02": {
+      "sense": "stream",
+      "context": "early",
+      "probe": "returning"
+    },
+    "it-03": {
+      "sense": "stream",
+      "context": "late",
+      "probe": "newcomer"
+    },
+    "it-04": {
+      "sense": "stream",
+      "context": "late",
+      "probe": "returning"
+    },
+    "it-05": {
+      "sense": "music",
+      "context": "early",
+      "probe": "newcomer"
+    },
+    "it-06": {
+      "sense": "music",
+      "context": "early",
+      "probe": "returning"
+    },
+    "it-07": {
+      "sense": "music",
+      "context": "late",
+      "probe": "newcomer"
+    },
+    "it-08": {
+      "sense": "music",
+      "context": "late",
+      "probe": "returning"
+    }
+  },
+  "predictions": {
+    "fixed": "on a NEWCOMER probe, bayesBits(early) ≈ bayesBits(late) — flat (the gap)",
+    "signal": "on a NEWCOMER probe, bayesBits(early) > bayesBits(late) by a clear margin (the fix)",
+    "direction": "a reader fresh off a burst of newcomers is LESS surprised by another newcomer"
+  },
+  "controls": {
+    "surface": "distinct-figure count, raw-newcomer count, and total γ-mass are matched across early/late; a surface method is flat — only γ-decayed recency dissociates",
+    "mechanistic": "the signal-vs-fixed change on a RETURNING probe ≪ on a NEWCOMER probe"
+  },
+  "omnimodal": "the newcomer dissociation direction replicates in BOTH senses (stream, music) through one shared reader; no per-sense code",
+  "mechanism": "reserve = Σ_newcomers γ^(at-1-firstSeen) — the γ-decayed novelty rate as an amplitude through the unchanged Born step (surpriseAt/forwardDist)"
+}

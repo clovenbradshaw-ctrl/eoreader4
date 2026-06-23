@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyReserve } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -137,12 +137,24 @@ export const readingAt = (doc, cursor, opts = {}) => {
     }
   }
 
+  // THE SIGNAL-DERIVED NOVELTY RESERVE (opts.signalReserve — the constant-hunt fix,
+  // docs/spec-one-surprise.md, the exemplar). The mass the reader holds for the
+  // as-yet-unseen is no longer the hand-set NOVELTY=1.0 but the γ-decayed COUNT of
+  // newcomers in the prior — the recent novelty RATE, under the figure field's own
+  // decay γ. High right after a burst of newcomers (the reader expects more), low
+  // through a confirmation plateau (a newcomer is then a real surprise). The same
+  // fixed Born step consumes it (Z/pNovel below, surpriseAt and forwardDist later);
+  // only the amplitude is now context-sensitive. Computed from `firstIns` (each
+  // figure's first sighting), the helper filters to f < at, so it is strictly
+  // causal. Default OFF → reserve === NOVELTY === 1.0 → byte-identical (parity gate).
+  const reserve = opts.signalReserve ? noveltyReserve([...firstIns.values()], at, γ) : NOVELTY;
+
   // --- Prediction (REC): a probability distribution over who acts next. ----
-  // P(figure) ∝ γ-mass; a reserve of NOVELTY holds probability for someone
-  // not yet seen. Prediction = the expectation: the top of this distribution.
+  // P(figure) ∝ γ-mass; the reserve holds probability for someone not yet seen.
+  // Prediction = the expectation: the top of this distribution.
   const total = [...priorMass.values()].reduce((s, m) => s + m, 0);
-  const Z = total + NOVELTY;
-  const pNovel = NOVELTY / Z;
+  const Z = total + reserve;
+  const pNovel = reserve / Z;
   const pOf = (id) => (priorMass.get(id) || 0) / Z;
 
   const ranked = [...priorMass.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
@@ -217,7 +229,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: reserve, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------
@@ -272,7 +284,7 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // (figures + propositions + predicates) — the basis a draw needs, since figures alone are
   // too coarse to generate from (docs/spec-generation.md, Piece 1). Not yet wired into the
   // predictive SCORE; that swap changes the surprisal and ships behind RULES_REV.
-  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: NOVELTY });
+  if (opts.forward) out.pNext = forwardDist(priorProp, { novelty: reserve });
   return out;
 };
 

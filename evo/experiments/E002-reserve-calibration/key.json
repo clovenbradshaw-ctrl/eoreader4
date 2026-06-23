@@ -1,0 +1,15 @@
+{
+  "experiment": "E002-reserve-calibration",
+  "source": "outside-in (domain injection): a random Wikipedia article reduced to its content-token arrival stream",
+  "seedOfRecord": { "source": "wikipedia", "title": "IC Bus", "revid": 1359541440 },
+  "claim": "the signal-derived novelty reserve (E001's fix) is a better PREDICTIVE MODEL of a real open-vocabulary stream than the hand-set constant: it lowers mean held-out predictive surprisal (a proper scoring rule, −log2 p of what actually arrives, scored causally), and its advantage comes from tracking novelty-RATE VARIATION, so it shrinks when the stream is shuffled",
+  "predictions": {
+    "primary": "meanSurprisal(signal) < meanSurprisal(fixed) on the ordered stream (improvement > 0)",
+    "recency": "improvement on the ORDERED stream > improvement on the SHUFFLED stream — the edge is recency structure, not a luckier average constant"
+  },
+  "controls": {
+    "shuffled": "a seeded shuffle of the SAME tokens (identical total novelty and vocabulary; only the temporal structure of novelty is destroyed). A fix that helps equally on shuffled is just a better average constant, not recency tracking — caught here."
+  },
+  "mechanism": "the same noveltyReserve = Σ_newcomers γ^(at-1-firstSeen) as E001, applied to an INDEPENDENT pressure shape (forward log-loss calibration on real content, not a planted KL dissociation). This is the generalization test: fitness is how many independent pressures the fix improves.",
+  "verdictRule": "CONFIRMED if primary AND recency hold; LOCATED-GAP if the fix does not lower surprisal on real content; PARTIAL if it lowers surprisal but not more than shuffled (a better constant, not recency tracking)"
+}

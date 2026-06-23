@@ -1,0 +1,203 @@
+{
+  "experiment": "E001-novelty-reserve",
+  "gamma": 0.7,
+  "items": [
+    {
+      "id": "it-01",
+      "sense": "stream",
+      "cursor": 8,
+      "surface": {
+        "distinct": 3,
+        "rawNew": 3,
+        "totalMass": 3.1412
+      },
+      "fixed": {
+        "bayesBits": 0.28,
+        "surprisalBits": 2.05,
+        "bayes": 0.17674656327655813,
+        "surprise": 0.7585225423915487
+      },
+      "signal": {
+        "bayesBits": 0.61,
+        "surprisalBits": 3.25,
+        "bayes": 0.3465249655773356,
+        "surprise": 0.8951132986778416
+      }
+    },
+    {
+      "id": "it-02",
+      "sense": "stream",
+      "cursor": 8,
+      "surface": {
+        "distinct": 3,
+        "rawNew": 3,
+        "totalMass": 3.1412
+      },
+      "fixed": {
+        "bayesBits": 0.65,
+        "surprisalBits": 3.05,
+        "bayes": 0.3606557495076539,
+        "surprise": 0.8792612711957744
+      },
+      "signal": {
+        "bayesBits": 0.76,
+        "surprisalBits": 4.25,
+        "bayes": 0.4093549182929579,
+        "surprise": 0.9475566493389208
+      }
+    },
+    {
+      "id": "it-03",
+      "sense": "stream",
+      "cursor": 8,
+      "surface": {
+        "distinct": 3,
+        "rawNew": 3,
+        "totalMass": 3.1412
+      },
+      "fixed": {
+        "bayesBits": 0.28,
+        "surprisalBits": 2.05,
+        "bayes": 0.17674656327655813,
+        "surprise": 0.7585225423915487
+      },
+      "signal": {
+        "bayesBits": 0.15,
+        "surprisalBits": 1.47,
+        "bayes": 0.10043889925261307,
+        "surprise": 0.637992422343687
+      }
+    },
+    {
+      "id": "it-04",
+      "sense": "stream",
+      "cursor": 8,
+      "surface": {
+        "distinct": 3,
+        "rawNew": 3,
+        "totalMass": 3.1412
+      },
+      "fixed": {
+        "bayesBits": 0.06,
+        "surprisalBits": 1.52,
+        "bayes": 0.04301683973115722,
+        "surprise": 0.6519891355428183
+      },
+      "signal": {
+        "bayesBits": 0.05,
+        "surprisalBits": 1.77,
+        "bayes": 0.03639732553055386,
+        "surprise": 0.7072884693486841
+      }
+    },
+    {
+      "id": "it-05",
+      "sense": "music",
+      "cursor": 8,
+      "surface": {
+        "distinct": 3,
+        "rawNew": 3,
+        "totalMass": 3.1412
+      },
+      "fixed": {
+        "bayesBits": 0.92,
+        "surprisalBits": 1.7,
+        "bayes": 0.4716500399371458,
+        "surprise": 0.691314986894509
+      },
+      "signal": {
+        "bayesBits": 1.47,
+        "surprisalBits": 2.34,
+        "bayes": 0.6397720690768027,
+        "surprise": 0.8022949430876325
+      }
+    },
+    {
+      "id": "it-06",
+      "sense": "music",
+      "cursor": 8,
+      "surface": {
+        "distinct": 3,
+        "rawNew": 3,
+        "totalMass": 3.1412
+      },
+      "fixed": {
+        "bayesBits": 0.63,
+        "surprisalBits": 2.03,
+        "bayes": 0.3545106827341171,
+        "surprise": 0.7549965427347631
+      },
+      "signal": {
+        "bayesBits": 0.81,
+        "surprisalBits": 2.67,
+        "bayes": 0.4298851318064204,
+        "surprise": 0.8430813923389375
+      }
+    },
+    {
+      "id": "it-07",
+      "sense": "music",
+      "cursor": 8,
+      "surface": {
+        "distinct": 3,
+        "rawNew": 3,
+        "totalMass": 3.1412
+      },
+      "fixed": {
+        "bayesBits": 1,
+        "surprisalBits": 2.73,
+        "bayes": 0.5013712092592361,
+        "surprise": 0.8496273708871964
+      },
+      "signal": {
+        "bayesBits": 0.76,
+        "surprisalBits": 2.23,
+        "bayes": 0.4097875951250617,
+        "surprise": 0.7872062494742389
+      }
+    },
+    {
+      "id": "it-08",
+      "sense": "music",
+      "cursor": 8,
+      "surface": {
+        "distinct": 3,
+        "rawNew": 3,
+        "totalMass": 3.1412
+      },
+      "fixed": {
+        "bayesBits": 0.25,
+        "surprisalBits": 2.38,
+        "bayes": 0.1565657892982879,
+        "surprise": 0.8081421391099672
+      },
+      "signal": {
+        "bayesBits": 0.18,
+        "surprisalBits": 2.33,
+        "bayes": 0.1159549525839928,
+        "surprise": 0.8017562098374582
+      }
+    }
+  ],
+  "instrument": {
+    "stream": {
+      "organLive": true,
+      "insEvents": 9,
+      "sampleTrace": [
+        "INS e1@0",
+        "INS e2@1",
+        "INS e3@2"
+      ]
+    },
+    "music": {
+      "organLive": true,
+      "insEvents": 9,
+      "sampleTrace": [
+        "INS C@0",
+        "INS D@1",
+        "CON @1"
+      ]
+    },
+    "bayesChannelComputed": true
+  }
+}
