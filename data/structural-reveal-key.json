@@ -1,0 +1,32 @@
+{
+  "_meta": {
+    "what": "HELD KEY for the structural-reveal pressure. The measure (scripts/structural-reveal.mjs) never reads this. Only the scorer (scripts/structural-reveal-score.mjs) does.",
+    "claim": "A line that bonds two standing entities sitting in SEPARATE regions of the entity graph is a structural reveal. The interior's connectivity channel (bridgeSurprise) fires maximally on it (component collapse) and ~0 on surface-matched controls; the mass-based one-surprise (bayesBits) does NOT isolate it (it ranks fresh-entity lines above the reveal). The connectivity reading is invariant to a surface emphasis cue.",
+    "mechanism": "connectivity collapse over the CON/SIG bond graph, endpoints resolved through the causal SYN-merge identity quotient (src/core/bridge.js)"
+  },
+  "documents": {
+    "calvert-organ": {
+      "reveal": 7,
+      "controls": {
+        "adjacent_rebond": 4,
+        "fresh_entity": 5
+      },
+      "predicted": {
+        "bridge": {
+          "reveal": "high (>= 0.5) — endpoints were in different components",
+          "adjacent_rebond": "~0 (<= 0.2) — endpoints already adjacent, a re-bond confirms",
+          "fresh_entity": "~0 (<= 0.2) — a brand-new entity is new mass, not a bridge",
+          "reveal_is_unique_argmax": true
+        },
+        "bayes": {
+          "isolates_reveal": false,
+          "why": "the reveal bonds two STANDING entities (tiny mass deposit); at least one fresh-mass line outranks it on bayesBits — the gap this pressure targets"
+        },
+        "invariance": {
+          "bridge_reveal_unmarked_equals_marked": true,
+          "why": "bridge reads the bond structure, not the surface cue; the marked condition changes only an emphasis adverb"
+        }
+      }
+    }
+  }
+}
