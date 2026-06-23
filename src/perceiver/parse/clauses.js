@@ -46,40 +46,52 @@ const span = (s, from, to) => {
   return text ? { text, offset: from + lead } : null;
 };
 
+// The bare connective a boundary marker carries — ", and " → "and", " who " → "who".
+// Reported on the clause the marker OPENS (as `opener`), so the relation parser can
+// tell a coordinated continuation ("…, and walked off") from a relative clause
+// ("…player who refuses…") whose subject is the antecedent, not the running subject.
+const openerOf = (marker) => String(marker || '').replace(/[,;]/g, '').trim().toLowerCase() || null;
+
 export const segmentClauses = (sentence, { boundaries = SEED_CLAUSE_BOUNDARY } = {}) => {
   const s = String(sentence || '');
   if (!s.trim()) return [];
   const lower = s.toLowerCase();
 
   // Cut points: { at } where the current clause ends (exclusive), { after } where
-  // the next clause's text begins (past the marker).
+  // the next clause's text begins (past the marker), { opener } the marker's bare
+  // connective (null for a participial cut, which consumes no connective).
   const cuts = [];
   for (const mk of boundaries) {
     let from = 0, i;
     while ((i = lower.indexOf(mk, from)) !== -1) {
-      cuts.push({ at: i, after: i + mk.length });
+      cuts.push({ at: i, after: i + mk.length, opener: openerOf(mk) });
       from = i + mk.length;
     }
   }
   let m;
   const re = new RegExp(PARTICIPIAL.source, 'g');
-  while ((m = re.exec(s)) !== null) cuts.push({ at: m.index, after: m.index + m[0].length });
+  while ((m = re.exec(s)) !== null) cuts.push({ at: m.index, after: m.index + m[0].length, opener: null });
 
   if (cuts.length === 0) {
     const whole = span(s, 0, s.length);
-    return whole ? [whole] : [];
+    return whole ? [{ ...whole, opener: null }] : [];
   }
   cuts.sort((a, b) => a.at - b.at);
 
   const spans = [];
   let start = 0;
+  let opener = null;   // the connective that begins the clause now being collected
   for (const c of cuts) {
-    if (c.at <= start) { start = Math.max(start, c.after); continue; } // inside a consumed cut
+    if (c.at <= start) {                          // inside a consumed cut — the later
+      if (c.after > start) { start = c.after; opener = c.opener; }  // marker leads the next clause
+      continue;
+    }
     const sp = span(s, start, c.at);
-    if (sp) spans.push(sp);
+    if (sp) spans.push({ ...sp, opener });
     start = c.after;
+    opener = c.opener;
   }
   const tail = span(s, start, s.length);
-  if (tail) spans.push(tail);
+  if (tail) spans.push({ ...tail, opener });
   return spans;
 };
