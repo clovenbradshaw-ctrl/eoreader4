@@ -1,0 +1,23 @@
+{
+  "id": "001-novelty-baserate",
+  "_warning": "HELD KEY. The measurement never reads this file. Item→condition map and the predicted dissociation, control behaviour, and mechanism tag.",
+  "mechanism": "The reserve amplitude is replaced by the γ-decayed recent-newcomer rate (core noveltyAmplitude) and run through the SAME fixed Born step (reserve = novelty/(sumPrior+novelty), surpriseAt unchanged). Context enters at the amplitude; the law stays put. Layer: interior (src/core/surprise.js helper) + reader front-end (src/perceiver/reading.js), behind opts.signalNovelty, off by default.",
+  "items": {
+    "i01": { "condition": "low",  "modality": "text",  "note": "stable recurrence of a 3-figure cast; low recent novelty, small cast" },
+    "i02": { "condition": "high", "modality": "music", "note": "recent units are all NEW pitch classes; high recent novelty" },
+    "i03": { "condition": "ctrl", "modality": "text",  "note": "LARGE cast but introduced early (outside the γ-window); recent units recur — cast size is the loud surface proxy, recent novelty is low" },
+    "i04": { "condition": "low",  "modality": "music", "note": "stable recurrence of 3 pitch classes; low recent novelty" },
+    "i05": { "condition": "high", "modality": "text",  "note": "recent units are all NEW figures; high recent novelty, large cast" },
+    "i06": { "condition": "ctrl", "modality": "music", "note": "LARGE pitch-set introduced early, recent units recur — pitch-variety is the loud surface proxy, recent novelty is low" }
+  },
+  "predictions": {
+    "gap_live": "Within each modality, live_bayesBits is ~equal across high / low / ctrl (within 0.03). The hand-set reserve is blind to the recent novelty rate even though massAtCursor is matched and noveltyAmp differs sharply.",
+    "fix_signal": "Within each modality, signal_bayesBits(high) is clearly LESS than signal_bayesBits(low) (gap > 0.10): the same newcomer is less surprising after a burst of newcomers.",
+    "control": "Within each modality, signal_bayesBits(ctrl) is near signal_bayesBits(low) (within 0.06) and clearly ABOVE signal_bayesBits(high) (gap > 0.10): a large cast / wide pitch-set — the cheap surface signal, with massAtCursor matched — does NOT lower surprise. Only RECENT newcomers do. A method winning on cast size or mass fails here.",
+    "omnimodal": "fix_signal AND control hold in BOTH text and music — the same interior change helping two different organs."
+  },
+  "predicted_channels": {
+    "noveltyAmp": "high > ctrl ≈ low within each modality (the instrument: the derived amplitude itself separates high from low/ctrl).",
+    "massAtCursor": "matched across the three text items (identical) — so mass cannot explain any split."
+  }
+}

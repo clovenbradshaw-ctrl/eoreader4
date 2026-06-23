@@ -17,7 +17,7 @@
 // bits of what the line did under the prior the reading had built.
 
 import { CONVERSATIONAL_CAP } from '../converse/index.js';
-import { surpriseAt, forwardDist } from '../core/index.js';
+import { surpriseAt, forwardDist, noveltyAmplitude } from '../core/index.js';
 
 const GAMMA = 0.7;     // DEFAULT recency decay, matches DEFAULT_PROJECTION_RULES.decay_gamma
 const NOVELTY = 1.0;   // reserved prior mass for an as-yet-unseen figure
@@ -34,6 +34,13 @@ export const readingAt = (doc, cursor, opts = {}) => {
   // horizon (docs/bayesian-surprise.md). Defaults to GAMMA, so a standard reading is
   // byte-identical; only an explicit opts.gamma shifts the window.
   const γ = Number.isFinite(opts.gamma) ? opts.gamma : GAMMA;
+  // SIGNAL-DERIVED NOVELTY RESERVE (campaign exp/001-novelty-baserate). Off by default —
+  // the reserve stays the hand-set NOVELTY constant and the reading is byte-identical
+  // (parity gate). On (opts.signalNovelty), the reserve amplitude tracks the recent
+  // newcomer RATE under the same γ kernel and runs through the SAME Born step in
+  // surpriseAt. Opt-gated exactly like opts.forward / opts.horizon — the established
+  // reading.js pattern for a gated next-gen path.
+  const signalNovelty = opts.signalNovelty === true;
   const events = typeof doc.log.snapshot === 'function' ? doc.log.snapshot() : (doc.log.events || []);
 
   const label     = new Map(); // id → label
@@ -211,13 +218,35 @@ export const readingAt = (doc, cursor, opts = {}) => {
     if (k.startsWith('d:')) { const [i, ...v] = k.slice(2).split('|'); return `${name(i)}: ${v.join('|')}`; }
     return k;
   };
+  // The reserve amplitude fed to the Born step. Default: the hand-set NOVELTY constant.
+  // Under signalNovelty: the γ-decayed recent-newcomer RATE over the SAME proposition
+  // field, derived by the modality-agnostic core helper from each surviving atom's
+  // first-appearance step (≤ at) under the SAME γ. A newcomer arriving at `at` contributes
+  // γ⁰ = 1 (so absolute continuity is preserved exactly when a newcomer is present), one k
+  // steps back contributes γ^k — high after a burst of newcomers, low after confirmation.
+  let novelty = NOVELTY;
+  if (signalNovelty) {
+    const firstStepOf = new Map();
+    const note = (a, s) => { const p = firstStepOf.get(a); if (p === undefined || s < p) firstStepOf.set(a, s); };
+    for (const e of events) {
+      if (e.sentIdx == null || e.sentIdx > at || !inHorizon(e)) continue;
+      if (e.op === 'INS') note(`f:${e.id}`, e.sentIdx);
+      else if (e.op === 'CON' || e.op === 'SIG') {
+        note(`f:${e.src}`, e.sentIdx); note(`f:${e.tgt}`, e.sentIdx);
+        note(`p:${e.src}|${e.via || ''}|${e.tgt}`, e.sentIdx);
+      } else if (e.op === 'DEF' && e.key === 'predicate') {
+        note(`f:${e.id}`, e.sentIdx); note(`d:${e.id}|${e.value}`, e.sentIdx);
+      }
+    }
+    novelty = noveltyAmplitude(firstStepOf.values(), at, γ);
+  }
   // THE ONE SURPRISE (Track A, docs/spec-one-surprise.md). D_KL(posterior ‖ prior) over
   // the γ-decayed proposition field `priorProp`, with this line's `deposit` as the arrival.
   // The computation is lifted verbatim into the modality-agnostic `surpriseAt` core, which
   // text/music/phasepost all call — they differ only in the front-end that builds these two
   // maps and the axis renderer. Same operations, same order: the text path stays byte-
   // identical (parity gate: node --test tests/*.test.js).
-  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty: NOVELTY, axisLabel });
+  const { bayesBits, bayesBy } = surpriseAt(priorProp, deposit, { gamma: γ, novelty, axisLabel });
   const bayes = 1 - Math.pow(2, -bayesBits);   // squashed to [0,1)
 
   // --- EO-tagged surprises: the operator each surprise fired under. ---------

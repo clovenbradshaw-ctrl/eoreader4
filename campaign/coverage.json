@@ -1,0 +1,29 @@
+{
+  "note": "Sites the campaign has exercised. Bias the inside-out draw toward the COLD regions — the cells/operators/code with the fewest runs is where untested assumptions hide.",
+  "cells": {
+    "_comment": "27 Object-diagonal cells = operator (NUL..REC) × grain (Ground/Figure/Pattern). Count of experiments that stressed each.",
+    "INS_Ground": 1,
+    "EVA_Lens": 1,
+    "REC_Pattern": 0
+  },
+  "operators": {
+    "NUL": 0, "SEG": 0, "DEF": 0,
+    "SIG": 0, "CON": 0, "EVA": 1,
+    "INS": 1, "SYN": 0, "REC": 0
+  },
+  "code_sites": {
+    "_comment": "Production sites a pressure has probed (file#symbol).",
+    "src/core/surprise.js#NOVELTY_RESERVE": 1,
+    "src/core/surprise.js#noveltyAmplitude": 1,
+    "src/perceiver/reading.js#novelty": 1
+  },
+  "modalities": {
+    "text": 1, "music": 1, "image": 0, "frequency": 0, "video": 0
+  },
+  "cold_regions_next": [
+    "predictive reserve pNovel (reading.js:144) — still the constant; the same gap from the other channel",
+    "operators never stressed: NUL, SEG, DEF, SIG, CON, SYN, REC",
+    "organs never driven through a reserve pressure: image, frequency, video",
+    "voidnull.js thresholds (alpha) — another constant in the predictive path"
+  ]
+}

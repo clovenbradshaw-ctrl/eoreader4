@@ -73,6 +73,36 @@ export const surpriseAt = (prior, arrival, { gamma, novelty = NOVELTY_RESERVE, a
   return { bayesBits, bayesBy };
 };
 
+// noveltyAmplitude — the reserve mass DERIVED from the signal, not hand-set.
+//
+// `NOVELTY_RESERVE` answers "how much belief to hold for an as-yet-unseen atom" with a
+// fixed 1.0. That constant is blind to whether newcomers have actually been arriving:
+// since the figure field saturates to ~1/(1-γ) whatever it is made of, the reserve
+// probability `novelty/(sumPrior+novelty)` converges to the same value after a burst of
+// newcomers as after a long stable stretch — the reader grows equally certain nothing
+// new will come either way. That is the reader failing to learn from its own signal.
+//
+// This derives the amplitude from the signal's own recent history instead: the γ-decayed
+// count of FIRST-appearances (newcomers) under the SAME decay kernel the profile uses. It
+// is then run through the SAME fixed Born step inside `surpriseAt` (`reserve = novelty /
+// (sumPrior + novelty)`, unchanged) — context enters at the amplitude, the law stays put.
+// High after newcomers, low after confirmation, with no constant in the path.
+//
+//   firstSteps  iterable<number>  the step each surviving atom FIRST appeared (≤ cursor)
+//   cursor      the step the reserve is read at (the arrival's step)
+//   gamma       the same recency-decay kernel the profile uses
+//
+// Returns Σ γ^(cursor − firstStep): a newcomer arriving AT the cursor contributes γ⁰ = 1
+// (matching the deposit's weight in the posterior, so absolute continuity is preserved
+// exactly when a newcomer is present), one k steps back contributes γ^k. Equivalent to the
+// streaming recurrence a′ = γ·a + newcomers_now with the same γ. Modality-agnostic: it
+// reads only step indices, never an atom's content.
+export const noveltyAmplitude = (firstSteps, cursor, gamma) => {
+  let amp = 0;
+  for (const s of firstSteps) if (s <= cursor) amp += Math.pow(gamma, cursor - s);
+  return amp;
+};
+
 // p(next | profile) — THE FORWARD DISTRIBUTION (Track A, docs/spec-one-surprise.md).
 //
 // Surprise has two objects. The profile is the BACKWARD object — the γ-decayed summary of

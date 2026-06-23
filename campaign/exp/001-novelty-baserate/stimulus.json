@@ -1,0 +1,29 @@
+{
+  "id": "001-novelty-baserate",
+  "target": "INS_Ground / the novelty reserve (protention)",
+  "kind": "discrimination",
+  "level": "significance",
+  "horizon": "across-a-window",
+  "claim": "The belief a reader reserves for an as-yet-unseen atom should track the recent RATE of newcomers, so the SAME genuine newcomer is less surprising after a burst of newcomers than after a long stable stretch.",
+  "basis": "Each item lays down prior context, then a genuine newcomer arrives AT `cursor`. Items differ only in the recent rate of newcomers before the cursor; within a modality every item has the SAME number of units, so total decayed mass at the cursor is matched. A reader whose reserve is a hand-set constant is blind to the recent novelty rate; one whose reserve tracks the signal is not. The channels are read causally — each item sees only the units before its cursor.",
+  "channels": ["live_bayesBits", "signal_bayesBits", "noveltyAmp", "massAtCursor", "newcomerAtCursor"],
+  "items": [
+    { "item": "i01", "modality": "text", "cursor": 15,
+      "lines": ["Ada ran.","Bo ran.","Cy ran.","Ada ran.","Bo ran.","Cy ran.","Ada ran.","Bo ran.","Cy ran.","Ada ran.","Bo ran.","Cy ran.","Ada ran.","Bo ran.","Cy ran.","Zo ran."] },
+
+    { "item": "i02", "modality": "music", "cursor": 15,
+      "notes": ["C4","C4","C4","C4","C4","C4","C4","C4","C4","C4","D4","E4","G4","A4","B4","F#5"] },
+
+    { "item": "i03", "modality": "text", "cursor": 15,
+      "lines": ["Ada ran.","Bo ran.","Cy ran.","Di ran.","Ed ran.","Fi ran.","Ada ran.","Bo ran.","Cy ran.","Ada ran.","Bo ran.","Cy ran.","Ada ran.","Bo ran.","Cy ran.","Zo ran."] },
+
+    { "item": "i04", "modality": "music", "cursor": 15,
+      "notes": ["C4","D4","E4","C4","D4","E4","C4","D4","E4","C4","D4","E4","C4","D4","E4","F#5"] },
+
+    { "item": "i05", "modality": "text", "cursor": 15,
+      "lines": ["Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Ada ran.","Bo ran.","Cy ran.","Di ran.","Ed ran.","Fi ran.","Zo ran."] },
+
+    { "item": "i06", "modality": "music", "cursor": 15,
+      "notes": ["C4","D4","E4","G4","A4","B4","C4","D4","E4","C4","D4","E4","C4","D4","E4","F#5"] }
+  ]
+}
