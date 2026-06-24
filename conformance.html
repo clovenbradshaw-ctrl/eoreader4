@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <title>eoreader4 · conformance</title>
+  <style>
+    :root { --bg:#0b0b0d; --panel:#151518; --panel2:#18181b; --line:#27272a;
+            --fg:#e4e4e7; --muted:#a1a1aa; --dim:#71717a; --accent:#60a5fa;
+            --teal:#7fd1c6; --good:#34d399; --bad:#f87171; --warn:#fbbf24; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg);
+           font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    a { color:var(--teal); text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    header { display:flex; align-items:center; gap:.75rem; padding:.9rem 1.2rem;
+             background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+    header h1 { font-size:1.05rem; margin:0; font-weight:600; }
+    header .spacer { flex:1; }
+    main { max-width:1040px; margin:0 auto; padding:1.4rem 1.2rem 4rem; }
+    .lede { color:var(--muted); font-size:.92rem; max-width:72ch; }
+    .lede code { color:var(--teal); background:var(--panel2); padding:.05rem .3rem; border-radius:4px; }
+    button.run { background:#1d2030; color:var(--fg); border:1px solid #2c4a46;
+                 border-radius:7px; padding:.5rem .95rem; font-size:.92rem; cursor:pointer; letter-spacing:.02em; }
+    button.run:hover:not(:disabled) { background:#24283a; }
+    button.run:disabled { opacity:.5; cursor:default; }
+    .family { margin-top:1.6rem; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+    .family > .head { display:flex; align-items:center; gap:.7rem; padding:.85rem 1rem; background:var(--panel); }
+    .family > .head h2 { font-size:1rem; margin:0; font-weight:600; }
+    .family > .head .targets { color:var(--dim); font-size:.8rem; }
+    .family > .body { padding:1rem; display:none; }
+    .family.open > .body { display:block; }
+    .progress { color:var(--muted); font-size:.85rem; margin:.2rem 0 .8rem; font-variant-numeric:tabular-nums; }
+    .cards { display:flex; flex-wrap:wrap; gap:.6rem; margin:.3rem 0 1rem; }
+    .card { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:.6rem .8rem; min-width:150px; }
+    .card .label { color:var(--dim); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; }
+    .card .value { font-size:1.35rem; font-variant-numeric:tabular-nums; margin-top:.15rem; }
+    .card .target { font-size:.72rem; color:var(--dim); margin-top:.1rem; }
+    .pill { display:inline-block; font-size:.68rem; font-weight:600; padding:.08rem .4rem; border-radius:99px; vertical-align:middle; }
+    .pill.pass { background:rgba(52,211,153,.16); color:var(--good); }
+    .pill.fail { background:rgba(248,113,113,.16); color:var(--bad); }
+    .banner { border-radius:8px; padding:.7rem .9rem; font-size:.86rem; margin:.2rem 0 1rem; }
+    .banner.warn { background:rgba(251,191,36,.1); border:1px solid rgba(251,191,36,.35); color:#fcd34d; }
+    .banner.note { background:var(--panel2); border:1px solid var(--line); color:var(--muted); }
+    .banner b { color:var(--fg); }
+    table { width:100%; border-collapse:collapse; font-size:.83rem; margin-top:.4rem; }
+    th, td { text-align:left; padding:.32rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--dim); font-weight:500; font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; }
+    td.q { color:var(--fg); }
+    .mark.ok { color:var(--good); }
+    .mark.no { color:var(--bad); }
+    .tag { font-size:.7rem; color:var(--dim); }
+    .flagchip { display:inline-block; background:rgba(251,191,36,.12); color:#fcd34d;
+                font-size:.68rem; padding:.02rem .3rem; border-radius:4px; margin:0 .2rem .15rem 0; }
+    code.mono { font-variant-numeric:tabular-nums; color:var(--muted); }
+    .foot { color:var(--dim); font-size:.78rem; margin-top:.6rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>eoreader4 · conformance</h1>
+    <span class="spacer"></span>
+    <a href="index.html">← app</a>
+  </header>
+  <main>
+    <p class="lede">
+      Runs the conformance test families from
+      <a href="https://github.com/clovenbradshaw-ctrl/eoreader4/blob/main/docs/conformance-spec.md">docs/conformance-spec.md</a>
+      against the <b>real</b> <code>runTurn</code> pipeline, in your browser, with the same
+      <code>src/</code> modules the app loads. Deterministic — <code>echo</code> model + hash
+      embedder, no network, no weights. That determinism is also the ceiling: it measures the
+      <code>answerable</code> void verdict and the veto flags, but it <b>cannot</b> measure FM2
+      (confabulation at a void) — that needs a live generative model. Results are a baseline-run
+      artifact, not a pass/fail certificate.
+    </p>
+    <p><button class="run" id="run-all">▶ Run all families</button></p>
+    <div id="families"></div>
+  </main>
+
+  <script type="module">
+    import { runFamilyC } from './eoreader4-eval/family-c-void.mjs';
+
+    const pct = (x) => (x * 100).toFixed(1) + '%';
+    const el = (tag, attrs = {}, ...kids) => {
+      const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') n.className = v;
+        else if (k === 'html') n.innerHTML = v;
+        else n.setAttribute(k, v);
+      }
+      for (const c of kids) n.append(c?.nodeType ? c : document.createTextNode(c));
+      return n;
+    };
+    const card = (label, value, target, ok) => {
+      const c = el('div', { class: 'card' }, el('div', { class: 'label' }, label));
+      const val = el('div', { class: 'value' }, String(value));
+      if (ok != null) val.append(' ', el('span', { class: 'pill ' + (ok ? 'pass' : 'fail') }, ok ? 'PASS' : 'FAIL'));
+      c.append(val);
+      if (target) c.append(el('div', { class: 'target' }, target));
+      return c;
+    };
+
+    // --- Family C renderer ---------------------------------------------------
+    const renderFamilyC = (body, { rows, scores: s, meta }) => {
+      body.replaceChildren();
+
+      const cards = el('div', { class: 'cards' });
+      cards.append(
+        card('Void recall', pct(s.voidRecall), 'target ≥ 90%', s.voidRecall >= 0.90),
+        card('Void precision', pct(s.voidPrecision), 'target ≥ 75%', s.voidPrecision >= 0.75),
+        card('Over-abstention', pct(s.overAbstention), 'target ≤ 15%', s.overAbstention <= 0.15),
+        card('Near-miss voids', `${s.nearCaught}/${s.nearTotal}`, 'hardest class'),
+        card('Confusion', `tp ${s.tp} · fn ${s.fn} · fp ${s.fp} · tn ${s.tn}`, `${s.goldVoid} void / ${s.goldAns} answerable`),
+      );
+      body.append(cards);
+
+      if (s.saturated.length) {
+        const ids = s.saturated.map(f => `${f.id} (${pct(f.frac)})`).join(', ');
+        body.append(el('div', { class: 'banner warn', html:
+          `⚠ <b>Saturated discriminator</b> — fired on &gt; ${(s.saturationThreshold * 100).toFixed(0)}% of a balanced set: <b>${ids}</b>. ` +
+          `A flag firing on nearly every turn carries no abstention signal, so this run is a plumbing / regression ` +
+          `check, <b>not a valid family-C score</b> (spec §C.6). The 0% void recall is <b>by design</b>: the ` +
+          `<code>answerable</code> verdict is conservative and abstention was moved downstream — which only ` +
+          `discriminates with the MiniLM organ live.` }));
+      }
+
+      body.append(el('div', { class: 'banner note', html:
+        `<b>Config:</b> model <code>${meta.model}</code> · embedder <code>${meta.embedder}</code> · ` +
+        `classifier <code>${meta.classifier}</code> · FM2 measured: <b>${meta.fm2Measured}</b>. ` +
+        `FM2 (the spec's run-gating number) needs MiniLM live + a real generative model at <code>llm</code>.` }));
+
+      const tbl = el('table');
+      tbl.append(el('thead', {}, el('tr', {},
+        el('th', {}, ''), el('th', {}, 'expected'), el('th', {}, 'predicted'),
+        el('th', {}, 'spans/top'), el('th', {}, 'flags'), el('th', {}, 'question'))));
+      const tb = el('tbody');
+      for (const r of rows) {
+        const correct = (r.expected === 'void') === r.predictedVoid;
+        const flags = el('td', {});
+        for (const f of r.flags) flags.append(el('span', { class: 'flagchip' }, f));
+        tb.append(el('tr', {},
+          el('td', {}, el('span', { class: 'mark ' + (correct ? 'ok' : 'no') }, correct ? '✓' : '✗')),
+          el('td', {}, r.expected + (r.near ? ' ' : ''), r.near ? el('span', { class: 'tag' }, '[near]') : ''),
+          el('td', {}, r.predictedVoid ? 'void' : 'answer'),
+          el('td', {}, el('code', { class: 'mono' }, `${r.spans} / ${r.top}`)),
+          flags,
+          el('td', { class: 'q' }, r.q)));
+      }
+      tbl.append(tb);
+      body.append(tbl);
+      body.append(el('div', { class: 'foot' },
+        'Targets the answerable stage (void verdict) and the veto flag-and-tell contract. Stage coverage: fold ○ · answerable ● · veto ○.'));
+    };
+
+    // --- Families registry (add E, etc. here as they are stood up) -----------
+    const FAMILIES = [
+      { id: 'C', title: 'Family C — void detection / abstention',
+        targets: 'answerable · veto', run: runFamilyC, render: renderFamilyC },
+    ];
+
+    const mount = document.getElementById('families');
+    const ui = {};
+    for (const fam of FAMILIES) {
+      const progress = el('div', { class: 'progress' }, 'not run yet');
+      const body = el('div', { class: 'body' }, progress);
+      const runBtn = el('button', { class: 'run' }, '▶ Run');
+      const head = el('div', { class: 'head' },
+        el('h2', {}, fam.title), el('span', { class: 'targets' }, '→ ' + fam.targets),
+        el('span', { class: 'spacer', style: 'flex:1' }), runBtn);
+      const wrap = el('div', { class: 'family open' }, head, body);
+      mount.append(wrap);
+      ui[fam.id] = { fam, body, progress, runBtn };
+      runBtn.addEventListener('click', () => runOne(fam.id));
+    }
+
+    const runOne = async (id) => {
+      const { fam, body, progress, runBtn } = ui[id];
+      runBtn.disabled = true;
+      body.replaceChildren(progress);
+      progress.textContent = 'running…';
+      try {
+        const result = await fam.run({
+          onCase: (row, i, n) => { progress.textContent = `running… ${i + 1}/${n}  (${row.q})`; },
+        });
+        progress.textContent = `done — ${result.rows.length} cases through the real pipeline`;
+        fam.render(body, result);
+        body.prepend(progress);
+      } catch (e) {
+        progress.textContent = '';
+        body.replaceChildren(el('div', { class: 'banner warn' }, 'Error: ' + (e?.message || e)));
+        console.error(e);
+      } finally {
+        runBtn.disabled = false;
+      }
+    };
+
+    document.getElementById('run-all').addEventListener('click', async () => {
+      for (const fam of FAMILIES) await runOne(fam.id);
+    });
+  </script>
+</body>
+</html>
