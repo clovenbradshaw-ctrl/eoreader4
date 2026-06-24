@@ -18,7 +18,7 @@ import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';
 import { frameSpan }            from './frame.js';
 import { extractMetadata }      from './metadata.js';
-import { createEntityAdmission }from './entities.js';
+import { createEntityAdmission, scanInitialisms }from './entities.js';
 import { parseRelations, scanDescriptors } from './relations.js';
 import { argumentSpanSeg }      from './proposition.js';
 import { createCorefField }     from './coref.js';
@@ -252,6 +252,28 @@ export const createParser = ({
                        reason: 'surname-containment-thin', surname: obs.surname, sentIdx });
           surnameMerges.push({ synSeq: syn.seq, surname: obs.surname });
         }
+      }
+
+      // Acronym ↔ expansion (§8 ORG-1). With this sentence's names admitted, look for
+      // the parenthetical initialism construction — "Nashville Downtown Partnership
+      // (NDP)" — where the parenthesised all-caps token's letters are the name's
+      // initials. On a match we commit a SYN alias (the projection unions it, so every
+      // bare "NDP" — before or after the definition — lands on the one node) with a
+      // write-time EVA, SEDIMENT it as a defeasible REC in the conventions ledger (no
+      // acronym table — learned from the text), and re-point admission so the
+      // document's own later mentions resolve without re-deriving. A learned alias is
+      // committed once: the guard skips a parenthetical the ledger already carries.
+      for (const ini of scanInitialisms(sent, admission)) {
+        if (admission.initialismOf(ini.acronymLabel)) continue;          // already learned this read
+        if (ini.acronymId !== ini.expansionId) {
+          const syn = log.append({ op: 'SYN', kind: 'merge', from: ini.acronymId, to: ini.expansionId,
+                                   label: ini.expansion, sentIdx, match: 'initialism', warrant: 'initialism',
+                                   evidence: 'initialism', acronym: ini.acronym });
+          log.append({ op: 'EVA', site: 'merge', ref: syn.seq, verdict: VERDICTS.CORROBORATED,
+                       reason: 'initialism-expansion', acronym: ini.acronym, sentIdx });
+        }
+        admission.registerInitialism(ini.acronymLabel, ini.expansionId);
+        conventions.learnInitialism(ini.acronym, ini.expansionId);
       }
 
       // The relations parser reads coref two ways: `field()` for a leading

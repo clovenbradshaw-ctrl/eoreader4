@@ -34,7 +34,7 @@
 // (relation-types.js) is core; the perceiver's idFor is NOT imported — the one-line
 // label normalization is duplicated below rather than reaching up into a faculty.
 
-import { isFunctional } from './relation-types.js';
+import { attributesConflict } from './relation-types.js';
 
 // normLabel — the identity key (the doc's `norm2`). Deliberately mirrors the
 // perceiver's idFor (perceiver/parse/entities.js): lowercase, spaces→'-', strip to
@@ -135,7 +135,14 @@ export const discriminatorIndex = (edges, find, labelFor) => {
 //   'open'    — neither: the asterisk holds and identity remains a void.
 // Conflict dominates convergence — conflicting discriminators are positive evidence
 // of two people, not merely the absence of evidence for one.
-export const evaluateSameAs = (rootA, rootB, { discriminatorsOf, minConvergence = 1, functionalVias = null } = {}) => {
+//
+// The conflict semantics are NOT held here: this is the consume side of the spec's
+// ID-4 oracle. `attributesConflict` (the typing bridge, injectable via the opt — the
+// same discipline as the parser's injected rolesConflict) judges whether two value-
+// sets on one via are incompatible; evaluateSameAs only counts the verdicts. A custom
+// oracle (or learned functionality, threaded as `functionalVias`) flows straight in.
+export const evaluateSameAs = (rootA, rootB,
+  { discriminatorsOf, minConvergence = 1, functionalVias = null, attributesConflict: conflictOracle = attributesConflict } = {}) => {
   const A = discriminatorsOf(rootA) || EMPTY;
   const B = discriminatorsOf(rootB) || EMPTY;
   const shared = [];
@@ -145,9 +152,11 @@ export const evaluateSameAs = (rootA, rootB, { discriminatorsOf, minConvergence 
     if (!targetsB) continue;
     const overlap = [...targetsA].filter(t => targetsB.has(t));
     if (overlap.length) { for (const t of overlap) shared.push({ via, target: t }); continue; }
-    // same via, disjoint targets — a clash only when the relation is one-valued.
-    if (isFunctional(via) || (functionalVias && functionalVias.has(via)))
-      conflicts.push({ via, a: [...targetsA], b: [...targetsB] });
+    // same via, disjoint targets — ask the oracle whether the values conflict (a
+    // one-valued attribute filled by disjoint fillers, or typed-role disjointness).
+    const verdict = conflictOracle(via, [...targetsA], [...targetsB], { functionalVias });
+    if (verdict && verdict.conflict > 0)
+      conflicts.push({ via, a: [...targetsA], b: [...targetsB], conflict: verdict.conflict, reason: verdict.reason });
   }
   let verdict = 'open';
   if (conflicts.length) verdict = 'split';

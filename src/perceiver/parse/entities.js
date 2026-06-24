@@ -30,6 +30,60 @@ const CONN  = String.raw`de|von|van|der|del|di|du|la|le|of|the`;
 const NAME  = String.raw`[A-Z][a-zA-Z]+(?:\s+(?:${CONN}\s+)?[A-Z][a-zA-Z]+)*`;
 const CAP_RE = new RegExp(String.raw`\b(?:${TITLE}\s+)?${NAME}\b`, 'g');
 
+// ── Initialism (acronym ↔ expansion) — a learned, defeasible org alias ───────
+// The orthographic MECHANISM only (the parse leaf holds mechanism, never a table):
+// is `acronym` the initialism of `expansion`? Take the expansion's words, drop the
+// lowercase connectors a name carries (the same CONN class — "of", "the", "von": a
+// real initialism skips them, "Bank of America" → "BOA"), and compare the leading
+// capitals to the acronym's letters. STRICT exact match keeps it high-precision — a
+// shell that shares only some tokens ("NDMC" vs "Nashville Downtown Partnership")
+// does NOT pass, which is exactly the structural distinctness §8 wants preserved.
+// No acronym dictionary anywhere: a pair is proposed only when the text co-locates
+// the two forms and the letters line up; the alias is then sedimented as a REC rule.
+const CONN_SET = new Set(CONN.split('|'));
+export const initialismMatch = (acronym, expansion) => {
+  const ac = String(acronym || '').replace(/[^A-Za-z]/g, '').toUpperCase();
+  if (ac.length < 2) return false;
+  const all = String(expansion || '').trim().split(/\s+/).filter(Boolean);
+  if (all.length < 2) return false;                   // a one-word "expansion" initialises nothing
+  const initialsOf = (ws) => ws.map((w) => (w[0] || '').toUpperCase()).join('');
+  // An acronym may either skip the connectors ("Nashville Downtown Partnership" → NDP)
+  // or keep them ("Bank of America" → BOA): accept against the initials computed BOTH
+  // ways, so either convention lines up. The expansion must still be ≥2 real words.
+  const content = all.filter((w) => !CONN_SET.has(w.toLowerCase()));
+  if (content.length < 2) return false;
+  return ac === initialsOf(all) || ac === initialsOf(content);
+};
+
+// The parenthetical seeding context: an admitted multi-word name immediately
+// followed by a parenthesised all-caps token whose letters are that name's
+// initials — "Nashville Downtown Partnership (NDP)". Pure over the sentence + the
+// live admission; reports the pair (with ids where the side is admitted) for the
+// pipeline to commit as a SYN alias and learn as a convention.
+const ACRO_RE = String.raw`[A-Z][A-Z.&]+`;
+const INITIALISM_RE = new RegExp(String.raw`(${NAME})\s*\(\s*(${ACRO_RE})\s*\)`, 'g');
+export const scanInitialisms = (sentence, admission) => {
+  const s = String(sentence || '');
+  const out = [];
+  const re = new RegExp(INITIALISM_RE.source, 'g');
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    const expansion = cleanLabel(m[1]);
+    const acronym   = m[2].replace(/[.&]/g, '');
+    if (!expansion || !acronym) continue;
+    if (!admission || !admission.isAdmitted(expansion)) continue;   // the expansion is the anchor
+    if (!initialismMatch(acronym, expansion)) continue;
+    const expansionId = admission.idOf(expansion);
+    // The acronym's canonical id — idFor, the same normalisation a bare "NDP" admits
+    // under — so the SYN alias the pipeline emits unions any independently-sighted
+    // "NDP" (before OR after the definition) onto the expansion, and stays auditable
+    // even when "(NDP)" alone never cleared gravity on its own.
+    const acronymId = idFor(acronym);
+    out.push({ acronym, acronymLabel: acronym, acronymId, expansion, expansionId, index: m.index });
+  }
+  return out;
+};
+
 // The default convention predicates, from the seeds — used by the standalone
 // scanner and by an admission constructed without a live ledger. The pipeline
 // passes its own (seed ∪ learned), so a document's dialect flows straight in.
@@ -146,6 +200,19 @@ export const createEntityAdmission = ({ conventions } = {}) => {
   const admitted  = new Map(); // label → id (post-admission)
   const sightSent = new Map(); // label → number[] (every sighting's sentIdx)
   const mentions  = new Map(); // id    → number[] (sentence indices, ordered)
+  const initialisms = new Map(); // acronym label → expansion id (learned org alias)
+
+  // Sediment a learned acronym↔expansion alias into admission state: a bare acronym
+  // now RESOLVES to the expansion's id without re-deriving (the §8 ORG-1 promise).
+  // Re-points the acronym's label so every later sighting is admitted under the
+  // expansion — the same state mutation the head (given-name) alias makes, applied
+  // to organisations. The SYN event the pipeline emits is the auditable record; this
+  // is the fast path that keeps the document's own later mentions on one node.
+  const registerInitialism = (acronymLabel, expansionId) => {
+    if (!acronymLabel || !expansionId) return;
+    initialisms.set(acronymLabel, expansionId);
+    admitted.set(acronymLabel, expansionId);
+  };
 
   const noteMention = (id, sentIdx) => {
     if (sentIdx == null) return;
@@ -243,8 +310,10 @@ export const createEntityAdmission = ({ conventions } = {}) => {
 
   return {
     observe,
+    registerInitialism,
     isAdmitted: (label) => admitted.has(label),
     idOf:       (label) => admitted.get(label),
+    initialismOf: (acronymLabel) => initialisms.get(acronymLabel) ?? null,
     labelOf:    (id)    => {
       for (const [label, eid] of admitted) if (eid === id) return label;
       return null;
@@ -252,6 +321,7 @@ export const createEntityAdmission = ({ conventions } = {}) => {
     get counts()   { return counts; },
     get admitted() { return admitted; },
     get mentions() { return mentions; },
+    get initialisms() { return initialisms; },
   };
 };
 

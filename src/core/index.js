@@ -62,6 +62,7 @@ export { bridgeSurprise, BRIDGE_DINF } from './bridge.js';
 export {
   PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,
   relationPrior, areDisjoint, functionalClash, checkRelationConflict,
+  attributesConflict,
 } from './relation-types.js';
 // The learning layer (reshape §5): one defeasible ledger, priors + learned, same
 // slot. It lives in the core because the built-in reading knowledge is inherited
