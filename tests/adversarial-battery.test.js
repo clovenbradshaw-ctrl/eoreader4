@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { parseText } from '../src/perceiver/parse/pipeline.js';
 import { projectGraph } from '../src/core/project.js';
+import { attributesConflict } from '../src/core/index.js';
 
 // Adversarial battery (Draft 0.1), identity families A/B/C/H — MEASURED against the
 // engine, not hypothesized. Each case below was run; the GREEN ones are committed as
@@ -58,6 +60,23 @@ test('[B5-ctrl] the SAME birth date leaves the merge standing — the veto does 
   assert.equal(d.log.events.some((e) => e.op === 'SEG' && e.kind === 'retract'), false);
 });
 
+test('[B6] indeterminate zone (Fellegi-Sunter): same name + conflicting key is CONTESTED, not split', () => {
+  // Strong agreement (the identical full name) + one disagreement on a functional key is
+  // the F-S middle zone: ONE entity, the key held INDETERMINATE for adjudication, both
+  // source values retained — NOT two entities (the B5 veto needs only a shared surname),
+  // NOT a silent overwrite. This is the disagreement-as-signal the near-identity
+  // literature (Recasens 2012) says surfaces exactly here.
+  const d = P('John Smith was born in 1961. John Smith chaired Acme. John Smith was born in 1962.');
+  const johns = [...projectGraph(d.log).entities.keys()].filter((k) => /john/.test(k));
+  assert.equal(johns.length, 1, 'strong name agreement ⇒ one entity, not two');
+  const eva = d.log.events.find((e) => e.op === 'EVA' && e.reason === 'functional-key-contested' && e.id === 'john-smith');
+  assert.ok(eva, 'the conflicting key is held for adjudication');
+  assert.equal(eva.verdict, 'indeterminate');
+  assert.deepEqual([...eva.values].sort(), ['1961', '1962']);
+  assert.deepEqual(d.log.events.filter((e) => e.op === 'DEF' && e.key === 'bornOn').map((e) => e.value).sort(),
+    ['1961', '1962'], 'both source-attributed values stay in the log');
+});
+
 test('[B3] (frontier) two IDENTICAL full names still merge — needs within-doc splitting', { skip: 'RED B3: two "John Smith" with no distinguishing key share one id; splitting one id by per-mention attributes is unbuilt' }, () => {
   const d = P('John Smith chaired the senate hearing. John Smith fixed the leaking pipe.');
   const johns = [...projectGraph(d.log).entities.keys()].filter((k) => /john/.test(k));
@@ -102,6 +121,33 @@ test('[C2b] (frontier) a structural CON is POSITIVE evidence of distinctness (OR
 
 test('[C5] (frontier) person/org type-incompatibility is a hard merge veto', { skip: 'RED C5: no entity-type (person vs org) channel, so same surface form trivially shares a node' }, () => {
   assert.ok(false);
+});
+
+// ── D · confidence — orthogonality of incompatible functional keys ───────────
+
+test('[D4] orthogonality is an EXACT zero — incompatible functional keys give conflict=1 (P(coref)=0)', () => {
+  // The hard end of the continuum is a Born-zero, not a thresholded small number: two
+  // distinct values of a one-valued key (two EINs, two birth dates) are exactly
+  // incompatible. A shared value is exactly compatible.
+  assert.equal(attributesConflict('ein', '12-3456789', '98-7654321', { functional: true }).conflict, 1);
+  assert.equal(attributesConflict('ein', '12-3456789', '12-3456789', { functional: true }).conflict, 0);
+  assert.equal(attributesConflict('bornOn', '1961', '1979', { functional: true }).conflict, 1);
+});
+
+// ── Honesty constraint (v0.2): challenge-set ≠ task performance ───────────────
+
+test('[corpus] the new functional / contested / initialism paths do not fire on attested prose', () => {
+  // The constructed minimal pairs above pass; this guards that they do not MISFIRE on
+  // real text. Every new path is construction-gated, so Metamorphosis triggers none and
+  // its real characters still admit — the goldens enforce the byte-identity beneath this.
+  let text;
+  try { text = readFileSync(new URL('../data/metamorphosis.txt', import.meta.url), 'utf8'); }
+  catch { return; }   // fixture absent in some checkouts — the goldens still cover it
+  const doc = parseText(text, { docId: 'meta' });
+  const ev = doc.log.events;
+  assert.equal(ev.some((e) => e.op === 'EVA' && /functional-key/.test(e.reason || '')), false, 'no spurious functional conflict');
+  assert.equal(ev.some((e) => e.op === 'SYN' && e.match === 'initialism'), false, 'no spurious initialism');
+  assert.equal(doc.admission.isAdmitted('Gregor'), true, 'a real character still admits');
 });
 
 // ── H · the log-as-trail ─────────────────────────────────────────────────────

@@ -188,13 +188,16 @@ export const createParser = ({
     // fires their rebutter when the surname proves shared by distinct agents — OR when
     // the endpoints carry a conflicting high-functionality key (a birth date).
     const surnameMerges = [];
-    // Per-entity functional attributes harvested during the read (id → {key: value}).
-    // A high-functionality key (a birth date) takes one value per entity, so two ids a
-    // tail merge would unite bearing DIFFERENT values is positive evidence of two
-    // entities — the §6 ID-6 / §7 PER-2 functional-conflict veto. The conflict verdict
-    // is the injected oracle's, never decided here; bornOn is flagged functional (ID-1).
+    // Per-entity functional attributes harvested during the read: id → Map(key →
+    // Map(value → firstSentIdx)). A high-functionality key (a birth date) takes one
+    // value per entity, so TWO ids a tail merge would unite bearing different values is
+    // positive evidence of two entities (the §6 ID-6 / §7 PER-2 veto, B5), while ONE id
+    // sighted under one name bearing two values is DISAGREEMENT, not distinctness (the
+    // Fellegi-Sunter indeterminate zone, B6). The conflict verdict is the injected
+    // oracle's, never decided here; bornOn is flagged functional (ID-1).
     const attrsById = new Map();
     const FUNCTIONAL_KEYS = new Set(['bornOn']);
+    const valuesOf = (id, key) => { const v = attrsById.get(id)?.get(key); return v ? [...v.keys()] : []; };
 
     // The structural frame (computed in Pass 0 above) is held BEFORE the per-line
     // chrome test so a block of licence prose — full sentences a per-line test reads
@@ -291,8 +294,9 @@ export const createParser = ({
       // remembered per id, so the surname reconciliation can veto a tail merge whose
       // endpoints carry conflicting values. Narrow by construction — no goldens carry it.
       for (const a of scanFunctionalAttributes(sent, admission)) {
-        const cur = attrsById.get(a.id) || {};
-        if (cur[a.key] == null) { cur[a.key] = a.value; attrsById.set(a.id, cur); }
+        let byKey = attrsById.get(a.id); if (!byKey) attrsById.set(a.id, byKey = new Map());
+        let vals = byKey.get(a.key);     if (!vals)  byKey.set(a.key, vals = new Map());
+        if (!vals.has(a.value)) vals.set(a.value, sentIdx);          // keep every distinct value
         log.append({ op: 'DEF', id: a.id, key: a.key, value: a.value, kind: 'attr', defeasible: true, sentIdx });
       }
 
@@ -372,10 +376,10 @@ export const createParser = ({
         // overturns a tail merge the surname-sharing rebutter cannot see (one full name
         // bearing the surname, a bare surname with a different birth year).
         let funcKey = null;
-        const A = attrsById.get(m.from), B = attrsById.get(m.to);
-        if (A && B) for (const key of FUNCTIONAL_KEYS) {
-          if (A[key] != null && B[key] != null
-              && attributesConflict(key, A[key], B[key], { functional: true }).conflict > 0) { funcKey = key; break; }
+        for (const key of FUNCTIONAL_KEYS) {
+          const va = valuesOf(m.from, key), vb = valuesOf(m.to, key);
+          if (va.length && vb.length
+              && attributesConflict(key, va, vb, { functional: true }).conflict > 0) { funcKey = key; break; }
         }
         if (!surnameShared && !funcKey) continue;                // no rebutter live → the merge stands
         const reason    = surnameShared ? 'surname-shared-by-distinct-agents' : 'functional-key-conflict';
@@ -384,6 +388,25 @@ export const createParser = ({
                                  reason, surname: m.surname, ...(funcKey ? { key: funcKey } : {}) });
         log.append({ op: 'EVA', site: 'merge', ref: m.synSeq, verdict: VERDICTS.CONTRADICTED,
                      reason: evaReason, surname: m.surname, ...(funcKey ? { key: funcKey } : {}), defeatedBy: seg.seq });
+      }
+    }
+
+    // ── B6 — the indeterminate zone: disagreement, not distinctness ─────────────
+    // An entity sighted under ONE name bearing CONFLICTING values of a functional key
+    // (two birth dates on one "John Smith") is the Fellegi-Sunter middle: strong
+    // agreement (the identical name) with a single disagreement is neither two entities
+    // (the B5 veto, which needs WEAK corroboration — only a shared surname) nor a silent
+    // overwrite. It is CONTESTED — both values stay in the log, and an EVA holds the key
+    // INDETERMINATE (verdicts.js: "indeterminate is held — the no-commit discipline"),
+    // the adjudication surface the answer layer reads. The oracle decides the conflict.
+    for (const [id, byKey] of attrsById) {
+      for (const key of FUNCTIONAL_KEYS) {
+        const vals = byKey.get(key);
+        if (!vals || vals.size < 2) continue;
+        const arr = [...vals.keys()];
+        if (attributesConflict(key, [arr[0]], arr.slice(1), { functional: true }).conflict > 0)
+          log.append({ op: 'EVA', site: 'attr', id, key, verdict: VERDICTS.INDETERMINATE,
+                       reason: 'functional-key-contested', values: arr });
       }
     }
 

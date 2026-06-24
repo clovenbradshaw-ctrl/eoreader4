@@ -90,6 +90,16 @@ the oracle, not the pipeline, owns the conflict semantics, and a *matching* date
 the merge standing (the veto does not over-fire). The extractor is deliberately narrow
 (a 4-digit year behind an explicit `born`/date-paren) so no golden carries it.
 
+The veto is the **weak-corroboration** end (only a shared surname links the two ids).
+Its complement is the **strong-corroboration** middle: an entity sighted under one
+*identical* name bearing two conflicting values (`John Smith … born 1961` … `John Smith
+… born 1962`) is **disagreement, not distinctness** — the Fellegi-Sunter indeterminate
+zone (Recasens' near-identity surfaces *as* this disagreement). The reconciliation keeps
+it **one** entity, holds the key `INDETERMINATE` via an `EVA` (the no-commit verdict),
+and retains both source values in the log — never two entities, never a silent
+overwrite. So the same functional-key conflict reads two ways by corroboration strength:
+veto a thin merge, contest a thick one.
+
 ### 4 · Calendar tokens are temporal expressions, not referents  (§4 detection)
 
 A capitalised weekday/month in an argument slot ("reconvene **Monday**") reached the
@@ -105,7 +115,8 @@ admits; a personification that genuinely recurs can re-earn it as the convention
 |---|---|
 | §8 ORG-1 acronym↔expansion, learned + defeasible (example 3) | **done here** |
 | §5.3 ID-4 / EM-3 `attributesConflict` injected oracle | **done here** |
-| §6 ID-6 / §7 PER-2 functional-key veto on a tail merge (example 2) | **done here** |
+| §6 ID-6 / §7 PER-2 functional-key veto on a tail merge (example 2 · B5) | **done here** |
+| §6 B6 the Fellegi-Sunter indeterminate zone — contested, not split | **done here** |
 | §4 calendar tokens denied referential gravity (the weekday over-admit) | **done here** |
 | §6 ID-6 functional-conflict → split (cross-source) | extended (now via the oracle) |
 | §8 ORG-4 distinctness preserved by the strict initialism test | guarded + tested |
