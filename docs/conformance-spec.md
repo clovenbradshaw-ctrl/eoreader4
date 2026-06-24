@@ -156,6 +156,16 @@ Two complementary standards isolate the two error directions:
 - FM2 (confabulating at a void) is the single most important number in the whole spec; any run exceeding 2% fails regardless of all other scores.
 - Void recall asymmetrically prioritized over precision: it is acceptable to over-abstain a little, never to confabulate.
 
+### C.6 Empirical note — measure the contract end-to-end, not the `answerable` verdict
+
+A first exploratory run (16 hand-built domain triples, balanced void/answerable, `echo` model + hash embedder) surfaced two things that change how this family must be measured:
+
+1. **The `answerable` void verdict caught 0 of 8 gold voids.** This is **by design, not a defect.** Under P0.2 the void no longer pre-empts the talker; `answerVoid` (`src/surfer/answerable.js`) is conservative by construction — it asserts VOID only when *no* referent resolves, *no* retrieval hit is strong (score ≥ 0.5 or ≥ 2 shared content tokens), *and* the field is measurably flat. The hardest void class — a question naming entities that *are* in the document but asking for an attribute that is *not* ("how much did the readers cost?", "what caused the collapse?") — clears the lexical-overlap gate and is handed to the talker on purpose. The abstention contract was deliberately moved **downstream** (diagonal guard + edge vetoes). **Conclusion: family C must score the end-to-end behavior (`answerable` ∪ diagonal-guard ∪ edge-vetoes ∪ the talker's own refusal), never the `answerable` verdict in isolation. Scoring the verdict alone reports a 0% recall that is architecturally expected and tells you nothing.**
+
+2. **The downstream net saturated to noise in this configuration.** Every one of the 16 turns — all 8 answerable ones included — fired `referent-ambiguous`, because that flag fires whenever the coref posterior is not `concentrated`, and under the hash organ it never concentrates. A flag that fires on 100% of a balanced set carries zero abstention signal. The discriminating vetoes (`off-diagonal-void`, `edge-*`) need the live MiniLM classifier or they degrade to `indeterminate`, and FM2 itself needs a generative model that can actually emit a claim at a gap — `echo` cannot confabulate.
+
+**Validity gate (added as a result):** a family-C run is only valid with the **MiniLM organ live** *and* a **real generative model** at `llm`. Reject any run where a single flag fires on more than ~60% of a balanced answerable/void set — that is a saturated-discriminator signal (a degraded organ), not a measurement. Record both conditions in the manifest (§8.1).
+
 ---
 
 ## 4. Test family D — Faithfulness / factcheck
