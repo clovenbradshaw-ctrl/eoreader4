@@ -267,6 +267,20 @@ export const SEED_DEMONYM = Object.freeze([
   'baltic', 'anglo', 'saxon',
 ]);
 
+// Calendar tokens — weekday and month names. Like demonyms, they are capitalised and
+// can land in an argument slot ("reconvene Monday", "due January"), so the gravity
+// floor admits them as one-shot figures; admission consults this register to deny that
+// referential gravity (a date is a temporal expression, not a referent). Errs toward
+// safety exactly as the demonym list does: weekdays (no common given-name collisions)
+// plus only the months that do NOT collide with given names — March/April/May/June/
+// July/August are also names, so they are OMITTED rather than silently drop a character.
+// Seeded for English and learnable like every register; a personified "Monday" that
+// truly recurs as a figure can still earn its way back as the convention is revised.
+export const SEED_CALENDAR = Object.freeze([
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  'january', 'february', 'september', 'october', 'november', 'december',
+]);
+
 export const SEED_FIELD_LABEL = Object.freeze([
   // bibliographic front matter
   'title', 'subtitle', 'author', 'authors', 'editor', 'translator', 'illustrator',
@@ -294,6 +308,7 @@ const SEEDS = {
   'conjunction': SEED_CONJUNCTION,
   'field-label': SEED_FIELD_LABEL,
   'demonym': SEED_DEMONYM,
+  'calendar': SEED_CALENDAR,
 };
 
 // The pre-baked strain-history a prior carries: a seed is not an axiom, it is a
@@ -338,6 +353,9 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
         support: e.support || PRIOR_SUPPORT,
         strain: 0,
         defeated: false,
+        // A value-bearing convention (today: an initialism's expansion) inherits its
+        // value, so a sedimented "NDP ⇒ …" alias survives into a later read as a prior.
+        ...(e.expansion != null ? { expansion: e.expansion } : {}),
       });
     }
   }
@@ -410,6 +428,9 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
     // A demonym / proper adjective ("Russian", "French") — read by entity admission
     // to deny ATTRIBUTIVE gravity ("Russian novelist" is not a character), seed ∪ learned.
     isDemonym: (v) => has('demonym', v),
+    // A calendar token (weekday / month) — read by entity admission to deny referential
+    // gravity ("reconvene Monday" is not a character), seed ∪ learned.
+    isCalendar: (v) => has('calendar', v),
     // A coordinating conjunction joining two like constituents ('and'/'or'/'nor') —
     // read by the relation parser to admit a coordinated subject ("Name and Name …"),
     // seed ∪ learned. NOT the adversative/illative connectives the function class holds.
@@ -418,6 +439,22 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
     // metadata pass to confirm a labeled line is a bibliographic field, seed ∪ learned.
     isFieldLabel: (v) => has('field-label', v),
     learnFieldLabel: (token, weight = 1) => learn('field-label', token, weight),
+    // An acronym↔expansion alias (§8 ORG-1) — "NDP" ⇒ the Nashville Downtown
+    // Partnership — LEARNED from the parenthetical construction the reader meets, never
+    // seeded (no acronym dictionary: EM-1/EM-2). It lives in the same store as every
+    // other convention, so it is defeasible (eva can break it) and inheritable (a later
+    // read picks it up as a prior, exportLedger carries the expansion). The register is
+    // keyed on the acronym; the entry additionally remembers the `expansion` the alias
+    // resolves to — the one register that carries a value beside its strain-history.
+    learnInitialism: (acronym, expansion, weight = 1) => {
+      const t = norm(acronym);
+      const m = ensure('initialism');
+      const e = m.get(t);
+      if (e) { e.weight += weight; e.support += weight; e.expansion = expansion; e.origin = 'learned'; e.defeated = false; }
+      else m.set(t, { origin: 'learned', weight, support: weight, strain: 0, defeated: false, expansion });
+      rules.push({ op: 'REC', kind: 'initialism', token: t, expansion, weight, t: Date.now() });
+    },
+    initialismOf: (acronym) => { const e = entryOf('initialism', acronym); return (e && !e.defeated) ? (e.expansion ?? null) : null; },
     // Convention status — the strain-history a consumer or a test can read.
     isDefeated: (kind, v) => { const e = entryOf(kind, v); return !!e && e.defeated; },
     originOf: (kind, v) => entryOf(kind, v)?.origin ?? null,
@@ -457,7 +494,8 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
       for (const [kind, m] of Object.entries(reg))
         for (const [token, e] of m)
           out.push({ kind, token, origin: e.origin, weight: e.weight, support: e.support,
-                     strain: e.strain, defeated: e.defeated });
+                     strain: e.strain, defeated: e.defeated,
+                     ...(e.expansion != null ? { expansion: e.expansion } : {}) });
       return out;
     },
   };

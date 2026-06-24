@@ -13,12 +13,13 @@
 
 import { createLog }            from '../../core/index.js';
 import { VERDICTS }             from '../../core/index.js';
+import { attributesConflict }   from '../../core/index.js';
 import { segmentSentences }     from './sentences.js';
 import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';
 import { frameSpan }            from './frame.js';
 import { extractMetadata }      from './metadata.js';
-import { createEntityAdmission }from './entities.js';
+import { createEntityAdmission, scanInitialisms, scanFunctionalAttributes }from './entities.js';
 import { parseRelations, scanDescriptors } from './relations.js';
 import { argumentSpanSeg }      from './proposition.js';
 import { createCorefField }     from './coref.js';
@@ -183,9 +184,20 @@ export const createParser = ({
     let lastIns = null;                         // { id, sentIdx } in reading order
 
     // Defeasible surname (tail) merges accumulate here as they are committed, each
-    // with the seq of its SYN. After the read, the reconciliation fires their
-    // rebutter when the surname proves shared by distinct agents (see below).
+    // with the seq of its SYN and its endpoints. After the read, the reconciliation
+    // fires their rebutter when the surname proves shared by distinct agents — OR when
+    // the endpoints carry a conflicting high-functionality key (a birth date).
     const surnameMerges = [];
+    // Per-entity functional attributes harvested during the read: id → Map(key →
+    // Map(value → firstSentIdx)). A high-functionality key (a birth date) takes one
+    // value per entity, so TWO ids a tail merge would unite bearing different values is
+    // positive evidence of two entities (the §6 ID-6 / §7 PER-2 veto, B5), while ONE id
+    // sighted under one name bearing two values is DISAGREEMENT, not distinctness (the
+    // Fellegi-Sunter indeterminate zone, B6). The conflict verdict is the injected
+    // oracle's, never decided here; bornOn is flagged functional (ID-1).
+    const attrsById = new Map();
+    const FUNCTIONAL_KEYS = new Set(['bornOn']);
+    const valuesOf = (id, key) => { const v = attrsById.get(id)?.get(key); return v ? [...v.keys()] : []; };
 
     // The structural frame (computed in Pass 0 above) is held BEFORE the per-line
     // chrome test so a block of licence prose — full sentences a per-line test reads
@@ -250,8 +262,42 @@ export const createParser = ({
                                    rebutter: 'distinct-agent-shares-surname' });
           log.append({ op: 'EVA', site: 'merge', ref: syn.seq, verdict: VERDICTS.INDETERMINATE,
                        reason: 'surname-containment-thin', surname: obs.surname, sentIdx });
-          surnameMerges.push({ synSeq: syn.seq, surname: obs.surname });
+          surnameMerges.push({ synSeq: syn.seq, surname: obs.surname, from: obs.id, to: obs.aliasOf });
         }
+      }
+
+      // Acronym ↔ expansion (§8 ORG-1). With this sentence's names admitted, look for
+      // the parenthetical initialism construction — "Nashville Downtown Partnership
+      // (NDP)" — where the parenthesised all-caps token's letters are the name's
+      // initials. On a match we commit a SYN alias (the projection unions it, so every
+      // bare "NDP" — before or after the definition — lands on the one node) with a
+      // write-time EVA, SEDIMENT it as a defeasible REC in the conventions ledger (no
+      // acronym table — learned from the text), and re-point admission so the
+      // document's own later mentions resolve without re-deriving. A learned alias is
+      // committed once: the guard skips a parenthetical the ledger already carries.
+      for (const ini of scanInitialisms(sent, admission)) {
+        if (admission.initialismOf(ini.acronymLabel)) continue;          // already learned this read
+        if (ini.acronymId !== ini.expansionId) {
+          const syn = log.append({ op: 'SYN', kind: 'merge', from: ini.acronymId, to: ini.expansionId,
+                                   label: ini.expansion, sentIdx, match: 'initialism', warrant: 'initialism',
+                                   evidence: 'initialism', acronym: ini.acronym });
+          log.append({ op: 'EVA', site: 'merge', ref: syn.seq, verdict: VERDICTS.CORROBORATED,
+                       reason: 'initialism-expansion', acronym: ini.acronym, sentIdx });
+        }
+        admission.registerInitialism(ini.acronymLabel, ini.expansionId);
+        conventions.learnInitialism(ini.acronym, ini.expansionId);
+      }
+
+      // Functional-attribute harvest (§7 PER-4). A birth date front-loaded by an
+      // appositive ("Smith (born 1979)") or a copular "born in" is a high-functionality
+      // identity key: at most one value per entity. Logged as a defeasible DEF attr and
+      // remembered per id, so the surname reconciliation can veto a tail merge whose
+      // endpoints carry conflicting values. Narrow by construction — no goldens carry it.
+      for (const a of scanFunctionalAttributes(sent, admission)) {
+        let byKey = attrsById.get(a.id); if (!byKey) attrsById.set(a.id, byKey = new Map());
+        let vals = byKey.get(a.key);     if (!vals)  byKey.set(a.key, vals = new Map());
+        if (!vals.has(a.value)) vals.set(a.value, sentIdx);          // keep every distinct value
+        log.append({ op: 'DEF', id: a.id, key: a.key, value: a.value, kind: 'attr', defeasible: true, sentIdx });
       }
 
       // The relations parser reads coref two ways: `field()` for a leading
@@ -323,11 +369,44 @@ export const createParser = ({
         bearers.get(s).add(label);
       }
       for (const m of surnameMerges) {
-        if ((bearers.get(m.surname)?.size || 0) < 2) continue;   // unique surname → the merge stands
+        const surnameShared = (bearers.get(m.surname)?.size || 0) >= 2;
+        // Functional-conflict veto (§6 ID-6 / §7 PER-2): the two endpoints a tail merge
+        // would unite carry a CONFLICTING high-functionality key — one birth date, two
+        // values. The injected oracle decides; bornOn is flagged functional (ID-1). This
+        // overturns a tail merge the surname-sharing rebutter cannot see (one full name
+        // bearing the surname, a bare surname with a different birth year).
+        let funcKey = null;
+        for (const key of FUNCTIONAL_KEYS) {
+          const va = valuesOf(m.from, key), vb = valuesOf(m.to, key);
+          if (va.length && vb.length
+              && attributesConflict(key, va, vb, { functional: true }).conflict > 0) { funcKey = key; break; }
+        }
+        if (!surnameShared && !funcKey) continue;                // no rebutter live → the merge stands
+        const reason    = surnameShared ? 'surname-shared-by-distinct-agents' : 'functional-key-conflict';
+        const evaReason = surnameShared ? 'distinct-agent-shares-surname'     : 'functional-key-conflict';
         const seg = log.append({ op: 'SEG', kind: 'retract', refSeq: m.synSeq,
-                                 reason: 'surname-shared-by-distinct-agents', surname: m.surname });
+                                 reason, surname: m.surname, ...(funcKey ? { key: funcKey } : {}) });
         log.append({ op: 'EVA', site: 'merge', ref: m.synSeq, verdict: VERDICTS.CONTRADICTED,
-                     reason: 'distinct-agent-shares-surname', surname: m.surname, defeatedBy: seg.seq });
+                     reason: evaReason, surname: m.surname, ...(funcKey ? { key: funcKey } : {}), defeatedBy: seg.seq });
+      }
+    }
+
+    // ── B6 — the indeterminate zone: disagreement, not distinctness ─────────────
+    // An entity sighted under ONE name bearing CONFLICTING values of a functional key
+    // (two birth dates on one "John Smith") is the Fellegi-Sunter middle: strong
+    // agreement (the identical name) with a single disagreement is neither two entities
+    // (the B5 veto, which needs WEAK corroboration — only a shared surname) nor a silent
+    // overwrite. It is CONTESTED — both values stay in the log, and an EVA holds the key
+    // INDETERMINATE (verdicts.js: "indeterminate is held — the no-commit discipline"),
+    // the adjudication surface the answer layer reads. The oracle decides the conflict.
+    for (const [id, byKey] of attrsById) {
+      for (const key of FUNCTIONAL_KEYS) {
+        const vals = byKey.get(key);
+        if (!vals || vals.size < 2) continue;
+        const arr = [...vals.keys()];
+        if (attributesConflict(key, [arr[0]], arr.slice(1), { functional: true }).conflict > 0)
+          log.append({ op: 'EVA', site: 'attr', id, key, verdict: VERDICTS.INDETERMINATE,
+                       reason: 'functional-key-contested', values: arr });
       }
     }
 

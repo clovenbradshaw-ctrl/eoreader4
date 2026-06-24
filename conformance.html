@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b0b0d">
-  <title>eoreader4 · conformance</title>
+  <title>eoreader4 · the model frontier</title>
   <style>
     :root { --bg:#0b0b0d; --panel:#151518; --panel2:#18181b; --line:#27272a;
             --fg:#e4e4e7; --muted:#a1a1aa; --dim:#71717a; --accent:#60a5fa;
@@ -19,8 +19,9 @@
     header h1 { font-size:1.05rem; margin:0; font-weight:600; }
     header .spacer { flex:1; }
     main { max-width:1040px; margin:0 auto; padding:1.4rem 1.2rem 4rem; }
-    .lede { color:var(--muted); font-size:.92rem; max-width:72ch; }
+    .lede { color:var(--muted); font-size:.92rem; max-width:74ch; }
     .lede code { color:var(--teal); background:var(--panel2); padding:.05rem .3rem; border-radius:4px; }
+    .lede b { color:var(--fg); }
     button.run { background:#1d2030; color:var(--fg); border:1px solid #2c4a46;
                  border-radius:7px; padding:.5rem .95rem; font-size:.92rem; cursor:pointer; letter-spacing:.02em; }
     button.run:hover:not(:disabled) { background:#24283a; }
@@ -38,50 +39,53 @@
     .card .value { font-size:1.35rem; font-variant-numeric:tabular-nums; margin-top:.15rem; }
     .card .target { font-size:.72rem; color:var(--dim); margin-top:.1rem; }
     .pill { display:inline-block; font-size:.68rem; font-weight:600; padding:.08rem .4rem; border-radius:99px; vertical-align:middle; }
-    .pill.pass { background:rgba(52,211,153,.16); color:var(--good); }
-    .pill.fail { background:rgba(248,113,113,.16); color:var(--bad); }
+    .pill.physics  { background:rgba(52,211,153,.16); color:var(--good); }
+    .pill.frontier { background:rgba(251,191,36,.16); color:var(--warn); }
     .banner { border-radius:8px; padding:.7rem .9rem; font-size:.86rem; margin:.2rem 0 1rem; }
     .banner.warn { background:rgba(251,191,36,.1); border:1px solid rgba(251,191,36,.35); color:#fcd34d; }
     .banner.note { background:var(--panel2); border:1px solid var(--line); color:var(--muted); }
     .banner b { color:var(--fg); }
     table { width:100%; border-collapse:collapse; font-size:.83rem; margin-top:.4rem; }
-    th, td { text-align:left; padding:.32rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+    th, td { text-align:left; padding:.42rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
     th { color:var(--dim); font-weight:500; font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; }
     td.q { color:var(--fg); }
     .mark.ok { color:var(--good); }
-    .mark.no { color:var(--bad); }
-    .tag { font-size:.7rem; color:var(--dim); }
-    .flagchip { display:inline-block; background:rgba(251,191,36,.12); color:#fcd34d;
-                font-size:.68rem; padding:.02rem .3rem; border-radius:4px; margin:0 .2rem .15rem 0; }
-    code.mono { font-variant-numeric:tabular-nums; color:var(--muted); }
+    .mark.no { color:var(--warn); }
+    .kind { display:inline-block; font-size:.66rem; font-weight:600; padding:.04rem .35rem; border-radius:4px;
+            background:rgba(96,165,250,.13); color:#93c5fd; letter-spacing:.03em; }
+    .caseid { font-weight:600; color:var(--fg); font-variant-numeric:tabular-nums; }
+    .input { color:var(--dim); font-size:.78rem; margin-top:.2rem; }
+    .measured { color:var(--muted); }
+    .needs { color:#fcd34d; font-size:.8rem; }
     .foot { color:var(--dim); font-size:.78rem; margin-top:.6rem; }
   </style>
 </head>
 <body>
   <header>
-    <h1>eoreader4 · conformance</h1>
+    <h1>eoreader4 · the model frontier</h1>
     <span class="spacer"></span>
     <a href="index.html">← app</a>
   </header>
   <main>
     <p class="lede">
-      Runs the conformance test families from
-      <a href="https://github.com/clovenbradshaw-ctrl/eoreader4/blob/main/docs/conformance-spec.md">docs/conformance-spec.md</a>
-      against the <b>real</b> <code>runTurn</code> pipeline, in your browser, with the same
-      <code>src/</code> modules the app loads. Deterministic — <code>echo</code> model + hash
-      embedder, no network, no weights. That determinism is also the ceiling: it measures the
-      <code>answerable</code> void verdict and the veto flags, but it <b>cannot</b> measure FM2
-      (confabulation at a void) — that needs a live generative model. Results are a baseline-run
-      artifact, not a pass/fail certificate.
+      These are the cases <b>physics alone cannot reach</b>. Each runs through the <b>real</b>
+      deterministic core — admission gravity, union-find identity, the symbolic conflict oracle,
+      the <code>DEF·EVA·REC</code> ledger — the same <code>src/</code> modules the app loads, with
+      <b>no model, no embedder, no weights, no network</b>. The panel measures exactly where the
+      core abstains or misses. A <b>✗ is not a defect</b>: it is the frontier the model channel is
+      for — a witness that deposits <i>defeasible weight</i> into the field, never a decider
+      (<code>coref.js</code>: “a witness observes, it does not decide”). Pass these and you have
+      needed an LLM. Grounded in the adversarial battery (CheckList · Winograd · Fellegi-Sunter ·
+      near-identity) — see
+      <a href="https://github.com/clovenbradshaw-ctrl/eoreader4/blob/main/docs/emergent-identity.md">docs/emergent-identity.md</a>.
     </p>
-    <p><button class="run" id="run-all">▶ Run all families</button></p>
+    <p><button class="run" id="run-all">▶ Run the frontier</button></p>
     <div id="families"></div>
   </main>
 
   <script type="module">
-    import { runFamilyC } from './eoreader4-eval/family-c-void.mjs';
+    import { runFrontier } from './eoreader4-eval/frontier-llm.mjs';
 
-    const pct = (x) => (x * 100).toFixed(1) + '%';
     const el = (tag, attrs = {}, ...kids) => {
       const n = document.createElement(tag);
       for (const [k, v] of Object.entries(attrs)) {
@@ -92,71 +96,63 @@
       for (const c of kids) n.append(c?.nodeType ? c : document.createTextNode(c));
       return n;
     };
-    const card = (label, value, target, ok) => {
+    const card = (label, value, target) => {
       const c = el('div', { class: 'card' }, el('div', { class: 'label' }, label));
-      const val = el('div', { class: 'value' }, String(value));
-      if (ok != null) val.append(' ', el('span', { class: 'pill ' + (ok ? 'pass' : 'fail') }, ok ? 'PASS' : 'FAIL'));
-      c.append(val);
+      c.append(el('div', { class: 'value' }, String(value)));
       if (target) c.append(el('div', { class: 'target' }, target));
       return c;
     };
 
-    // --- Family C renderer ---------------------------------------------------
-    const renderFamilyC = (body, { rows, scores: s, meta }) => {
+    const renderFrontier = (body, { rows, summary: s, meta }) => {
       body.replaceChildren();
 
       const cards = el('div', { class: 'cards' });
       cards.append(
-        card('Void recall', pct(s.voidRecall), 'target ≥ 90%', s.voidRecall >= 0.90),
-        card('Void precision', pct(s.voidPrecision), 'target ≥ 75%', s.voidPrecision >= 0.75),
-        card('Over-abstention', pct(s.overAbstention), 'target ≤ 15%', s.overAbstention <= 0.15),
-        card('Near-miss voids', `${s.nearCaught}/${s.nearTotal}`, 'hardest class'),
-        card('Confusion', `tp ${s.tp} · fn ${s.fn} · fp ${s.fp} · tn ${s.tn}`, `${s.goldVoid} void / ${s.goldAns} answerable`),
+        card('Cases', s.total, 'hardest classes'),
+        card('Reached by physics', s.reached, 'no model needed'),
+        card('Model frontier', s.frontier, 'needs the witness channel'),
+        card('Families', s.families.join(' · '), 'detection · coref · identity'),
       );
       body.append(cards);
 
-      if (s.saturated.length) {
-        const ids = s.saturated.map(f => `${f.id} (${pct(f.frac)})`).join(', ');
-        body.append(el('div', { class: 'banner warn', html:
-          `⚠ <b>Saturated discriminator</b> — fired on &gt; ${(s.saturationThreshold * 100).toFixed(0)}% of a balanced set: <b>${ids}</b>. ` +
-          `A flag firing on nearly every turn carries no abstention signal, so this run is a plumbing / regression ` +
-          `check, <b>not a valid family-C score</b> (spec §C.6). The 0% void recall is <b>by design</b>: the ` +
-          `<code>answerable</code> verdict is conservative and abstention was moved downstream — which only ` +
-          `discriminates with the MiniLM organ live.` }));
-      }
-
-      body.append(el('div', { class: 'banner note', html:
-        `<b>Config:</b> model <code>${meta.model}</code> · embedder <code>${meta.embedder}</code> · ` +
-        `classifier <code>${meta.classifier}</code> · FM2 measured: <b>${meta.fm2Measured}</b>. ` +
-        `FM2 (the spec's run-gating number) needs MiniLM live + a real generative model at <code>llm</code>.` }));
+      body.append(el('div', { class: 'banner warn', html:
+        `<b>${s.frontier}/${s.total}</b> cases are unreachable by the deterministic core — that is the point. ` +
+        `Each is a place where meaning, world-knowledge, or accumulated agreement-weight must enter, ` +
+        `which is precisely what the model deposits as defeasible field weight. The core does not guess: ` +
+        `it abstains, and the abstention is the honest signal.` }));
 
       const tbl = el('table');
       tbl.append(el('thead', {}, el('tr', {},
-        el('th', {}, ''), el('th', {}, 'expected'), el('th', {}, 'predicted'),
-        el('th', {}, 'spans/top'), el('th', {}, 'flags'), el('th', {}, 'question'))));
+        el('th', {}, ''), el('th', {}, 'case'), el('th', {}, 'kind'),
+        el('th', {}, 'what the deterministic core did'), el('th', {}, 'needs the model for'))));
       const tb = el('tbody');
       for (const r of rows) {
-        const correct = (r.expected === 'void') === r.predictedVoid;
-        const flags = el('td', {});
-        for (const f of r.flags) flags.append(el('span', { class: 'flagchip' }, f));
+        const status = el('td', {}, el('span', { class: 'mark ' + (r.reached ? 'ok' : 'no') }, r.reached ? '✓' : '✗'),
+          ' ', el('span', { class: 'pill ' + (r.reached ? 'physics' : 'frontier') }, r.reached ? 'PHYSICS' : 'FRONTIER'));
+        const caseCell = el('td', { class: 'q' },
+          el('span', { class: 'caseid' }, r.id), ' — ', r.title,
+          el('div', { class: 'input' }, r.input));
         tb.append(el('tr', {},
-          el('td', {}, el('span', { class: 'mark ' + (correct ? 'ok' : 'no') }, correct ? '✓' : '✗')),
-          el('td', {}, r.expected + (r.near ? ' ' : ''), r.near ? el('span', { class: 'tag' }, '[near]') : ''),
-          el('td', {}, r.predictedVoid ? 'void' : 'answer'),
-          el('td', {}, el('code', { class: 'mono' }, `${r.spans} / ${r.top}`)),
-          flags,
-          el('td', { class: 'q' }, r.q)));
+          status,
+          caseCell,
+          el('td', {}, el('span', { class: 'kind' }, r.kind)),
+          el('td', { class: 'measured' }, r.measured),
+          el('td', { class: 'needs' }, r.needs)));
       }
       tbl.append(tb);
       body.append(tbl);
+
+      body.append(el('div', { class: 'banner note', html:
+        `<b>Config:</b> engine <code>${meta.engine}</code> · model <code>${meta.model}</code> · ` +
+        `embedder <code>${meta.embedder}</code> · network <code>${meta.network}</code>. ${meta.note}` }));
       body.append(el('div', { class: 'foot' },
-        'Targets the answerable stage (void verdict) and the veto flag-and-tell contract. Stage coverage: fold ○ · answerable ● · veto ○.'));
+        'INV = invariance / metamorphic relation · DIR = directional (trigger flip) · MFT = minimum functionality. ' +
+        'Kinds per CheckList (Ribeiro et al. 2020).'));
     };
 
-    // --- Families registry (add E, etc. here as they are stood up) -----------
     const FAMILIES = [
-      { id: 'C', title: 'Family C — void detection / abstention',
-        targets: 'answerable · veto', run: runFamilyC, render: renderFamilyC },
+      { id: 'F', title: 'Frontier — where the deterministic core hits its ceiling',
+        targets: 'detection · coreference · identity', run: runFrontier, render: renderFrontier },
     ];
 
     const mount = document.getElementById('families');
@@ -181,9 +177,9 @@
       progress.textContent = 'running…';
       try {
         const result = await fam.run({
-          onCase: (row, i, n) => { progress.textContent = `running… ${i + 1}/${n}  (${row.q})`; },
+          onCase: (row, i, n) => { progress.textContent = `running… ${i + 1}/${n}  (${row.id} ${row.title})`; },
         });
-        progress.textContent = `done — ${result.rows.length} cases through the real pipeline`;
+        progress.textContent = `done — ${result.rows.length} hard cases through the real deterministic core`;
         fam.render(body, result);
         body.prepend(progress);
       } catch (e) {

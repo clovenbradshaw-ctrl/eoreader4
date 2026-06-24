@@ -100,6 +100,50 @@ export const functionalClash = (a, b) => {
     && ta.gender && tb.gender && ta.gender === tb.gender);
 };
 
+// ── The attribute conflict oracle (spec §5.3 ID-4 / EM-3) ───────────────────
+//
+// Generalises rolesConflict/areDisjoint into the one place the conflict semantics
+// for ANY attribute live, so the identity code (coref, the asterisk's evaluateSameAs)
+// CONSULTS conflict, never CONTAINS it — "a leaf claims no knowledge it wasn't
+// handed." Given an attribute type and two value-sets, it answers how strongly they
+// are incompatible, in [0,1]:
+//
+//   match            any shared value → 0 (a match never conflicts).
+//   role-disjoint    the values are typed roles the algebra knows cannot co-occur on
+//                    one bearer (sister ⟂ mother, mother ⟂ father) → 1. This is the
+//                    areDisjoint generalisation.
+//   functional-clash a SINGLE-VALUED attribute filled by non-overlapping values — one
+//                    birth date, one spouse, one licence — is positive evidence of TWO
+//                    entities → 1. Whether the type is single-valued is INJECTED, not
+//                    declared here: a kinship/social relation reads its functionality
+//                    from the primitive table; a biographical key (bornOn, licence,
+//                    qid) is flagged by the caller via `functional`/`functionalVias`,
+//                    the seam where the spec's LEARNED functionality (ID-1) enters.
+//   soft / unknown   nationality, an untyped attribute → 0. The oracle DEFERS rather
+//                    than guess ("no conflict" ≠ "consistent"), exactly as the rest of
+//                    the algebra defers on an unmapped noun.
+//
+// Itself defeasible: it is a function the assembly layer can replace or wrap (the
+// `attributesConflict` opt threads through evaluateSameAs), the same discipline as
+// the injected rolesConflict.
+const toValueSet = (v) => {
+  const arr = Array.isArray(v) ? v : [v];
+  return new Set(arr.map((x) => String(x ?? '').trim().toLowerCase()).filter(Boolean));
+};
+export const attributesConflict = (attrType, a, b, opts = {}) => {
+  const A = toValueSet(a), B = toValueSet(b);
+  if (!A.size || !B.size) return { conflict: 0, reason: 'insufficient' };
+  for (const x of A) if (B.has(x)) return { conflict: 0, reason: 'match' };   // a shared value never conflicts
+  // Typed-role disjointness — pairwise, since the values themselves are the roles.
+  for (const x of A) for (const y of B) if (areDisjoint(x, y)) return { conflict: 1, reason: 'role-disjoint' };
+  // Single-valued attribute, non-overlapping fillers. Functionality is the relation
+  // table's where it knows the type, plus whatever the caller injects (learned keys).
+  const functional = opts.functional
+    ?? (isFunctional(attrType) || !!(opts.functionalVias && opts.functionalVias.has(attrType)));
+  if (functional) return { conflict: 1, reason: 'functional-clash' };
+  return { conflict: 0, reason: 'soft' };                                     // nationality / unknown → defer
+};
+
 // ── The symbolic verdict, embedder-free ────────────────────────────────────
 //
 // Returns a VERDICTS-tagged result, or null when the claim is outside the algebra
