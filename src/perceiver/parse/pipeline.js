@@ -410,6 +410,53 @@ export const createParser = ({
       }
     }
 
+    // ── B6.5 — within-document near-identity, surfaced (not merged) ──────────────
+    // Two DISTINCT multi-word names sharing a surname AND a discriminator (both run
+    // NDP) are corroborated past coincidence — Fellegi-Sunter agreement-weight, not
+    // string-identity. The tail-alias can't see it (both are multi-word) so today they
+    // sit as two unrelated entities. When such a corroborated pair ALSO conflicts on a
+    // functional key, that is the genuine adjudication middle: likely one person with a
+    // bad record, possibly two — so we SURFACE it as a held, contested near-identity
+    // (an EVA, INDETERMINATE), never an auto-merge (guard-first: merging corroborated
+    // same-surname names is the dangerous half, deferred). Detection is engine (surname
+    // + shared discriminator, corpus statistics); the resolution is the witness's.
+    // Construction-gated three ways (surname ∧ shared discriminator ∧ functional
+    // conflict), so it stays silent on prose that carries none.
+    const discrimTargets = new Map();   // id → Set(discriminator target), naming vias excluded
+    for (const { rel } of candidates) {
+      if ((rel.op !== 'CON' && rel.op !== 'SIG') || !rel.src || rel.tgt == null) continue;
+      const via = String(rel.via || '').toLowerCase();
+      if (via === 'name' || via === 'named' || via === 'called' || via === 'alias') continue;
+      let s = discrimTargets.get(rel.src); if (!s) discrimTargets.set(rel.src, s = new Set());
+      s.add(String(rel.tgt).toLowerCase());
+    }
+    const bySurname = new Map();         // surname → Set(id) over admitted MULTI-word names
+    for (const [label, id] of admission.admitted) {
+      const w = label.split(' ');
+      if (w.length < 2) continue;
+      const s = w[w.length - 1].toLowerCase();
+      let set = bySurname.get(s); if (!set) bySurname.set(s, set = new Set());
+      set.add(id);
+    }
+    for (const [surname, idset] of bySurname) {
+      const ids = [...idset];
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i], b = ids[j];
+        if (a === b) continue;
+        const da = discrimTargets.get(a), db = discrimTargets.get(b);
+        if (!da || !db || ![...da].some((t) => db.has(t))) continue;     // need corroboration beyond the surname
+        let conflictKey = null;
+        for (const key of FUNCTIONAL_KEYS) {
+          const va = valuesOf(a, key), vb = valuesOf(b, key);
+          if (va.length && vb.length
+              && attributesConflict(key, va, vb, { functional: true }).conflict > 0) { conflictKey = key; break; }
+        }
+        if (!conflictKey) continue;                                      // no dispute → nothing to surface here
+        log.append({ op: 'EVA', site: 'identity', a, b, surname, key: conflictKey,
+                     verdict: VERDICTS.INDETERMINATE, reason: 'near-identity-contested' });
+      }
+    }
+
     // Move 3 — the relation recurrence gate (ReVerb's lexical constraint). A real
     // relation recurs; a verb seen once is suspect. We gate relations the way the
     // referent table gates entities — by recurrence — but HOLD WEAK rather than

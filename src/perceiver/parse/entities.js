@@ -93,7 +93,7 @@ export const scanInitialisms = (sentence, admission) => {
 // (the worked-example-2 functional-conflict veto). Deliberately narrow: a 4-digit year
 // behind an explicit "born"/date-paren, never a bare number, so it cannot misfire on
 // the goldens (which carry no such construction).
-const BIRTH_RE = new RegExp(String.raw`(${NAME})\s*(?:,?\s+(?:was\s+|were\s+)?born\s+(?:in\s+|on\s+)?|\(\s*(?:born\s+|b\.\s*)?)(\d{4})\b`, 'g');
+const BIRTH_RE = new RegExp(String.raw`((?:${TITLE}\s+)?${NAME})\s*(?:,?\s+(?:was\s+|were\s+)?born\s+(?:in\s+|on\s+)?|\(\s*(?:born\s+|b\.\s*)?)(\d{4})\b`, 'g');
 export const scanFunctionalAttributes = (sentence, admission) => {
   const s = String(sentence || '');
   const out = [];

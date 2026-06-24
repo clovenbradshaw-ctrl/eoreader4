@@ -41,6 +41,18 @@
     .pill { display:inline-block; font-size:.68rem; font-weight:600; padding:.08rem .4rem; border-radius:99px; vertical-align:middle; }
     .pill.physics  { background:rgba(52,211,153,.16); color:var(--good); }
     .pill.frontier { background:rgba(251,191,36,.16); color:var(--warn); }
+    .pill.engine   { background:rgba(52,211,153,.16); color:var(--good); }
+    .pill.mixed    { background:rgba(251,191,36,.16); color:var(--warn); }
+    .pill.model    { background:rgba(248,113,113,.16); color:var(--bad); }
+    .axisbar { display:flex; align-items:stretch; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin:.4rem 0 1rem; font-size:.78rem; }
+    .axisbar .seg { padding:.5rem .7rem; flex:1; }
+    .axisbar .seg b { display:block; font-size:.8rem; }
+    .axisbar .seg.eng { background:rgba(52,211,153,.08); color:#a7f3d0; }
+    .axisbar .seg.mix { background:rgba(251,191,36,.08); color:#fcd34d; }
+    .axisbar .seg.mod { background:rgba(248,113,113,.1); color:#fca5a5; border-left:2px solid var(--bad); }
+    .axisbar .seg small { color:var(--dim); }
+    .subcase { color:var(--dim); font-size:.76rem; margin-top:.25rem; }
+    .subcase .sc { color:var(--muted); } .subcase .t-engine { color:var(--good); } .subcase .t-model { color:var(--bad); }
     .banner { border-radius:8px; padding:.7rem .9rem; font-size:.86rem; margin:.2rem 0 1rem; }
     .banner.warn { background:rgba(251,191,36,.1); border:1px solid rgba(251,191,36,.35); color:#fcd34d; }
     .banner.note { background:var(--panel2); border:1px solid var(--line); color:var(--muted); }
@@ -68,17 +80,26 @@
   </header>
   <main>
     <p class="lede">
-      These are the cases <b>physics alone cannot reach</b>. Each runs through the <b>real</b>
-      deterministic core — admission gravity, union-find identity, the symbolic conflict oracle,
-      the <code>DEF·EVA·REC</code> ledger — the same <code>src/</code> modules the app loads, with
-      <b>no model, no embedder, no weights, no network</b>. The panel measures exactly where the
-      core abstains or misses. A <b>✗ is not a defect</b>: it is the frontier the model channel is
-      for — a witness that deposits <i>defeasible weight</i> into the field, never a decider
-      (<code>coref.js</code>: “a witness observes, it does not decide”). Pass these and you have
-      needed an LLM. Grounded in the adversarial battery (CheckList · Winograd · Fellegi-Sunter ·
-      near-identity) — see
-      <a href="https://github.com/clovenbradshaw-ctrl/eoreader4/blob/main/docs/emergent-identity.md">docs/emergent-identity.md</a>.
+      Hard coreference / identity cases, run through the <b>real</b> deterministic core — admission
+      gravity, union-find identity, the symbolic conflict oracle, the <code>DEF·EVA·REC</code> ledger —
+      the same <code>src/</code> modules the app loads, with <b>no model, no embedder, no weights,
+      no network</b>. The panel places each on the one axis that matters: <b>does resolving it need
+      the WITNESS CHANNEL to read meaning?</b> The tempting cut — hand-coded vs learned — is wrong,
+      because the engine’s middle tier already holds a <i>corpus-learned statistical layer</i>
+      (Fellegi-Sunter m/u weights, discriminativeness, the <code>REC</code> ledger). <b>Learned is
+      not the model.</b> The boundary is meaning: a witness reads it and deposits defeasible weight
+      into the field; it never decides (<code>coref.js</code>: “a witness observes, it does not
+      decide”). Most cases sit at <span class="pill engine">ENGINE</span> (the next deterministic
+      build) or <span class="pill mixed">MIXED</span> (a learned core, a witness tail); only a few
+      genuinely cross to <span class="pill model">MODEL</span>. Grounded in the battery
+      (CheckList · Winograd · Fellegi-Sunter · near-identity) — see
+      <a href="https://github.com/clovenbradshaw-ctrl/eoreader4/blob/main/docs/resolution-spectrum.md">docs/resolution-spectrum.md</a>.
     </p>
+    <div class="axisbar">
+      <div class="seg eng"><b>engine</b><small>deterministic rules + corpus-learned statistics — no witness</small></div>
+      <div class="seg mix"><b>mixed</b><small>a learned/rule core with a witness-needing tail or sub-case</small></div>
+      <div class="seg mod"><b>model</b><small>needs the witness channel to read meaning</small></div>
+    </div>
     <p><button class="run" id="run-all">▶ Run the frontier</button></p>
     <div id="families"></div>
   </main>
@@ -103,51 +124,63 @@
       return c;
     };
 
+    const witnessLabel = (w) => w === true ? 'needs witness' : w === 'tail' ? 'witness on tail' : 'no witness';
     const renderFrontier = (body, { rows, summary: s, meta }) => {
       body.replaceChildren();
 
       const cards = el('div', { class: 'cards' });
       cards.append(
-        card('Cases', s.total, 'hardest classes'),
-        card('Reached by physics', s.reached, 'no model needed'),
-        card('Model frontier', s.frontier, 'needs the witness channel'),
-        card('Families', s.families.join(' · '), 'detection · coref · identity'),
+        card('engine', s.engine, 'more deterministic build — no model'),
+        card('mixed', s.mixed, 'learned core · witness tail'),
+        card('model', s.model, 'genuinely needs the witness'),
+        card('witness-bound', s.witnessBound, 'crosses the meaning line'),
       );
       body.append(cards);
 
-      body.append(el('div', { class: 'banner warn', html:
-        `<b>${s.frontier}/${s.total}</b> cases are unreachable by the deterministic core — that is the point. ` +
-        `Each is a place where meaning, world-knowledge, or accumulated agreement-weight must enter, ` +
-        `which is precisely what the model deposits as defeasible field weight. The core does not guess: ` +
-        `it abstains, and the abstention is the honest signal.` }));
+      body.append(el('div', { class: 'banner note', html:
+        `Of <b>${s.total}</b> hard cases, <b>${s.witnessBound}</b> strictly need the witness channel; the rest are ` +
+        `reachable by more engine (deterministic rules + corpus-learned statistics) or straddle. The core does not ` +
+        `guess where it can’t read meaning — it abstains, and the abstention is the honest signal.` }));
 
       const tbl = el('table');
       tbl.append(el('thead', {}, el('tr', {},
-        el('th', {}, ''), el('th', {}, 'case'), el('th', {}, 'kind'),
-        el('th', {}, 'what the deterministic core did'), el('th', {}, 'needs the model for'))));
+        el('th', {}, 'tier'), el('th', {}, 'case'), el('th', {}, 'kind'),
+        el('th', {}, 'what the deterministic core does today'), el('th', {}, 'what crossing the line needs'))));
       const tb = el('tbody');
       for (const r of rows) {
-        const status = el('td', {}, el('span', { class: 'mark ' + (r.reached ? 'ok' : 'no') }, r.reached ? '✓' : '✗'),
-          ' ', el('span', { class: 'pill ' + (r.reached ? 'physics' : 'frontier') }, r.reached ? 'PHYSICS' : 'FRONTIER'));
+        const tierCell = el('td', {},
+          el('span', { class: 'pill ' + r.tier }, r.tier.toUpperCase()),
+          el('div', { class: 'tag', style: 'margin-top:.2rem' }, witnessLabel(r.needsWitness)));
         const caseCell = el('td', { class: 'q' },
           el('span', { class: 'caseid' }, r.id), ' — ', r.title,
           el('div', { class: 'input' }, r.input));
+        const needsCell = el('td', { class: 'needs' }, r.crosses);
+        if (r.subcases) {
+          const sc = el('div', { class: 'subcase' }, 'straddles: ');
+          r.subcases.forEach((c, i) => {
+            if (i) sc.append(' · ');
+            sc.append(el('span', { class: 'sc' }, c.case + ' → '),
+                      el('span', { class: 't-' + c.tier }, c.tier));
+          });
+          needsCell.append(sc);
+        }
         tb.append(el('tr', {},
-          status,
-          caseCell,
+          tierCell, caseCell,
           el('td', {}, el('span', { class: 'kind' }, r.kind)),
           el('td', { class: 'measured' }, r.measured),
-          el('td', { class: 'needs' }, r.needs)));
+          needsCell));
       }
       tbl.append(tb);
       body.append(tbl);
 
       body.append(el('div', { class: 'banner note', html:
+        `<b>Axis:</b> ${meta.axis}` }));
+      body.append(el('div', { class: 'banner note', html:
         `<b>Config:</b> engine <code>${meta.engine}</code> · model <code>${meta.model}</code> · ` +
-        `embedder <code>${meta.embedder}</code> · network <code>${meta.network}</code>. ${meta.note}` }));
+        `embedder <code>${meta.embedder}</code> · network <code>${meta.network}</code>.` }));
       body.append(el('div', { class: 'foot' },
-        'INV = invariance / metamorphic relation · DIR = directional (trigger flip) · MFT = minimum functionality. ' +
-        'Kinds per CheckList (Ribeiro et al. 2020).'));
+        'INV = invariance / metamorphic relation · DIR = directional (trigger flip) · MFT = minimum functionality ' +
+        '(CheckList, Ribeiro et al. 2020). Tiers from src/core/resolution-spectrum.js — the panel and the live classifier share one taxonomy.'));
     };
 
     const FAMILIES = [
