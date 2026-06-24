@@ -1,145 +1,120 @@
-// Frontier — the cases physics alone cannot reach.
+// Frontier — the witness-channel spectrum, measured on the real engine.
 //
-// The deterministic core (admission gravity, union-find identity, the symbolic
-// conflict oracle, the DEF·EVA·REC ledger) runs with NO model, NO embedder, NO
-// network — and that is its ceiling. This module runs the adversarial battery's
-// HARD cases (Winograd, casing-invariance, ontology-from-verb, weight-keyed
-// corroboration, author-name disambiguation) through the REAL pipeline and measures
-// where the physics abstains or misses. Each "✗ reached" is not a bug — it is the
-// frontier the model channel is for: a witness that deposits defeasible weight into
-// the field, never a decider. Pass these and you have needed an LLM.
+// The honest axis is NOT hand-coded-vs-learned. It is: does resolving this need the
+// WITNESS CHANNEL to read meaning? The engine side is the large middle — deterministic
+// rules PLUS corpus-learned statistics (Fellegi-Sunter m/u, discriminativeness, the
+// REC ledger) — and it is emphatically not the model; only open-domain meaning crosses
+// the line. Most "the core can't do this yet" cases sit at `engine` (the next
+// deterministic build) or `mixed` (a learned/deterministic core with a witness tail);
+// only a few genuinely need the channel.
 //
-// Pure, browser-safe: imports only the same `src/` ES modules the app loads. No
-// console, no process. The Node CLI and conformance.html both import `runFrontier`.
+// Each case runs through the REAL parseText + projectGraph (no model, no embedder, no
+// weights) to MEASURE what the core does today, and pulls its tier from the canonical
+// spectrum (src/core/resolution-spectrum.js) so the panel and the classifier agree.
+// Pure, browser-safe; the Node CLI and conformance.html both import `runFrontier`.
 
 import { parseText }    from '../src/perceiver/parse/pipeline.js';
 import { projectGraph } from '../src/core/project.js';
+import { spectrumOf, needsWitness } from '../src/core/resolution-spectrum.js';
 
 const labelsOf = (doc) => [...doc.admission.admitted.keys()].sort();
-const idsOf    = (doc) => new Set([...doc.admission.admitted.values()]);
 const eqSet    = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 const entityCount = (doc, re) => {
   const g = projectGraph(doc.log);
   return new Set([...g.entities.keys()].filter((k) => re.test(k)).map((k) => g.representative(k))).size;
 };
 
-// Each case runs the real engine and returns a row:
-//   { id, kind, family, title, input, measured, reached, needs }
-// `reached` = did the deterministic engine meet the bar with no model? (almost never —
-// that is the point). `needs` names the model capability a pass would require.
+// A case names the spectrum TYPE it exemplifies; tier/needsWitness/subcases come from
+// the canonical taxonomy, and `measure()` runs the engine to report today's behavior.
 const CASES = [
 
-  // ── A4 · INV · casing invariance (the metamorphic relation for the audio path) ──
-  () => {
-    const text  = 'Mara Singh requested the retention policy. She received no reply.';
-    const lower = text.toLowerCase();
-    const orig  = labelsOf(parseText(text,  { docId: 'a4-cased' }));
-    const low   = labelsOf(parseText(lower, { docId: 'a4-lower' }));
-    return {
-      id: 'A4', kind: 'INV', family: 'detection',
-      title: 'Casing invariance — lowercasing must not change who exists',
-      input: `“${text}”  vs  its lowercased copy`,
-      measured: `cased ⇒ {${orig.join(', ') || '∅'}} · lowercased ⇒ {${low.join(', ') || '∅'}}`,
-      reached: eqSet(orig, low),
-      needs: 'source-adaptive detection / truecasing — caps is the candidate gate (ED-6/7). The S1–S4 generator, gated by source class.',
-    };
-  },
+  { id: 'A4', kind: 'INV', spectrum: 'casing-detection',
+    title: 'Casing invariance — lowercasing must not change who exists',
+    input: '“Mara Singh requested the retention policy. She received no reply.” vs its lowercased copy',
+    measure: () => {
+      const text  = 'Mara Singh requested the retention policy. She received no reply.';
+      const orig  = labelsOf(parseText(text, { docId: 'a4c' }));
+      const low   = labelsOf(parseText(text.toLowerCase(), { docId: 'a4l' }));
+      return `cased ⇒ {${orig.join(', ') || '∅'}} · lowercased ⇒ {${low.join(', ') || '∅'}}` +
+             (eqSet(orig, low) ? ' — invariant holds' : ' — invariance VIOLATED (caps is the gate)');
+    },
+    crosses: 'clean lowercased text: the source-class gate + S1–S4 (deterministic + learned). Genuine ASR/OCR NOISE: the witness.' },
 
-  // ── A3 · DIR · same token, two ontologies (type from verb-selection) ──
-  () => {
-    const a = parseText('Apple acquired the startup and reported record earnings.', { docId: 'a3-org' });
-    const b = parseText('She ate an apple.', { docId: 'a3-fruit' });
-    const appleAdmitted = a.admission.isAdmitted('Apple');
-    // The engine has no entity-TYPE channel — it admits the capitalised token but cannot
-    // say organisation-vs-fruit, and the lowercased fruit is not admitted as a figure.
-    const fruitAdmitted = b.admission.isAdmitted('apple');
-    return {
-      id: 'A3', kind: 'DIR', family: 'detection',
-      title: 'Same token, two ontologies — Apple (org) vs apple (fruit)',
-      input: '“Apple acquired the startup…”  vs  “She ate an apple.”',
-      measured: `(org) “Apple” admitted: ${appleAdmitted ? 'yes' : 'no'}, type: none · (fruit) “apple” admitted: ${fruitAdmitted ? 'yes' : 'no'}`,
-      reached: false,   // detection fires on caps, but there is no org/fruit TYPE to move with the predicate
-      needs: 'an entity-type channel from verb-selection (S4) — “acquired / reported earnings” ⇒ organisation, independent of case.',
-    };
-  },
+  { id: 'A3', kind: 'DIR', spectrum: 'entity-typing',
+    title: 'Same token, two ontologies — Apple (org) vs apple (fruit)',
+    input: '“Apple acquired the startup…” vs “She ate an apple.”',
+    measure: () => {
+      const a = parseText('Apple acquired the startup and reported record earnings.', { docId: 'a3o' });
+      const b = parseText('She ate an apple.', { docId: 'a3f' });
+      return `(org) “Apple” admitted: ${a.admission.isAdmitted('Apple') ? 'yes' : 'no'}, type: none · ` +
+             `(fruit) “apple” admitted: ${b.admission.isAdmitted('apple') ? 'yes' : 'no'}`;
+    },
+    crosses: 'the injected typing bridge (verb→type: “acquired/reported earnings” ⇒ organisation) — rule + learned; only a NOVEL predicate falls to the witness.' },
 
-  // ── B8 · DIR · the Winograd trigger flip (world-knowledge pronoun resolution) ──
-  () => {
-    const sig = (doc) => doc.log.events
-      .filter((e) => e.op === 'INS' || e.op === 'CON' || e.op === 'SIG' || e.op === 'SYN')
-      .map((e) => `${e.op}:${e.src ?? e.id ?? ''}→${e.tgt ?? ''}`).join('|');
-    const a = parseText('The Senate rejected the Bill. It was too radical.', { docId: 'b8-a' });
-    const b = parseText('The Senate rejected the Bill. It was too cautious.', { docId: 'b8-b' });
-    // The trigger adjective ("radical" vs "cautious") is the only token that changes; in a
-    // world-knowledge reader it would flip what "It" resolves to. Here the structural
-    // event stream is byte-identical across the flip — the trigger word is inert.
-    const identical = sig(a) === sig(b);
-    return {
-      id: 'B8', kind: 'DIR', family: 'coreference',
-      title: 'Winograd trigger flip — “…because it was too radical / cautious”',
-      input: '“The Senate rejected the Bill. It was too radical / cautious.”',
-      measured: identical
+  { id: 'B8', kind: 'DIR', spectrum: 'pronoun-semantic',
+    title: 'Winograd trigger flip — “…because it was too radical / cautious”',
+    input: '“The Senate rejected the Bill. It was too radical / cautious.”',
+    measure: () => {
+      const sig = (doc) => doc.log.events
+        .filter((e) => e.op === 'INS' || e.op === 'CON' || e.op === 'SIG' || e.op === 'SYN')
+        .map((e) => `${e.op}:${e.src ?? e.id ?? ''}→${e.tgt ?? ''}`).join('|');
+      const a = parseText('The Senate rejected the Bill. It was too radical.', { docId: 'b8a' });
+      const b = parseText('The Senate rejected the Bill. It was too cautious.', { docId: 'b8b' });
+      return sig(a) === sig(b)
         ? 'the structural event stream is IDENTICAL across the trigger flip — resolution cannot differ'
-        : 'resolution differed (unexpected for the deterministic reader)',
-      reached: !identical,   // a real flip would make the streams differ
-      needs: 'world-knowledge pronoun resolution (the Winograd Schema). The trigger word carries meaning the physics cannot weigh.',
-    };
-  },
+        : 'resolution differed (unexpected for the deterministic reader)';
+    },
+    crosses: 'the witness channel — open-domain physical reasoning (small things fit in big things) that no field salience or symbolic table covers.' },
 
-  // ── B6.5 · MFT · weight-keyed corroboration, not string-identity ──
-  () => {
-    const doc = parseText(
-      'Tom Turner, the NDP CEO, was born in 1961. Mr. Turner was born in 1979.',
-      { docId: 'b65' });
-    const g = projectGraph(doc.log);
-    const turners = entityCount(doc, /turner/);
-    const contested = doc.log.events.some((e) => e.op === 'EVA' && e.reason === 'functional-key-contested');
-    // "Tom Turner" and "Mr. Turner" are two multi-word forms — the tail-alias only fires
-    // single↔multi-word, so they never unify; the shared role (NDP CEO) + surname is
-    // never weighed, so the conflicting birth year is neither vetoed nor contested.
-    return {
-      id: 'B6.5', kind: 'MFT', family: 'identity',
-      title: 'Weight-keyed corroboration — “Tom Turner, NDP CEO” … “Mr. Turner”',
-      input: '“Tom Turner, the NDP CEO, was born in 1961. Mr. Turner was born in 1979.”',
-      measured: `“Turner” → ${turners} entit${turners === 1 ? 'y' : 'ies'}; bornOn contested: ${contested ? 'yes' : 'no'} (corroboration on role+org+surname not weighed)`,
-      reached: false,   // B6 fires only on string-identical names; this corroboration is missed
-      needs: 'agreement-WEIGHT (Fellegi-Sunter), not string-identity — role+org+surname accumulate into the indeterminate zone (B6.5).',
-    };
-  },
+  { id: 'B6.5', kind: 'MFT', spectrum: 'held-near-identity',
+    title: 'Weight-keyed near-identity — “Tom Turner, runs NDP” … “Mr. Turner, runs NDP”',
+    input: '“Tom Turner runs NDP. Mr. Turner runs NDP. Tom Turner was born in 1961. Mr. Turner was born in 1979.”',
+    measure: () => {
+      const doc = parseText('Tom Turner runs NDP. Mr. Turner runs NDP. Tom Turner was born in 1961. Mr. Turner was born in 1979.', { docId: 'b65' });
+      const surfaced = doc.log.events.some((e) => e.op === 'EVA' && e.reason === 'near-identity-contested');
+      const turners = entityCount(doc, /turner/);
+      return surfaced
+        ? `now SURFACED as a held, contested near-identity (surname + shared org NDP, bornOn conflicts) — was: ${turners} unrelated entities`
+        : `${turners} unrelated entities (corroboration not weighed)`;
+    },
+    crosses: 'DETECTION is engine (surname + shared discriminator, corpus statistics) — now built. RESOLVING the dispute (one person with a bad record, or two) needs co-attestation / the witness.' },
 
-  // ── B3 · MFT · two people, one full name (author-name disambiguation) ──
-  () => {
-    const doc = parseText(
-      'John Smith chaired the senate hearing. John Smith fixed the leaking pipe.',
-      { docId: 'b3' });
-    const johns = entityCount(doc, /john/);
-    return {
-      id: 'B3', kind: 'MFT', family: 'identity',
-      title: 'Same full name, two people — the author-name disambiguation hard case',
-      input: '“John Smith chaired the senate hearing. John Smith fixed the leaking pipe.”',
-      measured: `two distinct “John Smith” → ${johns} node${johns === 1 ? '' : 's'} (string-identity collapses them)`,
-      reached: johns === 2,   // a senator and a plumber are two people
-      needs: 'context / world-knowledge to SPLIT a shared name on incompatible roles — the AND problem; needs per-mention typing.',
-    };
-  },
+  { id: 'B3', kind: 'MFT', spectrum: 'same-name-split',
+    title: 'Same full name, two people — author-name disambiguation',
+    input: '“John Smith chaired the senate hearing. John Smith fixed the leaking pipe.”',
+    measure: () => {
+      const doc = parseText('John Smith chaired the senate hearing. John Smith fixed the leaking pipe.', { docId: 'b3' });
+      return `two distinct “John Smith” → ${entityCount(doc, /john/)} node(s) — string-identity collapses them`;
+    },
+    crosses: 'a conflicting functional key splits them deterministically (D4 — engine); only the soft-role case (a senator who is not a plumber) needs the witness.' },
 ];
 
 export const runFrontier = async ({ onCase } = {}) => {
   const rows = [];
   for (let i = 0; i < CASES.length; i++) {
-    const row = CASES[i]();
+    const c = CASES[i];
+    const s = spectrumOf(c.spectrum) || { tier: 'model' };
+    const row = {
+      id: c.id, kind: c.kind, title: c.title, input: c.input,
+      tier: s.tier, engineKind: s.engineKind ?? null, needsWitness: needsWitness(s.tier),
+      subcases: s.subcases ?? null,
+      measured: c.measure(), crosses: c.crosses,
+    };
     rows.push(row);
     if (onCase) onCase(row, i, CASES.length);
   }
-  const reached = rows.filter((r) => r.reached).length;
-  const families = [...new Set(rows.map((r) => r.family))];
+  const tally = (t) => rows.filter((r) => r.tier === t).length;
   return {
     rows,
-    summary: { total: rows.length, reached, frontier: rows.length - reached, families },
+    summary: {
+      total: rows.length,
+      engine: tally('engine'), mixed: tally('mixed'), model: tally('model'),
+      witnessBound: rows.filter((r) => r.needsWitness === true).length,
+    },
     meta: {
       engine: 'parseText + projectGraph (the real deterministic core)',
       model: 'none', embedder: 'none', network: 'none',
-      note: 'Every row ran through the same src/ modules the app loads, with no weights. A ✗ marks the model frontier, not a defect.',
+      axis: 'needsWitness — does it need the witness channel to READ MEANING? The engine tier is deterministic rules PLUS corpus-learned statistics (Fellegi-Sunter, discriminativeness, the REC ledger) — learned is not the model.',
     },
   };
 };
