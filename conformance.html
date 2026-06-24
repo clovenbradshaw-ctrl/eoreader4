@@ -80,6 +80,7 @@
 
   <script type="module">
     import { runFamilyC } from './eoreader4-eval/family-c-void.mjs';
+    import { runFamilyE } from './eoreader4-eval/family-e-citation.mjs';
 
     const pct = (x) => (x * 100).toFixed(1) + '%';
     const el = (tag, attrs = {}, ...kids) => {
@@ -153,10 +154,58 @@
         'Targets the answerable stage (void verdict) and the veto flag-and-tell contract. Stage coverage: fold ○ · answerable ● · veto ○.'));
     };
 
-    // --- Families registry (add E, etc. here as they are stood up) -----------
+    // --- Family E renderer ---------------------------------------------------
+    const renderFamilyE = (body, { rows, scores: s, meta }) => {
+      body.replaceChildren();
+
+      const cards = el('div', { class: 'cards' });
+      cards.append(
+        card('Citation precision', pct(s.citationPrecision), 'target ≥ 90%', s.citationPrecision >= 0.90),
+        card('Citation recall', pct(s.citationRecall), 'target ≥ 85%', s.citationRecall >= 0.85),
+        card('Span-accuracy', pct(s.spanAccuracy), 'target ≥ 85%', s.spanAccuracy >= 0.85),
+        card('Wrong-twin', String(s.wrongTwin), 'near-dup mis-bindings'),
+        card('Bindings', `${s.cited}/${s.claims} cited`, `${s.requiring} require support`),
+      );
+      body.append(cards);
+
+      body.append(el('div', { class: 'banner note', html:
+        `<b>Valid run.</b> <code>bind</code> is mechanical — the model never writes [sN] — so this is ` +
+        `measurable deterministically: each echoed claim is verbatim, so its gold citation is an ` +
+        `independent string match, and the corpus seeds near-duplicate sentences so span-accuracy is a ` +
+        `real test. The one gap vs a live model: echo never paraphrases, so this scores binding on ` +
+        `<b>verbatim</b> claims. Precision below threshold here is a <b>binding-logic bug</b>, not a ` +
+        `generation problem (spec §E.4). Config: <code>${meta.model}</code> · <code>${meta.embedder}</code>.` }));
+
+      const tbl = el('table');
+      tbl.append(el('thead', {}, el('tr', {},
+        el('th', {}, ''), el('th', {}, 'cite'), el('th', {}, 'gold'),
+        el('th', {}, 'score'), el('th', {}, 'claim'))));
+      const tb = el('tbody');
+      for (const r of rows) {
+        tb.append(el('tr', {}, el('td', { colspan: '5', class: 'q', style: 'color:var(--muted);padding-top:.6rem' }, '› ' + r.q)));
+        for (const b of r.bound) {
+          const correct = b.citation && b.citedIdx === b.goldIdx;
+          const mark = b.citation ? (correct ? 'ok' : 'no') : '';
+          tb.append(el('tr', {},
+            el('td', {}, el('span', { class: 'mark ' + mark }, b.citation ? (correct ? '✓' : '✗') : '·')),
+            el('td', {}, el('code', { class: 'mono' }, b.citation || '—')),
+            el('td', {}, el('code', { class: 'mono' }, b.goldIdx != null ? 's' + b.goldIdx : '—')),
+            el('td', {}, el('code', { class: 'mono' }, String(b.score))),
+            el('td', { class: 'q' }, b.claim)));
+        }
+      }
+      tbl.append(tb);
+      body.append(tbl);
+      body.append(el('div', { class: 'foot' },
+        'Targets the bind stage (mechanical [sN] attachment). Stage coverage: bind ● · settle ○.'));
+    };
+
+    // --- Families registry (add the rest here as they are stood up) ----------
     const FAMILIES = [
       { id: 'C', title: 'Family C — void detection / abstention',
         targets: 'answerable · veto', run: runFamilyC, render: renderFamilyC },
+      { id: 'E', title: 'Family E — citation binding',
+        targets: 'bind', run: runFamilyE, render: renderFamilyE },
     ];
 
     const mount = document.getElementById('families');

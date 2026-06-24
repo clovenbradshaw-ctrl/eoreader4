@@ -234,6 +234,12 @@ Targets `bind` (mechanical `[sN]` attachment).
 
 - Because `bind` is mechanical (the model never writes `[sN]`), citation precision below threshold indicates a binding-logic bug, not a generation problem — flag as such in the report.
 
+### E.5 Empirical note — the family that *is* valid deterministically
+
+Unlike family C, family E is fully measurable with the `echo` model + hash embedder, and the contrast is instructive: because `bind` is mechanical, the deterministic config is the *honest* config, not a degraded one. The echo model emits the top retrieved spans verbatim, so each bound claim equals exactly one document sentence — and that sentence's index is an **independent gold citation** (a string match against `doc.sentences`, not the binder's own posterior). The harness (`eoreader4-eval/family-e-citation.mjs`) seeds **near-duplicate sentences** (north/south reactor, transit/bike allocations) so span-accuracy is a real test: a binder that routes a claim to the lexically-adjacent twin instead of its true source is caught and counted as a `wrong-twin` mis-binding.
+
+First run: **citation precision / recall / span-accuracy = 100%, 0 wrong-twin** over 16 bindings — the idf-weighted binder (`src/ground/bind.js`) correctly distinguished each twin (s0 north/Monday from s1 south/Tuesday; s2 cracked-valve from s3 corroded-seal). The single gap vs a live model: echo never *paraphrases*, so this measures binding on **verbatim** claims. Paraphrase-robustness — where a claim restates a span in different words and the binder must still find it — needs a generative model at `llm`. So family E's deterministic score is a *valid floor* (the mechanics are sound), and the live-model run raises the bar rather than first making the number meaningful (the way it does for family C).
+
 ---
 
 ## 6. Test family F — Veto / multi-issue handling
