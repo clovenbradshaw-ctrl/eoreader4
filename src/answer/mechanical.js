@@ -6,8 +6,16 @@
 
 import { tok } from '../perceiver/parse/index.js';
 import { editWithin, fuzzCeiling } from '../perceiver/parse/index.js';
-import { projectGraph } from '../core/index.js';
+import { projectGraph, boundedNull } from '../core/index.js';
 import { typeOf, areDisjoint } from '../core/index.js';
+
+// The non-relational confirm "Yes" line. It is DERIVED (boundedNull) from the
+// field's own chance overlap, not declared; CONFIRM_FLOOR is only the fallback,
+// reached when the field is too thin or coarse to measure a line below 1 (a
+// one-sentence doc, a two-token question). CONFIRM_ALPHA is the tolerated rate of
+// reading chance overlap as an answer — a policy, not an overlap value.
+const CONFIRM_FLOOR = 0.6;
+const CONFIRM_ALPHA = 0.05;
 
 export const answerMath = (question) => {
   const m = String(question || '').match(/(-?\d+(?:\.\d+)?)\s*([+\-*/x])\s*(-?\d+(?:\.\d+)?)/);
@@ -89,18 +97,31 @@ export const answerConfirm = (doc, question) => {
     return { route: 'confirm', text: 'The document does not say.', sources: [] };
   }
 
-  // ── non-relational confirm: the existing token-overlap path, unchanged ──
+  // ── non-relational confirm: the token-overlap path ──
+  // The "Yes" line is no longer a constant. The best sentence's overlap must beat
+  // what chance overlap throws up across the OTHER sentences (boundedNull, leave-
+  // one-out the peak — core/voidnull): a bounded-signal Born line, since overlap is
+  // a fraction in [0,1] read at a coarse grain (one shared token = 1/qLen). When the
+  // field is too thin or coarse to measure a line below 1 — a one-sentence doc, a
+  // two-token question — it falls back to CONFIRM_FLOOR. The 0.2 does-not-say floor
+  // and the deferral band above it are unchanged: asserting the void itself is the
+  // answerability reader's call (surfer/answerable), not this cheap confirm's.
   const qTokens = tok(q);
   if (qTokens.length === 0) return null;
+  const scores = [];
   let best = null;
   for (let i = 0; i < doc.sentences.length; i++) {
     const sentSet = doc.tokensBySentence[i];
     let hits = 0;
     for (const t of qTokens) if (sentSet.has(t)) hits++;
     const score = hits / qTokens.length;
+    scores.push(score);
     if (!best || score > best.score) best = { idx: i, score };
   }
-  if (best && best.score >= 0.6) {
+  const yesLine = boundedNull(scores, {
+    alpha: CONFIRM_ALPHA, grain: 1 / qTokens.length, leaveOut: best?.score, fallback: CONFIRM_FLOOR,
+  });
+  if (best && best.score >= yesLine) {
     return { route: 'confirm', text: `Yes. [s${best.idx}]`, sources: [best.idx] };
   }
   if (best && best.score < 0.2) {

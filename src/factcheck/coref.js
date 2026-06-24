@@ -20,12 +20,24 @@
 // witness-grades-itself problem.
 
 import { corefPerception, depositConversational, TALKER } from '../converse/index.js';
+import { boundedNull } from '../core/index.js';
 
 // Nearness floor — the cosine two spans must clear, in the DOCUMENT's meaning
-// space, for the geometric reader to second a proposed merge. Tunable against
-// goldens, not a constant; too loose merges two distinct people, too tight never
-// corroborates a true paraphrase.
+// space, for the geometric reader to second a proposed merge. Too loose merges
+// two distinct people, too tight never corroborates a true paraphrase.
+//
+// This is the FALLBACK, not the boundary. The boundary is derived (geometricSecond
+// below): the bounded-signal Born line over the document's own chance span-pairings
+// (core/voidnull.boundedNull), with alpha the one knob. The constant rules only
+// when no background is supplied — which, today, is always: the coref-corroboration
+// holon is built but not yet wired into a live turn, so nothing hands it the
+// document's span cosines yet. The derived path is in place and waiting for that
+// caller; until then this reads as the constant, by construction.
 export const NEARNESS_FLOOR = 0.6;
+
+// The tolerated probability of seconding a chance span-pairing as a true coref —
+// a policy, not a cosine. Matches the adjacency reader's budget (classify/phasepost).
+export const NEARNESS_ALPHA = 0.05;
 
 const cosine = (a, b) => {
   let dot = 0, na = 0, nb = 0;
@@ -48,11 +60,23 @@ export const proposeCoref = ({ a, b, cursor = null, turn = null, field = null })
 // are near in the document's own meaning space. Gated by `measuresMeaning` — under
 // the hash organ the cosine is spelling, not meaning, so it cannot second and the
 // proposal holds (§4/§10). Returns an async verdict the corroborator awaits.
-export const geometricSecond = ({ embedder, textA, textB, floor = NEARNESS_FLOOR }) => async () => {
+//
+// `background` is the document's chance span-pairings — the cosines of spans that
+// are NOT coreferent, the field's samples of what nearness chance produces. When
+// the caller supplies them the nearness line is derived from that distribution
+// (boundedNull, leave-one-out this pair), so a true paraphrase clears whatever the
+// field's own noise sets, not a number. Absent (the holon is unwired today) it
+// falls back to NEARNESS_FLOOR.
+export const geometricSecond = ({
+  embedder, textA, textB, floor = NEARNESS_FLOOR, background = null, alpha = NEARNESS_ALPHA,
+}) => async () => {
   if (!embedder?.measuresMeaning) return { seconds: false, by: 'geometric', reason: 'weak-embedder' };
   const [va, vb] = await Promise.all([embedder.embed(textA), embedder.embed(textB)]);
   const score = cosine(va, vb);
-  return { seconds: score >= floor, by: 'geometric', score };
+  const line = Array.isArray(background) && background.length
+    ? boundedNull(background, { alpha, leaveOut: score, fallback: floor })
+    : floor;
+  return { seconds: score >= line, by: 'geometric', score, line };
 };
 
 // Corroborate a coref proposal. The talker PROPOSED; a grounding reader DISPOSES.

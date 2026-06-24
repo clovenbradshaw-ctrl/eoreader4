@@ -147,6 +147,33 @@ export const deriveNull = (background, { scale = 'linear', alpha = 0.01, N, grai
   return Math.max(projection, grainFloor);
 };
 
+// ---- the bounded-signal boundary: a per-decision Born line -----------------
+
+// deriveNull's extreme-value bound answers "what is the MAX of N chance draws" —
+// the longest-snow-chain question. It is calibrated for UNBOUNDED, heavy-tailed
+// scores (pixel extents under percolation) or fine-grained counts, where a real
+// structure can tower arbitrarily over the noise. Pointed instead at a BOUNDED
+// signal — a cosine in [-1,1], an overlap FRACTION in [0,1], read at a coarse
+// grain (a few tokens) — that same bound overshoots the signal's own ceiling:
+// z·grain alone can exceed 1, so nothing ever clears it and every real match is
+// rejected. (Measured: a 27-cell centroid blob derives a line > 1.0; a 2-token
+// confirm needs a fraction > 1.0. The Born rule, misapplied, reads VOID forever.)
+//
+// The fix keeps the Born rule but reads the line as a SINGLE decision against the
+// noise, not the max of many: N=2 (this draw vs one chance draw), the minimal
+// multiple-comparison. The boundary is then the bulk's own (1-α) upper bound —
+// "just above what a typical chance value reaches" — robust to the handful of real
+// matches the bulk-fit trims. When even that cannot land below the signal's
+// structural `ceiling` (the bound is degenerate: cold start, a contaminated bulk,
+// or a grain too coarse to resolve a boundary at all), fall back to the caller's
+// constant. The physics sets the line wherever the background can support one; the
+// constant holds only at the edge it cannot. This is the bounded-signal complement
+// to deriveNull, for the relation-cosine and token-overlap floors.
+export const boundedNull = (background, { alpha = 0.05, leaveOut = null, grain = 0, ceiling = 1, fallback } = {}) => {
+  const line = deriveNull(background, { scale: 'linear', alpha, N: 2, grain, leaveOut });
+  return (Number.isFinite(line) && line < ceiling) ? line : fallback;
+};
+
 // ---- the streaming estimator: causal, adaptive, updated each step ----------
 
 // Maintain the background score distribution as a streaming estimate. `observe`

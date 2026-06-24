@@ -24,6 +24,7 @@
 // MiniLM is the embedder and verified centroids are loaded.
 
 import { BANDS, partitionCells, isMisfireCell } from './bands.js';
+import { boundedNull } from '../core/index.js';
 
 // Provenance is a second multiplier on confidence: how well a cell's centroid
 // is actually attested. Margin is the per-proposition continuous signal;
@@ -48,9 +49,22 @@ export const DEFAULT_FLOORS = Object.freeze({
 // "the same or adjacent" relation (the edge-grounding correspondence, §4). It is
 // read off the centroid geometry, never declared by hand; a too-loose floor
 // passes "owns" against "holds", a too-tight one strips "lives in" against
-// "located-in". Tune it against the worked-example goldens — a measured
-// threshold, not a constant (§10).
+// "located-in".
+//
+// This is no longer the boundary — it is the FALLBACK. The boundary is derived
+// (createCellAdjacency below): the Born rule on the centroid set itself. The
+// constant survives only for the cold start, when too few centroids exist to
+// measure a chance-pairing distribution at all (the same discipline equivalence
+// and answerable already run — abstain toward the constant until the void is
+// measurable).
 export const ADJACENCY_FLOOR = 0.6;
+
+// The tolerated probability of mistaking a chance pairing of two centroids for a
+// real adjacency. A policy, not a cosine — the physics computes the line that
+// delivers it (core/voidnull.boundedNull). This is now the one knob the original
+// ADJACENCY_FLOOR comment asked for ("tune it against the worked-example
+// goldens"): the floor value stops being the dial, alpha becomes it.
+export const ADJACENCY_ALPHA = 0.05;
 
 const cosine = (a, b) => {
   let dot = 0, na = 0, nb = 0;
@@ -118,25 +132,52 @@ const round = (x) => Math.round(x * 1000) / 1000;
 // string (§4): "lives in" and "located-in" must read as near, "lives in" and
 // "owns" as far — and that nearness lives between the two cells' CENTROIDS, not
 // their labels. So adjacency is the cosine between two cell centroid vectors,
-// thresholded by the measured floor. Same key is trivially adjacent. A cell with
-// no centroid, or the hash organ (no in-space vectors at all), cannot be
-// measured — adjacent() returns null and the caller HOLDS, never guessing off
-// spelling. This is the same firewall the classifier runs, applied to the
-// comparison of two cells rather than the typing of one.
-export const createCellAdjacency = (vectors) => {
+// thresholded by the boundary the centroid set's OWN noise derives — the Born
+// rule applied to the comparison of two cells (core/voidnull). Same key is
+// trivially adjacent. A cell with no centroid, or the hash organ (no in-space
+// vectors at all), cannot be measured — adjacent() returns null and the caller
+// HOLDS, never guessing off spelling. This is the same firewall the classifier
+// runs, applied to the comparison of two cells rather than the typing of one.
+export const createCellAdjacency = (vectors, { alpha = ADJACENCY_ALPHA } = {}) => {
   const has = !!(vectors && Object.keys(vectors).length);
-  const cosineOf = (a, b) => {
+  const rawCos = (a, b) => {
     const va = vectors?.[a], vb = vectors?.[b];
     if (!va || !vb) return null;
-    return round(cosine(va, vb));
+    return cosine(va, vb);
   };
+
+  // The noise background: every pairwise cosine among the centroids — the field's
+  // own samples of what a chance pairing of two cells looks like. A real adjacency
+  // must beat the Born line derived from THIS distribution (leave-one-out the pair
+  // under test), not a number anyone picked. Built once; a reader's centroid set
+  // is fixed.
+  const keys = has ? Object.keys(vectors) : [];
+  const background = [];
+  for (let i = 0; i < keys.length; i++)
+    for (let j = i + 1; j < keys.length; j++) {
+      const c = rawCos(keys[i], keys[j]);
+      if (Number.isFinite(c)) background.push(c);
+    }
+
+  // The boundary for a specific pair: the bounded-signal Born line over the chance
+  // pairings (leave-one-out this pair). boundedNull falls back to the constant on
+  // its own when the centroid set is too thin to measure a line below cosine 1
+  // (cold start, a handful of cells) — the same cold-start discipline as every
+  // other reader, here read off the geometry rather than off a number anyone set.
+  const lineFor = (a, b) =>
+    alpha == null ? ADJACENCY_FLOOR
+      : boundedNull(background, { alpha, leaveOut: rawCos(a, b), fallback: ADJACENCY_FLOOR });
+
   return Object.freeze({
     measurable: () => has,
-    cosine: cosineOf,
-    adjacent: (a, b, floor = ADJACENCY_FLOOR) => {
+    cosine: (a, b) => { const c = rawCos(a, b); return c == null ? null : round(c); },
+    // The boundary is derived by default (core/voidnull); an explicit numeric
+    // `floor` still overrides it, for a caller that wants a fixed cut.
+    adjacent: (a, b, floor) => {
       if (a && b && a === b) return true;       // a cell corresponds to itself
-      const c = cosineOf(a, b);
-      return c == null ? null : c >= floor;     // null → cannot measure → hold
+      const c = rawCos(a, b);
+      if (c == null) return null;               // null → cannot measure → hold
+      return c >= (floor != null ? floor : lineFor(a, b));
     },
   });
 };

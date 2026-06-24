@@ -84,8 +84,14 @@ near and "lives in" and "owns" are far: type both relations to their Pattern
 cells and compare **cells**, not strings. Two edges correspond when their
 endpoints resolve to the same referents and their Pattern cells are the same or
 **adjacent in centroid space** — `createCellAdjacency`, the cosine between two
-cell centroids over a measured floor (`ADJACENCY_FLOOR`), read off the geometry,
-never declared by hand (§10).
+cell centroids over a **derived** floor: the bounded-signal Born line on the
+centroid set's own chance pairings (`core/voidnull.boundedNull`, leave-one-out
+the pair under test), with `ADJACENCY_FLOOR` kept only as the cold-start fallback
+for a centroid set too thin to measure one. The boundary is read off the
+geometry, never declared by hand; `ADJACENCY_ALPHA` (the tolerated false-adjacency
+rate) is the one knob (§10). The bound is the *per-decision* one — a single pair
+against the noise (N=2), not `deriveNull`'s extreme-value max-of-N, which would
+overshoot a bounded cosine blob past 1.0 and find nothing adjacent.
 
 This inherits the MiniLM dependency whole. Under the hash embedder you cannot
 tell "lives in" from "owns" except by spelling, so **every relational verdict is
@@ -107,7 +113,10 @@ capped, tagged conversational warmth on both spans — the ordinary
 reinforce-as-deposition path. `corroborateCoref` commits a SYN merge **only on a
 grounding reader's second** (`geometricSecond`: the two spans near in the
 document's own meaning space — inert under the hash organ), witnessed by *that*
-reader, never by the talker. The proposal and the confirmation come from
+reader, never by the talker. Its nearness line is derived the same way the
+adjacency floor is — `boundedNull` over the document's chance span-pairings when a
+caller supplies them, `NEARNESS_FLOOR` the fallback until the corroborator is
+wired into a live turn to pass that background. The proposal and the confirmation come from
 different readers with different witnesses, so the committed identity is grounded
 and survives subtraction of talker mass by construction. Tip, never originate.
 
