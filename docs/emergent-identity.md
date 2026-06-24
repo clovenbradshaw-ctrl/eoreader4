@@ -76,21 +76,54 @@ via the same opt discipline as `rolesConflict`) instead of holding the functiona
 itself; behaviour is unchanged for the existing cases and now generalises to role
 disjointness and soft attributes.
 
+### 3 · The within-document functional-key veto  (§6 ID-6 · §7 PER-2 · worked example 2)
+
+A birth date is the canonical functional person-key. `scanFunctionalAttributes`
+(`entities.js`) reads it off the constructions that front-load it — the appositive
+`(born 1979)` / `(1961–…)` and the copular `born in 1979` — and attaches it to the
+nearest admitted name as a defeasible `DEF` attr. The surname reconciliation
+(`pipeline.js`) then vetoes a tail merge whose endpoints carry a **conflicting** key:
+`John Smith (born 1961)` + a bare `Smith (born 1979)` do **not** merge, even though the
+surname-sharing rebutter cannot see it (only one full "Smith" name). The veto is the
+existing append-only defeat — a `SEG`-retract + a write-time `EVA` naming the key — so
+the oracle, not the pipeline, owns the conflict semantics, and a *matching* date leaves
+the merge standing (the veto does not over-fire). The extractor is deliberately narrow
+(a 4-digit year behind an explicit `born`/date-paren) so no golden carries it.
+
+### 4 · Calendar tokens are temporal expressions, not referents  (§4 detection)
+
+A capitalised weekday/month in an argument slot ("reconvene **Monday**") reached the
+gravity floor as a one-shot figure. A seeded-but-learnable `calendar` register (the same
+shape as `demonym`) lets admission deny it referential gravity — weekdays plus only the
+months that do not collide with given names (March/April/May/June/July/August are
+omitted rather than silently drop a character). A real argument-slot referent still
+admits; a personification that genuinely recurs can re-earn it as the convention revises.
+
 ## Spec coverage map
 
 | clause | status |
 |---|---|
 | §8 ORG-1 acronym↔expansion, learned + defeasible (example 3) | **done here** |
 | §5.3 ID-4 / EM-3 `attributesConflict` injected oracle | **done here** |
+| §6 ID-6 / §7 PER-2 functional-key veto on a tail merge (example 2) | **done here** |
+| §4 calendar tokens denied referential gravity (the weekday over-admit) | **done here** |
 | §6 ID-6 functional-conflict → split (cross-source) | extended (now via the oracle) |
-| §8 ORG-4 structural distinctness preserved by the strict initialism test | guarded + tested |
+| §8 ORG-4 distinctness preserved by the strict initialism test | guarded + tested |
 | §3 emergent gravity admission · §2.2/§7 PER-2 surname defeat · §5/§6 held `same_as?` | pre-existing |
 | §10 provenance — every judgement an `EVA`/`REC` event, defeasible | followed |
 
-**Deferred** (named here so the boundary is honest): §4 caps-free detection on
-lowercased/ASR sources (examples 1, 5) — the largest change, a candidate generator off
-S1–S4 rather than `CAP_RE`; §5.2 ID-3 discriminativeness (TF-IDF-for-identity weighting
-of shared discriminators in `evaluateSameAs`); the within-document functional-key veto /
-split on a recurring bare surname (example 2 literally), which needs per-mention
-attribute binding; §9 the disambiguation-frame parser (`bornOn`/nationality/role slots);
-§10 the discrete user-correction vocabulary. Each lands on a seam this change leaves open.
+**Deferred** (named here so the boundary is honest):
+
+- **§4 caps-free detection** on lowercased/ASR sources (examples 1, 4, 5) — the largest
+  change: a candidate generator off S1–S4 argument-slots rather than `CAP_RE`, gated by a
+  source class (all-caps text currently makes `CAP_RE` swallow a whole sentence as one name).
+- **§8 ORG-4 positive structural guard** (example 2's shell game) — a structural CON as
+  evidence of distinctness. *Moot until a merge exists to guard*: the engine merges orgs
+  only on exact-normalised labels, so structurally-linked orgs with different labels
+  (`NDMC`/`DMC`) are never merge candidates today; the guard belongs at the site of a
+  future fuzzy/token-overlap merge, not before one.
+- **C5 person/org type veto** — needs an entity-type (person vs org) channel from
+  verb-selection (S4), so a shared surface form can be split by type.
+- **§5.2 ID-3 discriminativeness**; **§9** the disambiguation-frame parser; **§10** the
+  discrete user-correction vocabulary; within-document **splitting** of one id into two
+  (two identical full names — B3). Each lands on a seam this change leaves open.

@@ -20,7 +20,7 @@
 // where it was mentioned.
 
 import {
-  SEED_STARTER, SEED_FUNCTION, SEED_PREPOSITION, SEED_ROLE, SEED_AUXILIARY, SEED_DEMONYM,
+  SEED_STARTER, SEED_FUNCTION, SEED_PREPOSITION, SEED_ROLE, SEED_AUXILIARY, SEED_DEMONYM, SEED_CALENDAR,
 } from '../../core/conventions/index.js';
 
 const TITLE = String.raw`(?:Mr|Mrs|Ms|Dr|Miss|Mister|Sir|Madam|Madame|Lady|Lord|Professor|Prof|Capt|Captain|Rev|St|Aunt|Uncle)\.?`;
@@ -84,6 +84,31 @@ export const scanInitialisms = (sentence, admission) => {
   return out;
 };
 
+// ── Functional-attribute extraction (a high-functionality identity key) ──────
+// A birth year is the canonical functional person-key (§7 PER-4): at most one true
+// value per entity. Read off the constructions that front-load it — the appositive
+// "(born 1961)" / "(1961–1979)" and the copular "born in 1961" — and attach it to the
+// nearest admitted name to the left. Pure over the sentence + admission; the value is
+// a high-functionality attribute the conflict oracle vetoes a merge on when it differs
+// (the worked-example-2 functional-conflict veto). Deliberately narrow: a 4-digit year
+// behind an explicit "born"/date-paren, never a bare number, so it cannot misfire on
+// the goldens (which carry no such construction).
+const BIRTH_RE = new RegExp(String.raw`(${NAME})\s*(?:,?\s+(?:was\s+|were\s+)?born\s+(?:in\s+|on\s+)?|\(\s*(?:born\s+|b\.\s*)?)(\d{4})\b`, 'g');
+export const scanFunctionalAttributes = (sentence, admission) => {
+  const s = String(sentence || '');
+  const out = [];
+  const re = new RegExp(BIRTH_RE.source, 'g');
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    const name = cleanLabel(m[1]);
+    const year = m[2];
+    if (!name || !year) continue;
+    if (!admission || !admission.isAdmitted(name)) continue;     // attach only to a real referent
+    out.push({ id: admission.idOf(name), key: 'bornOn', value: year, index: m.index });
+  }
+  return out;
+};
+
 // The default convention predicates, from the seeds — used by the standalone
 // scanner and by an admission constructed without a live ledger. The pipeline
 // passes its own (seed ∪ learned), so a document's dialect flows straight in.
@@ -92,7 +117,7 @@ const setOf = (seed) => new Set(seed.map(lc));
 const DEFAULT_CONVENTIONS = (() => {
   const starter = setOf(SEED_STARTER), fn = setOf(SEED_FUNCTION);
   const prep = setOf(SEED_PREPOSITION), role = setOf(SEED_ROLE), aux = setOf(SEED_AUXILIARY);
-  const demonym = setOf(SEED_DEMONYM);
+  const demonym = setOf(SEED_DEMONYM), calendar = setOf(SEED_CALENDAR);
   return {
     isStarter:     (w) => starter.has(lc(w)),
     isFunction:    (w) => fn.has(lc(w)),
@@ -100,6 +125,7 @@ const DEFAULT_CONVENTIONS = (() => {
     isRole:        (w) => role.has(lc(w)),
     isAuxiliary:   (w) => aux.has(lc(w)),
     isDemonym:     (w) => demonym.has(lc(w)),
+    isCalendar:    (w) => calendar.has(lc(w)),
   };
 })();
 
@@ -160,6 +186,11 @@ const sightingGravity = (sentence, start, end, C, label = null) => {
   // — the system's stance wherever a reading is uncertain, and a far cheaper error than
   // admitting a nationality as a character (the floor that turned "the Russian novelist"
   // into a figure the protagonist's first-person "I" then resolved to).
+  // A calendar token (weekday / month) is a temporal expression, not a referent — deny
+  // it referential gravity wherever it lands, the argument slot included ("reconvene
+  // Monday"). A genuinely recurring personification would re-earn it as the convention
+  // is revised; the one-shot date that the floor mistook for a figure does not.
+  if (C.isCalendar && C.isCalendar(label ?? sentence.slice(start, end))) return 0.0;
   if (C.isDemonym && C.isDemonym(label ?? sentence.slice(start, end)))
     return (next && C.isAuxiliary(next)) ? 1.0 : 0.0;
   if (prev && (C.isRole(prev) || C.isPreposition(prev))) return 1.0;  // "his son Seth" / "unto Noah"
@@ -194,6 +225,7 @@ export const createEntityAdmission = ({ conventions } = {}) => {
     isRole:        (w) => conventions.isRole(w),
     isAuxiliary:   (w) => conventions.isAuxiliary(w),
     isDemonym:     (w) => conventions.isDemonym ? conventions.isDemonym(w) : false,
+    isCalendar:    (w) => conventions.isCalendar ? conventions.isCalendar(w) : false,
   } : DEFAULT_CONVENTIONS;
   const counts    = new Map(); // label → count
   const gravity   = new Map(); // label → Σ referential gravity over its sightings

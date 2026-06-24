@@ -26,9 +26,10 @@ test('[A1] (frontier) a lowercase entity is NOT admitted — caps is still a gat
   assert.ok(d.admission.isAdmitted('mark smith'));   // the frontier: admit on S1/S2/S4 without caps
 });
 
-test('[A2b] (frontier) a weekday ("Monday") over-admits on argument-position gravity', { skip: 'RED: "Monday" reaches the floor as a one-shot subject; needs a calendar/role discriminator' }, () => {
+test('[A2b] a weekday ("Monday") is denied referential gravity — a date is not a referent', () => {
   const d = P('The Court adjourned. We will reconvene Monday.');
   assert.equal(d.admission.isAdmitted('Monday'), false);
+  assert.equal(d.admission.isAdmitted('Court'), true, 'a real argument-slot referent still admits');
 });
 
 // ── B · people ───────────────────────────────────────────────────────────────
@@ -39,10 +40,28 @@ test('[B1] a unique surname still folds — defeasibility does not over-fire', (
   assert.equal(r('samsa'), r('gregor-samsa'), 'the one Samsa is Gregor');
 });
 
-test('[B3] (documented bound) two distinct same-name people merge — needs the attribute model', { skip: 'RED B3/B5: a surname-collision frame cannot split two "John Smith"s without bornOn/role keys' }, () => {
+test('[B5] functional-key veto: a bare surname with a conflicting birth date does NOT merge', () => {
+  // One full name bearing the surname + a bare surname with a DIFFERENT birth year.
+  // The surname-sharing rebutter cannot see this (only one full "Smith"), but the
+  // high-functionality bornOn conflict vetoes the tail merge — §6 ID-6 / §7 PER-2.
+  const d = P('John Smith (born 1961) chaired the hearing. Smith was born in 1979.');
+  const r = rep(d);
+  assert.notEqual(r('smith'), r('john-smith'), 'distinct birth dates ⇒ distinct entities');
+  assert.ok(d.log.events.some((e) => e.op === 'EVA' && e.reason === 'functional-key-conflict' && e.key === 'bornOn'),
+    'the veto is recorded as a write-time EVA naming the conflicting key');
+});
+
+test('[B5-ctrl] the SAME birth date leaves the merge standing — the veto does not over-fire', () => {
+  const d = P('John Smith (born 1961) chaired the hearing. Smith was born in 1961.');
+  const r = rep(d);
+  assert.equal(r('smith'), r('john-smith'), 'matching birth dates corroborate, not conflict');
+  assert.equal(d.log.events.some((e) => e.op === 'SEG' && e.kind === 'retract'), false);
+});
+
+test('[B3] (frontier) two IDENTICAL full names still merge — needs within-doc splitting', { skip: 'RED B3: two "John Smith" with no distinguishing key share one id; splitting one id by per-mention attributes is unbuilt' }, () => {
   const d = P('John Smith chaired the senate hearing. John Smith fixed the leaking pipe.');
   const johns = [...projectGraph(d.log).entities.keys()].filter((k) => /john/.test(k));
-  assert.equal(johns.length, 2);   // the frontier: kept apart by attribute disambiguation
+  assert.equal(johns.length, 2);
 });
 
 // ── C · organizations ────────────────────────────────────────────────────────

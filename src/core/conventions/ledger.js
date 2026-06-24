@@ -267,6 +267,20 @@ export const SEED_DEMONYM = Object.freeze([
   'baltic', 'anglo', 'saxon',
 ]);
 
+// Calendar tokens — weekday and month names. Like demonyms, they are capitalised and
+// can land in an argument slot ("reconvene Monday", "due January"), so the gravity
+// floor admits them as one-shot figures; admission consults this register to deny that
+// referential gravity (a date is a temporal expression, not a referent). Errs toward
+// safety exactly as the demonym list does: weekdays (no common given-name collisions)
+// plus only the months that do NOT collide with given names — March/April/May/June/
+// July/August are also names, so they are OMITTED rather than silently drop a character.
+// Seeded for English and learnable like every register; a personified "Monday" that
+// truly recurs as a figure can still earn its way back as the convention is revised.
+export const SEED_CALENDAR = Object.freeze([
+  'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  'january', 'february', 'september', 'october', 'november', 'december',
+]);
+
 export const SEED_FIELD_LABEL = Object.freeze([
   // bibliographic front matter
   'title', 'subtitle', 'author', 'authors', 'editor', 'translator', 'illustrator',
@@ -294,6 +308,7 @@ const SEEDS = {
   'conjunction': SEED_CONJUNCTION,
   'field-label': SEED_FIELD_LABEL,
   'demonym': SEED_DEMONYM,
+  'calendar': SEED_CALENDAR,
 };
 
 // The pre-baked strain-history a prior carries: a seed is not an axiom, it is a
@@ -413,6 +428,9 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
     // A demonym / proper adjective ("Russian", "French") — read by entity admission
     // to deny ATTRIBUTIVE gravity ("Russian novelist" is not a character), seed ∪ learned.
     isDemonym: (v) => has('demonym', v),
+    // A calendar token (weekday / month) — read by entity admission to deny referential
+    // gravity ("reconvene Monday" is not a character), seed ∪ learned.
+    isCalendar: (v) => has('calendar', v),
     // A coordinating conjunction joining two like constituents ('and'/'or'/'nor') —
     // read by the relation parser to admit a coordinated subject ("Name and Name …"),
     // seed ∪ learned. NOT the adversative/illative connectives the function class holds.
