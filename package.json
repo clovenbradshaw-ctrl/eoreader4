@@ -10,6 +10,7 @@
     "belief": "node scripts/belief-demo.mjs",
     "bench": "node scripts/surf-bench.mjs",
     "predict": "node scripts/predict-moves.mjs",
+    "credence": "node scripts/credence-measure.mjs",
     "learn:grammar": "node scripts/learn-grammar.mjs",
     "build:centroids": "node scripts/build-centroids.mjs",
     "serve": "python3 -m http.server 8000"
