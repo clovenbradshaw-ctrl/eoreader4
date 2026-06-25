@@ -127,10 +127,16 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
       revisions: ctx.revisions || null,
       flags,
     });
+    // Whether this answer BOUND — earned at least one citation, or honestly abstained.
+    // An answer that made claims but tied none to a source (`unbound` / `unbound-contact`)
+    // did not bind; §7 keeps it out of the next turn's ground (the converse fold filters
+    // an unbound assistant turn) so a claim that could not be grounded cannot become the
+    // premise of a follow-up — the propagation the audit shows turn over turn.
+    const unbound = flags.some(f => f.id === 'unbound' || f.id === 'unbound-contact');
     return {
       answer: ctx.answer, sources: ctx.sources || [],
       sourceDocs: sourceDocsOf(groundingDoc, ctx.sources),
-      referential: ctx.referential || null, flags,
+      referential: ctx.referential || null, flags, unbound,
       route: ctx.route || 'grounded', grounding, turn,
     };
   } catch (err) {

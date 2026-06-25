@@ -76,6 +76,30 @@ test('a correction / redirect opener leans only when it carries no strong query'
   assert.equal(needsContext('no, summarize chapter three'), false);   // a real standalone is never polluted
 });
 
+// The metamorphosis-battery follow-ups (§6): an evidence demand, a confusion marker, and
+// a reference to the talker's prior statement all lean on the conversation. The audit's
+// t2 "prove it" retrieved the broom sentence ("to prove it she gave Gregor's body another
+// shove") because it never resolved; these lock that in as resolved.
+test('an evidence demand, a confusion marker, and a reference to the prior answer all lean', () => {
+  assert.equal(needsContext('prove it'), true);
+  assert.equal(needsContext('back it up'), true);
+  assert.equal(needsContext('huh?'), true);
+  assert.equal(needsContext('what?'), true);
+  assert.equal(needsContext('come again?'), true);
+  assert.equal(needsContext('prove what you are saying about her life circumstances'), true);
+  assert.equal(needsContext('you said she was devoted'), true);
+  // A real evidence demand that carries its own query still stands alone — never polluted.
+  assert.equal(needsContext('prove the transformation is real'), false);
+});
+
+test('a demonstrative follow-up resolves to the prior topic, not its literal token', () => {
+  const history = [{ role: 'user', content: "who is gregor's sister?" }];
+  const resolved = resolveRetrievalQuery('prove it', history);
+  assert.match(resolved, /sister/, 'the topic the user is pursuing rides the query');
+  assert.match(resolved, /gregor/);
+  assert.match(resolved, /prove it/, 'the original words are preserved, not replaced');
+});
+
 test('the musician follow-ups carry the prior topic into the retrieval query', () => {
   // The turn before asked "who is the musician?"; the embedding query for the
   // follow-up must now ride "musician" rather than the bare "name".

@@ -1,4 +1,4 @@
 // The ground holon: cite-or-veto. The integrity guarantee.
 
 export { bindCitations, renderBound } from './bind.js';
-export { runVetoes, VETOES }          from './veto.js';
+export { runVetoes, VETOES, isUnbound, isAbstention } from './veto.js';

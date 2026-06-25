@@ -8,16 +8,16 @@
 // Vetoes are flag-only — they never substitute the model's answer.
 // The user sees what the model actually said, with a flag pinned to it.
 
-import { answerSmalltalk, answerMath, answerVoid } from '../answer/index.js';
+import { answerSmalltalk, answerMath, answerVoid, answerMetadata } from '../answer/index.js';
 import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts } from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
-import { buildGroundedMessages, buildChatMessages, orientationLine, metadataBlock } from '../model/index.js';
+import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
-import { runVetoes }        from '../ground/index.js';
+import { runVetoes, isUnbound } from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
 import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
@@ -48,6 +48,13 @@ export const stages = {
 
     const math = answerMath(ctx.question);
     if (math) return short(math);
+
+    // A front-matter question — "who wrote this?", "when was it written?" — is answered
+    // from doc.metadata as a distinct fact (§3), so title/author stay ANSWERABLE without
+    // riding the content prompt, where they would invite narration-from-memory. Only
+    // fires when the document actually carries the fact; otherwise it falls through.
+    const meta = answerMetadata(ctx.doc, ctx.question);
+    if (meta) return short(meta);
 
     // Not a mechanical short-circuit → a real turn. Read the TASK register
     // (intent.js): the prompt register (summary guard) and the token ceiling — the
@@ -91,17 +98,17 @@ export const stages = {
     // back to the hash organ. ctx.embedder (hash) is unchanged for every other stage —
     // only retrieval's semantic vectors are upgraded (turn/pipeline threads the organ).
     const re = pickRetrievalEmbedder(ctx);
-    // Resolve a follow-up against the conversation: a thin or self-referential question
-    // ("now?", "answer my first question") retrieves on the topic the user is pursuing,
-    // not its literal words. A self-contained question passes through untouched. Only the
-    // user's prior turns feed this — never the talker's answers (converse/focus.js).
-    //   Reference by reading (RULES_REV): the SUBJECT is held by the read path (the
-    //   fold reads the conversation cast), so retrieval is the cheap NOMINATION channel
-    //   and rides the question's own words — the regex query-fold is off the path
-    //   (docs/reference-by-reading.md §3, §5). Flag off: byte-identical.
-    const query = RULES_REV
-      ? ctx.question
-      : resolveRetrievalQuery(ctx.question, ctx.history);
+    // Resolve a follow-up against the conversation BEFORE retrieval (§6): a thin,
+    // demonstrative, or self-referential question ("now?", "prove it", "huh?", "what you
+    // are saying about her") retrieves on the topic the user is pursuing, not its literal
+    // words. A self-contained question passes through untouched. Only the user's prior
+    // turns feed this — never the talker's answers (converse/focus.js).
+    //   This runs on EVERY path, the reference-by-reading flag notwithstanding (the audit
+    //   ran with RULES_REV on and "prove it" retrieved the literal token — the broom
+    //   sentence — because the regex query-fold was gated off; §6 brings it back). The
+    //   read path still holds the SUBJECT (the fold's cast); this is the complementary
+    //   NOMINATION channel that finds the EVIDENCE spans the demonstrative points at.
+    const query = resolveRetrievalQuery(ctx.question, ctx.history);
     const spans = await retrieveHybrid(ctx.doc, query, re, 6);
     if (spans.length === 0) {
       // Strict grounded mode never falls through to free generation: it stays on the
@@ -221,14 +228,12 @@ export const stages = {
     const messages = grounded
       ? buildGroundedMessages({
           question:     ctx.question,
-          spans:        selectExcerpts(ctx.spans || []),  // the relevant few verbatim; the fold read all into the notes
-          notes:        ctx.note?.text || '',    // the fold's arrows — the document's reading, fed back in
-          orientation:  orientationOf(ctx.doc),
-          details:      documentDetails(ctx.doc),  // the document's own front matter (title, author, date, …)
+          spans:        selectExcerpts(ctx.spans || []),  // the relevant few verbatim — the ONE channel (§2)
+          orientation:  orientationOf(ctx.doc),       // filename · type · length — no recognition (§3)
           task:         ctx.task,               // the summary guard rides on a summary task
           budget:       ctx.budget,             // none by default; a caller may impose one
           conversation: groundedConversation(ctx),  // the USER's thread only — never the talker's prior answers
-          strict:       ctx.grounding === 'grounded',   // "only from the document" — refusal is the required fallback
+          strict:       ctx.grounding === 'grounded',   // "only what you read" — abstention is the honest fallback
         })
       : buildChatMessages({
           question: ctx.question,
@@ -345,16 +350,21 @@ export const stages = {
     return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, sources };
   },
 
-  // The confabulation rewrite — rewrite-then-tag. When the diagonal guard found the
-  // confabulation proper (a specific claim asserted at a measured Void), give the
-  // talker ONE more pass with a corrective, on the same excerpts, and re-run the bind
-  // and fact-check on the new draft through the very same stages. If the rewrite clears
-  // it, the clean draft replaces the confabulation outright. If it STILL confabulates,
-  // we put it through: the answer ships and the veto tags the offending span (flag-only,
-  // never silently dropped) — the record carries that a rewrite was tried and the
-  // figure-at-a-void survived it. Inert when the guard found nothing, in chat mode, or
-  // with no model. The grain guard is classifier-free, so this arms even under the hash
-  // organ.
+  // The regenerate pass — gate-then-rewrite (§5). Two triggers re-prompt the talker once
+  // against the SAME lines and re-run bind + fact-check on the new draft:
+  //   (a) the confabulation proper — a specific claim asserted at a measured Void (the
+  //       off-diagonal guard). Rewrite-then-TAG: a survivor ships, flagged.
+  //   (b) the §5 GATE — a REFUSING edge-grounded veto on the answer's load-bearing claim:
+  //       a relation the reading DENIES (factcheck.refuse), or a from-nowhere `unbound`
+  //       answer. Under the subjective frame abstention is free and coherent, so the
+  //       calculus that made these RIDE now inverts: they gate and regenerate. The turn
+  //       is recorded `gated` whether or not the regenerate clears it — the gate engaged;
+  //       with a real model the corrective pulls the redo toward an honest "I did not find
+  //       it." Scoped to the default `answer` task (the pointed question), so a summary's
+  //       connective claims are never gated.
+  // If the rewrite clears it, the clean draft replaces the first outright; a survivor
+  // ships with the veto's flag (never silently dropped). Inert with no model / no doc / in
+  // chat mode. Both guards are classifier-free, so this arms even under the hash organ.
   async revise(ctx) {
     // Retired on the streaming-answer path (docs/streaming-answer.md §3c, §5): the
     // block rewrite would un-stream tokens the reader has already seen, which the
@@ -362,10 +372,12 @@ export const stages = {
     // (band:'void' at the cursor) and any drift rode forward into the next beat — the
     // correction is already in the trail, so there is nothing to rewrite here.
     if (ctx.streamed) return ctx;
-    if (!ctx.doc || !ctx.spans?.length || !ctx.model || !confabulating(ctx)) return ctx;
+    if (!ctx.doc || !ctx.spans?.length || !ctx.model || !needsRegen(ctx)) return ctx;
+    // The §5 gate engaged at entry — recorded for the audit even if the regenerate clears.
+    const gated = gateCondition(ctx);
     let cur = ctx, attempts = 0;
     const revisions = [];
-    while (attempts < REWRITE_ATTEMPTS && confabulating(cur)) {
+    while (attempts < REWRITE_ATTEMPTS && needsRegen(cur)) {
       attempts++;
       // Record the superseded draft BESIDE its successor — never erase it. The
       // off-diagonal verdicts that condemned it travel with it, so the trail shows
@@ -376,20 +388,19 @@ export const stages = {
       const supersededVerdicts = (cur.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
       const messages = buildGroundedMessages({
         question:    ctx.question,
-        spans:       selectExcerpts(ctx.spans),   // same trimmed excerpts the first pass saw
-        notes:       ctx.note?.text || '',   // the refine reads the same notes as the first pass
+        spans:       selectExcerpts(ctx.spans),   // same trimmed lines the first pass saw
         orientation: orientationOf(ctx.doc),
-        details:     documentDetails(ctx.doc),   // the same front matter the first pass saw
         task:        ctx.task,
         budget:      ctx.budget,
         conversation: {},                     // history still withheld on the grounded path
-        corrective:  CONFAB_CORRECTIVE,
+        corrective:  correctiveFor(cur),      // confab → drop the link; gate → keep to the lines
       });
       const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
       cur = await stages.factcheck(await stages.bind({ ...cur, rawOutput: raw, messages }));
       revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw }));
     }
-    return { ...cur, revised: { attempts, resolved: !confabulating(cur) }, revisions };
+    return { ...cur, revised: { attempts, resolved: !needsRegen(cur) }, revisions,
+             ...(gated ? { gated: true } : {}) };
   },
 
   // The veto pass — flag-and-tell, ALWAYS. The vetoes ride alongside the model's answer
@@ -435,14 +446,42 @@ const REWRITE_ATTEMPTS = 1;
 // off the one claim the reading could not witness.
 const CONFAB_CORRECTIVE =
   'A previous attempt asserted a specific connection between named figures — a cause, an ' +
-  'action, an identity, a relationship — that the passages do not actually support. Answer ' +
-  'again in your own words, keeping to what the passages support. State the connection only ' +
+  'action, an identity, a relationship — that the lines do not actually support. Answer ' +
+  'again in your own words, keeping to what the lines support. State the connection only ' +
   'if it is really there; otherwise answer the part you can and leave the unsupported link out.';
+
+// The §5 corrective — handed when the GATE engaged (a refusing edge-grounded veto, or a
+// from-nowhere unbound answer), distinct from the confab refine. It steers the talker
+// back onto the lines and names the honest absence as a real option: under the subjective
+// frame "I did not find it" is coherent, so the regenerate can reach it.
+const GROUNDING_CORRECTIVE =
+  'Read the lines again. Part of what you just said is not in them — either it is not ' +
+  'there at all, or it conflicts with what they show. Answer again, keeping strictly to ' +
+  'what the lines say. If the answer is not in them, tell them plainly you did not find it.';
 
 // Did the diagonal guard catch the confabulation proper — a specific claim asserted at
 // a measured Void (the figure-at-a-void shape)? The hard case the rewrite targets.
 const confabulating = (ctx) =>
   (ctx.edgeVerdicts || []).some(v => v.verdict === 'off_diagonal' && v.void);
+
+// The §5 GATE condition. Under the subjective frame, a REFUSING edge-grounded veto on the
+// answer's load-bearing claim no longer rides: a relation the reading DENIES
+// (factcheck.refuse — a confident contradiction), or a from-nowhere `unbound` answer whose
+// claims tie to nothing, engages the gate and regenerates. Scoped to the default `answer`
+// task — the pointed question where retrieval finding nothing IS the absence; a whole-
+// document task's connective claims legitimately have no single witness. low-coverage, the
+// weak contradiction, edge-unsupported, and the off-diagonal grain over-read stay flag-only.
+const refusingEdge       = (ctx) => !!ctx.factcheck?.refuse;
+const loadBearingUnbound = (ctx) => isUnbound(ctx.bound || [], ctx.rawOutput);
+const gateCondition      = (ctx) => ctx.task === 'answer' && (refusingEdge(ctx) || loadBearingUnbound(ctx));
+
+// A regenerate is owed when the off-diagonal confab guard fired OR the §5 gate holds.
+const needsRegen = (ctx) => confabulating(ctx) || gateCondition(ctx);
+
+// The corrective for the regenerate, by failure: a pure §5 gate (no confab) steers back
+// onto the lines; otherwise the confab refine drops the unsupported link.
+const correctiveFor = (ctx) =>
+  (gateCondition(ctx) && !confabulating(ctx)) ? GROUNDING_CORRECTIVE : CONFAB_CORRECTIVE;
 
 // The Site-face terrain the reading typed at the answer locus, for the diagonal guard.
 // A measured void is a Void; a locus the document DEF'd as a site (boilerplate /
@@ -455,9 +494,10 @@ const terrainAtLocus = (ctx, cursor) => {
 };
 
 // The orientation line: the talker is handed the FILENAME, type, and length, read off
-// `docId` (the ingest sets it from the file name). The document's own metadata (title,
-// author, date) no longer rides here — it rides as facts via `documentDetails` (the
-// recognition guard is lifted by the reader's rule; see model/prompt.js).
+// `docId` (the ingest sets it from the file name) — and NOTHING that lets it narrate a
+// famous text from memory (§3). The document's own metadata (title, author, date) does
+// not ride here, nor anywhere in the content prompt; it is answered separately, as a
+// distinct fact, by the metadata answerer (answer/metadata.js, routed in `route`).
 const orientationOf = (doc) => {
   if (!doc) return '';
   const units = doc.units || doc.sentences || [];
@@ -466,23 +506,6 @@ const orientationOf = (doc) => {
     type:     doc.modality === 'image' ? 'image' : 'text',
     length:   units.length,
   });
-};
-
-// The document's front matter for the grounded prompt, composite-aware. A single doc
-// renders its own metadata; a composite renders EACH member's apart, never a merged
-// bag — a shared title across documents is a theory, not a fact (organs/in/composite.js),
-// so the chat sees them as distinct works unless a proof unifies them.
-const documentDetails = (doc) => {
-  if (!doc) return '';
-  if (Array.isArray(doc.metadataByDoc) && doc.metadataByDoc.length) {
-    const sections = doc.metadataByDoc
-      .map(({ docId, metadata }) => metadataBlock(metadata, `${docId}:`))
-      .filter(Boolean);
-    return sections.length
-      ? `About these documents (each its own front matter — distinct works unless proven the same):\n\n${sections.join('\n\n')}`
-      : '';
-  }
-  return metadataBlock(doc.metadata);
 };
 
 // The conversation the GROUNDED prompt carries: the user's OWN recent turns — the thread

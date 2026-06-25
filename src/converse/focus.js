@@ -44,6 +44,26 @@ const PRONOUN_TOKENS = new Set('he him his she her hers it its they them their t
 // the topic. Only leans when it carries no strong query of its own (guarded below).
 const CORRECTION = /^\s*(no|nope|nah|not|actually|rather|wait|i\s+mean(?:t)?)\b/;
 
+// An EVIDENCE DEMAND on the prior answer — "prove it", "back it up", "justify that".
+// The demonstrative object ("it"/"that") points at what was just said, not at anything
+// in the question; it leans on the conversation only when it carries no real query of
+// its own ("prove it" leans, "prove the earth is round" stands). This was the t2 audit
+// catastrophe: "prove it" retrieved on the literal token and landed on the broom
+// sentence ("to prove it she gave Gregor's body another shove") instead of the topic.
+const EVIDENCE = /^\s*(?:prove|justify|substantiate|verify|cite|source|defend|demonstrate|back\s+(?:it|that|this)\s+up)\b/i;
+
+// A reference to the TALKER's prior statement — "what you are saying", "what you said",
+// "what you claimed about her". The follow-up is about the prior answer's topic, so it
+// leans on the conversation. Allows a few words between "you" and the verb ("you ARE
+// saying", "you JUST said").
+const ABOUT_PRIOR = /\byou\b(?:'re)?(?:\s+(?:are|were|just|had|have|keep|kept|did|do|been))?\s+(?:said|say|saying|says|asked|told|mention(?:ed|ing)?|answered|wrote|claim(?:ed|ing)?|mean(?:t|ing)?|stat(?:e|ed|ing)|insist(?:ed|ing)?|referring|talking|telling)\b/i;
+
+// A pure confusion / continuation marker — "huh?", "what?", "eh", "come again", "how
+// so?", "really?". It carries no topic at all; it asks to re-tread the prior turn, so it
+// leans entirely on the conversation. The WHOLE utterance must be the marker, so a real
+// question that merely opens with "what" ("what is Gregor's job?") is untouched.
+const CONFUSION = /^\s*(?:huh|eh|hmm+|wat|what|sorry|pardon|come\s+again|really|meaning|how\s+so|in\s+what\s+way|wait(?:,?\s+what)?|say\s+(?:that\s+)?again|i\s+don'?t\s+(?:get|understand)(?:\s+(?:it|that))?)\s*[?!.…]*\s*$/i;
+
 // The content words of a string, in order, deduped — its topic-bearing tokens. Split
 // on the apostrophe too, so a possessive yields the bare noun ("gregor's" → "gregor",
 // the dangling "s" dropped as length-1) — the form the retriever indexes.
@@ -65,6 +85,14 @@ export const needsContext = (question) => {
   if (/\byou\s+(said|asked|told|mentioned|answered|wrote)\b/.test(q)) return true;
   if (/\b(answer|address|finish|repeat|reread|re-read)\s+(my|the|that|it|again)\b/.test(q)) return true;
   if (/\bgo\s+(on|ahead)\b|\bcontinue\b|\bgo back\b|\bback to\b|\bwhat about\b/.test(q)) return true;
+  // A pure confusion / continuation marker, and a reference to the talker's own prior
+  // statement, both lean on the conversation (the t2/t3 audit turns).
+  if (CONFUSION.test(q)) return true;
+  if (ABOUT_PRIOR.test(q)) return true;
+  // An evidence demand on the prior answer — "prove it" — but only when it carries no
+  // strong query of its own, so "prove the transformation is real" still stands alone.
+  const ev = q.match(EVIDENCE);
+  if (ev && contentWords(q.slice(ev[0].length)).length <= 1) return true;
   // Pronoun-led: a third-person pronoun whose only topic-bearing words (the pronoun
   // itself set aside) are generic attributes ("what is his name?", "what's her job?").
   // The pronoun has no antecedent in the question — it points back into the conversation.

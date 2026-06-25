@@ -70,12 +70,14 @@ export const extractGroundedInput = (messages) => {
   const user = [...messages].reverse().find(m => m.role === 'user');
   const content = user?.content || '';
 
-  // The question: grounded turns wrap it as "...\nUser: <question>"; the no-doc
-  // chat path passes the bare question as the whole user message.
-  let query = blockAfter(content, '\nUser: ');
+  // The question: the subjective frame wraps it as "...\nThey asked you: <question>"
+  // (model/prompt.js §1); the no-doc chat path passes the bare question as the whole
+  // user message. The legacy "\nUser: " marker is still tried for back-compatibility.
+  let query = blockAfter(content, '\nThey asked you: ')
+           || blockAfter(content, '\nUser: ');
   if (!query) query = content.trim();
 
-  // The sources: the verbatim spans under the excerpts header, one per line.
+  // The sources: the verbatim lines under the "What you read:" header, one per line.
   const excerpts = blockAfter(content, `${EXCERPTS_HEADER}\n`);
   const sources = excerpts
     ? excerpts.split('\n').map(s => s.trim()).filter(Boolean)

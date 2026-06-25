@@ -1,41 +1,42 @@
 // The prompt-assembly contract — what the talker is handed.
 //
-// Hand a model raw spans and a question with no structure, and it fills the gaps
-// between sentences with probable tokens — "the situation in the …" wants a
-// place, so it invents one. Hand it the FOLD instead — the edges that actually
-// exist — and it speaks from those edges with no gap to fill. The notes are the
-// cure on the generation side; the edge-grounding veto is the cure on the
-// checking side. The talker speaks from the fold's arrows on the way out and is
-// held to the fold's arrows on the way back. Same object, two directions.
+// THE SUBJECTIVE FRAME (docs/subjective-frame.md). The talker is not handed
+// "sources" and asked to report over them; it is positioned as the one who just
+// READ some lines, and its prose is its reading of them. There is exactly one
+// channel in the prompt — the verbatim lines, the only thing it read — and the
+// boundary is stated as a fact about the reader ("they are all you read"), not a
+// rule about sources. This retires VOID-as-coercion: if those lines are all the
+// reader saw, speaking past them is incoherent rather than forbidden, and "I did
+// not find that" becomes the honest report of an absence, not a refusal.
 //
-// Two scopes, two registers each. The CONVERSATION scope gives notes (the
-// session-register fold) and excerpts (the activated past turns). The DOCUMENT
-// scope gives notes (the EO arrows over the folded graph) and excerpts (the
-// retrieved spans, verbatim). In both, the talker reads a structured reading and
-// is anchored by verbatim text: it speaks from the structure, the verbatim keeps
-// it honest. The system message is stable across turns so the prefix cache holds.
+// What this REVERSES from the earlier (prompt-assembly.md) contract, per the
+// June 20 correction and docs/subjective-frame.md:
+//   §2 — the fold's ARROWS leave the prompt. A model reads `A --rel--> B` as a
+//        causal claim even when the edge encodes only adjacency (the post-hoc
+//        fallacy); the arrows shipping today are degraded verb-fragments, noise
+//        not spine. Relational structure now rides in span SELECTION and ORDER
+//        (the grounder's job), never as arrows in the talker's input.
+//   §3 — NO recognition. Orientation is filename · type · length only — never an
+//        extracted title or author. A talker that knows it is reading a famous
+//        book narrates the book it remembers, not the lines it read; this is the
+//        exact leak the metamorphosis battery puts under test. The front matter
+//        is still ANSWERABLE — a metadata question routes to a metadata answer
+//        (turn/stages.js) — it is just no longer AMBIENT in a content turn.
+//   §1 — stop calling the spans "memory." A reader read some lines; that framing
+//        is what makes the boundary hold with no refusal instruction behind it.
 //
-// The surface discipline (§3) governs the WHOLE prompt, not half of it. The notes
-// are plain-language arrows — `A --relation--> B`. Never operator codes, never
-// cell names, never sentence indices, never citation tokens. The same reason
-// citations are withheld from the talker — the mechanics are the grounder's job —
-// is the reason codes and indices are withheld. The talker speaks the arrows in
-// words; it does not speak the machinery.
+// Structure stays in the grounder: in selection, in order (§3 below), and in the
+// edge-grounding veto on the way back. `serializeNotes` / the substrate stay
+// alive — they feed the grounder and the veto — they just never reach the talker.
 //
-// Orientation now INCLUDES the document's own front-matter metadata — title, author,
-// date — handed to the talker as facts beside the filename and length (`metadataBlock`,
-// from doc.metadata, omnimodal). An earlier discipline WITHHELD these, for fear a
-// talker that recognized a famous book would answer from the book it remembers rather
-// than the graph it was handed. We lift that: the metadata IS the document (its front
-// matter), so when chatting about a document this is exactly the kind of thing to
-// include — and honesty is kept by the grounding check, not a blindfold. A claim the
-// talker makes that the GRAPH also holds is corroborated, not a leak
-// (factcheck/correspond.js); the answer is held to the reading on the way back.
+// The system message carries the stable boundary + voice (prefix cache holds);
+// the per-turn user block carries the lines, the conversation so far, the
+// question, and the absence clause last, where a small model attends hardest.
 
-// The verbatim retrieved spans sit under this header, last, where a small model
-// attends hardest. Exported so the echo backend can find them without an [sN]
-// label — the index the talker no longer sees.
-export const EXCERPTS_HEADER = 'Excerpts from the document:';
+// The verbatim lines the reader read sit under this header. Exported so the echo
+// backend (and pleias's RAG re-extraction) can find them. Recognition-free, and
+// in the reader's register — never "excerpts from the document."
+export const EXCERPTS_HEADER = 'What you read:';
 
 // NO default length prescription. The earlier contract carried a sentence cap, which
 // a small model read as the TASK, not a ceiling — "summarize" came back as a literal
@@ -49,39 +50,33 @@ export const DEFAULT_BUDGET = Object.freeze({});
 // task (turn/intent.js). A small model handed a "summarize" turn tends to reword a
 // single excerpt as the whole answer; this asks it to draw the excerpts together.
 export const SUMMARY_GUARD =
-  'They want a summary: say what the document is about in your own words, drawing the ' +
-  'excerpts together — never reword a single excerpt as the whole answer.';
+  'They want a summary: say what it is about in your own words, drawing the lines ' +
+  'together — never reword a single line as the whole answer.';
 
-// The talker is the answerer, and we trust it. A chatbot exists to SYNTHESIZE — to read
-// the page and tell the user what it means — not to hand back the raw text; if the user
-// wanted the verbatim sentences they would search the document themselves. So the system
-// message asks for an answer in the model's own words, names the notes and excerpts as its
-// MEMORY of the reading (not text to quote back), and leans against the reflexive refusal:
-// answer the question you can reasonably address. The grounding is added AFTER, on the way
-// back — the binder cites, the fact-check adjudicates and flags — never by gagging the
-// talker on the way out. The system message is stable across turns so the prefix cache holds.
-export const SYSTEM_GROUND = `You are a sharp, helpful reading companion. You've just read the part of the document the user is asking about, and they want your answer — not the raw text.
+// THE SUBJECTIVE FRAME (§1). The talker is positioned as the one who just read the
+// lines below — not a reporter handed sources. The boundary is a FACT about the reader
+// ("they are all you read"), so abstention is coherent, not forbidden: there is no
+// refusal instruction here, and none is needed. The words "sources / context /
+// passages / documents / memory" are deliberately kept OUT — a reader read some lines,
+// and that framing is what holds the boundary. The voice is stable across turns so the
+// prefix cache holds; the per-turn absence clause rides last in the user block, where a
+// small model attends hardest (buildGroundedMessages).
+export const SYSTEM_GROUND = `You just finished reading some lines — the ones below. They are all you read; you have not seen the rest of it.
 
-What follows is your own memory of that reading: your notes, and the passages they came from. Use them to answer in your OWN WORDS. Synthesize and explain; don't quote passages back or tell the user to "see the excerpt" — if they wanted the raw text, they would search it themselves.
-
-Lead with a direct answer. Draw on what you read; if part of the question genuinely isn't covered, answer what you can and say briefly what's missing — but don't refuse a question you can reasonably address.
-
-Write natural prose. Don't write citations or tags; those are added for you.`;
+Speak as the one who read them. Answer the user in your own words — say what you found, don't quote the lines back or tell them to go look. Write natural prose; don't write citations or tags, those are added for you.`;
 
 export const SYSTEM_CHAT = `You are a brief, accurate assistant. Answer using only what has been said in this conversation.`;
 
-// The STRICT grounded register — "only from the document" (the Grounded chip). Same
-// own-words synthesis discipline as SYSTEM_GROUND, but the fallback is inverted: where
-// SYSTEM_GROUND leans AGAINST refusal ("answer what you can"), this REQUIRES refusal when
-// the passages don't cover the question and forbids drawing on outside knowledge. A
-// faithful "it isn't in the text" is the correct answer here, never a failure.
-export const SYSTEM_GROUND_STRICT = `You are a precise reading companion, answering ONLY from the document the user is reading.
+// The STRICT grounded register — "only what you read" (the Grounded chip). The same
+// subjective frame, with one thing added: do not reach past the lines into outside
+// knowledge. The frame already makes "I did not find that" coherent; strict only forbids
+// filling the gap from elsewhere. A faithful "it wasn't in what I read" is the right
+// answer here, never a failure.
+export const SYSTEM_GROUND_STRICT = `You just finished reading some lines — the ones below. They are all you read; you have not seen the rest of it.
 
-What follows is your own memory of that reading: your notes, and the passages they came from. Answer in your OWN WORDS — synthesize and explain, don't quote the passages back — but stay strictly inside them. Every part of your answer must be supported by the notes and passages below.
+Speak as the one who read them, and answer ONLY from what you read — every part of your answer has to come from those lines. If they ask about something that was not in them, say so plainly — "I didn't find that in what I read." — and stop there. Don't fill the gap from outside or general knowledge, and don't guess.
 
-If the passages do not answer the question, say so plainly — "The document doesn't cover that." — and stop there. Do NOT fill the gap from outside or general knowledge, and do not guess. A faithful "it isn't in the text" is the right answer here, not a failure.
-
-Write natural prose. Don't write citations or tags; those are added for you.`;
+Write natural prose; don't write citations or tags, those are added for you.`;
 
 // The FREE register — general-knowledge chat that ignores the document (the Free form
 // chip). Distinct from SYSTEM_CHAT, which is the conversation-only fallback: this one
@@ -90,21 +85,24 @@ export const SYSTEM_FREE = `You are a helpful, knowledgeable assistant. Answer t
 
 (This reply is free-form — it is not grounded in any document the user may have loaded.)`;
 
-// The orientation line: filename, type, length. The document's front-matter metadata
-// (title, author, date) rides SEPARATELY, as facts — see `metadataBlock` and the
-// header note on why recognition is no longer withheld.
+// The orientation line: filename, type, length — and NOTHING that lets the talker
+// narrate a famous text from memory (§3). No title, no author, no genre: the epistemic
+// position of a reader who just set a file down. The front matter stays ANSWERABLE — a
+// metadata question routes to a metadata answer (answerMetadata, turn/stages.js) — it is
+// simply no longer AMBIENT in a content turn, where it invites narration-from-memory.
 export const orientationLine = ({ filename, type, length } = {}) => {
   const parts = [filename || 'the document', type || 'text'];
   if (length != null) parts.push(`${length} sentences`);
   return parts.join(' · ');
 };
 
-// The document's own front-matter metadata, rendered as a labeled block for the
-// grounded prompt (doc.metadata, by canonical key — omnimodal: text harvests it from
-// labeled lines, an image from EXIF, a score from ID3). Known keys lead in a stable
-// reading order (title, then author, then the rest); any extra key follows under a
-// title-cased label. Empty string when the document carries no metadata, so the slot
-// simply does not appear.
+// The document's own front-matter metadata, rendered as a labeled block (doc.metadata,
+// by canonical key — omnimodal: text harvests it from labeled lines, an image from EXIF,
+// a score from ID3). This NO LONGER rides the grounded content prompt (§3 — title/author
+// are the recognition leak the battery tests). It feeds the METADATA ANSWERER instead
+// (answerMetadata), which answers "who wrote this / when" from the front matter as a
+// distinct fact. Known keys lead in a stable reading order (title, then author, then the
+// rest); any extra key follows under a title-cased label. Empty string when none.
 const META_LABEL = {
   title: 'Title', subtitle: 'Subtitle', author: 'Author', editor: 'Editor',
   translator: 'Translator', illustrator: 'Illustrator', contributor: 'Contributor',
@@ -140,16 +138,36 @@ const budgetLine = (b) => {
   return parts.length ? `Reply in ${parts.join(', ')}.` : '';
 };
 
-// Build the grounded user turn from the contract's slots. Each slot is included
-// only when it has content, so a turn with no conversation history still reads
-// cleanly. Notes and excerpts are built from the same cursor upstream, so the
-// structured reading and the verbatim spans cohere (§6).
+// Order the lines for the frame (§3, position bias — Lost in the Middle / Context Rot):
+// strongest first (the cursor's argmax takes primacy), second-strongest last (the span
+// that most needs retaining takes recency), the weakest buried in the middle. Four to
+// eight lines. A read-only permutation over a fixed span set — the verbatim text is
+// untouched, only its order. Surfed spans (score 0) sort to the middle, as they should.
+export const orderSpansForFrame = (spans = [], { max = 8 } = {}) => {
+  const ranked = [...spans].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, max);
+  if (ranked.length <= 2) return ranked;
+  const first = ranked[0];                 // primacy — the argmax
+  const last  = ranked[1];                 // recency — the second-strongest
+  const middle = ranked.slice(2);          // the rest, weakest at the tail of this desc list
+  // Bury the weakest in the CENTRE: deal the middle outside-in, so the smallest lands
+  // in the middle of the middle and the stronger of the rest sit at the edges.
+  const left = [], right = [];
+  middle.forEach((s, i) => (i % 2 === 0 ? left : right).push(s));
+  return [first, ...left, ...right.reverse(), last];
+};
+
+// Build the grounded user turn as the SUBJECTIVE FRAME (§1–§3). One channel — the
+// verbatim lines, the only thing the reader read — framed as a reading, with the
+// question and the absence clause LAST where a small model attends hardest. No arrows
+// (§2): relational structure rode into span selection and order upstream, never as
+// `A --rel--> B` in the talker's input. No recognition (§3): orientation is
+// filename · type · length, never a title or author. The conversation rides in the same
+// reader's register (this reading so far), the USER's thread only — the talker's prior
+// answers stay withheld (the poisoning channel), and an unbound one never folds in (§7).
 export const buildGroundedMessages = ({
   question,
   spans = [],
-  notes = '',
   orientation = '',
-  details = '',
   task = 'answer',
   budget = DEFAULT_BUDGET,
   conversation = {},
@@ -158,17 +176,24 @@ export const buildGroundedMessages = ({
 } = {}) => {
   const blocks = [];
 
-  if (orientation) blocks.push(`You are reading ${orientation}.`);
-  // The document's own front-matter metadata (title, author, date, …) — handed as
-  // facts so a metadata question is answerable. Content still comes from the notes
-  // and excerpts below; this is the document telling you what it is.
-  if (details) blocks.push(details);
+  // What it was — filename · type · length, no recognition (§3).
+  if (orientation) blocks.push(`What it was: ${orientation}.`);
 
-  blocks.push(`Here is the chat with the user:\nUser: ${question}`);
+  // What you read — the verbatim lines, ordered for the frame (§3). The ONE channel.
+  if (spans.length)
+    blocks.push(`${EXCERPTS_HEADER}\n${orderSpansForFrame(spans).map(s => s.text).join('\n')}`);
+
+  // The conversation so far, in the reader's register — never document content (§1, §6).
+  if (conversation.notes)
+    blocks.push(`Earlier in this reading:\n${conversation.notes}`);
+  if (conversation.pastTurns?.length)
+    blocks.push(`They had asked you:\n${conversation.pastTurns.join('\n')}`);
+
+  // The live question — last of the material, just before the closing clause.
+  blocks.push(`They asked you: ${question}`);
 
   // A confabulation-rewrite corrective, when the talker is re-prompted after the
-  // diagonal guard caught a figure-at-a-void (turn/stages.js `revise`). Sits right
-  // after the question, where a small model attends, before the excerpts.
+  // diagonal guard caught a figure-at-a-void (turn/stages.js `revise`).
   if (corrective) blocks.push(corrective);
 
   // The summary guard rides on a summary task only — faithfulness, not length.
@@ -178,21 +203,19 @@ export const buildGroundedMessages = ({
   const budgetStr = budgetLine(budget);
   if (budgetStr) blocks.push(budgetStr);
 
-  // The conversation slots — now POPULATED by the session fold (docs/session-fold.md):
-  // the surfed recap of older turns as notes, the recent verbatim window as past turns.
-  if (conversation.notes)
-    blocks.push(`Notes about our conversation before this:\n${conversation.notes}`);
-  if (conversation.pastTurns?.length)
-    blocks.push(`Relevant parts of our past conversation:\n${conversation.pastTurns.join('\n')}`);
-
-  if (notes)        blocks.push(`Notes from the document:\n${notes}`);
-  if (spans.length) blocks.push(`${EXCERPTS_HEADER}\n${spans.map(s => s.text).join('\n')}`);
-
-  // Strict mode with nothing retrieved: name the absence so the talker refuses
-  // cleanly ("the document doesn't cover this") instead of reaching for outside
-  // knowledge. The strict system prompt already forbids that; this is the cue.
+  // Strict mode with nothing to read: the reader had no lines on this at all. Name that
+  // absence so the talker says it plainly rather than reaching past the frame for outside
+  // knowledge (the strict system message already forbids that; this is the in-register cue).
   if (strict && !spans.length)
-    blocks.push('No passages from the document were retrieved for this question. Say plainly that the document does not cover it — do not answer from outside knowledge.');
+    blocks.push('You read no lines bearing on their question — there were none to read. Tell them plainly you did not find it; do not answer from outside knowledge.');
+
+  // The ABSENCE CLAUSE, last (§1) — the keystone of the frame, where a small model
+  // attends hardest. Not a refusal instruction: if those lines are all the reader read,
+  // "I did not find that" is just the honest report of an absence. This is what retires
+  // VOID-as-coercion — the frame makes abstention coherent, no gag required.
+  blocks.push(
+    'Answer them now, in your own words. If they asked about something that was not in ' +
+    'what you read, tell them you did not find it — that is an honest answer, not a failure.');
 
   return [
     { role: 'system', content: strict ? SYSTEM_GROUND_STRICT : SYSTEM_GROUND },
