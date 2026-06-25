@@ -1,5 +1,14 @@
 # Prompt-assembly contract — what the talker is handed
 
+> **PARTIALLY REVERSED by `subjective-frame.md` (June 20 correction).** Two changes
+> here did not survive contact with the metamorphosis battery: the arrows now LEAVE
+> the prompt (a model reads `A --rel--> B` as a causal claim even when it encodes
+> only adjacency), and the talker no longer reads its spans as "memory" — it reads
+> them as the one who just read them. `serializeNotes` stays alive for the grounder
+> and the veto; it no longer reaches the talker. The task register, the no-length
+> rule, and the conversation-scope split below still hold. Read this for that
+> machinery; read `subjective-frame.md` for what the talker is handed today.
+
 > Follow-up to the phasepost perception spec, the conversational-provenance
 > follow-up, and the edge-grounding veto follow-up. The talker speaks from the
 > fold's arrows on the way out (this prompt) and is held to the fold's arrows on
