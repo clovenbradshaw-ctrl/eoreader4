@@ -85,3 +85,22 @@ test('the chat path rides the recent window as message history and the recap in 
   assert.ok(msgs.some(m => m.role === 'assistant'), 'prior turns ride as real message history');
   assert.equal(msgs[msgs.length - 1].content, 'and the ending?');
 });
+
+// §7 (docs/subjective-frame.md) — an UNBOUND talker reply never folds into the session
+// ground. The audit's wrong t1 answer became t4's premise; tagging the reply unbound
+// keeps it out of the verbatim window, the surfed recap, and lastReply, so the mistake
+// cannot propagate. A reply with no tag (every existing caller) is unaffected.
+test('an unbound talker reply is kept out of the session fold (§7)', () => {
+  const history = [
+    { role: 'user',      content: 'who underwent the transformation?' },
+    { role: 'assistant', content: 'The father was transformed into an insect.', unbound: true },
+    { role: 'user',      content: 'tell me more' },
+    { role: 'assistant', content: 'Gregor wakes as vermin and crawls the walls.' },
+  ];
+  const f = foldConversation(history);
+  const all = [...f.pastTurns, f.notes, f.lastReply].join('\n');
+  assert.doesNotMatch(all, /father was transformed/i, 'the unbound claim never folds in');
+  assert.notEqual(f.lastReply, 'The father was transformed into an insect.', 'an unbound reply is not the lastReply');
+  // The bound turns still ride — the filter is surgical, only the unbound reply drops.
+  assert.match(all, /who underwent the transformation/i, 'the user turns still ride');
+});

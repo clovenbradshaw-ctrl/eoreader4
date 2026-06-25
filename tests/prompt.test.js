@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildGroundedMessages, orientationLine, EXCERPTS_HEADER,
+  buildGroundedMessages, orientationLine, EXCERPTS_HEADER, orderSpansForFrame,
 } from '../src/model/prompt.js';
 import { serializeNotes } from '../src/perceiver/index.js';
 import { parseText } from '../src/perceiver/parse/index.js';
@@ -54,29 +54,50 @@ test('serializeNotes keeps negation as a conscience token (not- prefix), basic o
 });
 
 // ---------------------------------------------------------------------------
-// The contract: notes PLUS excerpts, two registers (§2).
+// The subjective frame (§1) and the ONE channel — verbatim lines, no arrows (§2).
 
-test('the grounded prompt feeds notes plus excerpts and the orientation — no default length line', () => {
+test('the grounded prompt is the subjective frame: the lines you read, no arrows, the question and absence clause last', () => {
   const spans = [
-    { idx: 3, text: 'Topps slammed the man to the ground.' },
-    { idx: 7, text: 'The fire started in room four.' },
+    { idx: 3, text: 'Topps slammed the man to the ground.', score: 0.9 },
+    { idx: 7, text: 'The fire started in room four.', score: 0.5 },
   ];
-  const notes = 'sister --tends--> Gregor\nTopps --slammed--> man';
   const [system, user] = buildGroundedMessages({
-    question: 'what happened?', spans, notes,
+    question: 'what happened?', spans,
     orientation: 'pg5200.txt · text · 757 sentences',
   });
   assert.equal(system.role, 'system');
-  // both document registers present
-  assert.match(user.content, /Notes from the document:/);
-  assert.match(user.content, /sister --tends--> Gregor/);
+  // The boundary is stated as a fact about the reader, not a rule about sources (§1).
+  assert.match(system.content, /they are all you read/i);
+  // The ONE channel — the verbatim lines under the reader-register header (§2).
   assert.match(user.content, new RegExp(EXCERPTS_HEADER));
   assert.match(user.content, /Topps slammed the man to the ground\./);
-  // the live exchange and orientation (no recognition)
-  assert.match(user.content, /User: what happened\?/);
-  assert.match(user.content, /You are reading pg5200\.txt/);
+  // NO arrows reach the talker (§2) — relational structure stays in the grounder.
+  assert.doesNotMatch(user.content, /-->/);
+  assert.doesNotMatch(user.content, /Notes from the document/);
+  // The forbidden register words are kept out of the frame (§1).
+  assert.doesNotMatch(user.content, /\b(excerpts?|passages?|sources?)\b/i);
+  // The live question, and the absence clause last where a small model attends (§1).
+  assert.match(user.content, /They asked you: what happened\?/);
+  assert.match(user.content, /did not find it/);
+  // Orientation is filename · type · length — no recognition (§3).
+  assert.match(user.content, /What it was: pg5200\.txt · text · 757 sentences/);
   // NO length prescription by default — max_tokens is the real bound (the task register)
   assert.doesNotMatch(user.content, /Reply in at most/);
+});
+
+// The line ordering (§3, position bias): strongest first, second-strongest last,
+// weakest buried in the middle. A read-only permutation — the text is untouched.
+test('orderSpansForFrame: strongest first, second-strongest last, weakest in the middle', () => {
+  const spans = [
+    { text: 'A', score: 0.5 }, { text: 'B', score: 0.9 }, { text: 'C', score: 0.1 },
+    { text: 'D', score: 0.8 }, { text: 'E', score: 0.3 },
+  ];
+  const ordered = orderSpansForFrame(spans).map(s => s.text);
+  assert.equal(ordered[0], 'B', 'strongest takes primacy');
+  assert.equal(ordered[ordered.length - 1], 'D', 'second-strongest takes recency');
+  assert.equal(ordered[Math.floor(ordered.length / 2)], 'C', 'the weakest is buried in the middle');
+  // It is a permutation — same multiset, nothing dropped or rewritten.
+  assert.deepEqual([...ordered].sort(), ['A', 'B', 'C', 'D', 'E']);
 });
 
 // The task register, in the prompt: no length line by default, a summary guard on a
@@ -92,43 +113,45 @@ test('no length prescription by default; an explicit budget re-imposes one for a
 test('the summary degeneracy guard rides on a summary task only — faithfulness, not length', () => {
   const spans = [{ idx: 0, text: 'x' }];
   const [, sum] = buildGroundedMessages({ question: 'summarize this', spans, task: 'summary' });
-  assert.match(sum.content, /drawing the excerpts together/, 'the guard rides on a summary task');
+  assert.match(sum.content, /drawing the lines together/, 'the guard rides on a summary task');
   assert.doesNotMatch(sum.content, /at most \d+ sentence/, 'the guard is faithfulness, not a length cap');
   const [, ans] = buildGroundedMessages({ question: 'what happened', spans, task: 'answer' });
   assert.doesNotMatch(ans.content, /drawing the excerpts together/, 'not on a default answer task');
 });
 
-test('the surface discipline holds across the whole prompt: no indices, codes, or citation tags', () => {
+test('the surface discipline holds across the whole prompt: no indices, codes, citation tags, or arrows', () => {
   const spans = [{ idx: 42, text: 'A verbatim sentence.' }];
   const [, user] = buildGroundedMessages({
-    question: 'q', spans, notes: 'a --binds--> b', orientation: 'f · text · 9 sentences',
+    question: 'q', spans, orientation: 'f · text · 9 sentences',
   });
   assert.doesNotMatch(user.content, /\[s\d+\]/, 'no sentence-index or citation tags');
   assert.doesNotMatch(user.content, /\b(CON|SEG|SIG|SYN|REC|DEF|EVA|INS|NUL)\b/, 'no operator codes');
+  assert.doesNotMatch(user.content, /-->/, 'no arrows — the talker reads the lines, not the graph (§2)');
 });
 
-test('absent conversation slots are simply omitted; present ones ride', () => {
+test('absent conversation slots are simply omitted; present ones ride in the reader register', () => {
   const [, withConv] = buildGroundedMessages({
     question: 'q', spans: [{ idx: 0, text: 'x' }],
-    conversation: { notes: 'you --asked-about--> Gregor', pastTurns: ['who is Gregor?'] },
+    conversation: { notes: 'You asked: who is Gregor?', pastTurns: ['You: who is Gregor?'] },
   });
-  assert.match(withConv.content, /Notes about our conversation before this:/);
-  assert.match(withConv.content, /Relevant parts of our past conversation:/);
+  assert.match(withConv.content, /Earlier in this reading:/);
+  assert.match(withConv.content, /They had asked you:/);
 
   const [, noConv] = buildGroundedMessages({ question: 'q', spans: [{ idx: 0, text: 'x' }] });
-  assert.doesNotMatch(noConv.content, /our conversation before this/);
+  assert.doesNotMatch(noConv.content, /Earlier in this reading/);
 });
 
 // ---------------------------------------------------------------------------
-// The grounded window: the talker is handed the document's own reading (the fold's
-// arrows) BESIDE the verbatim excerpts — discarding the computed fold was the
-// generation-side cause of the invented-location hallucination (docs/prompt-assembly.md).
-// The conversation is carried as the USER's thread only (what was asked) — the talker's
-// own prior answers stay withheld, the one channel a small model anchors on.
+// The grounded window under the subjective frame: the talker is handed the verbatim
+// lines it read — and ONLY those, no arrows (§2), no recognition (§3). The fold still
+// runs (its note feeds the grounder and the audit), but it never reaches the talker.
+// The conversation is carried as the USER's thread only — the talker's own prior
+// answers stay withheld, the one channel a small model anchors on.
 
-test('a grounded turn feeds the document notes plus the excerpts; the user thread rides, the talker’s answers stay withheld', async () => {
+test('a grounded turn is the subjective frame: the lines you read, no arrows, no recognition, the user thread only', async () => {
   const text = 'Gregor Samsa loved Grete Samsa. Gregor Samsa loved Grete Samsa. Grete Samsa helped Gregor Samsa.';
   const doc = parseText(text, { docId: 'pg5200.txt' });
+  doc.metadata = { title: 'The Metamorphosis', author: 'Franz Kafka' };   // recognition bait
   doc.sentenceEmbeddings = async (e) => Promise.all(doc.sentences.map(s => e.embed(s)));
   const model = createModel('echo'); await model.load();
   const audit = createAuditLog();
@@ -143,13 +166,18 @@ test('a grounded turn feeds the document notes plus the excerpts; the user threa
   });
   const t = audit.turns[0];
   assert.equal(t.route, 'grounded');
-  assert.match(t.prompt, /You are reading pg5200\.txt/, 'orientation, the filename not a title');
-  assert.match(t.prompt, new RegExp(EXCERPTS_HEADER), 'the verbatim excerpts are the talker’s input');
-  // The fold's reading now enters the window — the note block is present and non-empty.
-  assert.match(t.prompt, /Notes from the document:\n\S/, 'the document notes ride beside the excerpts');
+  assert.match(t.prompt, /What it was: pg5200\.txt/, 'orientation, the filename not a title');
+  assert.match(t.prompt, new RegExp(EXCERPTS_HEADER), 'the verbatim lines are the talker’s input');
+  // NO recognition (§3): the title/author the doc carries never reach the talker's prompt.
+  assert.doesNotMatch(t.prompt, /Metamorphosis/, 'the title never enters a content turn');
+  assert.doesNotMatch(t.prompt, /Kafka/, 'the author never enters a content turn');
+  // NO arrows (§2): the fold's arrows do not reach the talker.
+  assert.doesNotMatch(t.prompt, /-->/, 'no arrows in the talker’s window');
+  assert.doesNotMatch(t.prompt, /Notes from the document/, 'the notes block is gone');
+  // The fold still runs — its note is recorded for the grounder and the audit.
   const fold = t.steps.find(s => s.name === 'fold');
-  assert.ok(fold && fold.data.noteLen > 0, 'the fold runs and its note is recorded for the audit');
-  // The USER's own prior turn now rides — follow-up continuity.
+  assert.ok(fold && fold.data.noteLen > 0, 'the fold still runs and its note is recorded for the audit');
+  // The USER's own prior turn rides — follow-up continuity, in the reader register.
   assert.match(t.prompt, /You asked: who is Grete\?/, 'the user’s prior question is carried for continuity');
   // The talker's own prior ANSWER is STILL withheld — the poisoning channel stays closed.
   assert.doesNotMatch(t.prompt, /earlier answer about Grete/, 'the talker never sees its own prior answers');

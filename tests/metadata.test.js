@@ -7,6 +7,12 @@ import { parseText } from '../src/perceiver/parse/index.js';
 import { createConventions } from '../src/core/conventions/index.js';
 import { createCompositeDoc, ingestImage, ingestMusic, ingestFrequencies } from '../src/organs/in/index.js';
 import { metadataBlock, buildGroundedMessages } from '../src/model/index.js';
+import { answerMetadata } from '../src/answer/index.js';
+import { runTurn } from '../src/turn/pipeline.js';
+import { createAuditLog } from '../src/audit/index.js';
+import { createHashEmbedder } from '../src/model/embed-hash.js';
+import '../src/model/echo.js';
+import { createModel } from '../src/model/interface.js';
 
 // Front-matter metadata is a STRUCTURAL convention: a labeled field is a short line
 // whose key is a leading capitalized label, whose mark is a colon, and whose value is
@@ -162,15 +168,48 @@ test('a composite keeps each document’s metadata apart — a shared name is no
     'distinct documents → distinct metadata holon addresses');
 });
 
-// ── Chatting: the front matter is handed to the talker ────────────────────────
-test('the grounded prompt carries the document front matter (recognition guard lifted)', () => {
+// ── Chatting: NO recognition in the content prompt (§3) ───────────────────────
+// The recognition guard is RESTORED (docs/subjective-frame.md §3): a talker that knows
+// it is reading a famous book narrates the book it remembers, not the lines it read.
+// metadataBlock still renders the labeled facts — but for the METADATA ANSWERER, which
+// answers "who wrote this" as a distinct fact, never for the content prompt.
+test('the front matter never rides the content prompt (recognition guard restored)', () => {
   const block = metadataBlock({ title: 'Metamorphosis', author: 'Franz Kafka' });
-  assert.match(block, /Title: Metamorphosis/);
+  assert.match(block, /Title: Metamorphosis/, 'metadataBlock still renders the labeled facts for the answerer');
   assert.match(block, /Author: Franz Kafka/);
-  const msgs = buildGroundedMessages({ question: 'Who wrote this?', orientation: 'x · text · 9 sentences', details: block, spans: [] });
+  // The grounded builder no longer takes or renders front matter — title and author
+  // cannot leak into a content turn, even if a caller tries to pass them.
+  const msgs = buildGroundedMessages({ question: 'what happens?', orientation: 'x · text · 9 sentences', details: block, spans: [{ idx: 0, text: 'a line' }] });
   const user = msgs.find(m => m.role === 'user').content;
-  assert.match(user, /Author: Franz Kafka/, 'the metadata is in the prompt the talker reads');
-  assert.doesNotMatch(user, /do not name or place/, 'the recognition guard is lifted, per the user’s decision');
+  assert.doesNotMatch(user, /Metamorphosis/, 'the title never enters the content prompt');
+  assert.doesNotMatch(user, /Franz Kafka/, 'the author never enters the content prompt');
+});
+
+// ── The metadata answerer (§3): the front matter is ANSWERABLE, not ambient ───
+test('answerMetadata speaks the front matter as a distinct fact', () => {
+  const doc = { metadata: { title: 'The Metamorphosis', author: 'Franz Kafka', date: '1915' } };
+  assert.match(answerMetadata(doc, 'who wrote this?').text, /Franz Kafka/);
+  assert.match(answerMetadata(doc, 'who is the author?').text, /written by Franz Kafka/);
+  assert.match(answerMetadata(doc, "what's the title?").text, /The Metamorphosis/);
+  assert.match(answerMetadata(doc, 'when was this written?').text, /1915/);
+  assert.equal(answerMetadata(doc, 'what happens to Gregor?'), null, 'a content question is not a metadata question');
+});
+
+test('answerMetadata falls through (null) when the document carries no such fact', () => {
+  const doc = { metadata: { title: 'Untitled' } };   // no author
+  assert.equal(answerMetadata(doc, 'who wrote this?'), null, 'absent fact → fall through, never fabricate');
+  assert.equal(answerMetadata({}, 'who wrote this?'), null, 'no metadata at all → fall through');
+});
+
+test('a metadata question routes to the metadata answer — the title never enters a content prompt', async () => {
+  const doc = parseText('Gregor woke transformed. He had become an insect.', { docId: 'pg5200.txt' });
+  doc.metadata = { title: 'The Metamorphosis', author: 'Franz Kafka' };
+  doc.sentenceEmbeddings = async (e) => Promise.all(doc.sentences.map(s => e.embed(s)));
+  const model = createModel('echo'); await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({ question: 'who wrote this?', doc, model, embedder: createHashEmbedder(), auditLog: audit });
+  assert.equal(result.route, 'metadata', 'a front-matter question short-circuits to the metadata answer');
+  assert.match(result.answer, /Franz Kafka/, 'the author is answered as a distinct fact');
 });
 
 // ── Omnimodal — the metadata slot is part of the universal contract ───────────

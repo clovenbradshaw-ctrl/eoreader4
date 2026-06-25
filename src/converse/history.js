@@ -24,7 +24,12 @@ const DEFAULTS = Object.freeze({
 
 export const foldConversation = (history = [], opts = {}) => {
   const cfg = { ...DEFAULTS, ...opts };
-  const msgs = (Array.isArray(history) ? history : []).filter(m => m && m.content);
+  // §7 — an UNBOUND talker reply (claims, but none tied to a source) never folds into the
+  // session ground. It is dropped here, before the window/recap/lastReply are built, so a
+  // claim that did not bind cannot become the next turn's premise. A tag the pipeline set
+  // (ui/app.js); absent on every existing caller, so this is byte-identical without it.
+  const msgs = (Array.isArray(history) ? history : [])
+    .filter(m => m && m.content && !(m.role === 'assistant' && m.unbound));
   const empty = { recentMessages: [], pastTurns: [], notes: '', lastReply: '', stats: { recent: 0, folded: 0, notesLen: 0 } };
   if (msgs.length === 0) return empty;
 

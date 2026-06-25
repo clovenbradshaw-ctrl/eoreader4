@@ -74,22 +74,20 @@ export const VETOES = [
     // still rides: the answer ships with a prominent "couldn't tie any of this to the page"
     // caveat, rather than being swapped for a refusal. Telling the user is the safety.
     id: 'unbound',
-    test: ({ bound, draft }) =>
-      bound.length > 0 &&
-      bound.every(b => !b.citation) &&
-      bound.every(b => (b.score || 0) <= CONTACT_FLOOR) &&
-      !isAbstention(draft),
+    test: ({ bound, draft }) => isUnbound(bound, draft),
     refuses: true,
     message: 'No claim could be tied to a source sentence, and none made lexical contact with one.',
   },
   {
     // The FAINT sibling: every claim is uncited, but at least one made lexical contact with a
     // span (CONTACT_FLOOR < score < MIN_OVERLAP) — a paraphrase the lexical binder cannot tie
-    // to a single sentence. Flag, RIDE — never substituted. A faint amplitude has no business
-    // being enacted as certainty (the over-refusal guard); the binder cannot tell a reword from
-    // coincidence, so the meaning reader, not the floor, is what closes this residual. It is
-    // refuses:true (a serious pill — the answer cites nothing) but rides, the way a denied-but-
-    // -from-memory contradiction does.
+    // to a single sentence. Flag, RIDE — never gated. The faint amplitude is exactly the case
+    // the over-refusal guard protects: the binder cannot tell a reword from coincidence, so
+    // telling the user is the safety, not a regenerate. The LOAD-BEARING cases — the strict
+    // from-nowhere `unbound` and a refusing `edge-contradicted` — invert under the subjective
+    // frame (§5): with abstention now free and coherent, those GATE and regenerate rather than
+    // ride (the gate lives in turn/stages.js `revise`, reading isUnbound / factcheck.refuse).
+    // This faint sibling is deliberately NOT among them; it stays a flag.
     id: 'unbound-contact',
     test: ({ bound, draft }) =>
       bound.length > 0 &&
@@ -184,12 +182,24 @@ export const VETOES = [
 const normalize = (s) =>
   String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 
-// An honest void abstention — the talker declining because the excerpts don't cover the
-// question. Anchored to the document/text/excerpts (or a bare "no information") subject,
-// so it recognises "the document does not say" / "the text does not mention X" but NOT a
-// real claim that happens to contain the words ("the clerk does not say goodbye").
-const ABSTAIN = /^\s*(?:the\s+(?:document|text|excerpts?|passage)|it|this(?:\s+(?:document|text))?)\s+(?:does\s*n['’]?t|does\s+not|do\s+not|is\s+silent|says?\s+nothing)\b[^.?!]*?\b(?:say|says|mention|mentions|state|states|specify|specifies|cover|covers|address|addresses|indicate|indicates|contain|contains|tell)?\b|^\s*no\s+(?:information|mention|indication|details?|record)\b/i;
-const isAbstention = (draft) => ABSTAIN.test(String(draft || '').trim());
+// An honest void abstention — the talker declining because the lines don't cover the
+// question. Anchored to the document/text/lines (or a bare "no information") subject, so
+// it recognises "I did not find that" / "the text does not mention X" but NOT a real
+// claim that happens to contain the words ("the clerk does not say goodbye"). The
+// subjective frame's absence clause ("tell them you did not find it") makes this the
+// expected shape of an honest miss, so the matcher also catches the first-person reading.
+const ABSTAIN = /^\s*(?:the\s+(?:document|text|excerpts?|passage|lines?)|it|this(?:\s+(?:document|text))?|i)\s+(?:does\s*n['’]?t|does\s+not|do\s+not|did\s*n['’]?t|did\s+not|is\s+silent|says?\s+nothing)\b[^.?!]*?\b(?:say|says|mention|mentions|state|states|specify|specifies|cover|covers|address|addresses|indicate|indicates|contain|contains|tell|find|found)?\b|^\s*no\s+(?:information|mention|indication|details?|record)\b/i;
+export const isAbstention = (draft) => ABSTAIN.test(String(draft || '').trim());
+
+// The from-nowhere LIMIT, as a reusable predicate (§5): every claim is uncited AND made
+// no lexical contact with any span (score ≤ CONTACT_FLOOR for all). Prose grounded in
+// nothing — the load-bearing case the gate regenerates on, not just flags. The `unbound`
+// veto below and the gate (turn/stages.js) read the SAME predicate, one source of truth.
+export const isUnbound = (bound = [], draft = '') =>
+  bound.length > 0 &&
+  bound.every(b => !b.citation) &&
+  bound.every(b => (b.score || 0) <= CONTACT_FLOOR) &&
+  !isAbstention(draft);
 
 export const runVetoes = (ctx) => {
   const fired  = [];

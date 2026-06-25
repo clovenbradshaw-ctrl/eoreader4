@@ -28,13 +28,14 @@ const coldEmbedder = { isWarm: () => false, embed: async () => new Float32Array(
 test('Chat-with-document (strict) uses the strict register and forbids outside knowledge', () => {
   const [system] = buildGroundedMessages({ question: 'q', spans: [{ idx: 0, text: 'x' }], strict: true });
   assert.equal(system.content, SYSTEM_GROUND_STRICT);
-  assert.match(system.content, /ONLY from the document/i);
-  assert.match(system.content, /do not.*outside.*knowledge/is);
+  assert.match(system.content, /ONLY from what you read/i);
+  assert.match(system.content, /don'?t fill the gap from outside/is);
 });
 
 test('strict mode with nothing retrieved names the absence so the talker refuses cleanly', () => {
   const [, user] = buildGroundedMessages({ question: 'q', spans: [], strict: true });
-  assert.match(user.content, /No passages from the document were retrieved/i);
+  assert.match(user.content, /You read no lines bearing on their question/i);
+  assert.match(user.content, /do not answer from outside knowledge/i);
 });
 
 test('the default (Auto) grounded register is unchanged — not strict', () => {

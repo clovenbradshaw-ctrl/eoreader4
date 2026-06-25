@@ -352,9 +352,13 @@ const runQuery = async (question) => {
 
   // Append the completed exchange so the next turn's session fold can read it back —
   // but never feed an error turn back into the conversation (it would poison the fold).
+  // An UNBOUND answer (claims, but none tied to a source) is tagged so the fold keeps it
+  // out of the next turn's ground (§7): a claim that did not bind cannot become a
+  // follow-up's premise, the way the audit's wrong t1 answer became t4's premise.
   if (route !== 'error') {
     STATE.history.push({ role: 'user', content: question });
-    STATE.history.push({ role: 'assistant', content: result.answer || '' });
+    STATE.history.push({ role: 'assistant', content: result.answer || '',
+                         ...(result.unbound ? { unbound: true } : {}) });
   }
 
   els.send.disabled = false;

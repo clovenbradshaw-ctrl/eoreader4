@@ -44,8 +44,15 @@ const norm = (s) => String(s || '').trim().toLowerCase();
 // cast, never the answer's content (the grounded prompt still withholds the talker's
 // prior answers), so this carries no poisoning channel.
 export const conversationCast = (history = [], question = '') => {
+  // §7 — an UNBOUND talker reply never warms the cast. The talker's words enter the cast
+  // only to warm WHICH referent is in focus, but a reply that bound nothing warming the
+  // wrong figure (the audit's t1 father-claim warming "father") is exactly the propagation
+  // §7 closes. Tagged by the pipeline (ui/app.js); absent on existing callers, so this is
+  // byte-identical without it.
   const turns = [
-    ...(Array.isArray(history) ? history : []).filter(m => m && m.content).map(m => String(m.content)),
+    ...(Array.isArray(history) ? history : [])
+      .filter(m => m && m.content && !(m.role === 'assistant' && m.unbound))
+      .map(m => String(m.content)),
     String(question || ''),
   ].map(s => s.trim()).filter(Boolean);
   if (turns.length === 0) return [];

@@ -5,7 +5,7 @@
 //   id:        't42',
 //   question:  string,
 //   startedAt: ms, finishedAt: ms, durationMs: ms,
-//   route:     'math' | 'who' | 'confirm' | 'grounded' | 'chat' | 'error',
+//   route:     'math' | 'metadata' | 'smalltalk' | 'grounded' | 'chat' | 'error',
 //   grounding: 'auto' | 'grounded' | 'free',   // the register the user selected (the chip)
 //   steps:     [{ name, t, data }, ...],
 //   prompt:    string | null,   // verbatim, grounded only

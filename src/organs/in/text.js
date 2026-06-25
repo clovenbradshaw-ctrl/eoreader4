@@ -6,6 +6,13 @@ import { parseText }    from '../../perceiver/parse/index.js';
 import { projectGraph } from '../../core/index.js';
 import { areDisjoint }  from '../../core/index.js';
 
+// §4 — the coordinated-subject reading rides behind RULES_REV (the same flag the gated
+// talker reads, organs/out/speech/index.js). Read locally so the input organ stays
+// decoupled from the output organ; OFF by default, so every golden parse is byte-identical.
+// A caller may still override via `opts.coordSubjects`.
+const RULES_REV =
+  (typeof process !== 'undefined' && process.env && /^(1|true|on)$/i.test(process.env.RULES_REV || '')) || false;
+
 export const ingestText = async (file, opts = {}) => {
   const text  = typeof file === 'string' ? file : await file.text();
   const name  = typeof file === 'string' ? `doc-${Date.now()}` : (file.name || `doc-${Date.now()}`);
@@ -16,7 +23,8 @@ export const ingestText = async (file, opts = {}) => {
   // harness can confirm the forbidden-relation gate trips when exclusivity is gone.
   const rolesConflict = opts.rolesConflict === false ? () => false
     : (typeof opts.rolesConflict === 'function' ? opts.rolesConflict : areDisjoint);
-  const doc   = parseText(text, { docId: name, rolesConflict, corefOpts: opts.corefOpts });
+  const coordSubjects = opts.coordSubjects ?? RULES_REV;   // §4 — coordinated subjects (flagged)
+  const doc   = parseText(text, { docId: name, rolesConflict, corefOpts: opts.corefOpts, coordSubjects });
 
   // The graph is a fold of the log. Expose it as a frame-parameterised
   // projection so the UI can re-weight around a reading cursor (γ decay)

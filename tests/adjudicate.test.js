@@ -37,13 +37,13 @@ test('the factcheck stage runs in a grounded turn', async () => {
     'factcheck sits in the live pipeline, after bind and before veto');
 });
 
-test('a GROUNDED claim the graph denies is flagged and RIDES — flag-and-tell on its real domain', async () => {
-  // The rider edge-contradicted exists to protect: an answer that GROUNDS (claim 1
-  // "Grete waited." binds s1) yet contains a contradicted relation (Grete as Gregor's
-  // MOTHER, sister ⟂ mother). The contradiction is a fallible MEASUREMENT — the talker
-  // may speak from memory — so it is flagged, not gated, and the model text is surfaced.
-  // (The old fixture here used an UNGROUNDED contradiction, which conflated this case
-  // with the structural floor; the next test pins that case separately.)
+test('a confident contradiction GATES and regenerates (§5) — the model word still surfaces, with its flag', async () => {
+  // A confident edge-contradiction (Grete as Gregor's MOTHER, sister ⟂ mother, prior ~0.85)
+  // is libel-grade and, under the subjective frame, no longer rides: §5 engages the gate and
+  // regenerates against the lines (the contradiction is NOT among the flag-only cases the
+  // spec keeps — low-coverage, the weak contradiction, the unwitnessed). The gate regenerates,
+  // it does not gag: the model's word still surfaces (a fixed test model cannot improve, so
+  // the flagged draft rides, now with `gated` recorded; a real model would drop the false link).
   const doc = parseText(STORY, { docId: 'adj' });
   const audit = createAuditLog();
   const result = await runTurn({
@@ -54,24 +54,19 @@ test('a GROUNDED claim the graph denies is flagged and RIDES — flag-and-tell o
   const ids = result.flags.map(f => f.id);
   assert.ok(ids.includes('edge-contradicted'),
     `expected an edge-contradicted flag, got: ${ids.join(',') || '(none)'}`);
-  assert.ok(!ids.includes('unbound'), 'the answer grounds (claim 1 binds) — the structural floor stays silent');
-  assert.equal(result.turn.gated, false, 'a grounded contradiction is NOT gated — it rides');
-  assert.match(result.answer, /mother/i, 'the model text is surfaced with the flag, not gagged');
+  assert.equal(result.turn.gated, true, '§5: a confident contradiction engages the gate and regenerates');
+  assert.match(result.answer, /mother/i, 'the model text still surfaces — regenerated, not gagged');
   const fc = result.turn.steps.find(s => s.name === 'factcheck');
   assert.equal(fc.data.contradicted, 1);
 });
 
-test('a contradicting claim that makes lexical CONTACT rides, flagged — the lexical floor does not over-refuse a paraphrase, and the contradiction is still measured', async () => {
-  // The denied relation again, in a draft that CITES nothing (no claim clears MIN_OVERLAP)
-  // but DOES make lexical contact with a span — it restates "Grete waited" with extra
-  // material. Under the floor's re-typing (docs/grounding-floor.md) the lexical gate
-  // substitutes only the from-nowhere LIMIT — prose with no contact at all. A paraphrase
-  // that made contact but could not cite is a FAINT reading: it rides, flagged
-  // (`unbound-contact`), never substituted — enacting a faint amplitude as certainty is the
-  // over-refusal hazard, and a contradiction about real figures necessarily NAMES them, so
-  // it is never truly "from nowhere". The contradiction is the right organ for the false
-  // relation: it is independently measured (contradicted=1) and flagged (`edge-contradicted`),
-  // flag-and-tell. The lexical floor erases no signal by declining to gate.
+test('a contradicting paraphrase: the contradiction gates, the faint unbound-contact stays a flag', async () => {
+  // The denied relation in a draft that CITES nothing but makes lexical CONTACT (it restates
+  // "Grete waited" with extra material). Two readings split by §5: the confident
+  // `edge-contradicted` engages the gate (it regenerates); the faint `unbound-contact` — a
+  // paraphrase the binder cannot tie to one sentence — STAYS flag-only, exactly as the spec
+  // keeps it (enacting a faint amplitude as certainty is the over-refusal hazard). The model
+  // word still surfaces in both cases; the gate regenerates, it never substitutes.
   const doc = parseText(STORY, { docId: 'adj' });
   const audit = createAuditLog();
   const result = await runTurn({
@@ -80,13 +75,13 @@ test('a contradicting claim that makes lexical CONTACT rides, flagged — the le
     embedder: createHashEmbedder(), auditLog: audit,
   });
   const ids = result.flags.map(f => f.id);
-  assert.equal(result.turn.gated, false, 'a contacting paraphrase is NOT substituted — the over-refusal guard holds');
-  assert.ok(ids.includes('unbound-contact'), 'it flags as contact-but-uncitable (a faint reading), not the from-nowhere gate');
+  assert.equal(result.turn.gated, true, 'the confident contradiction engages the gate');
+  assert.ok(ids.includes('unbound-contact'), 'the faint contact-but-uncitable reading stays a flag, not a gate trigger');
   assert.ok(!ids.includes('unbound'), 'the from-nowhere gate stays silent — the prose made contact');
-  assert.ok(ids.includes('edge-contradicted'), 'and the contradiction is flagged on its own organ — flag-and-tell');
-  assert.match(result.answer, /mother/i, 'the model text rides with its flags, not gagged');
+  assert.ok(ids.includes('edge-contradicted'), 'and the contradiction is flagged on its own organ');
+  assert.match(result.answer, /mother/i, 'the model text still surfaces — regenerated, not gagged');
   const fc = result.turn.steps.find(s => s.name === 'factcheck');
-  assert.equal(fc.data.contradicted, 1, 'the contradiction is still measured and recorded — declining to gate erased nothing');
+  assert.equal(fc.data.contradicted, 1, 'the contradiction is still measured and recorded');
 });
 
 test('a from-memory claim consistent with the graph draws no contradiction flag', async () => {

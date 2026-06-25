@@ -4,6 +4,15 @@ import { readFileSync } from 'node:fs';
 
 import { parseText } from '../src/perceiver/parse/index.js';
 import { enactedReadingTo } from '../src/enact/index.js';
+import { projectGraph } from '../src/core/index.js';
+import { factCheck } from '../src/factcheck/index.js';
+import { resolveRetrievalQuery } from '../src/converse/focus.js';
+import { retrieveHybrid } from '../src/retrieve/index.js';
+import { runTurn } from '../src/turn/pipeline.js';
+import { createAuditLog } from '../src/audit/index.js';
+import { createHashEmbedder } from '../src/model/embed-hash.js';
+import '../src/model/echo.js';
+import { createModel } from '../src/model/interface.js';
 
 // THE METAMORPHOSIS BATTERY — Test 7, the decisive CONTROLS (docs/metamorphosis-battery.md §7).
 //
@@ -54,4 +63,70 @@ test('battery §7 — SHUFFLE control: the engine DEPENDS on sentence order (not
   const rel = Math.abs(shuffledMean - ordered.total) / ordered.total;
   assert.ok(rel > 0.1,
     `ordered (${ordered.total.toFixed(2)}) and shuffled-mean (${shuffledMean.toFixed(2)}) must differ — the engine reads order, not marginals (rel=${rel.toFixed(2)})`);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOLD MARK ZERO — the conversational battery (docs/subjective-frame.md).
+//
+// The audit run (`who is gregor's sister?` → `prove it` → `huh?` → `prove what you are
+// saying about her life circumstances`) failed gold mark zero: the talker assigned the
+// opening transformation to the FATHER, twice, and the engine let it ship — the prompt
+// leaked recognition, the demonstrative never resolved before retrieval, and the reading
+// held no transformation edge for the veto to contradict against. These pin the four
+// testable claims of gold mark zero. The talker's actual prose needs a live LLM, so the
+// claims that turn on it are tested through the MACHINERY that catches the failure.
+
+const META = readFileSync('data/metamorphosis.txt', 'utf8');   // Gregor transforms (s0); Grete is the sister
+const echo = async () => { const m = createModel('echo'); await m.load(); return m; };
+const ground = (doc) => { doc.sentenceEmbeddings = async (e) => Promise.all((doc.sentences || doc.units).map(s => e.embed(s))); return doc; };
+
+test('gold mark 0a — orientation carries NO recognition: a content turn never sees the title or author', async () => {
+  const doc = ground(parseText(META, { docId: 'pg5200.txt' }));
+  doc.metadata = { title: 'The Metamorphosis', author: 'Franz Kafka' };   // the front-matter bait
+  const audit = createAuditLog();
+  await runTurn({ question: 'what happens to Gregor?', doc, model: await echo(),
+                  embedder: createHashEmbedder(), auditLog: audit });
+  const prompt = audit.turns[0].prompt;
+  assert.match(prompt, /What it was: pg5200\.txt/, 'orientation is the filename — the reader who set a file down');
+  assert.doesNotMatch(prompt, /Metamorphosis/, 'the famous title never enters the content prompt');
+  assert.doesNotMatch(prompt, /Kafka/, 'nor the author — recognition is the leak under test');
+});
+
+test('gold mark 0b — "prove it" retrieves sister-evidence, not the literal token', async () => {
+  const doc = ground(parseText(META, { docId: 'pg5200.txt' }));
+  const history = [{ role: 'user', content: "who is gregor's sister?" }, { role: 'assistant', content: '(answer)' }];
+  const resolved = resolveRetrievalQuery('prove it', history);
+  assert.match(resolved, /sister/, 'the demonstrative resolves to the prior turn’s topic before retrieval');
+  const spans = await retrieveHybrid(doc, resolved, createHashEmbedder(), 5);
+  const top = spans.map(s => s.text).join(' · ');
+  assert.match(top, /Grete|sister/i, 'the top results are about the sister');
+  assert.doesNotMatch(spans[0].text, /transformed in his bed/i, 'NOT the opening transformation line by literal overlap');
+});
+
+test('gold mark 0c — the §5 veto marks the FATHER-transformation CONTRADICTED (depends on §4)', async () => {
+  // The reading holds the transformation as GREGOR's (active voice so the parser extracts the
+  // edge; Kafka's resultative is the §4 extraction seam). A talker that assigns it to a
+  // different undergoer is contradicted — the audit's missing number (contradicted:0 → 1).
+  const doc = parseText('Gregor Samsa woke. Gregor Samsa transformed into a vermin. Hermann Samsa stood by.',
+    { docId: 'pg5200.txt', referents: true });
+  const graph = projectGraph(doc.log, {});
+  const fc = await factCheck({ prose: 'Hermann Samsa transformed into a vermin.', doc, graph, changeOfState: true });
+  assert.equal(fc.counts.contradicted, 1, 'Gregor, not the father, transforms — the wrong attribution is contradicted');
+  assert.ok(fc.refuse, 'a REFUSING contradiction — the §5 gate engages and regenerates rather than shipping it');
+  // And the flag-off path is byte-identical: nothing to contradict against, as the audit found.
+  const off = await factCheck({ prose: 'Hermann Samsa transformed into a vermin.', doc, graph, changeOfState: false });
+  assert.equal(off.counts.contradicted, 0);
+});
+
+test('gold mark 0d — an unbound talker turn cannot become the next turn’s premise (§7)', async () => {
+  // The propagation the audit shows: t1’s unbound father-claim was t4’s premise. A reply that
+  // did not bind is tagged, and the converse fold drops it — it cannot ground a follow-up.
+  const { foldConversation } = await import('../src/converse/index.js');
+  const f = foldConversation([
+    { role: 'user', content: 'who underwent the transformation?' },
+    { role: 'assistant', content: 'The father was transformed into an insect.', unbound: true },
+    { role: 'user', content: 'prove what you are saying about him' },
+  ]);
+  assert.doesNotMatch([...f.pastTurns, f.notes, f.lastReply].join('\n'), /father was transformed/i,
+    'the unbound claim never enters the ground the next turn reads');
 });
