@@ -26,6 +26,15 @@ export const PRIMITIVES = Object.freeze({
   authored:{ symmetric: false, transitive: false, functional: false, inverse: 'authored-by',prior: 0.7 },
   located: { symmetric: false, transitive: true,  functional: false, inverse: 'contains',   prior: 0.85 },
   social:  { symmetric: true,  transitive: false, functional: false, inverse: 'social',     prior: 0.5 },  // friend (weak)
+  // CHANGE OF STATE (§4) — "transformed into", "became", "turned into". OBJECT-functional,
+  // not subject-functional: within ONE narrative reading a given resultant state is reached
+  // by a single undergoer (the central transformation has one undergoer), so a claim that a
+  // DIFFERENT figure reached the SAME resultant contradicts the reading. Defeasible (a modest
+  // prior) — many figures can become teachers in general; this is the reading's specific,
+  // definite resultant ("the vermin"), the metamorphosis the whole text turns on. Marked
+  // `objectFunctional` so the clash is checked on the OBJECT slot (correspond.js), and the
+  // subject `functional` flag stays false so the existing subject-clash path never fires it.
+  becomes: { symmetric: false, transitive: false, functional: false, objectFunctional: true, inverse: 'became-from', prior: 0.8 },
 });
 
 // Disjointness is stated on PRIMITIVES, not nouns. parent ⟂ sibling, parent ⟂
@@ -56,6 +65,12 @@ const SURFACE = Object.freeze({
   author:  { type: 'authored', gender: null }, writer: { type: 'authored', gender: null },
   capital: { type: 'located', gender: null },
   friend:  { type: 'social', gender: null }, neighbour: { type: 'social', gender: null }, neighbor: { type: 'social', gender: null },
+  // change-of-state surface verbs → the `becomes` primitive (§4). The verb is the `via`
+  // on a CON edge (parse/relations.js), so these are looked up the same way a kin noun is.
+  transform: { type: 'becomes', gender: null }, transformed: { type: 'becomes', gender: null },
+  become: { type: 'becomes', gender: null }, became: { type: 'becomes', gender: null },
+  'turn-into': { type: 'becomes', gender: null }, turned: { type: 'becomes', gender: null },
+  changed: { type: 'becomes', gender: null }, metamorphosed: { type: 'becomes', gender: null },
 });
 
 // Type a surface descriptor noun. Open vocab in, closed primitive out (or null —
@@ -70,6 +85,13 @@ export const typeOf = (surfaceNoun) => {
 
 export const isFunctional = (noun) => !!typeOf(noun)?.functional;
 export const isSymmetric  = (noun) => !!typeOf(noun)?.symmetric;
+// §4 — OBJECT-functional: one undergoer per resultant within a reading (the `becomes`
+// change-of-state primitive). Distinct from `functional` (one filler per subject slot).
+export const isObjectFunctional = (noun) => !!typeOf(noun)?.objectFunctional;
+export const objectFunctionalClash = (a, b) => {
+  const ta = typeOf(a), tb = typeOf(b);
+  return !!(ta && tb && ta.objectFunctional && ta.type === tb.type);
+};
 // The calibrated typing confidence for a surface noun (1 when untyped — an
 // unknown relation is not penalised). Consumed by checkRelationConflict to weigh
 // a contradiction's strength and by the factcheck refusal gate; an untyped noun
@@ -190,6 +212,33 @@ export const checkRelationConflict = (graph, claim) => {
       confidence: relationPrior(noun) * relationPrior(filled.via),
       citation: filled.sentIdx != null ? `s${filled.sentIdx}` : null,
     });
+  }
+  return null;
+};
+
+// §4 — the OBJECT-functional clash, the mirror of checkRelationConflict's functional-axiom:
+// where that looks at edges OUT of the subject (one filler per subject slot), this looks at
+// edges INTO the object (one undergoer per resultant). A `becomes` claim — "the father
+// transformed into the vermin" — contradicts the reading when the SAME resultant (the
+// vermin) was already reached from a DIFFERENT undergoer (Gregor). Kept SEPARATE from
+// checkRelationConflict so that function stays byte-identical; correspond.js calls this only
+// behind the §4 flag, and it returns null for every non-`becomes` relation, so nothing else
+// is touched. Requires a WITNESSED filler (`!e.derived`), the same provenance guard.
+export const checkObjectFunctionalConflict = (graph, claim) => {
+  const noun = claim?.via;
+  if (!isObjectFunctional(noun)) return null;     // only change-of-state primitives → defer
+  const rep = graph?.representative || ((id) => id);
+  const src = rep(claim.src), tgt = rep(claim.tgt);
+  const intoTgt = (graph?.edges || []).filter(e => rep(e.to) === tgt);
+  for (const e of intoTgt) {
+    if (rep(e.from) !== src && !e.derived && objectFunctionalClash(noun, e.via)) {
+      return Object.freeze({
+        verdict: VERDICTS.CONTRADICTED, reason: 'object-functional-axiom',
+        claimRel: noun, docRel: e.via, existing: rep(e.from), witnessed: !e.derived,
+        confidence: relationPrior(noun) * relationPrior(e.via),
+        citation: e.sentIdx != null ? `s${e.sentIdx}` : null,
+      });
+    }
   }
   return null;
 };

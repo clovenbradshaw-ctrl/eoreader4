@@ -22,7 +22,7 @@
 
 import { segmentSentences }       from '../perceiver/parse/index.js';
 import { parseRelations, headVerb } from '../perceiver/parse/index.js';
-import { checkRelationConflict }   from '../core/index.js';
+import { checkRelationConflict, checkObjectFunctionalConflict } from '../core/index.js';
 import { coherence, terrainInfo }  from '../core/index.js';
 import { operatorsByDomain }       from '../core/index.js';
 
@@ -98,7 +98,7 @@ const looksRelational = (sentence) => {
 // existing node-grounding citation path. A relational sentence whose endpoints
 // do not both anchor is returned UNRESOLVED, so the verdict holds it rather than
 // silently dropping it.
-export const claimedEdges = ({ prose, doc, cursor = Infinity }) => {
+export const claimedEdges = ({ prose, doc, cursor = Infinity, referents = false }) => {
   const admission = doc?.admission;
   if (!admission) return [];
   const isSpeech = doc?.conventions?.isAttributionVerb
@@ -107,9 +107,15 @@ export const claimedEdges = ({ prose, doc, cursor = Infinity }) => {
   const field = documentFieldAt(doc, cursor);
   const coref = { field: () => field, resolve: () => field[0]?.id ?? null };
 
+  // §4 — `referents` opens the NP object slot for the TALKER claim too, so a change-of-state
+  // resultant that is a common noun ("…into a vermin") resolves as an endpoint, the way it
+  // does on the page. OFF by default (the veto grounds against document figures only); the
+  // §4 flag turns it on so the object-functional clash has an object to check.
+  const relOpts = { ...(isSpeech ? { isSpeech } : {}), ...(referents ? { referents: true } : {}) };
+
   const out = [];
   for (const sentence of segmentSentences(prose)) {
-    const rels  = parseRelations(sentence, admission, coref, isSpeech ? { isSpeech } : {});
+    const rels  = parseRelations(sentence, admission, coref, relOpts);
     const edges = rels.filter(r => (r.op === 'CON' || r.op === 'SIG') && r.src && r.tgt);
     for (const e of edges) {
       out.push({ sentence, op: e.op, src: e.src, tgt: e.tgt, via: e.via || null, resolved: true });
@@ -171,7 +177,7 @@ const voidDenial = async ({ src, tgt, talkerCell }, { graph, classifier, adj }) 
 //   unsupported    — endpoints resolve, relation types, but nothing in the
 //                    document reading witnesses this relation. Not false —
 //                    unwitnessed. Stripped or flagged.
-export const checkClaim = async (claim, { doc, graph, classifier, adjacency } = {}) => {
+export const checkClaim = async (claim, { doc, graph, classifier, adjacency, changeOfState = false } = {}) => {
   if (!claim?.resolved) return result(VERDICTS.INDETERMINATE, { reason: 'unresolved-endpoints' });
 
   // The symbolic relation algebra runs BEFORE the classifier gate, because it is
@@ -185,6 +191,17 @@ export const checkClaim = async (claim, { doc, graph, classifier, adjacency } = 
     reason: algebra.reason, citation: algebra.citation || null,
     confidence: algebra.confidence ?? null,   // the joint typing prior rides the verdict
   });
+
+  // §4 — the OBJECT-functional (change-of-state) clash, behind the flag. Gregor (not the
+  // father) underwent the transformation; a claim that a different undergoer reached the
+  // same resultant is contradicted. Inert for every non-`becomes` relation, so the default
+  // path (flag off) is byte-identical.
+  if (changeOfState) {
+    const cos = checkObjectFunctionalConflict(graph, claim);
+    if (cos) return result(cos.verdict, {
+      reason: cos.reason, citation: cos.citation || null, confidence: cos.confidence ?? null,
+    });
+  }
 
   if (!classifier)      return result(VERDICTS.INDETERMINATE, { reason: 'no-classifier' });
 
@@ -307,11 +324,11 @@ const diagonalGuard = (claims, terrain) => {
 // `terrain` is the Site-face terrain the reading typed at the answer locus (Void /
 // Atmosphere / Entity …); when present, the diagonal guard contributes OFF_DIAGONAL
 // verdicts to `edgeVerdicts` alongside the four-way ones. Absent, the guard is inert.
-export const factCheck = async ({ prose, doc, graph, classifier, adjacency, cursor = Infinity, terrain = null } = {}) => {
-  const claims  = claimedEdges({ prose, doc, cursor });
+export const factCheck = async ({ prose, doc, graph, classifier, adjacency, cursor = Infinity, terrain = null, changeOfState = false } = {}) => {
+  const claims  = claimedEdges({ prose, doc, cursor, referents: changeOfState });
   const checked = [];
   for (const claim of claims) {
-    const v = await checkClaim(claim, { doc, graph, classifier, adjacency });
+    const v = await checkClaim(claim, { doc, graph, classifier, adjacency, changeOfState });
     checked.push(Object.freeze({ ...claim, ...v }));
   }
 

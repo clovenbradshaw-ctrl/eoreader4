@@ -341,6 +341,9 @@ export const stages = {
       // measured void rides as Void; this is what turns a specific claim made over an
       // absence into an OFF_DIAGONAL verdict the veto battery can tag.
       terrain: terrainAtLocus(ctx, cursor),
+      // §4 (behind RULES_REV): the change-of-state object-functional clash — Gregor, not
+      // the father, underwent the transformation. Off by default → byte-identical.
+      changeOfState: RULES_REV,
     });
     // A claim the GRAPH corroborates earns the cited sentence even when the model
     // spoke from memory: fold those citations into the answer's sources, de-duped.

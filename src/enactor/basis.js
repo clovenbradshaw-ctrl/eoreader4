@@ -28,6 +28,7 @@
 
 import { parseProps } from './props.js';
 import { correspondProp } from './props.js';
+import { projectGraph, typeOf } from '../core/index.js';
 
 // Build the grounded basis from a surf result and its document. `surf` is the
 // read/surf.js output (with a `field` carrying per-cursor bayes, and optionally
@@ -76,9 +77,34 @@ export const buildBasis = (surf, doc, question, opts = {}) => {
     }
   }
 
+  // §4 — the RELATIONAL / ROLE atom. The basis held mass over entities, triples, and
+  // predicates, but a kinship- or role-asserting reading (sister-of, transformed-into)
+  // moved NOTHING: those edges had no basis element to correspond to, so a relational
+  // proposition could neither ground nor be denied at the gate. This adds the TYPED
+  // relation edges (kinship, role, change-of-state — typeOf != null) incident to the
+  // stops as first-class basis elements, the grounded counterpart of the §4 edge-grounding
+  // unlock. An untyped CON edge stays in the prop channel as before; only the typed
+  // relations enter this atom, so the addition is additive and the existing fields are
+  // untouched.
+  const relations = [];
+  if (doc?.log) {
+    const graph = doc.projectGraph ? doc.projectGraph({ cursor }) : projectGraph(doc.log, { cursor });
+    const stopSet = new Set(stops);
+    for (const e of (graph.edges || [])) {
+      const t = typeOf(e.via);
+      if (!t) continue;                                                  // only typed relations
+      if (e.sentIdx != null && stops.length && !stopSet.has(e.sentIdx)) continue;  // incident to a stop
+      relations.push(Object.freeze({
+        src: e.from, via: e.via, tgt: e.to, idx: e.sentIdx ?? null,
+        type: t.type, status: 'relation',
+      }));
+    }
+  }
+
   return Object.freeze({
     props: Object.freeze(props),
     void: Object.freeze(voidEls),
+    relations: Object.freeze(relations),
     question: Object.freeze({ targetProps: Object.freeze(targetProps) }),
     cursor,
   });
