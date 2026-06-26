@@ -31,6 +31,10 @@ export { updateStance, applyMeasuredStance } from './stance.js';
 // REC, not endless surprise). Runs the Existence and Structure rungs at once, reads the
 // mis-framed signature off measured nulls, and re-grounds on a reframe.
 export { helixPredict, helixGenerate } from './helix-predict.js';
+// The persistent Horizon: memory that IS the moved density operator across turns. Cold-
+// starts at σ, folds each reading in with recency decay, departs σ as it accumulates a
+// self, and re-grounds (the helix turning) on a measured defeat.
+export { createHorizon } from './horizon.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';
