@@ -53,6 +53,10 @@ export { OPS, RELTYPES, operatorProfiles, structuralActivations, structuralHoriz
 // (deriveNull over random same-size groups) — `structureGrows` is the empirical answer to
 // whether the structural basis can learn distinctions or VOX must push semantics down.
 export { linkInventory, untypedVias, growLinkTypes, createLinkLearner } from './learn-links.js';
+// The role of an element by ablation — "remove it and see what reading changed" — done
+// structurally over operator profiles, not by subtracting embeddings. The leave-one-out the
+// Born rule already runs; the last embedder dependency dissolved into the operator basis.
+export { propositionRoles } from './roles.js';
 // Meaning is not extracted — it is conjectured by a self and refuted by what follows. That
 // mechanism already exists, fully, in the enactor's commit loop: the gate PROPOSES a
 // candidate proposition (the conjecture), EVA/REC REFUTES it against the grounded basis and
