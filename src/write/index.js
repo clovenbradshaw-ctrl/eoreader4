@@ -47,3 +47,12 @@ export { surfToPlan, stopToCell } from './plan.js';
 export { frameAt, SITES } from './frame.js';
 export { streamAnswer } from './answer.js';
 export { foldImpression } from './impression.js';
+// Writing is reading backwards — the demonstrable kernel (the holon above is the
+// production path). Referring-expression generation by INVERSE coref (emit a pronoun
+// only where the reader's field resolves it back to the meant entity — gender
+// conformance + γ-activation + distinctness, the reading rules run in reverse), with the
+// me-ness/self line (given = perceiver/not-mine; generated = enactor/mine; read back =
+// self) and a separate reader-model thread (theory of mind). Concept→traverse→words:
+// hold the activated graph as the imagistic concept, traverse it for the order of saying.
+export { createReaderModel, writeReferring } from './refer.js';
+export { conceptToPlan, speakConcept } from './traverse.js';
