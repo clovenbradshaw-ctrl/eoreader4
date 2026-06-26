@@ -31,44 +31,26 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0 } =
   // same convention linkInventory reads (firm → 1). `minCoupling` lets the generator SPEAK
   // ONLY WHAT IT HOLDS: with a floor, a merely-glimpsed relation is not said. Default 0
   // speaks everything (byte-identical), so the floor is opt-in.
-  const edges = events
-    .filter(e => (e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null)
-    .map(e => ({ from: e.src, to: e.tgt, via: e.via, sentIdx: e.sentIdx ?? 0, coupling: e.coupling != null ? e.coupling : (e.w != null ? e.w : 1) }))
-    .filter(e => e.coupling >= minCoupling);
-  if (!edges.length) return [];
-
-  // The order of saying is a COHERENCE walk, not a salience sort. Discourse reads well when
-  // each step keeps the center (Centering Theory: CONTINUE the entity in focus before
-  // shifting). So: start at the most-connected entity (the hub of the scene), then keep
-  // saying what the FOCUS does until it runs out, then shift to an entity already mentioned
-  // (a smooth RETAIN/SHIFT, not a jump to a stranger), and only then to a fresh start. Among
-  // equally-coherent next steps, the earliest-constituted edge goes first — the scene's own
-  // temporal order breaks ties, but connectivity, not coupling, drives the walk. Nothing is
-  // dropped: the loop runs until every edge is said (or max is hit).
-  const deg = {};
-  for (const e of edges) deg[e.from] = (deg[e.from] || 0) + 1;
-  let focus = Object.entries(deg).sort((a, b) => b[1] - a[1])[0]?.[0];
-
-  const byOrder = edges.slice().sort((a, b) => a.sentIdx - b.sentIdx);   // constitution order = tiebreak
-  const remaining = new Set(byOrder);
-  const mentioned = [];                                                  // most-recent first, for smooth shift
-  const note = (id) => { const i = mentioned.indexOf(id); if (i >= 0) mentioned.splice(i, 1); mentioned.unshift(id); };
-  const firstWhere = (pred) => { for (const e of byOrder) if (remaining.has(e) && pred(e)) return e; return null; };
-
+  // The order of saying follows the ARROW OF TIME — the order the bonds were constituted as
+  // the reading proceeded (the log's own order, sentIdx then append order). That order is
+  // not the surface being replayed; it is the concept's temporal/dependency structure, and
+  // it is essential: it is what coref runs on (a referent is introduced before it is leaned
+  // on), so honouring it in the retelling keeps every pronoun resolvable in the SAID order
+  // too. Coherence is not a reordering — it is realised by `realize` aggregating ADJACENT
+  // same-subject acts, which only holds when the order is already temporal. A salience sort
+  // would break both the time line and the reference line, so we do not sort by coupling.
   const plan = [];
-  while (remaining.size && plan.length < max) {
-    let e = firstWhere(x => x.from === focus)            // CONTINUE: the focus keeps acting
-         || firstWhere(x => mentioned.includes(x.from))  // SHIFT smoothly: to someone already in play
-         || byOrder.find(x => remaining.has(x));          // fresh start: the earliest unsaid
-    remaining.delete(e);
-    const objIsEntity = label.has(e.to);
+  for (const e of events) {
+    if (!((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null)) continue;
+    const coupling = e.coupling != null ? e.coupling : (e.w != null ? e.w : 1);
+    if (coupling < minCoupling) continue;
+    const objIsEntity = label.has(e.tgt);
     plan.push({
-      subj: { id: e.from, gender: G(e.from), name: L(e.from) },
+      subj: { id: e.src, gender: G(e.src), name: L(e.src) },
       verb: e.via,
-      obj: objIsEntity ? { id: e.to, gender: G(e.to), name: L(e.to) } : L(e.to),
+      obj: objIsEntity ? { id: e.tgt, gender: G(e.tgt), name: L(e.tgt) } : L(e.tgt),
     });
-    note(e.from); if (objIsEntity) note(e.to);
-    focus = objIsEntity ? e.to : e.from;                 // follow the bond to keep the chain connected
+    if (plan.length >= max) break;
   }
   return plan;
 };
