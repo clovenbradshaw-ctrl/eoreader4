@@ -167,6 +167,23 @@ export const VETOES = [
     message: 'The passage this answer draws on does not settle which figure it is about.',
   },
   {
+    // The surfer's own confabulation guard, surfaced (surfer/stance.js, surfing-next.md §3).
+    // updateStance measures HOW the reading committed at the peak: a Making (a rank-1 lens
+    // cleared its spectral null — the field supported a Figure commit) or a Ground-grain
+    // reserve (Cultivating/Clearing — the field supported only a Ground move, so naming a
+    // specific figure WOULD be the confabulation). `guard:true` is the reserve case. On a
+    // pointed question that is exactly the signal worth telling the user: the passage the
+    // answer rests on did not settle into a figure the reading could commit to. Flag-only —
+    // the answer rides, the measured thinness travels with it. Scoped to `answer`: a summary
+    // legitimately rides the Ground grain (it synthesises, it does not point), and inert when
+    // no stance was measured (no significance column, e.g. an empty doc).
+    id: 'stance-reserve',
+    test: ({ stance, task }) =>
+      (task === 'answer' || task == null) && !!stance && stance.guard === true,
+    refuses: false,
+    message: 'The reading did not settle on a figure to commit to here — it reserved rather than name one.',
+  },
+  {
     id: 'low-coverage',
     test: ({ bound, task, draft }) => {
       const total = bound.length;

@@ -20,7 +20,7 @@
 // uses ("list the nine operators") — is NOT routed here: queryTouchesDoc keeps it on the
 // lexical path, so the audit's strong t6 ("what are the 9 operators?") is untouched.
 
-import { siteIndices } from '../perceiver/index.js';
+import { siteIndices, significanceSpine } from '../perceiver/index.js';
 import { docVocab } from './lexical.js';
 import { tok } from '../perceiver/parse/index.js';
 
@@ -42,6 +42,17 @@ const META = new Set([
   'work', 'novel', 'essay', 'paper', 'chapter', 'thing', 'things',
   'main', 'mainly', 'point', 'points', 'key', 'topic', 'topics', 'idea', 'ideas',
   'says', 'say', 'said', 'mean', 'means', 'cover', 'covers', 'covered',
+  // SCOPE / COVERAGE words — they say HOW MUCH of the document, never its subject.
+  // The audit's t3 ("summarize the full document") rode the lexical path and
+  // confabulated because the incidental word "full" was in the doc's vocabulary, so
+  // queryTouchesDoc returned true and the structural skeleton — built to answer exactly
+  // this meta-query — was skipped. A scope word is about the ASKING, not the page; it
+  // only ever changes routing when the query reduces to meta words alone (a real subject
+  // term beside it still keeps the lexical path), and only on a whole-document task.
+  'full', 'whole', 'entire', 'complete', 'completely', 'rest', 'remainder', 'remaining',
+  'everything', 'else', 'more', 'part', 'parts', 'portion', 'section', 'sections',
+  'top', 'bottom', 'beginning', 'start', 'end', 'ending', 'middle', 'further',
+  'additional', 'content', 'contents', 'detail', 'details',
 ]);
 
 // Does the question name anything the document actually spells? Tokenize, drop the meta
@@ -77,9 +88,21 @@ export const retrieveStructural = (doc, k = 12) => {
     if (isHeading(units[i])) note(i, 0.7);
   }
 
-  // An even spread across the body — representative content the opening and headings miss.
+  // The body — representative content the opening and headings miss. Two complementary
+  // sources, so a summary gets both COVERAGE and SIGNIFICANCE:
+  //   · an even SPREAD (0.5) guarantees representative coverage end-to-end — never let a
+  //     region of a long document go wholly unseen;
+  //   · the document's TURNING POINTS (0.55, ranked above the spread) — the cursors of
+  //     highest Bayesian surprise read at document scale (perceiver/spine.js), where the
+  //     reading was rewritten. (surfing-next.md §1: the audit's thin summary was an even
+  //     stride of arbitrary lines; the spine adds the lines a summary is actually built
+  //     from, and ranks them ahead of the generic stride so they survive the k cap.)
+  // The spine degrades to nothing on a document with no measured surprise; the spread
+  // alone then behaves exactly as before — a strict superset of the old behaviour.
   const stride = Math.max(1, Math.floor(units.length / k));
   for (let i = 0; i < units.length; i += stride) note(i, 0.5);
+  const spine = significanceSpine(doc, { k });
+  for (const idx of spine.peaks) note(idx, 0.55);
 
   return [...picked.entries()]
     .map(([idx, score]) => ({ idx, score, text: units[idx], kind: 'structural', via: 'structural' }))

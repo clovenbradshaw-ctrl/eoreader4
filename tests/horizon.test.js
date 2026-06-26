@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createHorizon, centroidBasis } from '../src/surfer/index.js';
+import { createHorizon, centroidBasis, structuralGround, structuralActivations } from '../src/surfer/index.js';
+import { parseText } from '../src/perceiver/parse/pipeline.js';
 
 // The persistent Horizon: memory that IS the moved density operator. Cold-starts at σ,
 // folds each turn in with recency decay, departs σ as it accumulates, and re-grounds on
@@ -89,4 +90,59 @@ test('the reserve tracks the spread of readings — committed Horizon predicts s
 test('deterministic — same turns, same Horizon', () => {
   const run = () => { const h = createHorizon({ prior: PRIOR }); const a = idx('EVA_Binding_Lens'), b = idx('DEF_Dissecting_Lens'); let last; for (let t = 0; t < 5; t++) last = h.observe(turnIn(a, b)); return last; };
   assert.deepEqual(run(), run());
+});
+
+// The EMBEDDER-FREE Horizon (surfing-next.md §4). createHorizon cold-started at a σ built
+// from a CENTROID basis (a meaning prior), so a persistent Horizon was dark on the default
+// path. With an explicit structural `ground` (the operator basis, structuralGround()) it
+// accumulates over the operator profiles — no embedder, no centroids — so the cross-turn
+// memory rides every turn. This is the prerequisite #4 needed before threading it through
+// the turn loop.
+test('a Horizon cold-starts and accumulates on a structural ground — no embedder, no centroids', () => {
+  const h = createHorizon({ ground: structuralGround() });
+  assert.ok(h.reading().departure < 1e-6, 'cold-starts at the structural ground σ');
+
+  const acts = (txt) => structuralActivations(parseText(txt, { docId: 't' })).activations.filter(v => v.some(x => x > 0));
+  const r1 = h.observe(acts('Gregor sought Klamm. Gregor feared Klamm. Grete trusted Gregor.'));
+  const r2 = h.observe(acts('Klamm refused. Klamm left. Officials waited and watched.'));
+
+  assert.equal(r2.turns, 2, 'both turns folded in');
+  assert.ok(r1.departure > 0, 'the first turn departs the ground');
+  assert.ok(r2.departure > r1.departure, 'the memory accumulates across turns');
+  assert.ok(r2.cumulativeSurprise > 0, 'the time-integral of surprise is tracked');
+});
+
+test('createHorizon still rejects a ground it cannot measure', () => {
+  assert.throws(() => createHorizon({}), /ground/, 'no prior and no ground → an explicit error, not a silent dark Horizon');
+});
+
+// #4(b): the Horizon threaded through the turn (observe-only). runTurn folds each turn's
+// reading into a session Horizon at `settle` — AFTER the answer is formed, so the reading
+// the user saw is unchanged; the cross-turn memory accumulates for the next turn. A turn
+// with no Horizon threaded is byte-identical (no settle.horizon).
+test('runTurn accumulates a threaded Horizon across turns, and is inert without one', async (t) => {
+  const { parseText } = await import('../src/perceiver/parse/pipeline.js');
+  const { runTurn } = await import('../src/turn/pipeline.js');
+  const { createAuditLog } = await import('../src/audit/index.js');
+  const { createModel } = await import('../src/model/interface.js');
+  await import('../src/model/echo.js');
+
+  const model = createModel('echo'); await model.load();
+  const doc = parseText('Gregor sought Klamm. Gregor feared Klamm. Grete trusted Gregor. The clerk filed papers.', { docId: 'd' });
+  const horizon = createHorizon({ ground: structuralGround() });
+
+  const settleOf = (audit) => audit.turns[0].steps.find(s => s.name === 'settle').data;
+
+  const a1 = createAuditLog();
+  await runTurn({ question: 'what happens?', doc, model, auditLog: a1, horizon });
+  const a2 = createAuditLog();
+  await runTurn({ question: 'and Klamm?', doc, model, auditLog: a2, horizon });
+
+  assert.equal(settleOf(a1).horizon.turns, 1, 'first turn folded in');
+  assert.equal(settleOf(a2).horizon.turns, 2, 'second turn accumulated onto the same memory');
+  assert.ok(settleOf(a2).horizon.departure > settleOf(a1).horizon.departure, 'the memory departs σ further across turns');
+
+  const a3 = createAuditLog();
+  await runTurn({ question: 'what happens?', doc, model, auditLog: a3 });   // no horizon threaded
+  assert.equal(settleOf(a3).horizon, undefined, 'a turn with no Horizon is byte-identical (no settle.horizon)');
 });
