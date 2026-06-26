@@ -179,6 +179,38 @@ test('runTurn lights up the Significance column when a meaning embedder + prior 
     'the interpretive atmosphere rode the turn');
 });
 
+// ── Track D: the Paradigm pass EMITS an append-only REC when the basis is defeated ──
+test('a basis incommensurable with the corpus prior emits REC(Paradigm,…); a commuting one does not', () => {
+  // 4 orthonormal centroids → σ = (1/4)I, its top-m eigenbasis is the standard axes.
+  const E = (i) => { const v = [0, 0, 0, 0]; v[i] = 1; return v; };
+  const PRIOR4 = { vectors: {
+    EVA_Binding_Lens: E(0), DEF_Dissecting_Lens: E(1), REC_Making_Lens: E(2), CON_Binding_Link: E(3),
+  } };
+  const basis = centroidBasis(PRIOR4);
+  const doc = parseText('a. b. c. d. e. f. g. h. i. j. k. l.', { docId: 's' });
+
+  // MIS-FRAMED: the doc reads through directions that cross the prior's axes (e0±e2,
+  // e1±e3) → its eigen-subspace does not commute with σ's. Both halves identical →
+  // the within-doc baseline is ~0, so any real incommensurability clears it.
+  const u = [1 / Math.sqrt(2), 0, 1 / Math.sqrt(2), 0];
+  const w = [0, 1 / Math.sqrt(2), 0, 1 / Math.sqrt(2)];
+  const crossing = doc.sentences.map((_, i) => (i % 2 === 0 ? u : w));
+  const mis = surfFold(doc, 0, { activations: crossing, prior: basis, paradigm: true, paradigmRank: 2 });
+  assert.equal(mis.paradigm.verdict, 'mis-framed');
+  assert.ok(mis.paradigmRec, 'a defeated basis emits a Paradigm REC');
+  assert.equal(mis.paradigmRec.op, 'REC');
+  assert.equal(mis.paradigmRec.cell, 'REC_Composing_Paradigm');
+  assert.ok(mis.paradigmRec.surpriseDelta >= 0 && mis.paradigmRec.reground === true,
+    'the REC carries its surprise-delta and re-grounds (the helix turning)');
+
+  // UNDER-READ: the doc reads along the prior's own axes → its subspace commutes with
+  // σ → no incommensurability → stay at the Lens, no REC.
+  const aligned = doc.sentences.map((_, i) => (i % 2 === 0 ? E(0) : E(1)));
+  const under = surfFold(doc, 0, { activations: aligned, prior: basis, paradigm: true, paradigmRank: 2 });
+  assert.equal(under.paradigm.verdict, 'under-read');
+  assert.equal(under.paradigmRec, undefined, 'a commuting basis emits no REC — under-read, not mis-framed');
+});
+
 // projection + σ sanity
 test('projectUnits maps any vector into the shared 27-cell basis; σ is the corpus prior', () => {
   const basis = centroidBasis(PRIOR);

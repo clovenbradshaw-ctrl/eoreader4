@@ -189,6 +189,12 @@ const summarize = (name, ctx, ms) => {
                                 ...(ctx.surf.lensEntropy != null ? { lensEntropy: ctx.surf.lensEntropy } : {}),
                                 ...(ctx.surf.lenses ? { lenses: ctx.surf.lenses.filter(l => l.real).length } : {}),
                                 ...(ctx.surf.paradigm ? { paradigm: ctx.surf.paradigm.verdict } : {}),
+                                // the helix turning: a measured basis-defeat emitted as an
+                                // append-only REC(Paradigm,…) with its surprise-delta (the reframe).
+                                ...(ctx.surf.paradigmRec ? { paradigmRec: {
+                                  cell: ctx.surf.paradigmRec.cell,
+                                  surpriseDelta: ctx.surf.paradigmRec.surpriseDelta,
+                                } } : {}),
                                 // The Stance face (Track F): the measured commit — how the surfer
                                 // moved ρ — and whether the confabulation guard fired (a Ground-grain
                                 // commit: reserve, do not name a clause).

@@ -184,6 +184,54 @@ console.log('── GATE 3 · Paradigm ─────────────�
     : beat.length ? 'PARTIAL' : 'FAIL — not separable above baseline'}\n`);
 }
 
+// ── GATE F — Stance / the confabulation guard (the diagnostic-asymmetry theorem) ──
+// updateStance commits a Making only when a rank-1 lens clears its spectral null; else
+// it reserves (Ground-grain). That discriminator is only honest if logged FIGURE-grain
+// stances actually leave a sharper spectral signature than GROUND-grain ones — the
+// theorem the guard rests on. Bucket clauses by their labelled grain, sample small
+// documents of each, and measure the spectral signature (top eigenvalue, entropy, and
+// how often the Making test fires). Prediction: Figure > Pattern > Ground.
+if (npzArg >= 0 && units.length > 1000) {
+  console.log('── GATE F · Stance (diagnostic asymmetry: Figure sharpest, Ground diffuse) ─');
+  let seedF = 4242; const rndF = () => { seedF |= 0; seedF = seedF + 0x6D2B79F5 | 0; let t = Math.imul(seedF ^ seedF >>> 15, 1 | seedF); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const sigOfGrain = (idxs) => {
+    if (idxs.length < 16) return null;
+    let topSum = 0, entSum = 0, makeN = 0, S = 200;
+    for (let s = 0; s < S; s++) {
+      const acts = []; for (let i = 0; i < 8; i++) acts.push(units[idxs[Math.floor(rndF() * idxs.length)]].cact);
+      const spec = eigenLenses(buildDensity(acts).rho).map(l => l.weight);
+      const top = spec[0] || 0; topSum += top; entSum += vonNeumann(spec);
+      const nul = deriveNull(spec, { scale: 'linear', alpha: 0.05, leaveOut: top });
+      if (Number.isFinite(nul) && top > nul) makeN++;
+    }
+    return { top: topSum / S, ent: entSum / S, makeRate: makeN / S };
+  };
+  const idxByGrain = (g) => units.map((u, i) => (u.grain === g ? i : -1)).filter(i => i >= 0);
+  const grainSig = {};
+  for (const g of ['Figure', 'Ground', 'Pattern']) { const s = sigOfGrain(idxByGrain(g)); if (s) grainSig[g] = s; }
+  for (const g of Object.keys(grainSig))
+    console.log(`  ${g.padEnd(8)} top-eigenvalue ${round(grainSig[g].top)}  entropy ${round(grainSig[g].ent)}  Making-rate ${round(grainSig[g].makeRate)}`);
+  const sharpest = (grainSig.Figure && grainSig.Ground) ? grainSig.Figure.top - grainSig.Ground.top : null;
+  // permutation null on the Figure−Ground top-eigenvalue gap
+  let p = null;
+  if (sharpest != null) {
+    const grains = units.map(u => u.grain);
+    let seedP = 71; const rndP = () => { seedP |= 0; seedP = seedP + 0x6D2B79F5 | 0; let t = Math.imul(seedP ^ seedP >>> 15, 1 | seedP); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const gapOf = (arr) => {
+      const fi = [], gi = [];
+      for (let i = 0; i < arr.length; i++) { if (arr[i] === 'Figure') fi.push(i); else if (arr[i] === 'Ground') gi.push(i); }
+      const f = sigOfGrain(fi), g = sigOfGrain(gi);
+      return (f && g) ? f.top - g.top : -Infinity;
+    };
+    const N = 100; let ge = 0;
+    for (let k = 0; k < N; k++) { const sh = grains.slice(); for (let i = sh.length - 1; i > 0; i--) { const j = Math.floor(rndP() * (i + 1)); [sh[i], sh[j]] = [sh[j], sh[i]]; } if (gapOf(sh) >= sharpest) ge++; }
+    p = (ge + 1) / (N + 1);
+  }
+  console.log(`  Figure−Ground top-eigenvalue gap: ${sharpest != null ? round(sharpest) : 'n/a'}${p != null ? `  permutation p ≈ ${round(p)}` : ''}`);
+  console.log(`  verdict: ${sharpest > 0 && (p == null || p < 0.05) ? 'PASS — Figure moves are spectrally sharpest; the guard reads real stance'
+    : 'NEGATIVE — grains do not separate by spectral effect; the guard ships report-only'}\n`);
+}
+
 // ── VALIDATION — held-out + permutation null (only meaningful at corpus scale) ──
 // A fix that is correct and one that merely turned the verdict green look identical at
 // the moment the number flips. Two cheap checks separate them: does the centering hold

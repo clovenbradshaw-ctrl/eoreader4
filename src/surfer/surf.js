@@ -21,7 +21,7 @@
 // no read dependency), so this import stays acyclic.
 
 import { readingAt } from '../perceiver/index.js';
-import { deriveNull, buildDensity, eigenLenses, vonNeumann, commutator, projectorFrom } from '../core/index.js';
+import { deriveNull, buildDensity, eigenLenses, vonNeumann, commutator, projectorFrom, cellAt } from '../core/index.js';
 import { createEnactedLoop, calibrateReader } from '../enact/index.js';
 import { atmosphereFromActivations, corpusSigma, centroidBasis } from './atmosphere.js';
 import { updateStance } from './stance.js';
@@ -203,6 +203,9 @@ const significancePass = (activations, opts, surf = {}) => {
   // append-only REC at the Paradigm site is the loop's to emit (kept report-only here).
   if (opts.paradigm && basis) {
     out.paradigm = paradigmReading(activations, rho, basis, opts);
+    // The append-only REC, surfaced at top level for the fold (the spec's surf.paradigmRec):
+    // a measured basis-defeat the note records as a reframe, not a deeper read.
+    if (out.paradigm.rec) out.paradigmRec = out.paradigm.rec;
   }
 
   // STANCE (Track F): how the surfer MOVES ρ at the commit — the measured update stance,
@@ -246,7 +249,36 @@ const paradigmReading = (activations, rho, basis, opts) => {
   // Without enough baseline samples we cannot tell incommensurable from generic — the
   // safe (speak-more) failure is to stay UNDER-READ, never to claim a paradigm shift.
   const meanBase = baseline.length ? baseline.reduce((s, x) => s + x, 0) / baseline.length : Infinity;
-  const beatsBaseline = Number.isFinite(meanBase) && incommensurability > meanBase * (opts.paradigmHysteresis ?? 1.5);
+  // Hysteresis (cube.md #8): ascend only on a measured defeat that clears the baseline
+  // by a MARGIN, so a single noisy reach does not trigger a REC. The margin factor is
+  // the within-call form; a caller threading `opts.paradigmPrior` (the previous reach's
+  // incommensurability) can additionally require the defeat to have been SUSTAINED —
+  // temporal hysteresis the stateless surf cannot enforce on its own.
+  const hyst = opts.paradigmHysteresis ?? 1.5;
+  const bar = meanBase * hyst;
+  const sustained = !Number.isFinite(opts.paradigmPrior) || opts.paradigmPrior > bar;
+  const beatsBaseline = Number.isFinite(meanBase) && incommensurability > bar && sustained;
+
+  // THE ASCENT (Track D, now emitting). When the basis is defeated past its baseline,
+  // the honest move is not a better reading inside the frame — it is a new frame. Emit
+  // an append-only REC at the Paradigm site (REC_Composing_Paradigm — Generate × Pattern),
+  // carrying its surprise-delta: the margin by which the basis was defeated, which is also
+  // the cost that must be cleared again to move back. Routed through cellAt so the move is
+  // refused if it is not Object-diagonal. This is the helix TURNING — REC re-admits what
+  // counts as ground, handing the next read a bare NUL in the new (competing) frame.
+  let rec = null;
+  if (beatsBaseline) {
+    const cell = cellAt('REC', { site: 'Paradigm', stance: 'Composing' });
+    if (cell) rec = Object.freeze({
+      op: 'REC', site: 'Paradigm', stance: 'Composing', grain: 'Pattern', cell: cell.key,
+      surpriseDelta: round(incommensurability - meanBase),   // the audit's record of why the basis moved
+      incommensurability: round(incommensurability), baseline: round(meanBase),
+      reground: true,                       // hands back a bare ground (a NUL) in the new frame
+      reframedTo: 'corpus-eigenbasis',      // the competing basis the next read re-grounds against
+      rode: 'paradigm-commutator',
+    });
+  }
+
   return {
     measurable: baseline.length > 0,
     incommensurability: round(incommensurability),
@@ -254,6 +286,7 @@ const paradigmReading = (activations, rho, basis, opts) => {
     // mis-framed: the basis itself fails to commute past baseline → ascend (REC the
     // Paradigm). under-read: it still commutes → stay at the Lens, retrieve more.
     verdict: beatsBaseline ? 'mis-framed' : 'under-read',
+    rec,
   };
 };
 

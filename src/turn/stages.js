@@ -43,8 +43,8 @@ const significanceOpts = async (ctx, anchor) => {
     const activations = projectUnits(vectors, basis);
     const report = surfFold(ctx.doc, anchor, { activations, prior: basis, lensReport: true });
     const dom = report.lenses?.find(l => l.real)?.lens ?? report.lenses?.[0]?.lens ?? null;
-    return { activations, prior: basis, lensReport: true, atmosphere: true, stance: true, alpha: ctx.alpha ?? 0.05,
-             ...(dom ? { lens: dom } : {}) };
+    return { activations, prior: basis, lensReport: true, atmosphere: true, paradigm: true, stance: true,
+             alpha: ctx.alpha ?? 0.05, ...(dom ? { lens: dom } : {}) };
   } catch { return {}; }
 };
 
@@ -201,6 +201,11 @@ export const stages = {
     // surfer's located RECs feed the turns group, so the Significance face the flat
     // notes drop reaches the talker.
     const note   = foldNote(spans, { doc: ctx.doc, cursor, focus, surf: RULES_REV ? surf : null, grouped: RULES_REV });
+    // Pattern: if the basis itself was defeated (a measured Paradigm REC), the note
+    // records a REFRAME, not a deeper read — append-only, carrying its surprise-delta
+    // (the helix turning: REC re-admits what counts as ground). Off the dark path
+    // (no surf.paradigmRec) the note is untouched.
+    if (note && surf?.paradigmRec) note.reframed = surf.paradigmRec;
     // The reader's confidence about WHO this passage concerns — read off the
     // grounded coref posterior at the cursor (the same field the fold rode). No
     // longer measured and discarded: it rides the turn, and a diffuse field

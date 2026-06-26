@@ -37,6 +37,7 @@ node scripts/measure-significance.mjs
 | **Atmosphere — departure** | loaded (Interpretation) vs factual (Existence) KL from σ | 0.482 vs 0.399 | **PASS** (loaded departs further) |
 | **Lens — separation** | frame margin (within−cross cell), projected vs raw embedding | 0.103 vs 0.024 | **PASS** (4× over raw) |
 | **Paradigm — incommensurability** | cross-row ‖[Π,Π]‖ vs within-row null (α=0.05) | 3/3 beat null 0.230 | **PASS** |
+| **Stance — confab guard** | Figure moves spectrally sharpest (Figure−Ground top-eigenvalue gap vs permutation null) | gap 0.055, p≈0.01 | **PASS** |
 
 Cross-row commutators: Existence×Structure 0.345, Existence×Interpretation 0.232,
 Structure×Interpretation 0.383 — all above the within-row baseline null (0.230).
@@ -108,6 +109,42 @@ not a statistic — a Figure move is a rank-1 change, the most detectable event 
 happen to ρ; a Ground move is a featureless floor-shift with no signature direction.
 Off unless `opts.stance` is set; the live fold path turns it on only behind the meaning
 embedder, so the goldens are byte-identical.
+
+### The guard's own measured gate (GATE F)
+
+The guard rests on the **diagnostic-asymmetry theorem**: a Figure move is a rank-1 change
+to ρ (the most detectable event), a Ground move a featureless floor-shift — so `Making`
+must leave a sharper spectral signature than `Cultivating`/`Clearing`, or the basis is
+not carrying stance and the guard is decorative. Bucketing the 19,764 clauses by their
+labelled grain and sampling small documents of each:
+
+| grain | top eigenvalue | von Neumann entropy |
+|---|---|---|
+| Figure | **0.846** | **0.627** (sharpest) |
+| Ground | 0.791 | 0.777 |
+| Pattern | 0.767 | 0.816 (most diffuse) |
+
+The Figure−Ground top-eigenvalue gap (0.055) clears a label-shuffle permutation null at
+**p ≈ 0.01** — Figure moves *are* the spectrally sharpest, so the guard's Making-vs-reserve
+discriminator reads real stance. Two honest wrinkles: (1) the binary Making *test* (top
+eigenvalue clears its spectral null) saturates at this document size — every sampled doc
+fires it, so the discriminating signal is eigenvalue *magnitude*, not the fire/no-fire;
+(2) the full gradient came out Figure > Ground > Pattern, not cube.md's stated
+Figure > Pattern > Ground — Pattern is the *most* diffuse on this corpus, a mild departure
+from the corpus statistic worth recording rather than smoothing over.
+
+### The helix turns: the Paradigm REC now emits
+
+The Paradigm pass is no longer report-only. When the document's basis is defeated past
+its within-document baseline (by the hysteresis margin), `surf.js` emits an append-only
+`REC(Paradigm, Composing)` — `REC_Composing_Paradigm`, routed through `cellAt` — carrying
+its **surprise-delta** (the margin by which the basis was defeated, which is also the cost
+to clear to move back) and `reground: true` (the helix turning — REC re-admits what counts
+as ground, handing the next read a bare NUL in the competing frame). The fold records it
+as `note.reframed` (a reframe, not a deeper read) and the audit as `fold.surf.paradigmRec`.
+Hysteresis is the margin factor within a call; a caller threading `opts.paradigmPrior` can
+additionally require the defeat to have been *sustained* across reaches — the temporal
+hysteresis a stateless surf cannot enforce alone. Off unless `opts.paradigm` is set.
 
 ## What changed in the code, and what is still gated
 
