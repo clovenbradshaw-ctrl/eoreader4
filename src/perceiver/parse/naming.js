@@ -28,11 +28,11 @@ import { scanVocatives, KIN_NOUNS } from './relations.js';
 
 const REACH = 2;   // a vocative is answered within the next turn or two.
 
-// The one gate the ledger does not yet carry: a free-capital that survives
-// sentence-initial capitalisation yet names no person ("God", "Christmas"). This is
-// the embedding "feels-like-a-subject" DEF — modality-specific, revisable — kept
-// deliberately tiny. Everything else above is read from conventions.
-const NONPERSON = new Set(['god', 'christmas', 'heaven', 'hell']);
+// The free-capital that survives sentence-initial capitalisation yet names no person
+// ("God", "Christmas") — the embedding "feels-like-a-subject" DEF — no longer lives
+// here as a hardcoded set of this witness's own. It is a register in the conventions
+// ledger (isNonPerson, seed ∪ learned) like every other language-specific list, so the
+// universal merge engine holds nothing modality-specific and a corpus can teach it.
 
 const prevWord = (s, idx) => (s.slice(0, idx).match(/(\w+)\W*$/) || [])[1];
 
@@ -43,8 +43,9 @@ export const discoverNamings = (
   sentences,
   { admission, corefField, conventions, rolesConflict = () => false } = {},
 ) => {
-  const isStarter = conventions?.isStarter ?? (() => false);          // interjection class
-  const isSpeech  = conventions?.isAttributionVerb ?? (() => false);  // attribution register
+  const isStarter   = conventions?.isStarter ?? (() => false);          // interjection class
+  const isSpeech    = conventions?.isAttributionVerb ?? (() => false);  // attribution register
+  const isNonPerson = conventions?.isNonPerson ?? (() => false);        // names no person (the feels-like-a-subject DEF)
 
   // Owners per kin role, from the standing descriptors — only an ESTABLISHED NAMED
   // owner ("Gregor's sister") anchors a discovery; a bare epithet names no relation.
@@ -65,7 +66,7 @@ export const discoverNamings = (
     for (const v of scanVocatives(s)) {
       const prev = prevWord(s, v.index);
       if (prev && isStarter(prev)) continue;                  // interjection (ledger: starter)
-      if (NONPERSON.has(v.name.toLowerCase())) continue;      // names no person (embedding DEF)
+      if (isNonPerson(v.name)) continue;                      // names no person (embedding DEF, from conventions)
       if (admission.isAdmitted(v.name)) vocAt.push({ i, id: admission.idOf(v.name) });
     }
     const m = s.match(ROLE_SPEAKER);
