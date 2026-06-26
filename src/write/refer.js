@@ -87,7 +87,13 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
     const resolvable = !!pron && reader.resolvesTo(ent.id, ent.gender);
     if (pron) (resolvable ? pronRule.hold() : pronRule.break());   // EVA: read the choice back
     const usePronoun = pron && pronRule.on && resolvable;          // suppressed once the rule defeats
-    const surface = usePronoun ? pron : ent.name;
+    // Determiner DERIVED from givenness (Gundel's hierarchy), not a hand-rule: a common-noun
+    // referent the reader has already met is DEFINITE ("the"), a fresh one INDEFINITE ("a").
+    // We read givenness off the reader's own field — measured state, closed-class scaffold
+    // only. Proper names (capitalised) and pronouns take no determiner, so the default
+    // (proper-named) telling is byte-identical; only catalyst-admitted common nouns get one.
+    const given = reader.field.has(ent.id);
+    const surface = usePronoun ? pron : determine(ent.name, given);
     reader.note(ent.id, ent.gender, ent.name);               // now E is the most recent
     return { surface, form: usePronoun ? 'pronoun' : 'name', id: ent.id, fieldAfter: reader.snapshot() };
   };
@@ -95,6 +101,9 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
   for (const p of plan) {
     const s = refer(p.subj, 'subj');
     const o = p.obj && p.obj.id != null ? refer(p.obj, 'obj') : null;
+    // Only a catalyst-vetted common-noun ENTITY (with an id) takes a derived determiner; a
+    // bare np-string object is left alone — it may be a mass noun ("milk"), a plural, or a
+    // mis-parse the reanalysis will fix ("fell"), none of which take an indefinite article.
     const objText = o ? o.surface : (typeof p.obj === 'string' ? p.obj : '');
     const text = `${cap(s.surface)} ${p.verb}${objText ? ' ' + objText : ''}.`;
     units.push(Object.freeze({
@@ -120,3 +129,15 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
 };
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// Attach a determiner DERIVED from givenness, but only to a common-noun referent — a
+// lowercase-initial head (proper names are capitalised; the common-noun catalyst lowercases).
+// Given → definite "the"; new singular → indefinite "a/an"; new plural → bare (English has no
+// indefinite plural article). Closed-class scaffold only; the choice is the reader's measured
+// givenness, not a hand-rule. A name/pronoun/already-determined phrase passes through unchanged.
+const determine = (noun, given) => {
+  if (typeof noun !== 'string' || !/^[a-z]/.test(noun) || /^(the|a|an|his|her|its|their|my|your)\b/.test(noun)) return noun;
+  if (given) return `the ${noun}`;
+  if (/[^s]s$|[^aeiou]s$/.test(noun) && !/ss$/.test(noun)) return noun;   // plural → bare when new
+  return `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`;
+};
