@@ -16,6 +16,21 @@
 // does (the field is VOID) is the surfer's own negative result.
 
 export { surfFold } from './surf.js';
+// The Significance column's Ground terrain (cube.md #5): the Atmosphere pass and the
+// shared significance-basis projection every pass reads off. Pure on vectors past the
+// projection — omnimodal for free. The corpus prior is INJECTED, never imported, so the
+// surfer stays acyclic (it never reaches into classify).
+export { atmosphereOf, atmosphereFromActivations, projectUnit, projectUnits,
+         centroidBasis, corpusSigma } from './atmosphere.js';
+// The Stance face (Track F): how the surfer MOVES ρ at the commit, and the
+// confabulation guard quantified — read the update stance off the field, refuse a
+// Making the field will not bear. applyStance (the four real-symmetric primitives)
+// lives on the core leaf; updateStance reads the move here.
+export { updateStance, applyMeasuredStance } from './stance.js';
+// The helix-aware predictor (predict the move against the frame; let a stale basis be a
+// REC, not endless surprise). Runs the Existence and Structure rungs at once, reads the
+// mis-framed signature off measured nulls, and re-grounds on a reframe.
+export { helixPredict, helixGenerate } from './helix-predict.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';

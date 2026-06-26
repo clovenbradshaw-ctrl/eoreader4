@@ -100,6 +100,28 @@ export const surpriseAt = (prior, arrival, { gamma, novelty = NOVELTY_RESERVE, a
   return { bayesBits, bayesBy };
 };
 
+// noveltyFromLensEntropy — the reserve DERIVED from the spread of readings (the
+// significance-column Prediction section, consequence #1). Today's NOVELTY_RESERVE is a
+// constant; ρ's von Neumann entropy (core/spectral.js) is the predictive uncertainty of
+// the next unit: near 0 → one eigen-lens dominates → a committed frame → predict sharply
+// (small reserve); near log k → a balanced mixture of readings → reserve novelty mass and
+// predict broadly. This makes the reserve a Bayesian model-average over readings rather
+// than a max-likelihood point — the standard route to calibration. PURE ON THE SCALAR, so
+// it improves prediction (and the generative draw off forwardDist) for ANY modality: a
+// melody's themes, a video's motion motifs, a text's readings all decompose the same way.
+//
+// Normalised by log(dim) so it is the FRACTION of maximal mixing, scaled by `base`
+// (NOVELTY_RESERVE by default). Floored at a small share of base so forwardDist stays
+// proper on an empty profile. Opt-in: callers that pass no entropy keep the constant, so
+// every existing golden is byte-identical.
+export const noveltyFromLensEntropy = (lensEntropy, dim, base = NOVELTY_RESERVE) => {
+  if (!Number.isFinite(lensEntropy) || !Number.isFinite(dim) || dim < 2) return base;
+  const maxS = Math.log(dim);
+  if (!(maxS > 0)) return base;
+  const frac = Math.max(0, Math.min(1, lensEntropy / maxS));   // fraction of maximal mixing
+  return base * (0.1 + 0.9 * frac);                            // floor at 0.1·base, never 0
+};
+
 // p(next | profile) — THE FORWARD DISTRIBUTION (Track A, docs/spec-one-surprise.md).
 //
 // Surprise has two objects. The profile is the BACKWARD object — the γ-decayed summary of

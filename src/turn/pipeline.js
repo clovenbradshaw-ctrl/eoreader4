@@ -42,7 +42,7 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -61,7 +61,12 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // docs/streaming-answer.md): a grounded turn realises its answer one sentence per
   // surfer stop and emits tokens through `onToken` as they decode. Off by default —
   // the present one-shot path is byte-identical when `stream` is false.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, history, grounding, stream, onToken, alpha };
+  // `centroids` is the significance prior (the 27-cell centroid bundle). When present
+  // alongside a meaning-measuring `geometricEmbedder`, the fold's surf rides the full
+  // Significance column (Atmosphere · Lens · Paradigm); absent either, the column is
+  // dark and the surf is byte-identical to today. Injected, never imported, so the
+  // surfer stays acyclic.
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -171,6 +176,33 @@ const summarize = (name, ctx, ms) => {
                               surf: ctx.surf ? {
                                 anchor: ctx.surf.anchor, peak: ctx.surf.peak, stops: ctx.surf.stops,
                                 focus:  ctx.surf.focus,  recs: ctx.surf.recCursors, rode: ctx.surf.rode,
+                                // The Significance column, when it rode (meaning embedder + prior present):
+                                // the interpretive Atmosphere (departure · tone · verdict), the Lens spread
+                                // (lensEntropy = the predictive uncertainty of the next unit), and the
+                                // Paradigm verdict (under-read vs mis-framed). Absent on the dark path.
+                                ...(ctx.surf.atmosphere ? { atmosphere: {
+                                  departure: ctx.surf.atmosphere.departure,
+                                  tone: ctx.surf.atmosphere.tone?.label || null,
+                                  verdict: ctx.surf.atmosphere.verdict,
+                                  frame: ctx.surf.atmosphere.frame,   // which ρ each number came from
+                                } } : {}),
+                                ...(ctx.surf.lensEntropy != null ? { lensEntropy: ctx.surf.lensEntropy } : {}),
+                                ...(ctx.surf.lenses ? { lenses: ctx.surf.lenses.filter(l => l.real).length } : {}),
+                                ...(ctx.surf.paradigm ? { paradigm: ctx.surf.paradigm.verdict } : {}),
+                                // the helix turning: a measured basis-defeat emitted as an
+                                // append-only REC(Paradigm,…) with its surprise-delta (the reframe).
+                                ...(ctx.surf.paradigmRec ? { paradigmRec: {
+                                  cell: ctx.surf.paradigmRec.cell,
+                                  surpriseDelta: ctx.surf.paradigmRec.surpriseDelta,
+                                } } : {}),
+                                // The Stance face (Track F): the measured commit — how the surfer
+                                // moved ρ — and whether the confabulation guard fired (a Ground-grain
+                                // commit: reserve, do not name a clause).
+                                ...(ctx.surf.stance ? { stance: {
+                                  op: ctx.surf.stance.op, stance: ctx.surf.stance.stance,
+                                  grain: ctx.surf.stance.grain, firmness: ctx.surf.stance.firmness,
+                                  guard: ctx.surf.stance.guard,
+                                } } : {}),
                               } : null };
     case 'answerable': return ctx.voidMeasure
       ? { ...base, verdict: 'answer', terrain: 'void', kind: ctx.voidMeasure.kind, rode: ctx.voidMeasure.rode }

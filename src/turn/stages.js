@@ -11,7 +11,7 @@
 import { answerSmalltalk, answerMath, answerVoid, answerMetadata } from '../answer/index.js';
 import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts } from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold } from '../surfer/index.js';
+import { surfFold, centroidBasis, projectUnits } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
@@ -23,6 +23,30 @@ import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
+
+// The Significance column's opts for the fold's surf. Returns {} — the byte-identical
+// default — unless a MEANING-measuring embedder and a centroid prior are both present.
+// The async embedding work happens HERE (the fold stage is async); the surf itself
+// stays a synchronous pure function fed pre-computed activations. The dominant REAL
+// lens (one whose Born weight beat the spectral null) conditions the surf; absent any
+// real lens, the column still rides as a report (atmosphere + lenses) with the peak
+// unchanged. Degrades to {} on any embedding fault — a flaky meaning organ must never
+// crash the fold.
+const significanceOpts = async (ctx, anchor) => {
+  const emb = ctx.geometricEmbedder;
+  if (!ctx.doc || !ctx.centroids || !emb?.measuresMeaning ||
+      typeof ctx.doc.sentenceEmbeddings !== 'function') return {};
+  const basis = centroidBasis(ctx.centroids);
+  if (!basis) return {};
+  try {
+    const vectors = await ctx.doc.sentenceEmbeddings(emb);
+    const activations = projectUnits(vectors, basis);
+    const report = surfFold(ctx.doc, anchor, { activations, prior: basis, lensReport: true });
+    const dom = report.lenses?.find(l => l.real)?.lens ?? report.lenses?.[0]?.lens ?? null;
+    return { activations, prior: basis, lensReport: true, atmosphere: true, paradigm: true, stance: true,
+             alpha: ctx.alpha ?? 0.05, ...(dom ? { lens: dom } : {}) };
+  } catch { return {}; }
+};
 
 export const stages = {
 
@@ -140,7 +164,17 @@ export const stages = {
     // the question, exactly as before — byte-identical, the read path is dark.
     const refTarget = RULES_REV ? referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans) : null;
     const anchor = (refTarget?.locale ?? ctx.spans[0]?.idx) ?? 0;
-    const surf   = ctx.doc ? surfFold(ctx.doc, anchor) : null;
+    // THE SIGNIFICANCE COLUMN (significance-column spec). When a meaning-measuring
+    // embedder AND a centroid prior are present, the surf rides the full column: it
+    // registers the document's interpretive Atmosphere, decomposes its Lenses, and
+    // rides forward INSIDE the dominant reading (lens-conditioning) so the peak lands on
+    // that reading's surprise rather than the document's loudest overall. Inert under
+    // the hash embedder (a cosine between spelling-space and MiniLM-space measures
+    // nothing — the same firewall the geometric classifier runs), so `sigOpts` is `{}`
+    // there and the surf is byte-identical to today. This is the column improving the
+    // chat only where it can honestly measure, and staying dark where it cannot.
+    const sigOpts = await significanceOpts(ctx, anchor);
+    const surf   = ctx.doc ? surfFold(ctx.doc, anchor, sigOpts) : null;
 
     let spans = ctx.spans;
     if (surf) {
@@ -167,6 +201,11 @@ export const stages = {
     // surfer's located RECs feed the turns group, so the Significance face the flat
     // notes drop reaches the talker.
     const note   = foldNote(spans, { doc: ctx.doc, cursor, focus, surf: RULES_REV ? surf : null, grouped: RULES_REV });
+    // Pattern: if the basis itself was defeated (a measured Paradigm REC), the note
+    // records a REFRAME, not a deeper read — append-only, carrying its surprise-delta
+    // (the helix turning: REC re-admits what counts as ground). Off the dark path
+    // (no surf.paradigmRec) the note is untouched.
+    if (note && surf?.paradigmRec) note.reframed = surf.paradigmRec;
     // The reader's confidence about WHO this passage concerns — read off the
     // grounded coref posterior at the cursor (the same field the fold rode). No
     // longer measured and discarded: it rides the turn, and a diffuse field
