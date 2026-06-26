@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/index.js';
+import { createCorefField } from '../src/perceiver/parse/coref.js';
 
 // Causal gender as a SOFT coref cue (opt-in). Gender established BEFORE a pronoun — a title
 // at first naming, or a pronoun that already resolved — biases a later gendered pronoun
@@ -28,6 +29,25 @@ test('the cue is CAUSAL — it cannot use evidence that arrives after the pronou
   const off = srcOf(parseText(text, { docId: 's' }), 'left');
   const on = srcOf(parseText(text, { docId: 's', genderCoref: true }), 'left');
   assert.equal(on, off, 'with no gender established before the pronoun, the cue changes nothing');
+});
+
+test('the gender rule is defeasible: enough EVA breaks toggle it off (strain overtakes support)', () => {
+  const f = createCorefField({});
+  f.noteGender('x', 'm');                    // a title fixes x = masculine (support 1)
+  assert.equal(f.genderOf('x'), 'm');
+  f.evaGender('x', false);                   // one failure — strain 1, not yet past support
+  assert.equal(f.genderOf('x'), 'm', 'a single failure only strains a held belief');
+  f.evaGender('x', false);                   // a second failure — strain 2 > support 1
+  assert.equal(f.genderOf('x'), null, 'the belief is DEFEATED — the rule toggles off for x');
+});
+
+test('an EVA hold relaxes strain — a belief that keeps earning its place is reinstated', () => {
+  const f = createCorefField({});
+  f.noteGender('y', 'f');
+  f.evaGender('y', false); f.evaGender('y', false);   // defeated
+  assert.equal(f.genderOf('y'), null);
+  f.evaGender('y', true);                              // it does useful work again
+  assert.equal(f.genderOf('y'), 'f', 'strain relaxes below support — the rule comes back on');
 });
 
 test('the cue never empties the field: with every candidate incompatible it defers to the gender-free read', () => {

@@ -64,15 +64,24 @@ export const createCorefField = ({
   // Grounded deposit — a span-witnessed sighting. Adds this sighting's unit mass.
   const note = (id, sentIdx) => { touch(id, sentIdx).grounded += 1; };
 
-  // The gender ledger — a CAUSAL accumulation, off by default. The field resolves
-  // coreference without gender (by recency + role + distinctness); this is an optional
-  // SOFT cue the caller may feed from evidence seen so far (a title at first naming, or a
-  // pronoun that already resolved). It never sets the answer — it only lets a read prefer a
-  // gender-compatible candidate. Arrow of time: only what was noted BEFORE a pronoun can
-  // bias it, because nothing later has been noted yet.
-  const genders = new Map();   // id → { m, f, p } votes
-  const noteGender = (id, g) => { if (!g) return; const v = genders.get(id) || { m: 0, f: 0, p: 0 }; v[g] += 1; genders.set(id, v); };
-  const genderOf = (id) => { const v = genders.get(id); if (!v) return null; const g = ['m', 'f', 'p'].sort((a, b) => v[b] - v[a])[0]; return v[g] > 0 ? g : null; };
+  // The gender ledger — a CAUSAL, DEFEASIBLE cue, off by default. The field resolves
+  // coreference without gender (by recency + role + distinctness); this is an optional SOFT
+  // rule the caller feeds from evidence seen so far (a title at first naming, or a pronoun
+  // that already resolved). Like every grammar rule it is HELD, TESTED, and TOGGLED OFF when
+  // its EVA fails: each entity's gender carries support (votes) and strain, and when strain
+  // overtakes support the belief is DEFEATED — genderOf returns null and the cue stops acting
+  // on it (the title was misread, the entity is mis-merged, the character is in disguise…).
+  // Arrow of time: only what was noted BEFORE a pronoun can bias it.
+  const genders = new Map();   // id → { m, f, p, strain }
+  const noteGender = (id, g) => { if (!g) return; const v = genders.get(id) || { m: 0, f: 0, p: 0, strain: 0 }; v[g] += 1; genders.set(id, v); };
+  // EVA: a hold relaxes strain (the belief keeps earning its place); a break accrues it.
+  const evaGender = (id, holds) => { const v = genders.get(id); if (!v) return; if (holds) { if (v.strain > 0) v.strain -= 1; } else v.strain += 1; };
+  const genderOf = (id) => {
+    const v = genders.get(id); if (!v) return null;
+    const g = ['m', 'f', 'p'].sort((a, b) => v[b] - v[a])[0];
+    if (v[g] <= 0 || v.strain > v[g]) return null;   // no evidence, or DEFEATED (strain > support)
+    return g;
+  };
 
   // Conversational deposit — a talker-witnessed mention. Tagged (its own
   // channel), decaying, capped at the coupling ceiling. It adds mass; it does
@@ -242,7 +251,7 @@ export const createCorefField = ({
 
   return {
     note, noteConversational, reinforce,
-    noteGender, genderOf, fieldCompatible,
+    noteGender, evaGender, genderOf, fieldCompatible,
     noteDescriptor, unifyDescriptor, bindDescriptorsByElimination, descriptorState,
     field, fieldGrounded, survivesSubtraction,
   };

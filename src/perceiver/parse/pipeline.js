@@ -324,16 +324,25 @@ export const createParser = ({
       // had no implementation, so that call site got nothing and pronoun-owned
       // kinship bonds dropped silently — only named owners survived. Wired now.
       // Bias the backward field for a leading subject pronoun by its gender, using only
-      // gender noted BEFORE this line (titles, prior resolutions). Drops candidates known to
-      // be incompatible while one remains; with no gender evidence it is exactly priorField,
-      // so the gender-free reading is untouched. The chosen subject's gender is then noted
-      // for later lines — the arrow of time, carried forward one resolution at a time.
-      const genderAwarePrior = (() => {
-        if (!pg) return priorField;
-        const compat = priorField.filter(c => { const cg = corefField.genderOf(c.id); return cg == null || cg === pg; });
-        return (compat.length && compat.length < priorField.length) ? compat : priorField;
-      })();
-      if (pg && genderAwarePrior[0]) corefField.noteGender(genderAwarePrior[0].id, pg);
+      // gender noted BEFORE this line. The rule is DEFEASIBLE (EVA): when it excludes
+      // incompatible candidates AND a compatible home remains, the excluded beliefs HOLD
+      // (they did useful work); when EVERY candidate is excluded — the pronoun's only
+      // sensible antecedent is one the gender belief forbids — the rule has FAILED here, so
+      // we strain those beliefs (and defer to the gender-free read). Enough such failures
+      // defeat the belief in coref.js, toggling the cue off for that entity. With no gender
+      // evidence it is exactly priorField; the gender-free reading is untouched.
+      let genderAwarePrior = priorField;
+      if (pg) {
+        const incompatible = priorField.filter(c => { const cg = corefField.genderOf(c.id); return cg && cg !== pg; });
+        const compatible = priorField.filter(c => { const cg = corefField.genderOf(c.id); return cg == null || cg === pg; });
+        if (incompatible.length && compatible.length) {
+          genderAwarePrior = compatible;
+          incompatible.forEach(c => corefField.evaGender(c.id, true));    // EVA holds: exclusion did useful work
+        } else if (incompatible.length) {
+          incompatible.forEach(c => corefField.evaGender(c.id, false));   // EVA breaks: the only referent was forbidden
+        }
+        if (genderAwarePrior[0]) corefField.noteGender(genderAwarePrior[0].id, pg);
+      }
       const coref = {
         field:   () => genderAwarePrior,
         resolve: () => priorField[0]?.id ?? null,
