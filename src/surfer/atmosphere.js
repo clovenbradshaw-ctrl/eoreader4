@@ -86,6 +86,38 @@ export const corpusSigma = (basis) => {
   return sigma;
 };
 
+// ── centering: expose the deviation, not the common offset ────────────────────
+//
+// MEASURED (scripts/measure-significance.mjs, on 19,764 labelled clauses): a cosine
+// projection onto the 27 cell centroids is dominated by a large common component —
+// every activation reads ~0.95 against every centroid — so the bare KL departure
+// collapses to ~0 and a raw-vs-projected lens margin NARROWS. Subtracting the basis
+// mean activation (the corpus prior's own mean reading, basis-derived and fixed)
+// exposes the deviation that carries the frame: centered, an interpretive document
+// departs the prior further than a factual one (0.48 vs 0.40) and the frame margin
+// widens 4× over the raw embedding. So the SPREAD reads (departure) are taken on the
+// centered activations; the MASS reads (tone) stay on the uncentered ρ, where the
+// diagonal is a genuine Born mass and the simplex/prediction story holds.
+const meanCache = new WeakMap();
+const basisMean = (basis) => {
+  if (meanCache.has(basis)) return meanCache.get(basis);
+  const acts = basis.vecs.map(c => projectUnit(c, basis));
+  const m = new Array(basis.keys.length).fill(0);
+  for (const a of acts) for (let j = 0; j < m.length; j++) m[j] += a[j] / acts.length;
+  meanCache.set(basis, m);
+  return m;
+};
+const centerBy = (acts, m) => acts.map(a => a.map((x, j) => x - (m[j] || 0)));
+
+const sigmaCenteredCache = new WeakMap();
+const corpusSigmaCentered = (basis) => {
+  if (sigmaCenteredCache.has(basis)) return sigmaCenteredCache.get(basis);
+  const m = basisMean(basis);
+  const sigma = buildDensity(centerBy(basis.vecs.map(c => projectUnit(c, basis)), m));
+  sigmaCenteredCache.set(basis, sigma);
+  return sigma;
+};
+
 // ── the tone: dominant Ground-grain (Atmosphere) cell of ρ ────────────────────
 //
 // The Ground-grain output. The Atmosphere-terrain cells are the three keyed *_Atmosphere
@@ -126,12 +158,12 @@ const toneOf = (rho, basis) => {
 // of the windows throw up by chance (deriveNull, leave-one-out, alpha the budget). This
 // is "a passage whose tone departs the corpus prior past the null."
 const WINDOW = 5;
-const windowDepartures = (activations, sigma) => {
-  const W = Math.min(WINDOW, activations.length);
+const windowDepartures = (centered, sigma) => {
+  const W = Math.min(WINDOW, centered.length);
   const out = [];
   if (W < 1) return out;
-  for (let i = 0; i + W <= activations.length; i++) {
-    const win = activations.slice(i, i + W);
+  for (let i = 0; i + W <= centered.length; i++) {
+    const win = centered.slice(i, i + W);
     const { rho } = buildDensity(win);
     out.push({ at: i, departure: relEntropy(rho, sigma) });
   }
@@ -151,12 +183,19 @@ export const atmosphereFromActivations = (activations, basisOrPrior, { alpha = 0
   const sigma = corpusSigma(basis);
   if (!sigma?.dim) return blank;
 
+  // MASS read — tone, on the uncentered ρ (the Born/simplex object).
   const { rho } = buildDensity(activations);
-  const departure = relEntropy(rho, sigma);
   const tone = toneOf(rho, basis);
 
+  // SPREAD read — departure, on the CENTERED activations against the centered prior
+  // (measurement first: centering is what makes the KL discriminate loaded from
+  // neutral; see the note above corpusSigmaCentered).
+  const centered = centerBy(activations, basisMean(basis));
+  const sigmaC = corpusSigmaCentered(basis);
+  const departure = relEntropy(buildDensity(centered).rho, sigmaC);
+
   // The per-window null: which windows read in a departed key past chance.
-  const windows = windowDepartures(activations, sigma);
+  const windows = windowDepartures(centered, sigmaC);
   const deps = windows.map(w => w.departure);
   let verdict = 'corpus-weather';
   const anomalousWindows = [];
