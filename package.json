@@ -17,7 +17,8 @@
     "learn:grammar": "node scripts/learn-grammar.mjs",
     "build:centroids": "node scripts/build-centroids.mjs",
     "serve": "python3 -m http.server 8000",
-    "grow-basis": "node scripts/grow-basis-demo.mjs"
+    "grow-basis": "node scripts/grow-basis-demo.mjs",
+    "text-generate": "node scripts/text-generate.mjs"
   },
   "engines": {
     "node": ">=20"
