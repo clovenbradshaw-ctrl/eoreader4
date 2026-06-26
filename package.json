@@ -20,7 +20,8 @@
     "grow-basis": "node scripts/grow-basis-demo.mjs",
     "text-generate": "node scripts/text-generate.mjs",
     "layered-generate": "node scripts/layered-generate.mjs",
-    "layered-stack": "node scripts/layered-stack-demo.mjs"
+    "layered-stack": "node scripts/layered-stack-demo.mjs",
+    "structural-significance": "node scripts/structural-significance.mjs"
   },
   "engines": {
     "node": ">=20"
