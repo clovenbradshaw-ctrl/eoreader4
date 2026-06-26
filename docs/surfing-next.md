@@ -90,17 +90,25 @@ The surf measures actionable signals and logs them to telemetry:
   (`stance-reserve`): on a pointed (`answer`) question, a Ground-grain commit is
   surfaced to the user as a thin-grounding flag, the surfer's own guard made
   visible. Pure wiring — the measurement already existed.
-- **stance-reserve → in-turn re-read — DONE (opt-in).** The active-inference loop,
-  brought in-turn (`src/turn/reread.js`): when the surf could not SETTLE on a figure
-  at the peak (the `stance-reserve` guard) on a pointed question, the `fold` stage
-  reads more of the document on the figure the reading circled and folds again from
-  the wider evidence — bounded to one extra pass, dependency-injected, audited in
-  `fold.reread`. Armed by `runTurn({ reread: true })`; **off by default, byte-
-  identical** when off (the trigger fires only on a measured under-settle, and the
-  default-on flip waits on a bench path that exercises the turn pipeline — `surfaceNote`
-  bypasses it today). The standalone cross-source version is PR #127's `inquire`; the
-  surf's `under-read` paradigm verdict can join `stance-reserve` as a trigger once the
-  structural paradigm pass lands.
+- **didn't-settle → in-turn re-read — DONE (opt-in).** The active-inference loop,
+  brought in-turn (`src/turn/reread.js`): when the reading could not SETTLE on a pointed
+  question, the `fold` stage reads more of the document on the figure it focused on and
+  folds again from the wider evidence — bounded to one extra pass, dependency-injected,
+  audited in `fold.reread`. Armed by `runTurn({ reread: true })`; **off by default,
+  byte-identical** when off.
+
+  *The trigger, corrected by a test run.* The first cut keyed on the `stance-reserve`
+  guard — but a live probe showed that on the 9-dim operator basis the structural stance
+  almost always finds a dominant lens (`Making`), so `guard && focus` essentially never
+  co-occurred: the re-read was **dead on the default path**. The live signal is the
+  **referential field** (`referent-ambiguous` — a diffuse coref posterior, "the passage
+  does not settle which figure it is about"), which fires on a genuinely ambiguous read
+  while leaving `surf.focus` to widen on. Verified end-to-end: a pronoun-heavy two-rivals
+  passage, `concentrated=false`, `focus="Anna"` → the re-read reads more on "Anna" and
+  widens the span set. The stance guard remains an additional trigger (for the meaning
+  path); the `under-read` paradigm verdict can join once the structural paradigm pass
+  lands. The default-on flip still waits on a bench path that drives `runTurn`
+  (`surfaceNote` bypasses it today).
 - **lensEntropy (staged).** The von Neumann entropy is the NPOV scalar *and* the
   predictive uncertainty — a calibrated confidence the answer could carry.
 

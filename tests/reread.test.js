@@ -10,13 +10,22 @@ import { unsettled, rereadOnUnsettled } from '../src/turn/reread.js';
 
 const reserve = (focus) => ({ stance: { guard: true, stance: 'Cultivating', grain: 'Ground' }, focus });
 const making  = (focus) => ({ stance: { guard: false, stance: 'Making', grain: 'Figure' }, focus });
+const diffuse  = { id: 'anna', concentrated: false };   // the referent-ambiguous measure firing
+const settledRef = { id: 'anna', concentrated: true };
 
-test('unsettled fires only on a pointed turn whose surf reserved with a figure in view', () => {
+test('unsettled fires on a reserved stance OR a diffuse coref field, with a figure in view', () => {
+  // the stance-reserve trigger (the meaning-path signal)
   assert.equal(unsettled(reserve('klamm'), 'answer'), true);
   assert.equal(unsettled(reserve('klamm'), null), true, 'an untyped turn counts as pointed');
-  assert.equal(unsettled(making('klamm'), 'answer'), false, 'a firm Figure commit is settled');
+  // the referential trigger (the live one on the default basis): a committed lens but diffuse coref
+  assert.equal(unsettled(making('anna'), 'answer', diffuse), true, 'a diffuse coref field is an unsettled read');
+  // both quiet → settled
+  assert.equal(unsettled(making('anna'), 'answer', settledRef), false, 'a firm commit + concentrated coref is settled');
+  assert.equal(unsettled(making('klamm'), 'answer'), false, 'a firm Figure commit with no referential signal is settled');
+  // scope + preconditions
   assert.equal(unsettled(reserve('klamm'), 'summary'), false, 'a summary rides the Ground grain — never a re-read');
   assert.equal(unsettled(reserve(null), 'answer'), false, 'no circled figure → nothing to read more about');
+  assert.equal(unsettled(making('anna'), 'answer', { id: 'anna', concentrated: true }), false, 'concentrated coref is settled');
   assert.equal(unsettled(null, 'answer'), false, 'no surf → no trigger');
 });
 
