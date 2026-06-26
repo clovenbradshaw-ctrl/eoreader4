@@ -51,3 +51,30 @@ test('the same coverage flags a direct answer but not a summary', () => {
   const summary = runVetoes({ ...base, task: 'summary' });
   assert.ok(!summary.fired.some(f => f.id === 'low-coverage'));
 });
+
+// The surfer's own confabulation guard, surfaced (surfing-next.md §3). updateStance
+// measures HOW the reading committed at the peak; a Ground-grain commit (guard:true)
+// means the field supported only a Ground move — naming a specific figure would be the
+// confabulation. On a pointed question that thinness is surfaced to the user (flag-only).
+test('stance-reserve flags a Ground-grain commit on a pointed question, and only there', () => {
+  const bound = [{ claim: 'x', citation: 's0' }];
+  const reserve = { op: 'REC', site: 'Atmosphere', stance: 'Cultivating', grain: 'Ground', firmness: 0.3, guard: true };
+  const making  = { op: 'REC', site: 'Lens',       stance: 'Making',      grain: 'Figure', firmness: 1,   guard: false };
+
+  // Ground-grain reserve on a pointed answer → flagged, but rides (flag-only).
+  const v1 = runVetoes({ draft: 'an answer', question: 'who fed him?', bound, task: 'answer', stance: reserve });
+  assert.ok(v1.fired.some(f => f.id === 'stance-reserve' && !f.refuses), 'the reserve is surfaced');
+  assert.equal(v1.refuse, false, 'it never gates — the answer rides with the flag');
+
+  // A Making commit (the field supported a figure) does not flag.
+  const v2 = runVetoes({ draft: 'an answer', question: 'who fed him?', bound, task: 'answer', stance: making });
+  assert.ok(!v2.fired.some(f => f.id === 'stance-reserve'), 'a firm Figure commit is not a reserve');
+
+  // A summary legitimately rides the Ground grain (it synthesises, it does not point).
+  const v3 = runVetoes({ draft: 'a summary', question: 'summarize', bound, task: 'summary', stance: reserve });
+  assert.ok(!v3.fired.some(f => f.id === 'stance-reserve'), 'a summary is not flagged for reserving');
+
+  // Inert when no stance was measured (no significance column / empty doc).
+  const v4 = runVetoes({ draft: 'x', question: 'q', bound, task: 'answer' });
+  assert.ok(!v4.fired.some(f => f.id === 'stance-reserve'), 'no stance → no flag');
+});

@@ -6,6 +6,7 @@ import { ingestMusic } from '../src/organs/in/music.js';
 import { surfFold } from '../src/surfer/index.js';
 import {
   atmosphereFromActivations, atmosphereOf, projectUnit, projectUnits, centroidBasis, corpusSigma,
+  structuralActivations,
 } from '../src/surfer/index.js';
 import { noveltyFromLensEntropy, forwardDist, NOVELTY_RESERVE } from '../src/core/index.js';
 import { runTurn } from '../src/turn/pipeline.js';
@@ -150,21 +151,27 @@ test('noveltyFromLensEntropy makes the reserve track the spread of readings (omn
   assert.ok(fBroad.reserve > fSharp.reserve, 'a broader reading-spread holds more probability for the unseen');
 });
 
-// ── INTEGRATION: the fold's surf rides the column on the meaning path, dark on hash ──
-test('runTurn lights up the Significance column when a meaning embedder + prior are present', async () => {
+// ── INTEGRATION: the embedder-free column rides every turn; atmosphere is the meaning add-on ──
+// (surfing-next.md §2) The column used to be dark without a meaning embedder. Now the DEFAULT
+// basis is the operator profiles, so the lens spread and the commit stance ride on EVERY turn,
+// hash organ or not. The meaning embedder + centroid prior ADD the atmosphere terrain (the KL
+// departure from a corpus prior, which the structural ground does not carry).
+test('the structural column rides on the hash path; the meaning embedder adds atmosphere', async () => {
   const attach = (d) => { d.sentenceEmbeddings = async (emb) => Promise.all(d.sentences.map(s => emb.embed(s))); return d; };
   const doc = attach(parseText(STORY, { docId: 's' }));
   const model = createModel('echo'); await model.load();
 
-  // dark path: hash embedder, no centroids → no column on the surf (byte-identical surf shape)
+  // hash path: no meaning embedder, no centroids → the EMBEDDER-FREE column still rides.
   const auditDark = createAuditLog();
   await runTurn({ question: 'what happens to Otto?', doc, model, embedder: createHashEmbedder(), auditLog: auditDark });
   const foldDark = auditDark.turns[0].steps.find(s => s.name === 'fold');
-  assert.ok(foldDark?.data?.surf, 'the surf still rides');
-  assert.equal(foldDark.data.surf.atmosphere, undefined, 'no atmosphere on the dark path');
-  assert.equal(foldDark.data.surf.lensEntropy, undefined, 'no lens spread on the dark path');
+  assert.ok(foldDark?.data?.surf, 'the surf rides');
+  assert.equal(typeof foldDark.data.surf.lensEntropy, 'number', 'the lens spread rides embedder-free');
+  assert.ok(foldDark.data.surf.stance && typeof foldDark.data.surf.stance.guard === 'boolean',
+    'the commit stance is measured embedder-free');
+  assert.equal(foldDark.data.surf.atmosphere, undefined, 'but atmosphere needs the meaning prior — absent here');
 
-  // lit path: a meaning embedder + the centroid prior → the column rides
+  // lit path: a meaning embedder + the centroid prior → atmosphere joins the column.
   const doc2 = attach(parseText(STORY, { docId: 's' }));
   const auditLit = createAuditLog();
   await runTurn({
@@ -219,4 +226,26 @@ test('projectUnits maps any vector into the shared 27-cell basis; σ is the corp
   assert.equal(acts[0].length, basis.keys.length, 'one activation per cell');
   const sigma = corpusSigma(basis);
   assert.equal(sigma.dim, basis.keys.length, 'σ lives in the significance basis');
+});
+
+// The embedder-free default (surfing-next.md §2). The column first rode an embedding ρ —
+// the distributional bet the engine exists to refute, and it pinned the column to a
+// meaning model, so it was dark under the hash organ. Now the DEFAULT basis is the
+// operator profiles (structure-basis.js): ρ from what the nine operators do, read off the
+// log, no model. So lenses · lensEntropy · stance light up on EVERY turn — and, ridden
+// WITHOUT lens-conditioning, leave the arrest (stops/peak) byte-identical to the plain surf.
+test('the significance column lights up embedder-free, off the operator profiles', () => {
+  const doc = parseText(STORY, { docId: 's.md' });
+  const { activations, signs } = structuralActivations(doc);
+  assert.ok(activations.some(v => v.some(x => x > 0)), 'the operator profiles carry mass (no embedder)');
+
+  const sig = surfFold(doc, 1, { activations, signs, lensReport: true, stance: true });
+  assert.ok(Array.isArray(sig.lenses) && sig.lenses.length > 0, 'lenses computed off operators alone');
+  assert.ok(Number.isFinite(sig.lensEntropy), 'lensEntropy (the NPOV scalar) computed');
+  assert.ok(sig.stance && typeof sig.stance.guard === 'boolean', 'the commit stance + guard is measured');
+
+  // The parity gate: no lens passed → raw-bayes arrest → byte-identical to the plain surf.
+  const plain = surfFold(doc, 1);
+  assert.deepEqual(sig.stops, plain.stops, 'stops unchanged (the column does not move the arrest)');
+  assert.equal(sig.peak, plain.peak, 'peak unchanged');
 });

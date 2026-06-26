@@ -11,7 +11,7 @@
 import { answerSmalltalk, answerMath, answerVoid, answerMetadata } from '../answer/index.js';
 import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc } from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold, centroidBasis, projectUnits } from '../surfer/index.js';
+import { surfFold, centroidBasis, projectUnits, structuralActivations } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
@@ -54,18 +54,41 @@ const weaveMemory = (messages, mindSpans) => {
 // unchanged. Degrades to {} on any embedding fault — a flaky meaning organ must never
 // crash the fold.
 const significanceOpts = async (ctx, anchor) => {
+  if (!ctx.doc) return {};
   const emb = ctx.geometricEmbedder;
-  if (!ctx.doc || !ctx.centroids || !emb?.measuresMeaning ||
-      typeof ctx.doc.sentenceEmbeddings !== 'function') return {};
-  const basis = centroidBasis(ctx.centroids);
-  if (!basis) return {};
+  // THE MEANING PATH (the upgrade). A live meaning-measuring embedder AND a centroid prior
+  // → the embedding column: the full atmosphere/paradigm/stance read, ridden forward inside
+  // the dominant lens (lens-conditioned arrest). This is the richest reading and unchanged.
+  if (ctx.centroids && emb?.measuresMeaning && typeof ctx.doc.sentenceEmbeddings === 'function') {
+    const basis = centroidBasis(ctx.centroids);
+    if (basis) {
+      try {
+        const vectors = await ctx.doc.sentenceEmbeddings(emb);
+        const activations = projectUnits(vectors, basis);
+        const report = surfFold(ctx.doc, anchor, { activations, prior: basis, lensReport: true });
+        const dom = report.lenses?.find(l => l.real)?.lens ?? report.lenses?.[0]?.lens ?? null;
+        return { activations, prior: basis, lensReport: true, atmosphere: true, paradigm: true, stance: true,
+                 alpha: ctx.alpha ?? 0.05, ...(dom ? { lens: dom } : {}) };
+      } catch { /* fall through to the structural default — never a dark fold */ }
+    }
+  }
+  // THE STRUCTURAL DEFAULT (the embedder-free column, surfing-next.md §2). ρ from the
+  // OPERATOR PROFILES (structure-basis.js) — read off the log, no model — so the column
+  // (lenses, lensEntropy, stance) lights up on EVERY turn, not only when a meaning model
+  // is loaded. Conservative by construction: the dominant lens is NOT passed, so the surf
+  // is not lens-conditioned and `stops`/`peak` (the fields the answer rides) stay
+  // byte-identical to the no-significance surf. Lens-conditioned arrest on this basis is
+  // the follow-on, bench-validated before it changes the reading. The stance it computes
+  // is what the veto battery now reads (the surfer's own confabulation guard, §3).
   try {
-    const vectors = await ctx.doc.sentenceEmbeddings(emb);
-    const activations = projectUnits(vectors, basis);
-    const report = surfFold(ctx.doc, anchor, { activations, prior: basis, lensReport: true });
-    const dom = report.lenses?.find(l => l.real)?.lens ?? report.lenses?.[0]?.lens ?? null;
-    return { activations, prior: basis, lensReport: true, atmosphere: true, paradigm: true, stance: true,
-             alpha: ctx.alpha ?? 0.05, ...(dom ? { lens: dom } : {}) };
+    const { activations, signs } = structuralActivations(ctx.doc);
+    if (!activations.length || !activations.some(v => v.some(x => x > 0))) return {};
+    // `alpha` is deliberately NOT passed: it would flip the cursor axis from the median
+    // rule to the derived VOID boundary (surf.js `useBoundary`), changing which cursors
+    // arrest — a reading change for the bench-gated follow-on, not here. The significance
+    // pass falls back to its own internal 0.05 for the lens/stance nulls, so the column is
+    // fully measured while the arrest stays byte-identical.
+    return { activations, signs, lensReport: true, stance: true };
   } catch { return {}; }
 };
 
@@ -497,6 +520,10 @@ export const stages = {
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
       referential: ctx.referential, task: ctx.task,
+      // The surfer's measured commit stance — its own confabulation guard (stance-reserve):
+      // a Ground-grain reserve at the peak means the reading did not settle on a figure.
+      // Computed on every turn now the structural significance column is the default (§2).
+      stance: ctx.surf?.stance,
       // The edge-grounding verdicts the factcheck stage just deposited — the link-
       // shaped sibling of the node-level `unbound` check. Without this they were
       // computed and discarded; now a claim the graph DENIES becomes a flag.
