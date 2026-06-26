@@ -17,7 +17,8 @@ import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/
 import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { renderUserMessage, createThinkingMessage,
-         updateThinking, finalizeThinking, streamThinking, streamImpression } from './chat.js';
+         updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock } from './chat.js';
+import { createMind } from '../mind/index.js';
 import { foldImpression } from '../write/index.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
 import { renderGraph } from './graph-view.js';
@@ -40,7 +41,18 @@ const STATE = {
   activeTab: 'text',
   history:   [],         // the running transcript, fed back each turn (the session fold)
   grounding: 'auto',     // how answers use the document: 'auto' | 'grounded' | 'free' (the chip)
+  // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
+  // chip distinct from the document chips: when on, every turn consults the corpus and
+  // surfaces its provenance-tagged spans beneath the answer. Lazily constructed; the
+  // build is paid once and cached to OPFS. See docs/the-mind.md.
+  mind:      null,       // the createMind() instance, once constructed
+  mindReady: false,      // the OPFS index is built and queryable
+  mindOn:    false,      // consult memory this session (persisted)
+  mindBuilding: false,   // a build is in flight (chip shows progress)
 };
+
+// The corpus the mind reads — the ~3,400-book English Project Gutenberg parquet.
+const CORPUS_URL = 'https://storage.googleapis.com/intelechia-content/eo-mind/gutenberg_en_3400.parquet';
 
 // The grounding register the chip cycles through. One value (STATE.grounding) that the
 // turn pipeline fans out to the route, the retrieval fallback, and the system prompt.
@@ -165,14 +177,97 @@ const removeDoc = (id) => {
   renderDocChips();
 };
 
+// ── The mind: eoreader's read corpus, held as memory ───────────────────────
+// Constructed lazily (the OPFS-backed index), built once with progress, then
+// consulted as an opt-in source kept epistemically separate from the document.
+
+// Construct the mind once; reading status() tells us whether the OPFS index is
+// already built from a prior session (cached) so a returning user need not rebuild.
+const getMind = async () => {
+  if (!STATE.mind) STATE.mind = await createMind({ url: CORPUS_URL });
+  return STATE.mind;
+};
+
+// After boot, quietly check whether memory is already on disk — so the pinned
+// chip shows "ready" for a returning user without any action. Never blocks boot.
+const probeMind = async () => {
+  try {
+    const mind = await getMind();
+    const st = await mind.status();
+    STATE.mindReady = !!st.built;
+    renderDocChips();
+  } catch { /* OPFS unavailable — the chip simply offers to build later */ }
+};
+
+// Read the corpus into memory (resumable; cached to OPFS). Progress lands in the
+// status line so the cost is honest, never a spinner that hides it.
+const buildMindNow = async () => {
+  if (STATE.mindBuilding) return;
+  STATE.mindBuilding = true;
+  renderDocChips();
+  setStatus('memory: starting…');
+  try {
+    const mind = await getMind();
+    await mind.build(({ group, groups, books, sentences, phase }) => {
+      if (phase === 'flush')
+        setStatus(`memory: reading… group ${group}${groups ? `/${groups - 1}` : ''} · ` +
+          `${books} books · ${sentences.toLocaleString()} sentences`);
+    });
+    STATE.mindReady = true;
+    STATE.mindOn = true;
+    persistMind();
+    const st = await mind.status();
+    setStatus(`memory: ready · ${st.books.toLocaleString()} books · ${st.sentences.toLocaleString()} sentences`);
+  } catch (err) {
+    setStatus(`memory: build failed — ${err?.message || err}`);
+  } finally {
+    STATE.mindBuilding = false;
+    renderDocChips();
+  }
+};
+
+const persistMind = () => {
+  try { localStorage.setItem('eoreader.mindOn', STATE.mindOn ? '1' : '0'); } catch { /* ignore */ }
+};
+
+// The chip's click: not built → build it; built → toggle consulting on/off.
+const onMindChip = () => {
+  if (STATE.mindBuilding) return;
+  if (!STATE.mindReady) { buildMindNow(); return; }
+  STATE.mindOn = !STATE.mindOn;
+  persistMind();
+  renderDocChips();
+};
+
+const renderMindChip = (root) => {
+  const chip = document.createElement('span');
+  const on = STATE.mindReady && STATE.mindOn;
+  chip.className = 'doc-chip mind' + (on ? ' on' : '') + (STATE.mindBuilding ? ' building' : '');
+  const name = document.createElement('span');
+  name.className = 'doc-chip-name';
+  name.textContent = STATE.mindBuilding ? '✦ Mind · reading…'
+    : !STATE.mindReady ? '✦ Mind · load memory'
+    : on ? '✦ Mind · on' : '✦ Mind · off';
+  chip.title = STATE.mindBuilding
+    ? 'Reading the corpus into memory (once; cached to OPFS).'
+    : !STATE.mindReady
+      ? 'eoreader’s read corpus — its memory. Click to read it in (once, then cached).'
+      : on
+        ? 'Consulting memory — its recalled lines appear beneath each answer. Click to stop.'
+        : 'Memory is ready but not consulted. Click to consult it.';
+  chip.addEventListener('click', onMindChip);
+  chip.appendChild(name);
+  root.appendChild(chip);
+};
+
 // The persistent document chips: every loaded document is a chip; tagged (selected)
 // ones are grounded against, and stay selected until deselected. Clicking a chip
-// toggles its selection and views it; the × removes it.
+// toggles its selection and views it; the × removes it. The pinned Mind chip leads.
 const renderDocChips = () => {
   const root = els.docChips;
   root.innerHTML = '';
-  if (STATE.docs.size === 0) { root.hidden = true; return; }
-  root.hidden = false;
+  root.hidden = false;                  // the pinned Mind chip is always present
+  renderMindChip(root);
   for (const [id] of STATE.docs) {
     const on = STATE.selected.has(id);
     const chip = document.createElement('span');
@@ -350,6 +445,15 @@ const runQuery = async (question) => {
   // one doc pane (clicking a source chip switches to that document instead).
   if (result.sources?.length && selectedDocs.length <= 1) highlightSources(els.docView, result.sources);
 
+  // Consult MEMORY (the mind), if on — a separate, epistemically-distinct reading.
+  // It runs the SAME lexical score over the read corpus and surfaces its recalled,
+  // provenance-tagged lines beneath the answer. Never folded into the document
+  // answer here (display-only); failures are swallowed so memory can't break a turn.
+  if (STATE.mindOn && STATE.mindReady && STATE.mind && route !== 'error') {
+    try { renderMindBlock(thinking, await STATE.mind.retrieve(question, 5)); }
+    catch { /* memory is an enhancement — a fault leaves the answer untouched */ }
+  }
+
   // Append the completed exchange so the next turn's session fold can read it back —
   // but never feed an error turn back into the conversation (it would poison the fold).
   // An UNBOUND answer (claims, but none tied to a source) is tagged so the fold keeps it
@@ -432,6 +536,13 @@ els.groundingChip.addEventListener('click', () => {
   try { localStorage.setItem('eoreader.grounding', STATE.grounding); } catch { /* ignore */ }
   applyGrounding();
 });
+
+// The Mind chip — pinned and always present. Restore the consult preference, show
+// the chip immediately, then probe OPFS after boot so a returning user whose memory
+// is already on disk sees "ready" without rebuilding. The probe never blocks boot.
+try { STATE.mindOn = localStorage.getItem('eoreader.mindOn') === '1'; } catch { /* default off */ }
+renderDocChips();
+(window.requestIdleCallback || ((f) => setTimeout(f, 200)))(probeMind);
 
 // Audit: live-render on every step / finish. Export stays disabled until there
 // is at least one turn, so the button never hands back an empty file.

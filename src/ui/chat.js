@@ -246,6 +246,48 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   if (root) root.scrollTop = root.scrollHeight;
 };
 
+// The "from memory" block — eoreader's READ corpus (the mind), surfaced as a
+// distinct, epistemically-separate panel beneath a document-grounded answer.
+// Each line is a real sentence in a named book, linked to its source URI: the
+// memory always points back at what it remembers, the accountability local
+// inference buys. Rendered only when the mind is consulted (the pinned chip).
+export const renderMindBlock = (el, spans, opts = {}) => {
+  if (!el) return;
+  // Drop a prior block if this turn re-renders (defensive — one block per msg).
+  el.querySelector('.mindblock')?.remove();
+  const box = document.createElement('div');
+  box.className = 'mindblock';
+  const head = document.createElement('div');
+  head.className = 'mindblock-head';
+  head.textContent = spans?.length
+    ? `✦ from memory · ${spans.length} recalled`
+    : '✦ from memory · nothing recalled for this';
+  box.appendChild(head);
+
+  for (const s of (spans || [])) {
+    const item = document.createElement('div');
+    item.className = 'mindsource';
+    const quote = document.createElement('span');
+    quote.className = 'mindsource-q';
+    const line = String(s.text || '').replace(/\s+/g, ' ').trim();
+    quote.textContent = `“${line.length > 200 ? line.slice(0, 200) + '…' : line}”`;
+    const prov = document.createElement('a');
+    prov.className = 'mindsource-prov';
+    prov.href = s.book?.uri || '#';
+    prov.target = '_blank';
+    prov.rel = 'noopener';
+    const author = s.book?.authors ? ` — ${String(s.book.authors).split(';')[0].trim()}` : '';
+    prov.textContent = `${s.book?.title || 'unknown'}${author}`;
+    prov.title = `Open the source — ${s.book?.uri || ''}`;
+    item.appendChild(quote);
+    item.appendChild(prov);
+    box.appendChild(item);
+  }
+  el.appendChild(box);
+  const root = el.parentElement;
+  if (root) root.scrollTop = root.scrollHeight;
+};
+
 // Back-compat for any caller that still wants a one-shot assistant render.
 export const renderAssistantMessage = (root, text, sources, opts = {}) => {
   const el = createThinkingMessage(root);

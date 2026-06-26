@@ -274,6 +274,30 @@ section h2 .hint {
 }
 .doc-chip-x:hover { opacity: 1; background: transparent; color: #fca5a5; }
 
+/* The pinned Mind chip — eoreader's read corpus (its memory), an opt-in source
+   kept visually distinct from the document chips (a violet accent, not green). */
+.doc-chip.mind { border-color: #4c3a6e; background: #1a1426; color: #c4b5fd; cursor: pointer; }
+.doc-chip.mind.on { border-color: #6d28d9; background: #241640; color: #ddd6fe; }
+.doc-chip.mind.building { color: #c4b5fd; opacity: .85; cursor: progress; }
+
+/* The "from memory" block — distinct from the document sources above it. */
+.msg.assistant .mindblock {
+  margin-top: .5rem; padding: .45rem .55rem; border-radius: 8px;
+  border: 1px solid #3b2d57; background: #160f24;
+}
+.msg.assistant .mindblock-head {
+  font-size: .62rem; letter-spacing: .06em; text-transform: uppercase;
+  color: #a78bfa; margin-bottom: .35rem;
+}
+.msg.assistant .mindsource { display: block; margin: .3rem 0; font-size: .76rem; line-height: 1.35; }
+.msg.assistant .mindsource-q { color: #d4d4d8; }
+.msg.assistant .mindsource-prov {
+  display: inline-block; margin-left: .35rem; font-size: .68rem;
+  color: #a78bfa; text-decoration: none; border-bottom: 1px dotted #6d28d9;
+  font-family: ui-monospace, monospace;
+}
+.msg.assistant .mindsource-prov:hover { color: #ddd6fe; }
+
 #composer { display: flex; gap: .5rem; flex-shrink: 0; }
 #input {
   flex: 1; padding: .5rem .65rem;
