@@ -16,11 +16,11 @@ test('phraserBrief emits the determined propositions and a grounded draft', () =
   assert.equal(typeof b.draft, 'string');
 });
 
-test('the realization prompt licenses surface scaffolding and forbids content', () => {
+test('the prompt feeds the impression and trusts the talker — no caveat list (the veto enforces)', () => {
   const p = realizationPrompt(phraserBrief(DOC(), { genders: { Gregor: 'm', Grete: 'f' } }));
-  assert.match(p.system, /surface realizer|not an author/i);
-  assert.match(p.system, /MUST NOT|change or drop any verb|state anything not given/i, 'forbids authoring content');
-  assert.match(p.user, /Gregor/, 'the facts are the talker\'s only content');
+  assert.match(p.system, /impression|scene|into words|voice/i, 'feeds the scene as an impression to voice');
+  assert.doesNotMatch(p.system, /MUST NOT|forbidden|do not add|will be removed/i, 'no heavy prohibition list — grounding is enforced after the fact, not by nagging the prompt');
+  assert.match(p.user, /Gregor/, 'the talker is given the content to form into words');
 });
 
 test('a faithful talker passes the veto; a drifting talker has its invented proposition stripped', async () => {

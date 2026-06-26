@@ -12,8 +12,10 @@
 import { speakConcept } from './traverse.js';
 import { classifyProvenance } from '../ground/index.js';
 
-// phraserBrief(doc, opts) → the determined content for a talker.
-//   propositions  the grounded subject–relation–object triples (the facts, no wording choice)
+// phraserBrief(doc, opts) → the determined content for a talker, as IMPRESSIONS to voice.
+//   propositions  the grounded subject–relation–object triples — the pre-verbal scene, the
+//                 impression a reading left, waiting to be put into words (the talker's only
+//                 content; we chose the facts, it chooses the wording)
 //   draft         our own telegraphic realisation (referring/tense/aggregation already done)
 //   plan          the underlying plan (for provenance / audit)
 export const phraserBrief = (doc, opts = {}) => {
@@ -26,27 +28,24 @@ export const phraserBrief = (doc, opts = {}) => {
   return Object.freeze({ propositions, draft: spoken.text, plan: spoken.plan });
 };
 
-// realizationPrompt(brief) → the constrained instruction a talker realises FROM.
+// realizationPrompt(brief) → what the talker is GIVEN, not what it is forbidden.
 //
-// The contract follows the veto (ground/provenance.js): a proposition is kept only if its
-// RELATION survives between its figures, so the prompt licenses exactly the surface freedom
-// that keeps the relation intact and forbids the rest. The talker SCAFFOLDS — articles,
-// prepositions, conjunctions, pronoun-vs-name, sentence flow — and KEEPS every verb and every
-// participant. It does not author: no new noun, name, verb, action, or claim. What it adds
-// beyond the facts the post-check strips, so the prompt and the veto say the same thing.
+// The propositions are IMPRESSIONS — the pre-verbal scene a reading left (Levelt's preverbal
+// message), held as who-did-what, waiting to be put into words. We feed the talker the scene
+// and ask it to voice it, with almost no caveats: a defensive, prohibition-heavy prompt makes
+// a model stilted, and the prohibitions are redundant anyway, because grounding is enforced
+// AFTER the fact by the veto (talkThenVerify / classifyProvenance), not by nagging the prompt.
+// So the prompt's job is to convey the impression richly and trust the talker to form words;
+// the veto's job, silent, is to strip anything that drifted. One light nudge to stay with the
+// scene, and no list of rules.
 export const realizationPrompt = (brief) => Object.freeze({
-  system: 'You are a surface realizer, not an author. You are given a list of facts, each a '
-    + 'subject, a verb, and (sometimes) an object. Rewrite them as fluent, natural English. '
-    + 'You MAY: add articles (a/the), prepositions, and connectives; choose a pronoun or the '
-    + 'name; reorder or join sentences; fix agreement and tense. You MUST NOT: change or drop '
-    + 'any verb, add any new noun/name/verb/action, or state anything not given. Every fact '
-    + 'must reappear with its verb and its participants intact. If a fact resists fluent '
-    + 'phrasing, keep it plain rather than invent — anything you add that is not in the facts '
-    + 'will be removed.',
-  user: 'Facts (subject — verb — object):\n'
-    + brief.propositions.map((p) => `- ${p.subj} — ${p.verb}${p.obj ? ' — ' + p.obj : ''}`).join('\n')
-    + `\n\nReference draft (already grounded; smooth it, keep its verbs): ${brief.draft}`
-    + '\n\nFluent prose:',
+  system: 'You are the voice that turns a reading into words. You are handed the impression a '
+    + 'reader was left with — a scene of who did what to whom. Say it as fluent, natural prose, '
+    + 'the way someone would who had just read it and is telling a friend what happened. Stay '
+    + 'with the scene as given; you need add nothing to make it whole.',
+  user: 'The scene, as impressions:\n'
+    + brief.propositions.map((p) => `· ${p.subj} ${p.verb}${p.obj ? ' ' + p.obj : ''}`).join('\n')
+    + `\n\nIn rough words it came out: ${brief.draft}\n\nNow say it naturally:`,
 });
 
 // talkThenVerify(brief, model, { doc }) → realise via the talker, then VETO its drift.
