@@ -320,6 +320,11 @@ section h2 .hint {
 #composer .chip[data-mode="grounded"]:hover { background: #0a3026; }
 #composer .chip[data-mode="free"]     { color: #fcd34d; border-color: #78350f; background: #271a06; }
 #composer .chip[data-mode="free"]:hover { background: #32230a; }
+/* the inquiry chip: muted when off, filled-bright when self-directed inquiry is on */
+#composer .chip[data-on="false"]      { color: #64748b; border-color: #1e293b; background: #0c1626; }
+#composer .chip[data-on="false"]:hover { background: #111d33; }
+#composer .chip[data-on="true"]       { color: #c4b5fd; border-color: #5b21b6; background: #1e1340; }
+#composer .chip[data-on="true"]:hover { background: #271854; }
 button {
   padding: .5rem 1rem;
   background: #2563eb; border: none; border-radius: 8px;

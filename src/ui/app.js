@@ -41,6 +41,7 @@ const STATE = {
   activeTab: 'text',
   history:   [],         // the running transcript, fed back each turn (the session fold)
   grounding: 'auto',     // how answers use the document: 'auto' | 'grounded' | 'free' (the chip)
+  inquire:   false,      // self-directed inquiry — read another pass on the engine's own open question (the chip)
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
   // chip distinct from the document chips: when on, every turn consults the corpus and
   // surfaces its provenance-tagged spans beneath the answer. Lazily constructed; the
@@ -83,6 +84,7 @@ const els = {
   exportBtn: document.getElementById('export-audit'),
   backend:   document.getElementById('backend'),
   groundingChip: document.getElementById('grounding-chip'),
+  inquireChip: document.getElementById('inquire-chip'),
   docChips:  document.getElementById('doc-chips'),
 };
 
@@ -420,6 +422,7 @@ const runQuery = async (question) => {
     auditLog: STATE.audit,
     history:  STATE.history,    // the prior transcript — the session fold reads it
     grounding: STATE.grounding, // the Auto / Chat with document / Free form register (the chip)
+    inquire:  STATE.inquire,    // self-directed inquiry — read another pass on the open question (the chip)
     onStep:   (name, ctx, data) => {
       updateThinking(thinking, name, data, ctx);
       // As soon as the fold has read the passage, type its IMPRESSION into the bubble
@@ -545,6 +548,25 @@ els.groundingChip.addEventListener('click', () => {
   STATE.grounding = GROUNDING_MODES[(i + 1) % GROUNDING_MODES.length];
   try { localStorage.setItem('eoreader.grounding', STATE.grounding); } catch { /* ignore */ }
   applyGrounding();
+});
+
+// Inquiry chip — toggles self-directed inquiry (the inquire stage, turn/stages.js). When
+// on, a grounded answer turn THINKS over what it retrieved and, if a figure stays open (one
+// the spans keep mentioning but that never acts), reads another pass on its OWN question and
+// folds the answering lines in as citable spans before the talker speaks. The follow-up
+// questions it asked ride in the `inquire` step of the audit trace. Off by default.
+const applyInquire = () => {
+  els.inquireChip.textContent     = `Inquiry: ${STATE.inquire ? 'on' : 'off'}`;
+  els.inquireChip.dataset.on      = String(STATE.inquire);
+};
+try {
+  STATE.inquire = localStorage.getItem('eoreader.inquire') === 'on';
+} catch { /* localStorage may be unavailable — default off stands */ }
+applyInquire();
+els.inquireChip.addEventListener('click', () => {
+  STATE.inquire = !STATE.inquire;
+  try { localStorage.setItem('eoreader.inquire', STATE.inquire ? 'on' : 'off'); } catch { /* ignore */ }
+  applyInquire();
 });
 
 // The Mind chip — pinned and always present. Restore the consult preference, show

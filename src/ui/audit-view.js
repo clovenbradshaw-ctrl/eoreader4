@@ -69,6 +69,13 @@ const renderRow = (turn) => {
       `<span class="ms">+${s.t}ms</span>` +
       `<span class="data">${escapeHtml(stringify(s.data))}</span>`;
     body.appendChild(line);
+    // Self-directed inquiry: surface the engine's OWN follow-up questions legibly, not just
+    // in the step JSON — these are the open figures it chose to go read more about.
+    const asked = s.name === 'inquire' ? (s.data?.asked || []) : [];
+    for (const q of asked) {
+      body.insertAdjacentHTML('beforeend',
+        `<div class="step inquiry-q"><span class="name">↳ asked</span><span class="data">${escapeHtml(q)}</span></div>`);
+    }
   }
   if (turn.prompt) {
     body.insertAdjacentHTML('beforeend',
