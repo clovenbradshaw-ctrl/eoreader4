@@ -48,6 +48,11 @@ export { createLayeredGenerator } from './layered-generator.js';
 // off the log), not embeddings — meaning as what the operators do to the field, not as
 // distributional company. The embedder stays in VOX; the column reads structure.
 export { OPS, RELTYPES, operatorProfiles, structuralActivations, structuralHorizon, structuralCommutator } from './structure-basis.js';
+// Label feedback (word → concept): grow specific link-types from the recurring links the
+// closed vocabulary leaves untyped, and MEASURE whether structure alone carves each one
+// (deriveNull over random same-size groups) — `structureGrows` is the empirical answer to
+// whether the structural basis can learn distinctions or VOX must push semantics down.
+export { linkInventory, untypedVias, growLinkTypes } from './learn-links.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';

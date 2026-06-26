@@ -14,6 +14,15 @@
 // bond", "assert-and-evaluate"), which cannot be topic clusters because they are made of
 // operators, not content words. That is the separation the embedding path needed
 // centering to fake; here it is free, because structure is not distribution.
+//
+// FIRST LEVEL: a link is its operator. An edge between two nodes is a LINK, and a link
+// IS one of the nine operators — that is how a relation is typed, full stop, at the first
+// level. Links CAN get more specific (a CON that is a kinship bond, a SIG that is a
+// perception), but that finer typing is a SECOND, optional level layered on top — never
+// the default. So the canonical structural activation is operators-only; the relation-
+// class refinement is opt-in (`relations:true`), and it types only the minority of links
+// the shipped closed vocabulary happens to know. The recurring links it leaves untyped are
+// what the label-feedback basis (learn-links.js) grows new specific types for.
 
 import { buildDensity, eigenLenses, vonNeumann, relEntropy, commutator, projectorFrom, OPERATORS } from '../core/index.js';
 
@@ -22,10 +31,12 @@ export const OPS = Object.freeze(Object.keys(OPERATORS));
 const OP_IDX = Object.fromEntries(OPS.map((o, i) => [o, i]));
 const round = (x) => Math.round(x * 1e4) / 1e4;
 
-// the engine's relation-semantic classes (read off CON/SIG events' relType) — a fixed,
-// structural taxonomy that refines the operator basis: a CON is a bond, but a SPATIAL
-// bond and an AFFECT bond are different operational readings. Still no embedder, still
-// nothing distributional — these are typed relations the parse already assigned.
+// the engine's relation-semantic classes (read off CON/SIG events' relType) — the SECOND,
+// optional level: a fixed closed taxonomy that REFINES the operator typing. A link is
+// always its operator first (a CON is a bond); a SPATIAL bond and an AFFECT bond are the
+// same link made more specific. Shipped and fixed, so it only types the minority of links
+// whose verb the conventions ledger recognises — the recurring untyped rest is the gap
+// learn-links.js grows into. Still no embedder, nothing distributional. NOT the default.
 export const RELTYPES = Object.freeze(['spatial', 'perception', 'affect', 'motion', 'possession', 'speech', 'kinship']);
 
 // Per-unit structural activation: the count of each operator the unit performs, read off
@@ -41,10 +52,11 @@ export const operatorProfiles = (doc) => {
   return prof;
 };
 
-// ENRICHED structural activation: operators (Act face) + relation-semantic classes, with
-// a SIGN read off polarity (a negated/defeated reading subtracts — the spec's
-// contradiction-interferes ρ, computed structurally). Still no embedder.
-export const structuralActivations = (doc, { relations = true } = {}) => {
+// Structural activation: by default operators ONLY (a link is its operator — the first
+// level). Opt into the second level with `relations:true`, which appends the relation-
+// semantic classes; a SIGN read off polarity lets a negated/defeated reading subtract
+// (the spec's contradiction-interferes ρ, computed structurally). Still no embedder.
+export const structuralActivations = (doc, { relations = false } = {}) => {
   const units = doc?.units || doc?.sentences || [];
   const dims = relations ? [...OPS, ...RELTYPES] : [...OPS];
   const RT_IDX = Object.fromEntries(RELTYPES.map((r, i) => [r, OPS.length + i]));

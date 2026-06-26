@@ -53,6 +53,13 @@ test('structuralCommutator: identical operational bases commute (~0); determinis
   assert.equal(structuralCommutator(prof, prof), c, 'deterministic');
 });
 
+test('a link is its operator: structuralActivations types relations by operator only, by default', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  const s = structuralActivations(doc);                       // no opts → first level only
+  assert.equal(s.dims.length, OPS.length, 'the default basis is operators only — a link is its operator');
+  assert.deepEqual(s.dims, [...OPS], 'no relation-class dimensions unless opted in');
+});
+
 test('the enriched basis adds relation classes + polarity signs, still structural', () => {
   const doc = parseText(STORY, { docId: 's' });
   const s = structuralActivations(doc, { relations: true });
