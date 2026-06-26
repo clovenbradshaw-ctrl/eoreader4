@@ -90,6 +90,24 @@ const round = (x) => Math.round(x * 1000) / 1000;
 
 const isNumeric = (seq) => seq.length > 0 && seq.every(x => typeof x === 'number');
 
+// The difference-rung ladder: [seq, Δseq, Δ²seq, …] up to `depth`. Rung 0 is the
+// absolute unit (position), rung 1 the move (velocity), rung 2 the move-of-the-move
+// (acceleration), and so on — the helix recursing inside prediction. A constant at rung
+// k is a stationary regularity the k-1 rungs below it cannot see: a drifting object is
+// stationary at rung 1, an accelerating one at rung 2. diffs[r][i] explains seq[i+r].
+const diffs = (seq, depth) => {
+  const out = [seq];
+  for (let r = 1; r <= depth; r++) {
+    const prev = out[r - 1], d = [];
+    for (let i = 1; i < prev.length; i++) d.push(prev[i] - prev[i - 1]);
+    out.push(d);
+  }
+  return out;
+};
+const RUNG_LABELS = ['existence', 'structure', 'acceleration', 'jerk', 'snap'];
+const rungIndex = (r) => typeof r === 'number' ? r
+  : Math.max(0, RUNG_LABELS.indexOf(r === 'move' ? 'structure' : r));
+
 // ── helixPredict: read the stream at both rungs, diagnose, re-ground ──────────
 //
 //   seq      the unit stream (numbers → the move rung is the first difference;
@@ -102,83 +120,78 @@ const isNumeric = (seq) => seq.length > 0 && seq.every(x => typeof x === 'number
 // Returns { rungs, steps, recs, summary }. Each step carries the per-rung surprise (in
 // bits), the carrying rung, and whether a re-ground fired. `recs` are the measured
 // frame relocations, each an append-only REC(Paradigm, Composing) with its surprise-delta.
-export const helixPredict = (seq, { order = 2, window = 3, alpha = 0.05 } = {}) => {
-  const moveAvailable = isNumeric(seq);
-  const rungs = moveAvailable ? ['existence', 'structure'] : ['existence'];
-  const moves = moveAvailable ? seq.slice(1).map((x, i) => x - seq[i]) : null;
+export const helixPredict = (seq, { order = 2, window = 3, alpha = 0.05, maxRung = 1 } = {}) => {
+  const numeric = isNumeric(seq);
+  const depth = numeric ? Math.max(1, maxRung) : 0;
+  const D = diffs(numeric ? seq : seq, depth);             // D[r] = r-th difference (rung r)
+  const R = D.length - 1;                                  // top rung index
+  const rungs = numeric ? RUNG_LABELS.slice(0, R + 1) : ['existence'];
 
+  const anchor = new Array(R + 1).fill(0);                 // per-rung ground, relocated on a REC
+  const hist = Array.from({ length: R + 1 }, () => []);    // per-rung surprise history
   const steps = [];
   const recs = [];
-  let anchorE = 0;                 // the Existence rung's ground — relocated on a REC
-  const eHist = [], mHist = [];    // surprise histories, for the measured thresholds
+  let lastReground = -Infinity;
 
   for (let at = order; at < seq.length; at++) {
-    // EXISTENCE rung — absolute, predicted from the (possibly re-grounded) prefix.
-    const eFrom = Math.max(anchorE, 0);
-    const eModel = countsOf(seq.slice(eFrom, at), order);
-    const eCtx = seq.slice(Math.max(eFrom, at - order), at);
-    const eBits = -Math.log2(probOf(eModel, eCtx, seq[at], order));
-
-    // STRUCTURE rung — the move, frame-relative, NEVER re-grounded (it is already
-    // frame-free). moves[k] is the step into seq[k+1], so predicting seq[at] is
-    // predicting moves[at-1] from the prior moves.
-    let mBits = null;
-    if (moveAvailable && at - 1 >= order) {
-      const mModel = countsOf(moves.slice(0, at - 1), order);
-      const mCtx = moves.slice(at - 1 - order, at - 1);
-      mBits = -Math.log2(probOf(mModel, mCtx, moves[at - 1], order));
+    const bits = new Array(R + 1).fill(null);
+    for (let r = 0; r <= R; r++) {
+      const idx = at - r;                                  // D[r][idx] explains seq[at]
+      const from = Math.max(anchor[r], 0);
+      if (idx < order || idx - from < order) continue;     // not enough (post-reground) context yet
+      const model = countsOf(D[r].slice(from, idx), order);
+      const ctx = D[r].slice(idx - order, idx);
+      bits[r] = -Math.log2(probOf(model, ctx, D[r][idx], order));
+      hist[r].push(bits[r]);
     }
+    const win = bits.map((b, r) => (hist[r].length ? mean(hist[r].slice(-window)) : null));
 
-    eHist.push(eBits); if (mBits != null) mHist.push(mBits);
-    const eWin = mean(eHist.slice(-window));
-    const mWin = mHist.length ? mean(mHist.slice(-window)) : null;
+    // the carrying rung — the lowest-surprise rung with evidence (the stationary one).
+    let carrying = 0, best = Infinity;
+    for (let r = 0; r <= R; r++) if (win[r] != null && win[r] < best) { best = win[r]; carrying = r; }
 
-    // MEASURED thresholds: "high" beats the deriveNull of the rung's own surprise
-    // history (the Born rule on the surprise distribution); "holding" sits below the
-    // move rung's running median. Both need enough history to be measurable.
-    const eHigh = deriveNull(eHist.slice(0, -1), { scale: 'linear', alpha });
-    const eIsHigh = Number.isFinite(eHigh) && eWin > eHigh;
-    const mIsHolding = mWin != null && mHist.length >= 4 && mWin < median(mHist.slice(0, -1));
-
-    let carrying = 'existence';
-    if (mWin != null && mWin < eWin) carrying = 'structure';
-
-    // MIS-FRAMED → re-ground: the absolute rung rots while the move rung holds. Fire an
-    // append-only REC and relocate the Existence ground to here (drop to a NUL in the
-    // new frame). Sustained by the window, so a one-off spike does not trigger it.
+    // MIS-FRAMED → re-ground: the LOWEST rung r whose surprise beats the deriveNull of its
+    // own history (high) while the rung ABOVE it holds below its median — the regularity
+    // lives one rung up, so relocate rungs 0..r (drop to a NUL in the new frame). Measured
+    // thresholds, sustained by the window (hysteresis — a one-off spike is not a reframe).
     let regrounded = false;
-    if (eIsHigh && mIsHolding && at - anchorE > window) {
-      anchorE = at - order;                              // re-ground: forget the stale frame
-      regrounded = true;
-      recs.push(Object.freeze({
-        at, op: 'REC', site: 'Paradigm', stance: 'Composing', cell: 'REC_Composing_Paradigm',
-        surpriseDelta: round(eWin - (mWin ?? 0)),        // the basis-defeat margin = cost to move back
-        rode: 'helix-misframe', reground: true,
-      }));
+    for (let r = 0; r < R; r++) {
+      if (win[r] == null || win[r + 1] == null) continue;
+      const hi = deriveNull(hist[r].slice(0, -1), { scale: 'linear', alpha });
+      const isHigh = Number.isFinite(hi) && win[r] > hi;
+      const holding = hist[r + 1].length >= 4 && win[r + 1] < median(hist[r + 1].slice(0, -1));
+      if (isHigh && holding && at - lastReground > window) {
+        for (let j = 0; j <= r; j++) anchor[j] = Math.max(0, (at - j) - order);
+        lastReground = at; regrounded = true;
+        recs.push(Object.freeze({
+          at, op: 'REC', site: 'Paradigm', stance: 'Composing', cell: 'REC_Composing_Paradigm',
+          rung: rungs[r], surpriseDelta: round(win[r] - win[r + 1]),
+          rode: 'helix-misframe', reground: true,
+        }));
+        break;
+      }
     }
 
     steps.push({
       at, unit: seq[at],
-      existenceBits: round(eBits),
-      moveBits: mBits == null ? null : round(mBits),
-      carrying, regrounded,
+      existenceBits: bits[0] == null ? null : round(bits[0]),
+      moveBits: bits[1] == null ? null : round(bits[1]),
+      rungBits: bits.map(b => (b == null ? null : round(b))),
+      carrying: rungs[carrying], regrounded,
     });
   }
 
-  const eAll = steps.map(s => s.existenceBits);
-  const mAll = steps.map(s => s.moveBits).filter(x => x != null);
+  const meanRung = (r) => { const v = steps.map(s => s.rungBits[r]).filter(x => x != null); return v.length ? round(mean(v)) : null; };
+  const carriedAbove0 = steps.some(s => s.carrying !== 'existence');
   return {
-    rungs,
-    steps,
-    recs,
+    rungs, steps, recs,
     summary: Object.freeze({
-      meanExistenceBits: round(mean(eAll)),
-      meanMoveBits: mAll.length ? round(mean(mAll)) : null,
+      meanExistenceBits: meanRung(0),
+      meanMoveBits: R >= 1 ? meanRung(1) : null,
+      rungBits: rungs.map((_, r) => meanRung(r)),
       recCount: recs.length,
-      // the diagnosis the flat predictor cannot make: a reframe is move-low while
-      // absolute-high; true noise is both high.
-      diagnosis: recs.length ? 'reframe(s) detected and re-grounded' :
-        (mAll.length && mean(mAll) >= mean(eAll) ? 'no reframe; move rung no better' : 'frame stable'),
+      diagnosis: recs.length ? 'reframe(s) detected and re-grounded'
+        : (carriedAbove0 ? 'a higher rung carries (a constant move/accel)' : 'frame stable'),
     }),
   };
 };
@@ -192,29 +205,36 @@ export const helixPredict = (seq, { order = 2, window = 3, alpha = 0.05 } = {}) 
 // the same move-grammar. Deterministic given `seed` (no Math.random — the workflow rule).
 export const helixGenerate = (seq, { order = 2, n = 16, seed = 1, start = null, rung = 'structure' } = {}) => {
   const numeric = isNumeric(seq);
+  const k = rungIndex(rung);
   let s = seed >>> 0;
   const rnd = () => { s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const draw = (ranked) => { const Z = ranked.reduce((a, r) => a + r.p, 0) || 1; let x = rnd() * Z; for (const r of ranked) { x -= r.p; if (x <= 0) return r.u; } return ranked[ranked.length - 1]?.u; };
 
-  if (rung === 'structure' && numeric) {
-    const moves = seq.slice(1).map((x, i) => x - seq[i]);
-    const mModel = countsOf(moves, order);
-    let cur = start != null ? start : seq[seq.length - 1];
-    let mctx = moves.slice(-order);
-    const out = [cur];
-    for (let k = 0; k < n; k++) {
-      const mv = draw(distOf(mModel, mctx, order));
-      cur = cur + mv;                          // the move applied to the frame
-      out.push(cur);
-      mctx = [...mctx, mv].slice(-order);
+  if (numeric && k >= 1) {
+    // Draw the k-th difference (the stationary rung) and INTEGRATE up k times, seeding
+    // each lower rung with its last observed value — generation by predicting the move
+    // (or the move-of-the-move) against the frame, then re-constituting the absolute.
+    const D = diffs(seq, k);
+    const model = countsOf(D[k], order);
+    let ctx = D[k].slice(-order);
+    const lasts = []; for (let j = 0; j < k; j++) lasts[j] = D[j][D[j].length - 1];
+    if (start != null) lasts[0] = start;                    // re-ground generation into a new frame
+    const out = [lasts[0]];
+    for (let step = 0; step < n; step++) {
+      const dk = draw(distOf(model, ctx, order));
+      const nd = new Array(k + 1); nd[k] = dk;
+      for (let j = k - 1; j >= 0; j--) nd[j] = lasts[j] + nd[j + 1];   // integrate accel→vel→pos
+      for (let j = 0; j <= k; j++) if (j < k) lasts[j] = nd[j];
+      out.push(nd[0]);
+      ctx = [...ctx, dk].slice(-order);
     }
     return out;
   }
-  // Existence rung fallback (or non-numeric): draw absolute units.
+  // Existence rung (k=0) or a non-numeric stream: draw absolute units.
   const eModel = countsOf(seq, order);
   let ctx = start != null ? [start] : seq.slice(-order);
   const out = [...ctx];
-  for (let k = 0; k < n; k++) {
+  for (let step = 0; step < n; step++) {
     const u = draw(distOf(eModel, ctx, order));
     out.push(u);
     ctx = [...ctx, u].slice(-order);
