@@ -34,12 +34,31 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0, cu
   const G = (id) => genders[L(id)] ?? genders[id] ?? 'n';
 
   // resolve the cursor (a label or an id) to an entity id, and build the frame predicate.
-  const cursorId = cursor == null ? null
-    : (label.has(cursor) ? cursor : [...label.entries()].find(([, lab]) => String(lab).toLowerCase() === String(cursor).toLowerCase())?.[0] ?? cursor);
+  // Match by id, then exact label, then a NAME WORD it contains ("Gregor" → "Gregor Samsa"),
+  // so a cursor on a given name finds the merged full-name entity.
+  const resolveCursor = () => {
+    if (cursor == null) return null;
+    if (label.has(cursor)) return cursor;
+    const cl = String(cursor).toLowerCase();
+    for (const [id, lab] of label) if (String(lab).toLowerCase() === cl) return id;
+    for (const [id, lab] of label) if (String(lab).toLowerCase().split(/\s+/).includes(cl)) return id;
+    return cursor;
+  };
+  const cursorId = resolveCursor();
   const inFrame = frame == null ? () => true
     : typeof frame === 'function' ? frame
     : (Array.isArray(frame) ? (e) => frame.includes(e.relType) : (e) => e.relType === frame);
   const onCursor = cursorId == null ? () => true : (e) => e.src === cursorId || e.tgt === cursorId;
+
+  // Honour bond-level REANALYSIS (reanalyze.js): a REC(kind:'reanalysis') in the log supersedes
+  // a mis-bond and forms the corrected one. So a garden-path mis-bond is not spoken — in its
+  // place we say the original verb (demoted to a co-predicate) and the orphaned verb as the
+  // main predicate. With no reanalysis REC on the log this map is empty → unchanged.
+  const superseded = new Map();   // "src|via|tgt" → { demotedVia, formed:{src,via} }
+  for (const e of events) {
+    if (e.op === 'REC' && e.kind === 'reanalysis' && e.supersedes && e.forms)
+      superseded.set(`${e.supersedes.src}|${e.supersedes.via}|${e.supersedes.tgt}`, { demotedVia: e.supersedes.via, formed: e.forms });
+  }
 
   // coupling rides on `w` for a sub-unit (held-weak) bond and is absent on a firm one — the
   // same convention linkInventory reads (firm → 1). `minCoupling` lets the generator SPEAK
@@ -59,6 +78,16 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0, cu
     const coupling = e.coupling != null ? e.coupling : (e.w != null ? e.w : 1);
     if (coupling < minCoupling) continue;
     if (!inFrame(e) || !onCursor(e)) continue;            // cursor + frame select WHAT is said
+    const sup = superseded.get(`${e.src}|${e.via}|${e.tgt}`);
+    if (sup) {
+      // the garden path resolves into a reduced relative: the orphaned verb is the MAIN
+      // predicate, the original verb a relative-clause MODIFIER of the subject — "Beauty, who
+      // ran, fell." Which bond subordinates is the REC's `demoted` tag (measured), not a rule.
+      plan.push({ subj: { id: sup.formed.src, gender: G(sup.formed.src), name: L(sup.formed.src) },
+        verb: sup.formed.via, relative: { verb: sup.demotedVia } });
+      if (plan.length >= max) break;
+      continue;
+    }
     const objIsEntity = label.has(e.tgt);
     plan.push({
       subj: { id: e.src, gender: G(e.src), name: L(e.src) },

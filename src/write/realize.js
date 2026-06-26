@@ -58,7 +58,8 @@ export const realize = (plan, { gamma = 0.7, enactment = 'voice', given = null }
       j++;
     }
     if (preds.length > 1) aggRule.hold();    // a clean compound read back fine
-    sentences.push(`${cap(head.subj)} ${conjoin(preds)}.`);
+    // a reduced-relative modifier attaches to the subject, once, before the predicate(s).
+    sentences.push(`${cap(head.subj)}${head.relText || ''} ${conjoin(preds)}.`);
     i = j;
   }
   return { text: sentences.join(' '), sentences, units: r.units, given: r.given, self: r.self };

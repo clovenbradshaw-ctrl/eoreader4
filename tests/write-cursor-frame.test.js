@@ -35,6 +35,14 @@ test('cursor and frame compose', () => {
   assert.ok(!v.includes('saw') && !v.includes('feared'), 'neither off-frame nor off-cursor bonds');
 });
 
+test('a cursor on a given name finds the merged full-name entity', () => {
+  const doc = parseText('Gregor Samsa woke. Gregor Samsa saw Grete. Grete brought Gregor Samsa milk.', { docId: 's' });
+  const plan = conceptToPlan(doc, { cursor: 'Gregor' });   // entity label is "Gregor Samsa"
+  assert.ok(plan.length >= 1, 'the cursor resolves "Gregor" to "Gregor Samsa"');
+  assert.ok(plan.every(p => p.subj.name.includes('Gregor') || (p.obj && String(p.obj.name || p.obj).includes('Gregor'))),
+    'every said bond touches the cursor entity');
+});
+
 test('no cursor/frame is the full telling (byte-identical default)', () => {
   const doc = parseText(SCENE, { docId: 's' });
   assert.equal(conceptToPlan(doc).length, conceptToPlan(doc, { cursor: null, frame: null }).length);

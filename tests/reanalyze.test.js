@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/index.js';
-import { reanalyze } from '../src/surfer/index.js';
+import { reanalyze, applyReanalysis } from '../src/surfer/index.js';
+import { speakConcept, inferGenders } from '../src/write/index.js';
 
 // Bond-level reanalysis: the garden-path recovery as the surprisal → re-retrieve →
 // reconsolidate loop, one level below the basis REC. Composes the verb oracle, γ-recency
@@ -40,6 +41,29 @@ test('the reconsolidation is an auditable REC event (the mis-bond is left on the
 test('no false reanalysis: a real entity in the object slot is not a garden path', () => {
   const doc = parseText('Beauty saw Grete.', { docId: 'c' });
   assert.equal(reanalyze(doc, { isVerb }).count, 0, 'an entity object is fine — no spurious reanalysis');
+});
+
+test('applying the reanalysis changes what is SPOKEN — the garden path resolves in the output', () => {
+  const doc = parseText('Beauty ran past the barn fell.', { docId: 'g' });
+  const before = speakConcept(doc, { genders: inferGenders(doc) }).text;
+  assert.match(before, /ran fell/, 'before: the mis-bond is spoken (fell as an object of ran)');
+
+  const n = applyReanalysis(doc, { isVerb });
+  assert.equal(n, 1, 'one reconsolidation appended to the log');
+
+  const after = speakConcept(doc, { genders: inferGenders(doc) }).text;
+  assert.doesNotMatch(after, /ran fell/, 'after: the mis-bond is no longer spoken');
+  assert.match(after, /\bfell\b/, 'fell is now a predicate, not an object');
+  // append-only: the REC is on the trail AND the mis-bond is still there to audit
+  assert.ok(doc.log.snapshot().some(e => e.op === 'REC' && e.kind === 'reanalysis'), 'the reconsolidation is recorded');
+  assert.ok(doc.log.snapshot().some(e => e.via === 'ran' && e.tgt === 'fell'), 'the mis-bond is not deleted');
+});
+
+test('no garden path → applyReanalysis is a no-op and the telling is unchanged', () => {
+  const doc = parseText('Beauty saw Grete.', { docId: 'c' });
+  const before = speakConcept(doc, { genders: inferGenders(doc) }).text;
+  assert.equal(applyReanalysis(doc, { isVerb }), 0);
+  assert.equal(speakConcept(doc, { genders: inferGenders(doc) }).text, before, 'unchanged');
 });
 
 test('re-retrieval is γ-recency: the orphaned verb takes the most recently available subject', () => {

@@ -21,6 +21,7 @@
 
 import { fromEnactor, fromPerceiver, reenter, isMine, isReadBackOfPriorSelf, canWitness } from '../core/index.js';
 import { createRule } from './eva.js';
+import { toPast } from './morph.js';
 
 const PRONOUN = Object.freeze({
   m: { subj: 'he', obj: 'him', poss: 'his' },
@@ -87,7 +88,13 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
     const resolvable = !!pron && reader.resolvesTo(ent.id, ent.gender);
     if (pron) (resolvable ? pronRule.hold() : pronRule.break());   // EVA: read the choice back
     const usePronoun = pron && pronRule.on && resolvable;          // suppressed once the rule defeats
-    const surface = usePronoun ? pron : ent.name;
+    // Determiner DERIVED from givenness (Gundel's hierarchy), not a hand-rule: a common-noun
+    // referent the reader has already met is DEFINITE ("the"), a fresh one INDEFINITE ("a").
+    // We read givenness off the reader's own field — measured state, closed-class scaffold
+    // only. Proper names (capitalised) and pronouns take no determiner, so the default
+    // (proper-named) telling is byte-identical; only catalyst-admitted common nouns get one.
+    const given = reader.field.has(ent.id);
+    const surface = usePronoun ? pron : determine(ent.name, given);
     reader.note(ent.id, ent.gender, ent.name);               // now E is the most recent
     return { surface, form: usePronoun ? 'pronoun' : 'name', id: ent.id, fieldAfter: reader.snapshot() };
   };
@@ -95,8 +102,19 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
   for (const p of plan) {
     const s = refer(p.subj, 'subj');
     const o = p.obj && p.obj.id != null ? refer(p.obj, 'obj') : null;
+    // Only a catalyst-vetted common-noun ENTITY (with an id) takes a derived determiner; a
+    // bare np-string object is left alone — it may be a mass noun ("milk"), a plural, or a
+    // mis-parse the reanalysis will fix ("fell"), none of which take an indefinite article.
     const objText = o ? o.surface : (typeof p.obj === 'string' ? p.obj : '');
-    const text = `${cap(s.surface)} ${p.verb}${objText ? ' ' + objText : ''}.`;
+    // verbs are realised in the narrative past (morph.js) — the source hands a bare/gerund
+    // via when it stripped an auxiliary ("would accept" → "accept"); an already-past form is
+    // kept. A reduced-relative modifier (from reanalysis): the relativizer is DERIVED from
+    // animacy — "who" for an evidenced person (m/f/p), "that" otherwise — the only scaffold.
+    const verb = toPast(p.verb);
+    const relText = p.relative
+      ? `, ${(p.subj.gender === 'm' || p.subj.gender === 'f' || p.subj.gender === 'p') ? 'who' : 'that'} ${toPast(p.relative.verb)},`
+      : '';
+    const text = `${cap(s.surface)}${relText} ${verb}${objText ? ' ' + objText : ''}.`;
     units.push(Object.freeze({
       text, subjForm: s.form, objForm: o?.form ?? null,
       // me-ness: the writer's own output enters through the ENACTOR door.
@@ -104,7 +122,7 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
       readerField: s.fieldAfter,
       // the recomposable pieces — so a grammatical-encoding stage (realize.js) can join
       // adjacent same-subject clauses without re-deciding the referring forms.
-      parts: Object.freeze({ subjId: p.subj.id, subj: s.surface, verb: p.verb, obj: objText }),
+      parts: Object.freeze({ subjId: p.subj.id, subj: s.surface, verb, obj: objText, relText }),
     }));
   }
 
@@ -120,3 +138,15 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
 };
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// Attach a determiner DERIVED from givenness, but only to a common-noun referent — a
+// lowercase-initial head (proper names are capitalised; the common-noun catalyst lowercases).
+// Given → definite "the"; new singular → indefinite "a/an"; new plural → bare (English has no
+// indefinite plural article). Closed-class scaffold only; the choice is the reader's measured
+// givenness, not a hand-rule. A name/pronoun/already-determined phrase passes through unchanged.
+const determine = (noun, given) => {
+  if (typeof noun !== 'string' || !/^[a-z]/.test(noun) || /^(the|a|an|his|her|its|their|my|your)\b/.test(noun)) return noun;
+  if (given) return `the ${noun}`;
+  if (/[^s]s$|[^aeiou]s$/.test(noun) && !/ss$/.test(noun)) return noun;   // plural → bare when new
+  return `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`;
+};
