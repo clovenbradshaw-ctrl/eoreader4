@@ -172,3 +172,25 @@ export const everyThoughtIsMine = (train) =>
 export const worthSayingAloud = (thought, { limit = 3 } = {}) =>
   (thought.voids || []).slice(0, limit).map((v) =>
     Object.freeze({ figure: v.figure, question: `What of ${v.figure}?`, band: v.band, activation: v.activation }));
+
+// resolveVoids — wake on world (idle.js I4). Thinking POSES an open question but cannot
+// answer it: a thought is reafference, it never witnesses (the firewall). Only EXAFFERENCE —
+// a fresh document, the perceiver door — can close it. So when a new doc arrives, this checks
+// each open void against it: a figure the train kept hearing about, that the new doc now
+// CHARACTERIZES (makes act, as a bond subject), is resolved — witnessed by the world, not by
+// the self. The ones the new doc does not touch stay open. This is the active-inference close:
+// the void was a conjecture about where information would pay; the world confirms it or not.
+//   thought   a prior train's result (its `voids` are the open questions)
+//   doc       the freshly arrived document (exafference)
+// Returns { closed, remaining, resolved, open } — closed carry a perceiver witness; remaining
+// are still the self's open questions.
+export const resolveVoids = (thought, doc) => {
+  const acts = characterized(doc);
+  const closed = [];
+  const remaining = [];
+  for (const v of thought.voids || []) {
+    if (acts.has(String(v.figure).toLowerCase())) closed.push(v);
+    else remaining.push(v);
+  }
+  return Object.freeze({ closed, remaining, resolved: closed.length, open: remaining.length });
+};

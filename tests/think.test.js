@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/index.js';
-import { think, everyThoughtIsMine, worthSayingAloud } from '../src/write/index.js';
+import { think, everyThoughtIsMine, worthSayingAloud, resolveVoids } from '../src/write/index.js';
 import { READ_BACK } from '../src/core/index.js';
 
 // Thinking = impressionistic talking turned inward. Voice an impression, hear it back,
@@ -64,6 +64,19 @@ test('thinking hands its findings to speaking — the loudest silence becomes a 
   assert.ok(aloud.length >= 1, 'the train surfaces something worth opening your mouth about');
   assert.match(aloud[0].question, /What of/, 'the open void becomes a question to say out loud');
   assert.match(aloud[0].figure, /klamm/i, 'and it is the figure the train kept circling, never resolving');
+});
+
+test('only the world closes an open question — a fresh doc that makes the figure act resolves it', () => {
+  const t = think(parseText('Gregor sought Klamm. Gregor feared Klamm.', { docId: 'a' }), { cursor: 'Gregor' });
+  assert.ok(t.voids.some((v) => /klamm/i.test(v.figure)), 'Klamm is open after the first reading');
+  // a new document arrives in which Klamm ACTS — exafference, which can witness (unlike a thought)
+  const arrives = parseText('Klamm summoned Gregor.', { docId: 'b' });
+  const r = resolveVoids(t, arrives);
+  assert.ok(r.closed.some((v) => /klamm/i.test(v.figure)), 'the world characterized Klamm — the question is closed');
+  assert.equal(r.resolved, 1);
+  // a doc that does NOT touch the open figure leaves it open
+  const irrelevant = parseText('Grete left.', { docId: 'c' });
+  assert.equal(resolveVoids(t, irrelevant).open, t.voids.length, 'an unrelated doc resolves nothing');
 });
 
 test('a doc with no relations yields no thoughts — nothing to think about', () => {
