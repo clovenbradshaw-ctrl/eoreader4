@@ -80,7 +80,7 @@ answer uses — stay byte-identical. Lens-conditioned arrest on the structural
 basis ("ride forward inside the dominant reading") is the follow-on, gated and
 bench-validated before it changes the reading by default.
 
-### 3. Close the surf's own verdicts into control
+### 3. Close the surf's own verdicts into control — stance veto + re-read DONE
 
 The surf measures actionable signals and logs them to telemetry:
 
@@ -90,14 +90,17 @@ The surf measures actionable signals and logs them to telemetry:
   (`stance-reserve`): on a pointed (`answer`) question, a Ground-grain commit is
   surfaced to the user as a thin-grounding flag, the surfer's own guard made
   visible. Pure wiring — the measurement already existed.
-- **paradigm `under-read` → re-read (staged; the loop now exists).** The verdict
-  means "the basis still commutes → stay at the Lens, *retrieve more*"
-  (`surf.js:286-288`). PR #127 landed exactly that loop as `inquire`
-  (`write/think.js`): read more of the source *on the engine's own open question*,
-  fold it in, repeat, self-terminating — embedder-free, dependency-injected. So
-  what remains is only the **trigger**: route the surf's `under-read` verdict (or a
-  `stance-reserve` / a think-void) into `inquire` to widen before answering. The
-  mechanism is built; the wiring is the work.
+- **stance-reserve → in-turn re-read — DONE (opt-in).** The active-inference loop,
+  brought in-turn (`src/turn/reread.js`): when the surf could not SETTLE on a figure
+  at the peak (the `stance-reserve` guard) on a pointed question, the `fold` stage
+  reads more of the document on the figure the reading circled and folds again from
+  the wider evidence — bounded to one extra pass, dependency-injected, audited in
+  `fold.reread`. Armed by `runTurn({ reread: true })`; **off by default, byte-
+  identical** when off (the trigger fires only on a measured under-settle, and the
+  default-on flip waits on a bench path that exercises the turn pipeline — `surfaceNote`
+  bypasses it today). The standalone cross-source version is PR #127's `inquire`; the
+  surf's `under-read` paradigm verdict can join `stance-reserve` as a trigger once the
+  structural paradigm pass lands.
 - **lensEntropy (staged).** The von Neumann entropy is the NPOV scalar *and* the
   predictive uncertainty — a calibrated confidence the answer could carry.
 
