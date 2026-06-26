@@ -53,6 +53,12 @@ export { OPS, RELTYPES, operatorProfiles, structuralActivations, structuralHoriz
 // (deriveNull over random same-size groups) — `structureGrows` is the empirical answer to
 // whether the structural basis can learn distinctions or VOX must push semantics down.
 export { linkInventory, untypedVias, growLinkTypes, createLinkLearner } from './learn-links.js';
+// Meaning is not extracted — it is conjectured by a self and refuted by what follows. The
+// conjecturer holds, for a relation, the inferential role it GUESSES (posited as a
+// prediction, owned through the enactor door so it cannot witness itself, overturned when
+// the exafferent world refutes it). Fallible, owned, perspectival — what extraction cannot
+// be. The empirical complement to learn-links: structure carries form, the self conjectures sense.
+export { createConjecturer } from './conjecture.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';
