@@ -20,16 +20,21 @@ import { realize } from './realize.js';
 // Starts at the most-connected entity (the warmest hub of the scene) and walks the
 // highest-coupling outgoing relation, following the bond to the next entity — a
 // salience-guided walk over the concept, not a replay of the source.
-export const conceptToPlan = (doc, { genders = {}, max = 12 } = {}) => {
+export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0 } = {}) => {
   const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
   const label = new Map();
   for (const e of events) if (e.op === 'INS' && e.id != null && !label.has(e.id)) label.set(e.id, e.label);
   const L = (id) => label.get(id) ?? id;
   const G = (id) => genders[L(id)] ?? genders[id] ?? 'n';
 
+  // coupling rides on `w` for a sub-unit (held-weak) bond and is absent on a firm one — the
+  // same convention linkInventory reads (firm → 1). `minCoupling` lets the generator SPEAK
+  // ONLY WHAT IT HOLDS: with a floor, a merely-glimpsed relation is not said. Default 0
+  // speaks everything (byte-identical), so the floor is opt-in.
   const edges = events
     .filter(e => (e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null)
-    .map(e => ({ from: e.src, to: e.tgt, via: e.via, coupling: e.coupling || 0 }));
+    .map(e => ({ from: e.src, to: e.tgt, via: e.via, coupling: e.coupling != null ? e.coupling : (e.w != null ? e.w : 1) }))
+    .filter(e => e.coupling >= minCoupling);
   if (!edges.length) return [];
 
   const deg = {};
@@ -60,8 +65,8 @@ export const conceptToPlan = (doc, { genders = {}, max = 12 } = {}) => {
 // text + the choppy per-clause units + per-unit provenance + the read-back self), so the
 // generated saying is self-authored (me-ness) and its pronouns resolve back to the concept
 // (validated by reading forward). Pass { aggregate:false } for the unjoined clause stream.
-export const speakConcept = (doc, { genders = {}, max = 12, gamma = 0.7, enactment = 'voice', aggregate = true } = {}) => {
-  const plan = conceptToPlan(doc, { genders, max });
+export const speakConcept = (doc, { genders = {}, max = 12, gamma = 0.7, enactment = 'voice', aggregate = true, minCoupling = 0 } = {}) => {
+  const plan = conceptToPlan(doc, { genders, max, minCoupling });
   const render = aggregate ? realize : writeReferring;
   return { plan, ...render(plan, { gamma, enactment, given: doc }) };
 };

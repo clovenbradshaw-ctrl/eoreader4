@@ -38,9 +38,30 @@ reading the 3400-book Gutenberg corpus. It holds only conventions:
 
 The engine stays pure: it ships only its hand-seeded conventions
 (`core/conventions` `SEED_RELATION_TYPES`), byte-identical. This file is the corpus-grounded
-companion, as data. Note that the `relation` convention kind is currently *recorded* by the
-parser but not *read* as a gate, so loading this file does not yet change reading behaviour;
-wiring the corpus prior into the recurrence gate is a deliberate, separate step.
+companion, as data.
+
+## Using it as a prior (opt-in)
+
+`corpusRelationsInherit(json)` turns the file into an `inherit` array for
+`createConventions`, carried into a reading as `parseText(text, { conventionsOpts: { inherit } })`.
+The effect lands in one place — the recurrence gate (`perceiver/parse/pipeline.js`): a
+relation verb met only **once** in a short new document is normally held weak (×0.5
+coupling) until it recurs, but a corpus-attested verb is held **firm** instead, because the
+corpus already watched it bond hundreds of times. With no prior, `conventions.isRelation` is
+empty there and the gate is byte-identical.
+
+The generation effect is direct. `speakConcept(doc, { minCoupling })` lets the generator
+**speak only what it holds firmly**. On a fresh scene whose relations are each glimpsed once
+(`Anna saw Ben. Ben left Anna. Anna gave Maria.`):
+
+- **without** the prior, at `minCoupling: 0.75`, the generator is **silent** — nothing is
+  held firmly enough to say;
+- **with** the prior, the same verbs are firm, so the whole scene is spoken.
+
+The corpus changed *what the self can confidently say*, and gave it no content to say it
+with — it never said "Anna saw Ben", only that "saw" is a relation worth holding. The
+conjecture and the commit stay the self's (the enactor gate); the corpus is only the HOW it
+brings to the page.
 
 ## The finding the corpus made plain
 

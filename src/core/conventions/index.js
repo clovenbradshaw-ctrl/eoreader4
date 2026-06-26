@@ -7,3 +7,6 @@ export { createConventions, SEED_SPEECH, SEED_ABBREVIATIONS,
          SEED_CONJUNCTION, SEED_FIELD_LABEL, SEED_DEMONYM, SEED_CALENDAR,
          SEED_NONPERSON } from './ledger.js';
 export { induceAttributionVerbs }  from './induce.js';
+// Corpus conventions as an inheritable prior — carry the harvested relation vocabulary (the
+// HOW) into a new reading, so a corpus-attested verb met once is held firm, not weak. Opt-in.
+export { corpusRelationsInherit } from './corpus.js';

@@ -485,7 +485,11 @@ export const createParser = ({
         // reveal's verb ("listed") is single by nature, and the edge's warrant is the
         // construction, not the verb's recurrence — so it is not held weak and dropped
         // from the firm graph the bridge channel reads.
-        const recurrent = (viaCount.get(edge.via) || 1) >= 2 || coord === true;
+        // A corpus-attested relation verb (inherited prior) counts as recurrent even on a
+        // single sighting: the corpus already saw it bond hundreds of times, so a new short
+        // document need not re-earn it. With no corpus prior, isRelation is empty here and
+        // this OR changes nothing — reading stays byte-identical.
+        const recurrent = (viaCount.get(edge.via) || 1) >= 2 || coord === true || conventions.isRelation(edge.via);
         let factor = recurrent ? 1 : 0.5;
         // An NP referent rides the SAME recurrence gate as the verb and the figure: a
         // common noun seen once across the document is held weak, never dropped — the
