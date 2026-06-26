@@ -37,14 +37,35 @@ const propsOf = (text) => {
   return props;
 };
 
-// classifyProvenance(answer, spans) → one verdict per proposition of the answer.
+// the document's own propositions, read off its graph (full cross-sentence coref intact),
+// optionally restricted to the sentences actually read. This is the right ground truth for a
+// doc-grounded answer — re-parsing spans in isolation loses the coref the graph already has.
+const docPropositions = (doc, spanIdxs = null) => {
+  const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
+  const label = new Map();
+  for (const e of events) if (e.op === 'INS' && e.id != null && !label.has(e.id)) label.set(e.id, String(e.label).toLowerCase());
+  const L = (id) => label.get(id) ?? String(id).toLowerCase();
+  const allow = spanIdxs ? new Set(spanIdxs) : null;
+  const props = [];
+  for (const e of events) {
+    if ((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null && (!allow || allow.has(e.sentIdx)))
+      props.push({ subj: L(e.src), via: String(e.via).toLowerCase(), obj: e.tgt != null ? L(e.tgt) : null });
+  }
+  return props;
+};
+
+// classifyProvenance(answer, source) → one verdict per proposition of the answer.
+//   source   a string[] of read spans (re-parsed), OR { doc, spanIdxs?, spans? } to judge
+//            against the document's OWN graph (coref intact) — the correct ground truth for
+//            an answer generated from a doc.
 //   verbatim   the answer clause appears (subj, relation, object together) in a read span.
-//   grounded   the same two figures stand in a relation in a read span's propositions —
-//              propositional correspondence, the meaning witnessed.
+//   grounded   the same two figures stand in a relation among the source propositions.
 //   fabricated neither — asserts a proposition nothing read supports.
-export const classifyProvenance = (answer, spans = []) => {
+export const classifyProvenance = (answer, source = []) => {
+  const fromDoc = source && !Array.isArray(source) && source.doc;
+  const spans = Array.isArray(source) ? source : (source.spans || source.doc?.sentences || []);
   const spanLC = spans.map((s) => String(s).toLowerCase());   // for the verbatim substring check only
-  const docProps = spans.flatMap(propsOf);                    // parse in original case so entities admit
+  const docProps = fromDoc ? docPropositions(source.doc, source.spanIdxs) : spans.flatMap(propsOf);
   // figure pairs are ORDER-INSENSITIVE — "the same two figures stand in a relation" holds
   // whichever way the writer turned it (a reworded or role-swapped paraphrase still grounds).
   const pairKey = (a, b) => [a, b].sort().join('|');

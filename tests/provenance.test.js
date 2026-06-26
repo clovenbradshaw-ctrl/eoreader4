@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { classifyProvenance } from '../src/ground/index.js';
+import { parseText } from '../src/perceiver/parse/index.js';
 
 // A response is a sequence of propositions, each with its own grounding provenance —
 // verbatim (lifted), grounded (the same figures stand in the same relation a span asserts),
@@ -37,6 +38,14 @@ test('a reworded proposition over the same two figures is grounded, not fabricat
 test('a proposition about figures nothing read mentions is fabricated', () => {
   const c = classifyProvenance('Ptolemy charted the comets.', SPANS);   // comets in no span
   assert.equal(c.propositions[0].grounding, 'fabricated');
+});
+
+test('judged against the doc GRAPH (coref intact), a graph-faithful answer is fully witnessed', () => {
+  const doc = parseText('Gregor Samsa woke. Gregor Samsa saw Grete. Gregor Samsa trusted Grete.', { docId: 'm' });
+  const faithful = classifyProvenance('Gregor Samsa saw Grete.', { doc });
+  assert.equal(faithful.summary.fabricated, 0, 'an answer drawn from the graph fabricates nothing');
+  const offGraph = classifyProvenance('Gregor Samsa met Klamm.', { doc });   // Klamm not in the doc
+  assert.equal(offGraph.propositions.find(p => p.via === 'met')?.grounding, 'fabricated');
 });
 
 test('one response, mixed provenance — the fabricated part is isolated, the witnessed ride', () => {

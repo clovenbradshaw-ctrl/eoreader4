@@ -34,8 +34,17 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0, cu
   const G = (id) => genders[L(id)] ?? genders[id] ?? 'n';
 
   // resolve the cursor (a label or an id) to an entity id, and build the frame predicate.
-  const cursorId = cursor == null ? null
-    : (label.has(cursor) ? cursor : [...label.entries()].find(([, lab]) => String(lab).toLowerCase() === String(cursor).toLowerCase())?.[0] ?? cursor);
+  // Match by id, then exact label, then a NAME WORD it contains ("Gregor" → "Gregor Samsa"),
+  // so a cursor on a given name finds the merged full-name entity.
+  const resolveCursor = () => {
+    if (cursor == null) return null;
+    if (label.has(cursor)) return cursor;
+    const cl = String(cursor).toLowerCase();
+    for (const [id, lab] of label) if (String(lab).toLowerCase() === cl) return id;
+    for (const [id, lab] of label) if (String(lab).toLowerCase().split(/\s+/).includes(cl)) return id;
+    return cursor;
+  };
+  const cursorId = resolveCursor();
   const inFrame = frame == null ? () => true
     : typeof frame === 'function' ? frame
     : (Array.isArray(frame) ? (e) => frame.includes(e.relType) : (e) => e.relType === frame);
