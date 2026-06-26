@@ -53,12 +53,13 @@ export { OPS, RELTYPES, operatorProfiles, structuralActivations, structuralHoriz
 // (deriveNull over random same-size groups) — `structureGrows` is the empirical answer to
 // whether the structural basis can learn distinctions or VOX must push semantics down.
 export { linkInventory, untypedVias, growLinkTypes, createLinkLearner } from './learn-links.js';
-// Meaning is not extracted — it is conjectured by a self and refuted by what follows. The
-// conjecturer holds, for a relation, the inferential role it GUESSES (posited as a
-// prediction, owned through the enactor door so it cannot witness itself, overturned when
-// the exafferent world refutes it). Fallible, owned, perspectival — what extraction cannot
-// be. The empirical complement to learn-links: structure carries form, the self conjectures sense.
-export { createConjecturer } from './conjecture.js';
+// Meaning is not extracted — it is conjectured by a self and refuted by what follows. That
+// mechanism already exists, fully, in the enactor's commit loop: the gate PROPOSES a
+// candidate proposition (the conjecture), EVA/REC REFUTES it against the grounded basis and
+// the deriveNull line (fluent hallucination cannot collapse; VOID is the conscience), and
+// the SELF is the closed loop drawn by the efference copy + the one monitor + core/self.
+// learn-links/corpus-relations measure what CAN be extracted as shared convention (the HOW,
+// only form); the sense is conjectured live by that existing self — not by anything here.
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';
