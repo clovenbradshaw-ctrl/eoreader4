@@ -88,6 +88,35 @@ const els = {
 
 const setStatus = (s) => { els.status.textContent = s; };
 
+// Ingestion feedback. A large document used to freeze the page silently behind a
+// synchronous parse; now the parse yields and reports, and this paints a live bar in
+// the dropzone (label + percentage) so the wait is legible. Built on demand, removed
+// when the document lands — the dropzone returns to its plain prompt.
+const setIngestProgress = (label, pct) => {
+  let bar = els.dropzone.querySelector('.ingest-progress');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'ingest-progress';
+    bar.innerHTML = '<div class="ingest-label"></div>' +
+                    '<div class="ingest-track"><div class="ingest-fill"></div></div>';
+    els.dropzone.appendChild(bar);
+    els.dropzone.classList.add('ingesting');
+  }
+  bar.querySelector('.ingest-label').textContent = label;
+  const fill = bar.querySelector('.ingest-fill');
+  if (pct == null) {                       // indeterminate — phase running, no count yet
+    fill.classList.add('indeterminate');
+    fill.style.width = '100%';
+  } else {
+    fill.classList.remove('indeterminate');
+    fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  }
+};
+const endIngest = () => {
+  els.dropzone.classList.remove('ingesting');
+  els.dropzone.querySelector('.ingest-progress')?.remove();
+};
+
 // Load the currently selected backend, idempotently. Auto-runs on boot and
 // whenever the backend select changes — the user never has to wait for the
 // first message to start the download.
@@ -303,9 +332,32 @@ const renderDocChips = () => {
 };
 
 const ingest = async (file) => {
-  setStatus('parsing…');
+  const name = (typeof file === 'string' ? null : file?.name) || 'document';
+  const sizeKB = (typeof file !== 'string' && file?.size) ? Math.round(file.size / 1024) : null;
+  const sizeTag = sizeKB != null ? ` · ${sizeKB >= 1024 ? (sizeKB / 1024).toFixed(1) + ' MB' : sizeKB + ' KB'}` : '';
+  setStatus(`reading ${name}${sizeTag}…`);
+  setIngestProgress(`reading ${name}${sizeTag}…`, null);   // indeterminate until the parse reports
   const t0 = performance.now();
-  const doc = await ingestText(file);
+
+  let doc;
+  try {
+    // The parse now yields between chunks and reports as it goes (organs/in/text.js →
+    // pipeline.js), so a large document streams a percentage in instead of freezing.
+    doc = await ingestText(file, {
+      onProgress: ({ phase, done, total }) => {
+        if (phase !== 'parse') return;
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        const msg = `parsing ${name} — ${pct}% (${done.toLocaleString()}/${total.toLocaleString()} sentences)`;
+        setIngestProgress(msg, pct);
+        setStatus(msg);
+      },
+    });
+  } catch (err) {
+    endIngest();
+    setStatus(`ingest failed for ${name}: ${err?.message || err}`);
+    return;
+  }
+
   // Keep document ids unique so two files with the same name stay distinct (their
   // referents are namespaced by this id in the composite).
   let id = doc.docId, n = 2;
@@ -319,9 +371,10 @@ const ingest = async (file) => {
 
   const t1 = performance.now();
   const g = doc.projectGraph();
-  setStatus(`parsed: ${doc.sentences.length} sentences, ${doc.log.length} events, ` +
+  const summary = `parsed ${name}: ${doc.sentences.length.toLocaleString()} sentences, ${doc.log.length.toLocaleString()} events, ` +
     `${g.entities.size} figures, ${g.edges.length} links, ${Math.round(t1 - t0)}ms · ` +
-    `${STATE.docs.size} doc${STATE.docs.size > 1 ? 's' : ''} loaded`);
+    `${STATE.docs.size} doc${STATE.docs.size > 1 ? 's' : ''} loaded`;
+  setStatus(summary);
 
   // Semantic site-role pass — chrome by role, not a list. Marks off-distribution
   // figure-less units as sites (DEF role=site) so retrieval skips furniture.
@@ -331,14 +384,24 @@ const ingest = async (file) => {
   // a stronger embedder sharpens the judgement.
   const capable = STATE.embedder?.id && STATE.embedder.id !== 'hash-embed';
   if (capable && doc.sentences.length > 20) {
+    setIngestProgress(`reading roles in ${name}…`, null);
     try {
-      const sites = await markSites(doc, STATE.embedder);
+      // Embedding a large document is the other slow phase — report it the same way
+      // (vectors land incrementally) so the wait stays legible past the parse.
+      const sites = await markSites(doc, STATE.embedder, 0.16, ({ done, total }) => {
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        const msg = `reading roles in ${name} — ${pct}% (${done.toLocaleString()}/${total.toLocaleString()})`;
+        setIngestProgress(msg, pct);
+        setStatus(msg);
+      });
       if (sites.length && STATE.doc?.docId === id) {
         markSiteSentences(els.docView, sites);
         renderLog(doc, els.logView, { onSelectSentence: selectSentence });
       }
     } catch { /* role pass is best-effort */ }
+    setStatus(summary);
   }
+  endIngest();
 };
 
 // Tabs: Text · Graph · Log share the document pane. The reading cursor is
