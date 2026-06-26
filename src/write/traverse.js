@@ -17,15 +17,29 @@ import { writeReferring } from './refer.js';
 import { realize } from './realize.js';
 
 // conceptToPlan — traverse the held relation graph into an ordered proposition plan.
-// Starts at the most-connected entity (the warmest hub of the scene) and walks the
-// highest-coupling outgoing relation, following the bond to the next entity — a
-// salience-guided walk over the concept, not a replay of the source.
-export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0 } = {}) => {
+//
+// Two knobs make the SAME graph yield different tellings — the honest form of novelty (the
+// generator recombines and re-frames; it never fabricates a fact the graph does not hold):
+//   cursor  the entity in focus — say only what it touches (its local subgraph). Moving the
+//           cursor re-centres the telling on a different participant.
+//   frame   the lens on the relations — a relType bucket (or set, or predicate). Say only the
+//           bonds that fall under it, so the same scene told "through perception" and "through
+//           motion" are different texts. The frame is the active reading lens, run forward.
+// Both are SELECTION (what to say); the arrow of time still fixes ORDER (when). They compose.
+export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0, cursor = null, frame = null } = {}) => {
   const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
   const label = new Map();
   for (const e of events) if (e.op === 'INS' && e.id != null && !label.has(e.id)) label.set(e.id, e.label);
   const L = (id) => label.get(id) ?? id;
   const G = (id) => genders[L(id)] ?? genders[id] ?? 'n';
+
+  // resolve the cursor (a label or an id) to an entity id, and build the frame predicate.
+  const cursorId = cursor == null ? null
+    : (label.has(cursor) ? cursor : [...label.entries()].find(([, lab]) => String(lab).toLowerCase() === String(cursor).toLowerCase())?.[0] ?? cursor);
+  const inFrame = frame == null ? () => true
+    : typeof frame === 'function' ? frame
+    : (Array.isArray(frame) ? (e) => frame.includes(e.relType) : (e) => e.relType === frame);
+  const onCursor = cursorId == null ? () => true : (e) => e.src === cursorId || e.tgt === cursorId;
 
   // coupling rides on `w` for a sub-unit (held-weak) bond and is absent on a firm one — the
   // same convention linkInventory reads (firm → 1). `minCoupling` lets the generator SPEAK
@@ -44,6 +58,7 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0 } =
     if (!((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null)) continue;
     const coupling = e.coupling != null ? e.coupling : (e.w != null ? e.w : 1);
     if (coupling < minCoupling) continue;
+    if (!inFrame(e) || !onCursor(e)) continue;            // cursor + frame select WHAT is said
     const objIsEntity = label.has(e.tgt);
     plan.push({
       subj: { id: e.src, gender: G(e.src), name: L(e.src) },
@@ -60,8 +75,8 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0 } =
 // text + the choppy per-clause units + per-unit provenance + the read-back self), so the
 // generated saying is self-authored (me-ness) and its pronouns resolve back to the concept
 // (validated by reading forward). Pass { aggregate:false } for the unjoined clause stream.
-export const speakConcept = (doc, { genders = {}, max = 12, gamma = 0.7, enactment = 'voice', aggregate = true, minCoupling = 0 } = {}) => {
-  const plan = conceptToPlan(doc, { genders, max, minCoupling });
+export const speakConcept = (doc, { genders = {}, max = 12, gamma = 0.7, enactment = 'voice', aggregate = true, minCoupling = 0, cursor = null, frame = null } = {}) => {
+  const plan = conceptToPlan(doc, { genders, max, minCoupling, cursor, frame });
   const render = aggregate ? realize : writeReferring;
   return { plan, ...render(plan, { gamma, enactment, given: doc }) };
 };
