@@ -108,13 +108,17 @@ const toneOf = (rho, dims) => {
   });
 };
 
-// structuralHorizon(doc | profiles, { k, relations, signs }) → the embedder-free
+// structuralHorizon(doc | profiles, { k, relations, signs, learner }) → the embedder-free
 // significance reading. Same shape as the embedding column (departure · tone · lenses ·
-// lensEntropy) but every number is operational. `relations` adds the relation-semantic
-// dimensions; `signs` lets a defeated reading subtract (contradiction-interferes ρ).
-export const structuralHorizon = (docOrProfiles, { k = 4, relations = false, signs = false } = {}) => {
+// lensEntropy) but every number is operational. `relations` adds the fixed relation-
+// semantic dimensions; `signs` lets a defeated reading subtract (contradiction-interferes
+// ρ); `learner` reads the document through the GROWN basis (operators + the types the
+// engine has learned for itself), so the reading is constituted partly through distinctions
+// it was not shipped with — the label-feedback loop, closed.
+export const structuralHorizon = (docOrProfiles, { k = 4, relations = false, signs = false, learner = null } = {}) => {
   let dims, profiles, sgnAll = null;
   if (Array.isArray(docOrProfiles?.[0])) { dims = OPS; profiles = docOrProfiles; }
+  else if (learner && typeof learner.activationsFor === 'function') { const s = learner.activationsFor(docOrProfiles); dims = s.dims; profiles = s.activations; }
   else if (relations) { const s = structuralActivations(docOrProfiles, { relations: true }); dims = s.dims; profiles = s.activations; if (signs) sgnAll = s.signs; }
   else { dims = OPS; profiles = operatorProfiles(docOrProfiles); }
 

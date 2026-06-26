@@ -52,7 +52,7 @@ export { OPS, RELTYPES, operatorProfiles, structuralActivations, structuralHoriz
 // closed vocabulary leaves untyped, and MEASURE whether structure alone carves each one
 // (deriveNull over random same-size groups) — `structureGrows` is the empirical answer to
 // whether the structural basis can learn distinctions or VOX must push semantics down.
-export { linkInventory, untypedVias, growLinkTypes } from './learn-links.js';
+export { linkInventory, untypedVias, growLinkTypes, createLinkLearner } from './learn-links.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';

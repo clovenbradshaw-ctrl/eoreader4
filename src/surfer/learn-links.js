@@ -117,6 +117,7 @@ export const growLinkTypes = (doc, { minCount = 3, alpha = 0.05, samples = 200 }
   const sampleFrom = (feats, k) => { if (feats.length < k) return null; const idx = []; const used = new Set(); let guard = 0; while (idx.length < k && guard++ < k * 20) { const i = (rand() * feats.length) | 0; if (!used.has(i)) { used.add(i); idx.push(i); } } return idx.map(i => feats[i]); };
 
   const cands = untypedVias(doc, { minCount });
+  const family = Math.max(2, cands.length);   // multiple-comparison correction over the candidates
   const grown = cands.map(({ via, count, op }) => {
     const feats = pool.filter(l => l.via === via).map(featureOf);
     const coh = coherence(feats);
@@ -128,7 +129,7 @@ export const growLinkTypes = (doc, { minCount = 3, alpha = 0.05, samples = 200 }
     const opFeats = pool.filter(l => l.op === op).map(featureOf);
     const bg = [];
     for (let s = 0; s < samples; s++) { const grp = sampleFrom(opFeats, count); if (grp) bg.push(coherence(grp)); }
-    const line = deriveNull(bg, { scale: 'linear', alpha, N: 2 });
+    const line = deriveNull(bg, { scale: 'linear', alpha, N: family });
     const usable = Number.isFinite(line) && coh > line;
     return Object.freeze({
       key: `${op}/${via}`,            // the operator stays first; this only makes it specific
@@ -151,5 +152,131 @@ export const growLinkTypes = (doc, { minCount = 3, alpha = 0.05, samples = 200 }
     // a usable specific type on its own. FALSE: the recurring labels carry distinctions the
     // structural features can't separate — evidence the semantic push from VOX does real work.
     structureGrows: usableTypes.length > 0,
+  });
+};
+
+// ── The persistent learner — the learning lives INSIDE the engine ──────────────────────
+//
+// growLinkTypes answers the question for ONE document and forgets. But learning is
+// accumulation: a label that does not yet have enough evidence to beat its null in one book
+// may earn it across several. createLinkLearner is the in-process memory that makes that
+// real. It is fed documents one at a time, keeps the structural features of every untyped
+// link it has ever seen (per verb, and per operator for the null), and after each document
+// re-asks whether any verb's links now cohere beyond a same-operator null. When one does,
+// the verb is PROMOTED to a learned link-type — a new, more-specific second level, GROWN
+// from evidence rather than shipped. Promotions are sticky: once the evidence cleared the
+// bar, the distinction is part of the engine's vocabulary.
+//
+// The payoff is `activationsFor(doc)`: the structural basis GROWN with one dimension per
+// learned type, so a later reading is constituted through distinctions the engine taught
+// itself. That is the loop the critique said was missing — word → concept → changed
+// reading — closed in-process, with no embedder and nothing posted out. `snapshot()` makes
+// the learned vocabulary serialisable so it can persist across runs; `restore` re-seeds it.
+
+const hashStr = (s) => { let h = 2166136261 >>> 0; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+
+export const createLinkLearner = ({ minEvidence = 6, alpha = 0.05, samples = 200, cap = 4000, restore = null } = {}) => {
+  const byVia = new Map();      // via → { ops: {op:count}, feats: [] }
+  const opPool = new Map();     // op → feats[]   (the same-operator null background)
+  const learned = new Map();    // via → { key, via, op, count, coherence, nullLine, since }
+  let docsSeen = 0, linksSeen = 0;
+
+  if (restore?.learned) { for (const r of restore.learned) learned.set(r.via, Object.freeze({ ...r })); docsSeen = restore.docsSeen || 0; linksSeen = restore.linksSeen || 0; }
+
+  const topOp = (ops) => Object.entries(ops).sort((a, b) => b[1] - a[1])[0][0];
+
+  // the cumulative same-operator null: random same-size groups drawn from every untyped
+  // link of that operator the learner has accumulated. Seeded from the verb so it is
+  // deterministic and reproducible across runs (no Date/Math.random).
+  // N is the family size — the number of candidate verbs being tested at once. deriveNull's
+  // bound is then "what the LUCKIEST of N chance draws reaches", the engine's own multiple-
+  // comparison correction: at corpus scale thousands of verbs are tested, and without this a
+  // 0.05 line lets ~5% through as noise. Tying N to the family means only a verb that towers
+  // over what the luckiest random group would reach is promoted.
+  const nullLineFor = (op, k, N) => {
+    const pool = opPool.get(op) || [];
+    if (pool.length < k + 2) return Infinity;
+    let seed = (hashStr(op) ^ Math.imul(k, 2654435761) ^ linksSeen) >>> 0;
+    const rand = () => { seed = (seed * 1103515245 + 12345) >>> 0; return seed / 0x100000000; };
+    const bg = [];
+    for (let s = 0; s < samples; s++) {
+      const idx = []; const used = new Set(); let guard = 0;
+      while (idx.length < k && guard++ < k * 20) { const i = (rand() * pool.length) | 0; if (!used.has(i)) { used.add(i); idx.push(i); } }
+      bg.push(coherence(idx.map(i => pool[i])));
+    }
+    return deriveNull(bg, { scale: 'linear', alpha, N });
+  };
+
+  // re-evaluate every not-yet-learned verb against its cumulative same-operator null, and
+  // promote those that beat it. Cheap accumulation and (quadratic) evaluation are split so
+  // a corpus-scale harvest can accumulate every book and evaluate once at the end.
+  const evaluate = () => {
+    const newlyLearned = [];
+    // the family being tested this round — every not-yet-learned verb with enough evidence.
+    // deriveNull is corrected against this count, so a big vocabulary does not leak noise.
+    const family = Math.max(2, [...byVia.values()].filter(v => v.feats.length >= minEvidence).length);
+    for (const [via, v] of byVia) {
+      if (learned.has(via) || v.feats.length < minEvidence) continue;
+      const op = topOp(v.ops);
+      const coh = coherence(v.feats);
+      const line = nullLineFor(op, v.feats.length, family);
+      if (Number.isFinite(line) && coh > line) {
+        const rec = Object.freeze({ key: `${op}/${via}`, via, op, count: v.feats.length, coherence: round(coh), nullLine: round(line), since: docsSeen });
+        learned.set(via, rec); newlyLearned.push(rec.key);
+      }
+    }
+    return newlyLearned;
+  };
+
+  // ingest a batch of links directly (the learner is a link consumer; a parsed document is
+  // just one source). Links are { op, via, relType?, coupling, tgtKind, polarity, ctx? };
+  // ctx (the sentence operator-profile) defaults to zeros when a non-document source has none.
+  // Pass { evaluate:false } to only accumulate (then call evaluate() yourself) — for scale.
+  const observeLinks = (links, { evaluate: doEval = true } = {}) => {
+    docsSeen++;
+    for (const raw of links) {
+      const l = { coupling: 1, tgtKind: 'other', polarity: 0, ctx: new Array(OPS.length).fill(0), ...raw, via: String(raw.via || '').toLowerCase() };
+      if (!l.op || !l.via || l.relType) continue;     // need a link; skip what the shipped vocabulary already typed
+      linksSeen++;
+      const f = featureOf(l);
+      let v = byVia.get(l.via); if (!v) byVia.set(l.via, v = { ops: {}, feats: [] });
+      v.ops[l.op] = (v.ops[l.op] || 0) + 1;
+      v.feats.push(f); if (v.feats.length > cap) v.feats.shift();
+      let p = opPool.get(l.op); if (!p) opPool.set(l.op, p = []);
+      p.push(f); if (p.length > cap) p.shift();
+    }
+    const newlyLearned = doEval ? evaluate() : [];
+    return Object.freeze({ docsSeen, linksSeen, learnedCount: learned.size, pending: byVia.size - learned.size, newlyLearned });
+  };
+
+  // ingest one parsed document — its untyped links feed the same accumulation.
+  const observe = (doc, opts) => observeLinks(linkInventory(doc).links, opts);
+
+  const learnedTypes = () => [...learned.values()].sort((a, b) => b.count - a.count);
+
+  return Object.freeze({
+    observe, observeLinks, evaluate,
+    learnedTypes,
+    vocabulary: () => learnedTypes().map(r => r.key),
+    // type one link: its operator (first level) and any learned type that now applies (second).
+    typeLink: (link) => { const via = String(link.via || '').toLowerCase(); const rec = learned.get(via); return { op: link.op, learnedType: rec ? rec.key : null }; },
+    // the GROWN basis: operators (the first level) + one dimension per learned type. A later
+    // reading constituted through this is read partly through distinctions the engine grew.
+    activationsFor: (doc) => {
+      const keys = learnedTypes().map(r => r.key);
+      const ltIdx = Object.fromEntries(keys.map((k, i) => [k, i]));
+      const prof = operatorProfiles(doc);
+      const acts = prof.map(p => [...p, ...new Array(keys.length).fill(0)]);
+      const { links } = linkInventory(doc);
+      for (const l of links) {
+        if (l.relType) continue;
+        const rec = learned.get(l.via);
+        if (rec && l.sentIdx >= 0 && l.sentIdx < acts.length) acts[l.sentIdx][OPS.length + ltIdx[rec.key]] += 1;
+      }
+      return { dims: [...OPS, ...keys], activations: acts };
+    },
+    get docsSeen() { return docsSeen; },
+    get linksSeen() { return linksSeen; },
+    snapshot: () => ({ docsSeen, linksSeen, learned: learnedTypes() }),
   });
 };
