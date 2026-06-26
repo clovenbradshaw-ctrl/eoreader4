@@ -13,6 +13,7 @@ export { buildGroundedMessages, buildChatMessages, SYSTEM_GROUND, SYSTEM_CHAT,
          EXCERPTS_HEADER, DEFAULT_BUDGET, SUMMARY_GUARD } from './prompt.js';
 
 import './echo.js';
+import './structure.js';
 import './wllama.js';
 import './pleias.js';
 import './onnx.js';

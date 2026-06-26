@@ -439,6 +439,11 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
     isRole: (v) => has('role', v),
     isFunction: (v) => has('function', v),
     isStarter: (v) => has('starter', v),
+    // A known relation predicate — a verb the reading (or an inherited corpus prior) has
+    // attested as a bond's via. Read by the recurrence gate so a corpus-attested relation
+    // verb met once in a new document is not held weak. Default-empty unless a prior is
+    // inherited, so reading is byte-identical without one.
+    isRelation: (v) => has('relation', v),
     // A demonym / proper adjective ("Russian", "French") — read by entity admission
     // to deny ATTRIBUTIVE gravity ("Russian novelist" is not a character), seed ∪ learned.
     isDemonym: (v) => has('demonym', v),

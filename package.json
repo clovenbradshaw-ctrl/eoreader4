@@ -12,11 +12,17 @@
     "predict": "node scripts/predict-moves.mjs",
     "helix-predict": "node scripts/helix-predict.mjs",
     "video-predict": "node scripts/video-predict.mjs",
+    "horizon": "node scripts/horizon-demo.mjs",
     "credence": "node scripts/credence-measure.mjs",
     "learn:grammar": "node scripts/learn-grammar.mjs",
     "build:centroids": "node scripts/build-centroids.mjs",
     "preparse": "node scripts/preparse-corpus.mjs",
-    "serve": "python3 -m http.server 8000"
+    "serve": "python3 -m http.server 8000",
+    "grow-basis": "node scripts/grow-basis-demo.mjs",
+    "text-generate": "node scripts/text-generate.mjs",
+    "layered-generate": "node scripts/layered-generate.mjs",
+    "layered-stack": "node scripts/layered-stack-demo.mjs",
+    "structural-significance": "node scripts/structural-significance.mjs"
   },
   "engines": {
     "node": ">=20"

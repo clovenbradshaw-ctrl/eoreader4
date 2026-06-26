@@ -65,6 +65,16 @@ export const createParser = ({
   // byte-identical (the goldens are untouched); a harness flips it on to expose the
   // convergence the bond graph otherwise never sees.
   coordSubjects      = false,
+  // Causal gender as a SOFT coref cue (off by default → byte-identical). When on, a title
+  // at first naming and a pronoun that already resolved record an entity's gender, and a
+  // later gendered subject pronoun prefers a gender-compatible antecedent. Strictly
+  // backward-looking: only gender noted before a pronoun can bias it. The reading the engine
+  // is already good at is unchanged when this is off.
+  genderCoref        = false,
+  // The common-noun admission catalyst (entities.js) — a recurring definite common noun that
+  // takes content verbs reacts into an entity node, gated by an inhibitor against runaway.
+  // Off by default → the capitalised reading is byte-identical.
+  commonNouns        = false,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -96,7 +106,7 @@ export const createParser = ({
     // Admission reads its language-specific word-classes (starters, prepositions,
     // role words, function words, auxiliaries) from the same conventions ledger the
     // splitter and relation parser use — seed ∪ what this document taught.
-    const admission   = createEntityAdmission({ conventions });
+    const admission   = createEntityAdmission({ conventions, commonNouns });
 
     // Transcript detection — the handler is injected, not imported.
     if (transcriptHandler && transcriptHandler.detect && transcriptHandler.detect(text)) {
@@ -229,12 +239,23 @@ export const createParser = ({
       const priorField = corefField.field(sentIdx);
       const priorLastIns = lastIns;
 
+      // Causal gender cue (opt-in). A title introduces an entity's gender at the moment it
+      // is named (a convention, she/he/Mr — not a name table); a leading subject pronoun's
+      // gender is read for THIS line. Both are used only to bias the BACKWARD field below.
+      const TITLE_GENDER = { mr: 'm', mister: 'm', sir: 'm', lord: 'm', mrs: 'f', miss: 'f', ms: 'f', lady: 'f', madam: 'f', madame: 'f' };
+      const titleGenders = {};
+      if (genderCoref) for (const m of sent.matchAll(/\b(Mr|Mrs|Miss|Ms|Mister|Madam|Madame|Lady|Lord|Sir)\.?\s+([A-Z][a-zA-Z]+)/g)) titleGenders[m[2].toLowerCase()] = TITLE_GENDER[m[1].toLowerCase()];
+      const lead = genderCoref ? /^\s*(he|she|they)\b/i.exec(sent) : null;
+      const pg = lead ? { he: 'm', she: 'f', they: 'p' }[lead[1].toLowerCase()] : null;
+
       for (const obs of admission.observe(sent, sentIdx)) {
         // INS on every sighting (admit and present) so edge weights track how
         // often a figure actually appears, not just that it exists.
         if (obs.status === 'admit' || obs.status === 'present') {
           log.append({ op: 'INS', id: obs.id, label: obs.label, sentIdx });
           corefField.note(obs.id, sentIdx);
+          // a title naming this entity fixes its gender, causally, at first sight.
+          if (genderCoref) for (const w of String(obs.label || '').toLowerCase().split(/\s+/)) if (titleGenders[w]) corefField.noteGender(obs.id, titleGenders[w]);
           lastIns = { id: obs.id, sentIdx };       // the arrow of time advances
         }
         if (obs.status !== 'admit' || !obs.aliasOf) continue;
@@ -306,8 +327,28 @@ export const createParser = ({
       // same pre-line field and take the strongest prior candidate. `resolve`
       // had no implementation, so that call site got nothing and pronoun-owned
       // kinship bonds dropped silently — only named owners survived. Wired now.
+      // Bias the backward field for a leading subject pronoun by its gender, using only
+      // gender noted BEFORE this line. The rule is DEFEASIBLE (EVA): when it excludes
+      // incompatible candidates AND a compatible home remains, the excluded beliefs HOLD
+      // (they did useful work); when EVERY candidate is excluded — the pronoun's only
+      // sensible antecedent is one the gender belief forbids — the rule has FAILED here, so
+      // we strain those beliefs (and defer to the gender-free read). Enough such failures
+      // defeat the belief in coref.js, toggling the cue off for that entity. With no gender
+      // evidence it is exactly priorField; the gender-free reading is untouched.
+      let genderAwarePrior = priorField;
+      if (pg) {
+        const incompatible = priorField.filter(c => { const cg = corefField.genderOf(c.id); return cg && cg !== pg; });
+        const compatible = priorField.filter(c => { const cg = corefField.genderOf(c.id); return cg == null || cg === pg; });
+        if (incompatible.length && compatible.length) {
+          genderAwarePrior = compatible;
+          incompatible.forEach(c => corefField.evaGender(c.id, true));    // EVA holds: exclusion did useful work
+        } else if (incompatible.length) {
+          incompatible.forEach(c => corefField.evaGender(c.id, false));   // EVA breaks: the only referent was forbidden
+        }
+        if (genderAwarePrior[0]) corefField.noteGender(genderAwarePrior[0].id, pg);
+      }
       const coref = {
-        field:   () => priorField,
+        field:   () => genderAwarePrior,
         resolve: () => priorField[0]?.id ?? null,
         // The last INS referent activated before this line, for a subjectless
         // clause to default to — within the activation reach, weight decayed by how
@@ -485,7 +526,11 @@ export const createParser = ({
         // reveal's verb ("listed") is single by nature, and the edge's warrant is the
         // construction, not the verb's recurrence — so it is not held weak and dropped
         // from the firm graph the bridge channel reads.
-        const recurrent = (viaCount.get(edge.via) || 1) >= 2 || coord === true;
+        // A corpus-attested relation verb (inherited prior) counts as recurrent even on a
+        // single sighting: the corpus already saw it bond hundreds of times, so a new short
+        // document need not re-earn it. With no corpus prior, isRelation is empty here and
+        // this OR changes nothing — reading stays byte-identical.
+        const recurrent = (viaCount.get(edge.via) || 1) >= 2 || coord === true || conventions.isRelation(edge.via);
         let factor = recurrent ? 1 : 0.5;
         // An NP referent rides the SAME recurrence gate as the verb and the figure: a
         // common noun seen once across the document is held weak, never dropped — the

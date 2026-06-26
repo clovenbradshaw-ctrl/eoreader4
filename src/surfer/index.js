@@ -31,6 +31,44 @@ export { updateStance, applyMeasuredStance } from './stance.js';
 // REC, not endless surprise). Runs the Existence and Structure rungs at once, reads the
 // mis-framed signature off measured nulls, and re-grounds on a reframe.
 export { helixPredict, helixGenerate } from './helix-predict.js';
+// The persistent Horizon: memory that IS the moved density operator across turns. Cold-
+// starts at σ, folds each reading in with recency decay, departs σ as it accumulates a
+// self, and re-grounds (the helix turning) on a measured defeat.
+export { createHorizon } from './horizon.js';
+// The growing basis: the cells themselves learned, not shipped. Where the frame has no
+// cell for what it keeps meeting, it composes one (REC Composing a Paradigm cell) — but
+// only when misfits cohere, the signal-from-noise discipline applied to category
+// formation. Re-grounding can then relocate to a frame element that did not exist.
+export { createGrowingBasis } from './grow-basis.js';
+// The layered generative stack: generate many layers of meaning at once (Paradigm →
+// Lens → Proposition → Token), each a chain conditioned on the one above and
+// independently re-groundable — coherence lives high, fluency low, the helix run forward.
+export { createLayeredGenerator } from './layered-generator.js';
+// The structural significance basis: ρ built from OPERATIONS (the cube's Act face read
+// off the log), not embeddings — meaning as what the operators do to the field, not as
+// distributional company. The embedder stays in VOX; the column reads structure.
+export { OPS, RELTYPES, operatorProfiles, structuralActivations, structuralHorizon, structuralCommutator } from './structure-basis.js';
+// Label feedback (word → concept): grow specific link-types from the recurring links the
+// closed vocabulary leaves untyped, and MEASURE whether structure alone carves each one
+// (deriveNull over random same-size groups) — `structureGrows` is the empirical answer to
+// whether the structural basis can learn distinctions or VOX must push semantics down.
+export { linkInventory, untypedVias, growLinkTypes, createLinkLearner } from './learn-links.js';
+// The role of an element by ablation — "remove it and see what reading changed" — done
+// structurally over operator profiles, not by subtracting embeddings. The leave-one-out the
+// Born rule already runs; the last embedder dependency dissolved into the operator basis.
+export { propositionRoles } from './roles.js';
+// Bond-level reanalysis — the garden-path recovery as the engine's own surprisal → re-retrieve
+// → reconsolidate loop, one level below the basis REC. Composes the verb oracle (HOW
+// conventions), γ-recency re-retrieval (the coref kernel), and a logged REC; the mis-bond
+// stays on the append-only trail, so the garden path resolves auditably.
+export { reanalyze } from './reanalyze.js';
+// Meaning is not extracted — it is conjectured by a self and refuted by what follows. That
+// mechanism already exists, fully, in the enactor's commit loop: the gate PROPOSES a
+// candidate proposition (the conjecture), EVA/REC REFUTES it against the grounded basis and
+// the deriveNull line (fluent hallucination cannot collapse; VOID is the conscience), and
+// the SELF is the closed loop drawn by the efference copy + the one monitor + core/self.
+// learn-links/corpus-relations measure what CAN be extracted as shared convention (the HOW,
+// only form); the sense is conjectured live by that existing self — not by anything here.
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';

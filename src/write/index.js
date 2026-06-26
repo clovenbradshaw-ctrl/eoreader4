@@ -47,3 +47,24 @@ export { surfToPlan, stopToCell } from './plan.js';
 export { frameAt, SITES } from './frame.js';
 export { streamAnswer } from './answer.js';
 export { foldImpression } from './impression.js';
+// Writing is reading backwards — the demonstrable kernel (the holon above is the
+// production path). Referring-expression generation by INVERSE coref (emit a pronoun
+// only where the reader's field resolves it back to the meant entity — gender
+// conformance + γ-activation + distinctness, the reading rules run in reverse), with the
+// me-ness/self line (given = perceiver/not-mine; generated = enactor/mine; read back =
+// self) and a separate reader-model thread (theory of mind). Concept→traverse→words:
+// hold the activated graph as the imagistic concept, traverse it for the order of saying.
+export { createReaderModel, writeReferring } from './refer.js';
+export { conceptToPlan, speakConcept } from './traverse.js';
+// Gender inferred by reading (γ-recency over the committed entities + the lexical gender of
+// the pronouns that corefer to them) — not a name table. Silent where the text gives no
+// evidence, so the referrer falls back to the name rather than fabricating "it".
+export { inferGenders } from './genders.js';
+// Grammatical encoding (surface only): join adjacent same-subject clauses into one
+// sentence with a compound predicate — the standard NLG aggregation move, so the
+// generator says "He woke, saw his legs, and turned" rather than three choppy clauses. It
+// does not re-inflect verbs or re-decide reference; provenance/self pass through.
+export { realize, speak } from './realize.js';
+// A grammar rule held and tested — the write-side EVA: apply while it reads back, toggle off
+// when it fails. Pronominalisation and aggregation are governed by it, as gender is in coref.
+export { createRule } from './eva.js';

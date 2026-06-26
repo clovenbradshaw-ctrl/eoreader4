@@ -54,6 +54,34 @@ test('helixGenerate rides the move rung and re-grounds into an untrained registe
   assert.ok(g2.length === 9);
 });
 
+test('the helix climbs: a constant-acceleration signal is stationary at rung 2, which carries', () => {
+  // position quadratic, velocity linear, acceleration constant
+  const pos = []; let x = 0, v = 0;
+  for (let t = 0; t < 20; t++) { pos.push(x); v += 1; x += v; }
+  const r = helixPredict(pos, { order: 2, maxRung: 2 });
+  assert.deepEqual(r.rungs, ['existence', 'structure', 'acceleration']);
+  const [e, s, a] = r.summary.rungBits;
+  assert.ok(a < s && a < e, `the acceleration rung is the calmest (${a} < ${s}, ${e})`);
+  assert.ok(a < 0.5, 'a constant 2nd difference is ~0 bits — perfectly predictable');
+  assert.ok(r.steps.filter(st => st.carrying === 'acceleration').length > r.steps.length / 2,
+    'the acceleration rung carries most steps');
+});
+
+test('helixGenerate from the acceleration rung extrapolates a parabola (constant 2nd difference)', () => {
+  const pos = []; let x = 0, v = 0;
+  for (let t = 0; t < 20; t++) { pos.push(x); v += 1; x += v; }
+  const g = helixGenerate(pos, { order: 2, n: 5, rung: 'acceleration' });
+  const tail = g.slice(-6);
+  const d1 = tail.slice(1).map((y, i) => y - tail[i]);          // velocities
+  const d2 = d1.slice(1).map((y, i) => y - d1[i]);              // accelerations
+  assert.ok(d2.every(a => Math.abs(a - d2[0]) < 1e-9), 'second differences are constant — a real parabola');
+});
+
+test('maxRung default is 1 — the deeper rungs do not appear unless asked (parity)', () => {
+  const r = helixPredict([0, 2, 4, 6, 8, 10, 12], { order: 2 });
+  assert.deepEqual(r.rungs, ['existence', 'structure'], 'default depth unchanged');
+});
+
 test('deterministic — same seq, same opts, same trace and same generation', () => {
   const a = helixPredict(modulating, { order: 2 });
   const b = helixPredict(modulating, { order: 2 });
