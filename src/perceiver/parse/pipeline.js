@@ -71,6 +71,10 @@ export const createParser = ({
   // backward-looking: only gender noted before a pronoun can bias it. The reading the engine
   // is already good at is unchanged when this is off.
   genderCoref        = false,
+  // The common-noun admission catalyst (entities.js) — a recurring definite common noun that
+  // takes content verbs reacts into an entity node, gated by an inhibitor against runaway.
+  // Off by default → the capitalised reading is byte-identical.
+  commonNouns        = false,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -102,7 +106,7 @@ export const createParser = ({
     // Admission reads its language-specific word-classes (starters, prepositions,
     // role words, function words, auxiliaries) from the same conventions ledger the
     // splitter and relation parser use — seed ∪ what this document taught.
-    const admission   = createEntityAdmission({ conventions });
+    const admission   = createEntityAdmission({ conventions, commonNouns });
 
     // Transcript detection — the handler is injected, not imported.
     if (transcriptHandler && transcriptHandler.detect && transcriptHandler.detect(text)) {

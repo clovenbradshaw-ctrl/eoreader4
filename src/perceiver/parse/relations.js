@@ -158,6 +158,17 @@ const leadingSubject = (sentence, admission, coref) => {
     return { id: admission.idOf(first.label), start: lead + first.start, end: lead + first.end,
              text: rest.slice(first.start, first.end), kind: 'name', w: 1 };
   }
+  // A clause-initial definite common-noun SUBJECT, but only when the common-noun catalyst has
+  // already reacted that head into an entity ("the soldier"). scanEntities is capitalised, so
+  // it never yields this span; we recover it from admission, which leadingSubject already
+  // holds. With the catalyst off, no common-noun head is admitted, so this never fires —
+  // byte-identical. This is the bond half the reagent half (entities.js) sets up.
+  const dn = rest.match(/^\s*the\s+([a-z][a-z]{2,})\b/i);
+  if (dn && admission.isAdmitted(dn[1].toLowerCase())) {
+    const head = dn[1].toLowerCase();
+    const start = lead + dn[0].toLowerCase().indexOf(head);
+    return { id: admission.idOf(head), start, end: start + head.length, text: head, kind: 'name', w: 1 };
+  }
   return null;
 };
 

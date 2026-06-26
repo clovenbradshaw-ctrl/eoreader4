@@ -159,6 +159,15 @@ const idFor = (label) =>
 
 const GRAVITY_FLOOR = 1.0;
 
+// The INHIBITOR for the common-noun admission catalyst (opt-in): heads that name no referent
+// however often they recur — temporal, quantifier, and abstract-relational nouns. Without
+// this, admitting definite common nouns runs away (the day / the way / the time flood the
+// graph). Paired with a RECURRENCE barrier (a common noun must recur AND take a content verb
+// before it reacts into a node), it admits "the soldier" / "the door" and refuses "the way".
+const ABSTRACT_HEADS = new Set(['way', 'time', 'thing', 'matter', 'fact', 'case', 'point', 'kind', 'sort',
+  'moment', 'sense', 'part', 'whole', 'same', 'other', 'first', 'last', 'rest', 'one', 'day', 'night',
+  'morning', 'evening', 'while', 'end', 'side', 'reason', 'idea', 'word', 'name', 'sake', 'use', 'need']);
+
 // A content head — an open-class word (`C.isFunction` is false), so a name beside
 // it is a verb's argument rather than a function word's neighbour.
 const isContent = (w, C) => !!w && /^[a-z][a-z'’]*$/.test(w) && w.length >= 2 && !C.isFunction(w);
@@ -217,7 +226,7 @@ const cleanLabel = (raw, C = DEFAULT_CONVENTIONS) => {
 // pipeline passes its live ledger (seed ∪ what the document taught); a standalone
 // caller gets the seeds. Only the predicates admission needs are taken, so any
 // conventions object (or a partial stub) works.
-export const createEntityAdmission = ({ conventions } = {}) => {
+export const createEntityAdmission = ({ conventions, commonNouns = false } = {}) => {
   const C = conventions ? {
     isStarter:     (w) => conventions.isStarter(w),
     isFunction:    (w) => conventions.isFunction(w),
@@ -335,6 +344,38 @@ export const createEntityAdmission = ({ conventions } = {}) => {
         });
       } else {
         out.push({ status: 'candidate', label });
+      }
+    }
+
+    // The COMMON-NOUN CATALYST (opt-in). A definite common-noun referent ("the soldier")
+    // never enters the capitalised scan above — it is not the reagent that reaction accepts.
+    // This is a second, higher-barrier pathway: a head reacts into a node only when it RECURS
+    // (≥2 sightings) AND accrues argument gravity (it takes a content verb), and is not an
+    // inhibited head (function / starter / calendar / abstract). The recurrence requirement
+    // is the raised activation energy a weaker, non-capitalised reagent must clear; the
+    // word-class checks are the inhibitor that keeps the graph from flooding. Off by default,
+    // so the capitalised reading is byte-identical.
+    if (commonNouns && sentIdx != null) {
+      const dre = /\bthe\s+([a-z][a-z]{2,})\b/gi;   // case-insensitive: sentence-initial "The X" counts too
+      let dm;
+      const here = new Set();
+      while ((dm = dre.exec(sentence)) !== null) {
+        const head = dm[1].toLowerCase();
+        if (here.has(head)) continue; here.add(head);
+        if (C.isFunction(head) || C.isStarter(head) || (C.isCalendar && C.isCalendar(head)) || ABSTRACT_HEADS.has(head)) continue;
+        const hs = dm.index + dm[0].length - head.length;
+        const sc = (counts.get(head) ?? 0) + 1; counts.set(head, sc);
+        const sg = (gravity.get(head) || 0) + sightingGravity(sentence, hs, hs + head.length, C, head);
+        gravity.set(head, sg);
+        const ss = sightSent.get(head) || []; ss.push(sentIdx); sightSent.set(head, ss);
+        if (admitted.has(head)) { const id = admitted.get(head); noteMention(id, sentIdx); out.push({ status: 'present', id, label: head }); }
+        else if (sc >= 2 && sg >= GRAVITY_FLOOR) {           // recurrence barrier + argument gravity
+          const id = idFor(head);
+          admitted.set(head, id);
+          if (!mentions.has(id)) mentions.set(id, []);
+          for (const si of ss) mentions.get(id).push(si);
+          out.push({ status: 'admit', id, label: head, rawId: id, aliasOf: null, aliasKind: null, surname: null, commonNoun: true });
+        }
       }
     }
     return out;
