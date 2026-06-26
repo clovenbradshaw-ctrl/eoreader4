@@ -281,6 +281,19 @@ export const SEED_CALENDAR = Object.freeze([
   'january', 'february', 'september', 'october', 'november', 'december',
 ]);
 
+// Free-capitals that survive sentence-initial capitalisation yet name no PERSON
+// ("God", "Christmas", "Heaven"). A vocative scan finds them in an address position
+// ("O God,"), but they are not a person who can answer a naming scene, so coreference
+// must not merge a role onto them. This is the embedding "feels-like-a-subject" DEF
+// the naming discovery used to hold as a hardcoded set of its own — modality-specific,
+// revisable — now a register like every other: seeded for English and learnable, so a
+// corpus that personifies "Death" or "Nature" as a speaking figure can teach it back
+// out by defeating the prior. The universal merge engine reads only the SYN it feeds;
+// this language-specific list lives here, the home for it, not in the engine.
+export const SEED_NONPERSON = Object.freeze([
+  'god', 'christmas', 'heaven', 'hell',
+]);
+
 export const SEED_FIELD_LABEL = Object.freeze([
   // bibliographic front matter
   'title', 'subtitle', 'author', 'authors', 'editor', 'translator', 'illustrator',
@@ -309,6 +322,7 @@ const SEEDS = {
   'field-label': SEED_FIELD_LABEL,
   'demonym': SEED_DEMONYM,
   'calendar': SEED_CALENDAR,
+  'nonperson': SEED_NONPERSON,
 };
 
 // The pre-baked strain-history a prior carries: a seed is not an axiom, it is a
@@ -431,6 +445,9 @@ export const createConventions = ({ seeds = true, inherit = null } = {}) => {
     // A calendar token (weekday / month) — read by entity admission to deny referential
     // gravity ("reconvene Monday" is not a character), seed ∪ learned.
     isCalendar: (v) => has('calendar', v),
+    // A free-capital that names no person ("God", "Christmas") — read by the naming
+    // discovery to refuse a coreference merge onto a non-person vocative, seed ∪ learned.
+    isNonPerson: (v) => has('nonperson', v),
     // A coordinating conjunction joining two like constituents ('and'/'or'/'nor') —
     // read by the relation parser to admit a coordinated subject ("Name and Name …"),
     // seed ∪ learned. NOT the adversative/illative connectives the function class holds.
