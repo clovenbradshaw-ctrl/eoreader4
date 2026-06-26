@@ -42,6 +42,17 @@ const META = new Set([
   'work', 'novel', 'essay', 'paper', 'chapter', 'thing', 'things',
   'main', 'mainly', 'point', 'points', 'key', 'topic', 'topics', 'idea', 'ideas',
   'says', 'say', 'said', 'mean', 'means', 'cover', 'covers', 'covered',
+  // SCOPE / COVERAGE words — they say HOW MUCH of the document, never its subject.
+  // The audit's t3 ("summarize the full document") rode the lexical path and
+  // confabulated because the incidental word "full" was in the doc's vocabulary, so
+  // queryTouchesDoc returned true and the structural skeleton — built to answer exactly
+  // this meta-query — was skipped. A scope word is about the ASKING, not the page; it
+  // only ever changes routing when the query reduces to meta words alone (a real subject
+  // term beside it still keeps the lexical path), and only on a whole-document task.
+  'full', 'whole', 'entire', 'complete', 'completely', 'rest', 'remainder', 'remaining',
+  'everything', 'else', 'more', 'part', 'parts', 'portion', 'section', 'sections',
+  'top', 'bottom', 'beginning', 'start', 'end', 'ending', 'middle', 'further',
+  'additional', 'content', 'contents', 'detail', 'details',
 ]);
 
 // Does the question name anything the document actually spells? Tokenize, drop the meta

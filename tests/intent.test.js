@@ -30,6 +30,25 @@ test('pointed "what is this X" lookups are NOT swallowed by the summary route', 
   ]) assert.notEqual(readTask(q), 'summary', q);
 });
 
+// The audit's t2: after a "summarize", the user pushed back "that's just the top part,
+// what about the rest?" — a request to cover the WHOLE document, which the bare `answer`
+// task read as a pointed lookup. A coverage continuation is a whole-document task.
+test('a coverage continuation ("what about the rest?") routes to summary', () => {
+  for (const q of [
+    "that's just the top part, what about the rest?",
+    'what about the rest', 'tell me the rest', 'the rest of it',
+    'what about the rest of the document', 'summarize the whole thing',
+    'everything else', 'what else is in here',
+  ]) assert.equal(readTask(q), 'summary', q);
+});
+
+// A pointed "what about X" naming a real subject must NOT be swallowed by the coverage cue.
+test('a pointed "what about X" is not a coverage continuation', () => {
+  for (const q of [
+    'what about Gregor', 'what about the ending', 'what about chapter two',
+  ]) assert.notEqual(readTask(q), 'summary', q);
+});
+
 test('list and explain route on their own cues, and default is answer', () => {
   assert.equal(readTask('list every character'), 'list');
   assert.equal(readTask('what are the themes'), 'list');
