@@ -71,10 +71,11 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0, cu
     if (!inFrame(e) || !onCursor(e)) continue;            // cursor + frame select WHAT is said
     const sup = superseded.get(`${e.src}|${e.via}|${e.tgt}`);
     if (sup) {
-      // the garden path resolves: the original verb is demoted to a co-predicate, the
-      // orphaned verb becomes the main predicate — both said with the re-retrieved subject.
-      plan.push({ subj: { id: e.src, gender: G(e.src), name: L(e.src) }, verb: sup.demotedVia });
-      plan.push({ subj: { id: sup.formed.src, gender: G(sup.formed.src), name: L(sup.formed.src) }, verb: sup.formed.via });
+      // the garden path resolves into a reduced relative: the orphaned verb is the MAIN
+      // predicate, the original verb a relative-clause MODIFIER of the subject — "Beauty, who
+      // ran, fell." Which bond subordinates is the REC's `demoted` tag (measured), not a rule.
+      plan.push({ subj: { id: sup.formed.src, gender: G(sup.formed.src), name: L(sup.formed.src) },
+        verb: sup.formed.via, relative: { verb: sup.demotedVia } });
       if (plan.length >= max) break;
       continue;
     }

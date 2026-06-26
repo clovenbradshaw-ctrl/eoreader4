@@ -105,7 +105,12 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
     // bare np-string object is left alone — it may be a mass noun ("milk"), a plural, or a
     // mis-parse the reanalysis will fix ("fell"), none of which take an indefinite article.
     const objText = o ? o.surface : (typeof p.obj === 'string' ? p.obj : '');
-    const text = `${cap(s.surface)} ${p.verb}${objText ? ' ' + objText : ''}.`;
+    // A reduced-relative modifier (from reanalysis). The relativizer is DERIVED from animacy —
+    // "who" for an evidenced person (m/f/p), "that" otherwise — the only closed-class scaffold.
+    const relText = p.relative
+      ? `, ${(p.subj.gender === 'm' || p.subj.gender === 'f' || p.subj.gender === 'p') ? 'who' : 'that'} ${p.relative.verb},`
+      : '';
+    const text = `${cap(s.surface)}${relText} ${p.verb}${objText ? ' ' + objText : ''}.`;
     units.push(Object.freeze({
       text, subjForm: s.form, objForm: o?.form ?? null,
       // me-ness: the writer's own output enters through the ENACTOR door.
@@ -113,7 +118,7 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
       readerField: s.fieldAfter,
       // the recomposable pieces — so a grammatical-encoding stage (realize.js) can join
       // adjacent same-subject clauses without re-deciding the referring forms.
-      parts: Object.freeze({ subjId: p.subj.id, subj: s.surface, verb: p.verb, obj: objText }),
+      parts: Object.freeze({ subjId: p.subj.id, subj: s.surface, verb: p.verb, obj: objText, relText }),
     }));
   }
 
