@@ -38,7 +38,7 @@ built*, and lifting the reach so the marquee capability can fire.
 
 ## The six moves, in priority order
 
-### 1. Lift the reach — a document-scale significance spine
+### 1. Lift the reach — a document-scale significance spine — DONE (this branch)
 
 The single-anchor ±16 window starves the surf's best idea. `significance-loop.md`
 describes the **cross-layer document REC** as the headline behavior — the
@@ -49,18 +49,21 @@ window**; the reach silently caps the engine's deepest move. It is also why the
 audit's summary was thin — `retrieveStructural` got the right 12 spans, but
 `surfFold` then reasoned only over the window around `spans[0]`.
 
-**Move.** Compute a **document-scale significance spine once** (memoized on the
-doc, lazily): the per-cursor `bayes` series and the REC cursors of the enacted
-loop run over the whole unit stream. Then:
-- a turn's surf is a *zoom* into the spine (seed at the anchor, but the band and
-  the REC context are the document's, not the window's);
-- whole-doc tasks (summary) retrieve on the **spine's RECs** — the document's own
-  turning points — a measured skeleton, far better than an even stride.
+**Move (landed).** `src/perceiver/spine.js` computes a **document-scale spine**:
+the surf's own Bayesian-surprise scalar read across the whole text, the
+highest-surprise cursors being the document's turning points. `retrieveStructural`
+now spreads the body across both an even stride (coverage) AND the spine's turning
+points (significance, ranked above the stride) — a strict superset of the old
+even-stride behaviour. Cost is bounded by a **sampling stride** sized to a fixed
+budget (`readingAt` rebuilds its prior each call, so reading every cursor would be
+O(units · events)); the spine is pure on the log and memoised by identity. It
+lives in the perceiver holon, so `retrieve → perceiver` (an existing edge) stays
+acyclic.
 
-Cost is the concern (`readingAt` over 19k units), so the spine is computed at
-most once per document and cached; subsampling/stride is the fallback for very
-long docs. Gate behind the bench target (move 6) before it changes summary
-retrieval by default.
+Still open (the follow-on): the spine currently informs *retrieval*; making a
+turn's surf a true *zoom* into the spine (the band and REC context the document's,
+not the window's) is the deeper version, and the enacted-loop RECs at document
+scale (not just `bayes` peaks) are part of move 5.
 
 ### 2. Default the significance column to the embedder-free ρ — DONE (this branch)
 
@@ -105,7 +108,18 @@ reading back into the Horizon** after the answer — and the *stance moves ρ*
 (the loop `stance.js` was built to close, currently open). This is also the only
 place the **temporal hysteresis** the surf admits it "cannot enforce on its own"
 (`surf.js:255-259`) can live: a re-grounding requires a basis-defeat *sustained
-across turns*. (Larger change — staged, designed here.)
+across turns*.
+
+**Prerequisite found (this branch).** `createHorizon` cold-starts at σ built from
+a **centroid basis** (`horizon.js:60-61`, `corpusSigma(basis)` needs `basis.keys`).
+But move 2 made the default significance basis the **embedder-free operator
+profiles**, which carry no centroid prior — only a maximally-mixed structural
+ground (`structure-basis.js` `groundSigma`). Threading the Horizon as-is would
+light it up **only on the meaning path** — dark by default, the exact mistake move
+2 fixed. So #4 must *first* generalise the Horizon to accept a structural ground σ,
+then thread it through `runTurn` and the app's session state, observe-only at first
+(no reading change, audited), and condition the surf as a measured second step.
+Larger change — staged; this is its real first task, not the threading.
 
 ### 5. Unify the REC sources
 
@@ -128,12 +142,13 @@ surf can be told apart from the local one.
 
 ## Sequencing
 
-Moves **2, 3 (stance), 6** are pure wiring of things that already compute, and
-are landed on this branch. Move **1** is the real engineering and the one that
-unblocks the engine's deepest move — it wants move 6 in place first so it is
-measurable. Moves **4** and **5** are the larger architectural closes the recent
-commits were building toward but stopped short of plugging in; they are designed
-above and staged.
+Moves **1, 2, 3 (stance), 6** are landed on this branch — the embedder-free
+column, the surfer's guard as a veto, the document-scale spine, and the bench
+target that measures it. Moves **4** and **5** are the larger architectural
+closes the recent commits were building toward but stopped short of plugging in;
+they are designed above and staged, each wanting its own focused effort with
+cross-turn / multi-detector validation (and #4 has the structural-ground
+prerequisite recorded above — do that first or it lands dark).
 
 The honest read: the recent updates were a *building* phase — correct apparatus
 accreted faster than it got wired. The next phase is **lifting the reach and
