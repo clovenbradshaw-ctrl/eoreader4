@@ -146,6 +146,35 @@ Hysteresis is the margin factor within a call; a caller threading `opts.paradigm
 additionally require the defeat to have been *sustained* across reaches — the temporal
 hysteresis a stateless surf cannot enforce alone. Off unless `opts.paradigm` is set.
 
+## The helix-aware predictor (`surfer/helix-predict.js`)
+
+The Bayesian sequence predictor (`sequence.js`) is single-rung: a flat n-gram over the
+absolute INS stream (the Existence rung). It reads a *reframe* — a melody's key change, a
+register shift — as novelty forever: TV-snow at the meaning layer, high surprise on a
+signal that is not random, only re-based. `helixPredict` climbs a rung. It runs the same
+n-gram at two rungs at once — **Existence** (the absolute unit) and **Structure** (the
+*move* between units, frame-relative by construction) — and reads the difference as the
+helix's own diagnosis:
+
+| absolute rung | move rung | diagnosis | action |
+|---|---|---|---|
+| high | **low** | **mis-framed** — the frame moved, the pattern held | fire `REC(Paradigm,…)`, re-ground the absolute rung |
+| high | high | genuine novelty / noise | reserve; there is no frame to find |
+| low | — | the frame still fits | predict, no REC |
+
+The thresholds are **measured**: "high" beats the `deriveNull` of a rung's own surprise
+history (the Born rule on the surprise distribution), "holding" sits below the move rung's
+running median — witness does not decide. On a motif stated in C then transposed to G, the
+absolute rung's mean surprise rises across the seam (0.96 → 1.83 bits) while the move
+rung's *falls* (1.19 → 0.74) — the mis-framed signature — and a `REC_Composing_Paradigm`
+fires a few beats after the seam (hysteresis: sustained absolute-rot while the move holds,
+not a one-off spike), re-grounding the absolute rung in the new key. `helixGenerate` then
+draws the move rung to generate *through* a frame it never trained on — the learned shape,
+transposed onto a new root. Demo: `npm run helix-predict`. The Significance rung
+(lens-conditioned prediction, the σ cold-start prior, the `noveltyFromLensEntropy` reserve)
+is the next rung up and waits on the meaning embedder; the Existence↔Structure climb and
+the REC-relocation are embedder-free and shown here.
+
 ## What changed in the code, and what is still gated
 
 - **Applied (validated):** the Atmosphere departure + per-window null now run on the

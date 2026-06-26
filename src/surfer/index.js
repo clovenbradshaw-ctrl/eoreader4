@@ -27,6 +27,10 @@ export { atmosphereOf, atmosphereFromActivations, projectUnit, projectUnits,
 // Making the field will not bear. applyStance (the four real-symmetric primitives)
 // lives on the core leaf; updateStance reads the move here.
 export { updateStance, applyMeasuredStance } from './stance.js';
+// The helix-aware predictor (predict the move against the frame; let a stale basis be a
+// REC, not endless surprise). Runs the Existence and Structure rungs at once, reads the
+// mis-framed signature off measured nulls, and re-grounds on a reframe.
+export { helixPredict, helixGenerate } from './helix-predict.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';
