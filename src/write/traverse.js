@@ -41,6 +41,16 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0, cu
     : (Array.isArray(frame) ? (e) => frame.includes(e.relType) : (e) => e.relType === frame);
   const onCursor = cursorId == null ? () => true : (e) => e.src === cursorId || e.tgt === cursorId;
 
+  // Honour bond-level REANALYSIS (reanalyze.js): a REC(kind:'reanalysis') in the log supersedes
+  // a mis-bond and forms the corrected one. So a garden-path mis-bond is not spoken — in its
+  // place we say the original verb (demoted to a co-predicate) and the orphaned verb as the
+  // main predicate. With no reanalysis REC on the log this map is empty → unchanged.
+  const superseded = new Map();   // "src|via|tgt" → { demotedVia, formed:{src,via} }
+  for (const e of events) {
+    if (e.op === 'REC' && e.kind === 'reanalysis' && e.supersedes && e.forms)
+      superseded.set(`${e.supersedes.src}|${e.supersedes.via}|${e.supersedes.tgt}`, { demotedVia: e.supersedes.via, formed: e.forms });
+  }
+
   // coupling rides on `w` for a sub-unit (held-weak) bond and is absent on a firm one — the
   // same convention linkInventory reads (firm → 1). `minCoupling` lets the generator SPEAK
   // ONLY WHAT IT HOLDS: with a floor, a merely-glimpsed relation is not said. Default 0
@@ -59,6 +69,15 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0, cu
     const coupling = e.coupling != null ? e.coupling : (e.w != null ? e.w : 1);
     if (coupling < minCoupling) continue;
     if (!inFrame(e) || !onCursor(e)) continue;            // cursor + frame select WHAT is said
+    const sup = superseded.get(`${e.src}|${e.via}|${e.tgt}`);
+    if (sup) {
+      // the garden path resolves: the original verb is demoted to a co-predicate, the
+      // orphaned verb becomes the main predicate — both said with the re-retrieved subject.
+      plan.push({ subj: { id: e.src, gender: G(e.src), name: L(e.src) }, verb: sup.demotedVia });
+      plan.push({ subj: { id: sup.formed.src, gender: G(sup.formed.src), name: L(sup.formed.src) }, verb: sup.formed.via });
+      if (plan.length >= max) break;
+      continue;
+    }
     const objIsEntity = label.has(e.tgt);
     plan.push({
       subj: { id: e.src, gender: G(e.src), name: L(e.src) },

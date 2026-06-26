@@ -59,3 +59,12 @@ export const reanalyze = (doc, { isVerb = null } = {}) => {
   }
   return Object.freeze({ reanalyses, count: reanalyses.length });
 };
+
+// applyReanalysis — make the reanalysis part of the record: APPEND each REC to the log. The
+// mis-bond is not removed (append-only); the REC supersedes it, and consumers that honour REC
+// (conceptToPlan) read the corrected bond instead. Returns how many reconsolidations fired.
+export const applyReanalysis = (doc, opts = {}) => {
+  const { reanalyses } = reanalyze(doc, opts);
+  for (const a of reanalyses) doc.log.append(a.rec);
+  return reanalyses.length;
+};
