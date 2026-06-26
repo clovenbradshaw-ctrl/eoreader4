@@ -83,7 +83,13 @@ export const createParser = ({
     transcriptActive: false,
   };
 
-  const parse = (text, { docId } = {}) => {
+  // `onProgress` and `chunkSize` are the FEEDBACK channel (large-document ingestion).
+  // With no sink the parse runs as one synchronous sweep, byte-identical to before —
+  // every golden parse and every test takes this path. When a caller wants progress
+  // (the UI ingesting a big file), it passes `onProgress`; the per-sentence pass then
+  // runs in chunks of `chunkSize`, yielding to the event loop between them so the page
+  // stays responsive, and parse returns a Promise. The work and its order are identical.
+  const parse = (text, { docId, onProgress, chunkSize = 250 } = {}) => {
     const log         = createLog({ docId });
     // Conventions first — the home for the language-specific stuff. The splitter
     // reads its abbreviation list from the ledger, so segmentation already honours
@@ -213,7 +219,7 @@ export const createParser = ({
     // chrome test so a block of licence prose — full sentences a per-line test reads
     // as narrative — is held by the bracket it sits outside. Empty for an unframed
     // document; this changes nothing there.
-    sentences.forEach((sent, sentIdx) => {
+    const processSentence = (sent, sentIdx) => {
       // Frame is held like chrome (NUL → no entities, no edges) AND marked a site (DEF
       // role=site), so retrieval and the fold skip it too — a licence line can no longer
       // surface as a citable span. The `via:'frame'` stamp distinguishes it in the trail
@@ -389,8 +395,12 @@ export const createParser = ({
       // primitive — the apposition-free hop the channel exists to recover.
       for (const b of corefField.bindDescriptorsByElimination([...admission.admitted.values()], sentIdx))
         derivedEdges.push({ op: 'CON', src: b.owner, tgt: b.id, via: b.role, sentIdx, w: b.w, derived: true });
-    });
+    };
 
+    // Post-loop reconciliation and document assembly. Reads only state the per-sentence
+    // pass accumulated (candidates, surnameMerges, attrsById, the coref field), so it is
+    // identical whichever driver fed the loop — it runs once, after every sentence is in.
+    const finalize = () => {
     // ── Defeat the thin surname merges whose rebutter has gone live ─────────────
     // Each tail (surname) SYN above was committed defeasibly, carrying the rebutter
     // "a distinct agent bears this surname." The rebutter is LIVE when the surname is
@@ -603,11 +613,39 @@ export const createParser = ({
       corefField,    // the referent field, incl. held standing descriptors (inspection)
       state, // exposed for inspection; not for outside mutation
     };
+    };  // end finalize
+
+    // Driver selection. Default: one synchronous sweep, byte-identical to the forEach
+    // this replaced (the path every test and golden parse takes). With a feedback sink:
+    // a chunked sweep that yields to the event loop and reports progress, returning a
+    // Promise. Either way `finalize()` runs once, after the last sentence is folded in.
+    if (!onProgress) {
+      sentences.forEach(processSentence);
+      return finalize();
+    }
+    const total = sentences.length;
+    const chunk = Math.max(1, chunkSize | 0);
+    onProgress({ phase: 'parse', done: 0, total });
+    return (async () => {
+      for (let i = 0; i < total; i++) {
+        processSentence(sentences[i], i);
+        // Report and breathe between chunks — but not after the last sentence, since
+        // finalize() follows immediately and the terminal 100% is emitted below it.
+        if ((i + 1) % chunk === 0 && i + 1 < total) {
+          onProgress({ phase: 'parse', done: i + 1, total });
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
+      onProgress({ phase: 'parse', done: total, total });
+      return finalize();
+    })();
   };
 
   return { parse, state };
 };
 
-// One-shot convenience. Tests and the default ingest path use this form.
+// One-shot convenience. Tests and the default ingest path use this form. Returns the
+// doc synchronously; if `opts.onProgress` is supplied it returns a Promise<doc> instead
+// (the chunked, yielding parse) — `await` it. Bare calls are unchanged.
 export const parseText = (text, opts = {}) =>
   createParser(opts).parse(text, opts);
