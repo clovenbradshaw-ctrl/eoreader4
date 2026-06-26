@@ -57,6 +57,11 @@ export { linkInventory, untypedVias, growLinkTypes, createLinkLearner } from './
 // structurally over operator profiles, not by subtracting embeddings. The leave-one-out the
 // Born rule already runs; the last embedder dependency dissolved into the operator basis.
 export { propositionRoles } from './roles.js';
+// Bond-level reanalysis — the garden-path recovery as the engine's own surprisal → re-retrieve
+// → reconsolidate loop, one level below the basis REC. Composes the verb oracle (HOW
+// conventions), γ-recency re-retrieval (the coref kernel), and a logged REC; the mis-bond
+// stays on the append-only trail, so the garden path resolves auditably.
+export { reanalyze } from './reanalyze.js';
 // Meaning is not extracted — it is conjectured by a self and refuted by what follows. That
 // mechanism already exists, fully, in the enactor's commit loop: the gate PROPOSES a
 // candidate proposition (the conjecture), EVA/REC REFUTES it against the grounded basis and
