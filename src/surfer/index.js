@@ -16,6 +16,12 @@
 // does (the field is VOID) is the surfer's own negative result.
 
 export { surfFold } from './surf.js';
+// The Significance column's Ground terrain (cube.md #5): the Atmosphere pass and the
+// shared significance-basis projection every pass reads off. Pure on vectors past the
+// projection — omnimodal for free. The corpus prior is INJECTED, never imported, so the
+// surfer stays acyclic (it never reaches into classify).
+export { atmosphereOf, atmosphereFromActivations, projectUnit, projectUnits,
+         centroidBasis, corpusSigma } from './atmosphere.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';

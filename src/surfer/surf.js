@@ -21,8 +21,9 @@
 // no read dependency), so this import stays acyclic.
 
 import { readingAt } from '../perceiver/index.js';
-import { deriveNull } from '../core/index.js';
+import { deriveNull, buildDensity, eigenLenses, vonNeumann, commutator, projectorFrom } from '../core/index.js';
 import { createEnactedLoop, calibrateReader } from '../enact/index.js';
+import { atmosphereFromActivations, corpusSigma, centroidBasis } from './atmosphere.js';
 
 // The reach: a little behind the anchor (to read the frame it sits inside), mostly
 // ahead (a surf rides forward, and the arrow of time orders the frame axis).
@@ -105,22 +106,36 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   // surf landed in. Default (no alpha) is byte-identical to the median rule. The anchor is
   // always a stop (retrieval set it down); every REC cursor is always a stop (a frame broke
   // there); the strongest remaining peaks fill toward maxStops, never the flat between them.
+  // LENS CONDITIONING (Track C #3). With opts.lens set to a chosen eigen-lens |L⟩ AND
+  // per-unit significance activations supplied, each cursor's field contribution is
+  // weighted by |⟨L|vᵤ⟩|² (Born) — the surf "rides forward inside one reading" and
+  // arrests on that reading's peaks rather than the document's loudest overall. Unset
+  // (the default), `scoreOf`/`scoreAt`/`scoreSeries` ARE the raw bayes, so the arrest is
+  // byte-identical to today — the parity gate.
+  const activations = Array.isArray(opts.activations) ? opts.activations : null;
+  const lensVec = (opts.lens && activations) ? opts.lens : null;
+  const cond    = lensVec ? (c) => bornWeight(lensVec, activations[c]) : null;
+  const scoreOf = (f) => (cond ? f.bayes * cond(f.idx) : f.bayes);
+  const scoreAt = (c) => (cond ? bayesAt(c) * cond(c) : bayesAt(c));
+  const scoreSeries = cond ? field.map(scoreOf) : reachBayes;
+
   const useBoundary = Number.isFinite(opts.alpha);
-  const band = useBoundary ? null : medianOf(reachBayes);
+  const band = useBoundary ? null : medianOf(scoreSeries);
   let isPeak;
   if (useBoundary) {
     for (const f of field) {
-      const nul = deriveNull(reachBayes, { scale: 'linear', alpha: opts.alpha, leaveOut: f.bayes });
-      f.verdict = f.bayes > nul ? 'SYN' : 'NUL';   // beats the noise null → structure; else held
+      const sc = scoreOf(f);
+      const nul = deriveNull(scoreSeries, { scale: 'linear', alpha: opts.alpha, leaveOut: sc });
+      f.verdict = sc > nul ? 'SYN' : 'NUL';   // beats the noise null → structure; else held
     }
     isPeak = (f) => f.verdict === 'SYN';
   } else {
-    isPeak = (f) => f.bayes > band;
+    isPeak = (f) => scoreOf(f) > band;
   }
   const stops = new Set([a, ...recCursors]);
   const peaks = field
     .filter(f => isPeak(f) && !stops.has(f.idx))
-    .sort((x, y) => y.bayes - x.bayes);
+    .sort((x, y) => scoreOf(y) - scoreOf(x));
   for (const p of peaks) {
     if (stops.size >= maxStops) break;
     stops.add(p.idx);
@@ -129,7 +144,7 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
 
   // The peak: the steepest stop — where to take the significance reading.
   let peak = a;
-  for (const c of stopList) if (bayesAt(c) > bayesAt(peak)) peak = c;
+  for (const c of stopList) if (scoreAt(c) > scoreAt(peak)) peak = c;
 
   // The focus: the warmest figure across the stops — each stop votes its warmest
   // figure; the peak's figure breaks ties so the eye sits where the field is steepest.
@@ -139,8 +154,115 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   let best  = votes.get(focus) || 0;
   for (const [f, v] of votes) if (v > best) { best = v; focus = f; }
 
-  return { anchor: a, stops: stopList, peak, focus, field, recCursors, recAxes, rode: useBoundary ? 'bayesian-void' : 'bayesian-figure' };
+  const base = { anchor: a, stops: stopList, peak, focus, field, recCursors, recAxes, rode: useBoundary ? 'bayesian-void' : 'bayesian-figure' };
+
+  // THE SIGNIFICANCE COLUMN (Tracks B/C/D). Off unless activations are supplied AND at
+  // least one significance opt is set — so the default surf is byte-identical (the new
+  // fields never appear). The passes read off ONE density operator ρ built over the
+  // doc's significance activations (core/spectral.js), each gated by deriveNull. Pure on
+  // vectors, so this runs unchanged on text, music, video — omnimodal for free.
+  const wantSig = activations && (opts.atmosphere || opts.lensReport || opts.lens || opts.paradigm);
+  if (!wantSig) return base;
+  return { ...base, ...significancePass(activations, opts) };
 };
+
+// Build ρ over the document's significance activations and read the three terrains off
+// it. Memo-free (surf is not memoised); cheap at the 27-cell grain. `signs` rides the
+// EVA stance when supplied (a defeated reading subtracts), default +1 (asserting).
+const significancePass = (activations, opts) => {
+  const out = {};
+  const basis = opts.prior ? (opts.prior.keys ? opts.prior : centroidBasis(opts.prior)) : null;
+  const { rho } = buildDensity(activations, opts.weights || null, opts.signs || null);
+
+  // LENS (Track C): the document's natural readings, ranked by Born weight, each gated
+  // by a spectral null — a lens is REAL only when its weight beats what a random
+  // spectrum of this rank throws up by chance (deriveNull on the eigenvalues). The von
+  // Neumann entropy is the NPOV scalar AND the predictive uncertainty of the next unit.
+  if (opts.lensReport || opts.lens || opts.paradigm) {
+    const spectrum = eigenLenses(rho).map(l => l.weight);
+    const lensEntropy = vonNeumann(spectrum);
+    const k = Number.isFinite(opts.k) ? opts.k : 4;
+    const top = eigenLenses(rho, { k });
+    const lenses = top.map(({ lens, weight }) => {
+      const nul = deriveNull(spectrum, { scale: 'linear', alpha: opts.alpha ?? 0.05, leaveOut: weight });
+      return { weight: round(weight), real: Number.isFinite(nul) ? weight > nul : false, lens };
+    });
+    out.lenses = lenses;
+    out.lensEntropy = round(lensEntropy);
+  }
+
+  // ATMOSPHERE (Track B): the Ground-grain tone + KL departure from the corpus prior.
+  if (opts.atmosphere && basis) {
+    out.atmosphere = atmosphereFromActivations(activations, basis, { alpha: opts.alpha ?? 0.05 });
+  }
+
+  // PARADIGM (Track D): incommensurability of the doc's basis against a competing one
+  // (the corpus σ eigenbasis), gated against a WITHIN-document baseline so generic
+  // non-commutation does not fire. Reports the under-read vs mis-framed candidate; the
+  // append-only REC at the Paradigm site is the loop's to emit (kept report-only here).
+  if (opts.paradigm && basis) {
+    out.paradigm = paradigmReading(activations, rho, basis, opts);
+  }
+  return out;
+};
+
+// The Paradigm pass, report-only. The competing basis is the corpus σ's top
+// eigenvectors; the baseline is the two halves of the DOCUMENT itself (two bases
+// everyone agrees are commensurable). The commutator is incommensurable only when it
+// beats that baseline's null — the calibration the spec's honest seam demands.
+const paradigmReading = (activations, rho, basis, opts) => {
+  const m = Number.isFinite(opts.paradigmRank) ? opts.paradigmRank : 3;
+  const sigma = corpusSigma(basis);
+  if (!sigma?.dim) return { measurable: false, verdict: 'unmeasured' };
+  const docProj = projectorFrom(eigenLenses(rho, { k: m }).map(l => l.lens));
+  const sigProj = projectorFrom(eigenLenses(sigma.rho, { k: m }).map(l => l.lens));
+  const incommensurability = commutator(docProj, sigProj);
+
+  // Baseline: split the doc in two and measure how much two commensurable halves'
+  // bases non-commute. A handful of splits gives the chance distribution.
+  const half = activations.length >> 1;
+  const baseline = [];
+  if (half >= m) {
+    const a1 = projectorFrom(eigenLenses(buildDensity(activations.slice(0, half)).rho, { k: m }).map(l => l.lens));
+    const a2 = projectorFrom(eigenLenses(buildDensity(activations.slice(half)).rho, { k: m }).map(l => l.lens));
+    baseline.push(commutator(a1, a2));
+    // a coarser split (thirds) so deriveNull has more than one sample to work with
+    const t = Math.max(m, Math.floor(activations.length / 3));
+    if (t < activations.length - m) {
+      const b1 = projectorFrom(eigenLenses(buildDensity(activations.slice(0, t)).rho, { k: m }).map(l => l.lens));
+      const b2 = projectorFrom(eigenLenses(buildDensity(activations.slice(t)).rho, { k: m }).map(l => l.lens));
+      baseline.push(commutator(b1, b2));
+    }
+  }
+  // Without enough baseline samples we cannot tell incommensurable from generic — the
+  // safe (speak-more) failure is to stay UNDER-READ, never to claim a paradigm shift.
+  const meanBase = baseline.length ? baseline.reduce((s, x) => s + x, 0) / baseline.length : Infinity;
+  const beatsBaseline = Number.isFinite(meanBase) && incommensurability > meanBase * (opts.paradigmHysteresis ?? 1.5);
+  return {
+    measurable: baseline.length > 0,
+    incommensurability: round(incommensurability),
+    baseline: round(meanBase),
+    // mis-framed: the basis itself fails to commute past baseline → ascend (REC the
+    // Paradigm). under-read: it still commutes → stay at the Lens, retrieve more.
+    verdict: beatsBaseline ? 'mis-framed' : 'under-read',
+  };
+};
+
+// |⟨L|v⟩|² — the Born overlap of a (27-cell) activation with a chosen eigen-lens,
+// both unit-normalised. 0 when either is absent so a missing activation simply
+// contributes no conditioning, never a crash.
+const bornWeight = (lens, v) => {
+  if (!Array.isArray(lens) || !Array.isArray(v)) return 0;
+  let dot = 0, nl = 0, nv = 0;
+  const n = Math.min(lens.length, v.length);
+  for (let i = 0; i < n; i++) { dot += lens[i] * v[i]; nl += lens[i] * lens[i]; nv += v[i] * v[i]; }
+  const d = Math.sqrt(nl) * Math.sqrt(nv);
+  if (d <= 1e-12) return 0;
+  const o = dot / d;
+  return o * o;
+};
+
+const round = (x) => Math.round(x * 1e4) / 1e4;
 
 const clampIdx = (x, S) => Math.max(0, Math.min(S - 1, x | 0));
 const medianOf = (xs) => {
