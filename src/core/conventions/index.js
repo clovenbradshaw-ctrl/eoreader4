@@ -10,3 +10,7 @@ export { induceAttributionVerbs }  from './induce.js';
 // Corpus conventions as an inheritable prior — carry the harvested relation vocabulary (the
 // HOW) into a new reading, so a corpus-attested verb met once is held firm, not weak. Opt-in.
 export { corpusRelationsInherit } from './corpus.js';
+// Packaged English verb morphology — the closed irregular base→past map (the realizer's
+// regular rules handle the productive cases). The same kind of curated lexical convention as
+// the seed lists above.
+export { SEED_IRREGULAR_PAST, SEED_PAST_FORMS } from './english-verbs.js';
