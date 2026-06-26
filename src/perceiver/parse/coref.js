@@ -64,6 +64,16 @@ export const createCorefField = ({
   // Grounded deposit — a span-witnessed sighting. Adds this sighting's unit mass.
   const note = (id, sentIdx) => { touch(id, sentIdx).grounded += 1; };
 
+  // The gender ledger — a CAUSAL accumulation, off by default. The field resolves
+  // coreference without gender (by recency + role + distinctness); this is an optional
+  // SOFT cue the caller may feed from evidence seen so far (a title at first naming, or a
+  // pronoun that already resolved). It never sets the answer — it only lets a read prefer a
+  // gender-compatible candidate. Arrow of time: only what was noted BEFORE a pronoun can
+  // bias it, because nothing later has been noted yet.
+  const genders = new Map();   // id → { m, f, p } votes
+  const noteGender = (id, g) => { if (!g) return; const v = genders.get(id) || { m: 0, f: 0, p: 0 }; v[g] += 1; genders.set(id, v); };
+  const genderOf = (id) => { const v = genders.get(id); if (!v) return null; const g = ['m', 'f', 'p'].sort((a, b) => v[b] - v[a])[0]; return v[g] > 0 ? g : null; };
+
   // Conversational deposit — a talker-witnessed mention. Tagged (its own
   // channel), decaying, capped at the coupling ceiling. It adds mass; it does
   // not set mass. Warmth, never witness.
@@ -219,8 +229,20 @@ export const createCorefField = ({
     return d ? Object.freeze({ ...d }) : null;
   };
 
+  // The backward field, biased by causal gender when asked. With a pronoun gender `g`, drop
+  // the candidates KNOWN to be incompatible — but only while a compatible-or-unknown one
+  // remains, so the cue can never empty the field, and with no gender evidence at all it is
+  // exactly `field` (the gender-free reading the engine is already good at). A soft veto.
+  const fieldCompatible = (sentIdx, g) => {
+    const f = field(sentIdx);
+    if (!g) return f;
+    const compatible = f.filter((c) => { const cg = genderOf(c.id); return cg == null || cg === g; });
+    return (compatible.length && compatible.length < f.length) ? compatible : f;
+  };
+
   return {
     note, noteConversational, reinforce,
+    noteGender, genderOf, fieldCompatible,
     noteDescriptor, unifyDescriptor, bindDescriptorsByElimination, descriptorState,
     field, fieldGrounded, survivesSubtraction,
   };

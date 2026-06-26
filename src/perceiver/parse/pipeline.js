@@ -65,6 +65,12 @@ export const createParser = ({
   // byte-identical (the goldens are untouched); a harness flips it on to expose the
   // convergence the bond graph otherwise never sees.
   coordSubjects      = false,
+  // Causal gender as a SOFT coref cue (off by default → byte-identical). When on, a title
+  // at first naming and a pronoun that already resolved record an entity's gender, and a
+  // later gendered subject pronoun prefers a gender-compatible antecedent. Strictly
+  // backward-looking: only gender noted before a pronoun can bias it. The reading the engine
+  // is already good at is unchanged when this is off.
+  genderCoref        = false,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -229,12 +235,23 @@ export const createParser = ({
       const priorField = corefField.field(sentIdx);
       const priorLastIns = lastIns;
 
+      // Causal gender cue (opt-in). A title introduces an entity's gender at the moment it
+      // is named (a convention, she/he/Mr — not a name table); a leading subject pronoun's
+      // gender is read for THIS line. Both are used only to bias the BACKWARD field below.
+      const TITLE_GENDER = { mr: 'm', mister: 'm', sir: 'm', lord: 'm', mrs: 'f', miss: 'f', ms: 'f', lady: 'f', madam: 'f', madame: 'f' };
+      const titleGenders = {};
+      if (genderCoref) for (const m of sent.matchAll(/\b(Mr|Mrs|Miss|Ms|Mister|Madam|Madame|Lady|Lord|Sir)\.?\s+([A-Z][a-zA-Z]+)/g)) titleGenders[m[2].toLowerCase()] = TITLE_GENDER[m[1].toLowerCase()];
+      const lead = genderCoref ? /^\s*(he|she|they)\b/i.exec(sent) : null;
+      const pg = lead ? { he: 'm', she: 'f', they: 'p' }[lead[1].toLowerCase()] : null;
+
       for (const obs of admission.observe(sent, sentIdx)) {
         // INS on every sighting (admit and present) so edge weights track how
         // often a figure actually appears, not just that it exists.
         if (obs.status === 'admit' || obs.status === 'present') {
           log.append({ op: 'INS', id: obs.id, label: obs.label, sentIdx });
           corefField.note(obs.id, sentIdx);
+          // a title naming this entity fixes its gender, causally, at first sight.
+          if (genderCoref) for (const w of String(obs.label || '').toLowerCase().split(/\s+/)) if (titleGenders[w]) corefField.noteGender(obs.id, titleGenders[w]);
           lastIns = { id: obs.id, sentIdx };       // the arrow of time advances
         }
         if (obs.status !== 'admit' || !obs.aliasOf) continue;
@@ -306,8 +323,19 @@ export const createParser = ({
       // same pre-line field and take the strongest prior candidate. `resolve`
       // had no implementation, so that call site got nothing and pronoun-owned
       // kinship bonds dropped silently — only named owners survived. Wired now.
+      // Bias the backward field for a leading subject pronoun by its gender, using only
+      // gender noted BEFORE this line (titles, prior resolutions). Drops candidates known to
+      // be incompatible while one remains; with no gender evidence it is exactly priorField,
+      // so the gender-free reading is untouched. The chosen subject's gender is then noted
+      // for later lines — the arrow of time, carried forward one resolution at a time.
+      const genderAwarePrior = (() => {
+        if (!pg) return priorField;
+        const compat = priorField.filter(c => { const cg = corefField.genderOf(c.id); return cg == null || cg === pg; });
+        return (compat.length && compat.length < priorField.length) ? compat : priorField;
+      })();
+      if (pg && genderAwarePrior[0]) corefField.noteGender(genderAwarePrior[0].id, pg);
       const coref = {
-        field:   () => priorField,
+        field:   () => genderAwarePrior,
         resolve: () => priorField[0]?.id ?? null,
         // The last INS referent activated before this line, for a subjectless
         // clause to default to — within the activation reach, weight decayed by how

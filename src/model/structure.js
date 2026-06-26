@@ -54,7 +54,9 @@ const structuralTelling = (messages) => {
   if (!text || text.length < 8) {
     return 'There is no document structure to speak from — select a document to ground in, and I will retell what its graph holds (structure only, no model).';
   }
-  const doc = parseText(text, { docId: 'grounded-excerpts' });
+  // genderCoref on: a title or a resolved pronoun fixes gender causally, so a later "she"
+  // will not bind to a masculine antecedent — the reference line the retelling rides on.
+  const doc = parseText(text, { docId: 'grounded-excerpts', genderCoref: true });
   const out = speakConcept(doc, { genders: inferGenders(doc), max: 10 });
   return out.text && out.text.trim()
     ? out.text
