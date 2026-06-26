@@ -15,10 +15,16 @@
     "credence": "node scripts/credence-measure.mjs",
     "learn:grammar": "node scripts/learn-grammar.mjs",
     "build:centroids": "node scripts/build-centroids.mjs",
+    "preparse": "node scripts/preparse-corpus.mjs",
     "serve": "python3 -m http.server 8000"
   },
   "engines": {
     "node": ">=20"
+  },
+  "//devDependencies": "Only the offline preparse (scripts/preparse-corpus.mjs) needs these. The browser build loads hyparquet from a CDN — the app itself has no dependencies.",
+  "devDependencies": {
+    "hyparquet": "^1.26.1",
+    "hyparquet-compressors": "^1.1.1"
   },
   "license": "MIT"
 }
