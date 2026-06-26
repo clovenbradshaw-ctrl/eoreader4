@@ -27,12 +27,14 @@ test('a proposition lifted from a span is verbatim', () => {
   assert.equal(c.propositions[0].grounding, 'verbatim');
 });
 
-test('a reworded proposition over the same two figures is grounded, not fabricated', () => {
-  // same figures (Anna, Ben) related, different relation/direction than the span "Anna trusted Ben"
-  const c = classifyProvenance('Ben deceived Anna.', SPANS);
-  const p = c.propositions.find(x => x.via === 'deceived');
-  assert.ok(p, 'a proposition was parsed');
-  assert.equal(p.grounding, 'grounded', 'the same two figures in a relation is grounded, though reworded');
+test('GROUNDED requires the SAME relation — a different verb between the same figures is fabricated', () => {
+  const doc = parseText('Anna saw Ben. She trusted Ben.', { docId: 's' });
+  // "Anna trusted Ben" — the relation is in the graph (She→Anna by coref), not in any one
+  // span, so it is grounded but not verbatim; a passive/reorder would ground the same way.
+  assert.equal(classifyProvenance('Anna trusted Ben.', { doc }).propositions.find(p => p.via === 'trusted')?.grounding, 'grounded');
+  // "Anna married Ben" — same figures, but a relation the doc never asserts → fabricated.
+  // Meaning is the relation, not just who it is about: married ≠ trusted/saw.
+  assert.equal(classifyProvenance('Anna married Ben.', { doc }).propositions.find(p => p.via === 'married')?.grounding, 'fabricated');
 });
 
 test('a proposition about figures nothing read mentions is fabricated', () => {

@@ -66,17 +66,17 @@ export const classifyProvenance = (answer, source = []) => {
   const spans = Array.isArray(source) ? source : (source.spans || source.doc?.sentences || []);
   const spanLC = spans.map((s) => String(s).toLowerCase());   // for the verbatim substring check only
   const docProps = fromDoc ? docPropositions(source.doc, source.spanIdxs) : spans.flatMap(propsOf);
-  // figure pairs are ORDER-INSENSITIVE — "the same two figures stand in a relation" holds
-  // whichever way the writer turned it (a reworded or role-swapped paraphrase still grounds).
-  const pairKey = (a, b) => [a, b].sort().join('|');
-  const figurePair = new Set(docProps.filter((p) => p.obj).map((p) => pairKey(p.subj, p.obj)));
-  const subjRel = new Set(docProps.map((p) => `${p.subj}|${p.via}`));
+  // GROUNDED requires the same RELATION between the same FIGURES, not merely the same figures:
+  // "Gregor married Grete" is fabricated even though the doc relates Gregor and Grete, because
+  // it relates them by other verbs — the meaning of a proposition is its relation, not just
+  // who it is about. Figures are order-insensitive (a passive/role-swapped rewording still
+  // grounds: "Ben was trusted by Anna" ↔ "Anna trusted Ben"); the relation must match.
+  const relKey = (p) => `${[p.subj, p.obj || ''].sort().join('~')}|${p.via}`;
+  const docRel = new Set(docProps.map(relKey));
 
   const out = propsOf(answer).map((p) => {
     const inSpan = spanLC.some((s) => s.includes(p.subj) && s.includes(p.via) && (!p.obj || s.includes(p.obj)));
-    // GROUNDED is propositional: the same figures in a relation, or the same figure in the
-    // same relation — read off the document's propositions, never raw word overlap.
-    const grounded = (p.obj && figurePair.has(pairKey(p.subj, p.obj))) || subjRel.has(`${p.subj}|${p.via}`);
+    const grounded = docRel.has(relKey(p));
     const grounding = inSpan ? 'verbatim' : grounded ? 'grounded' : 'fabricated';
     return Object.freeze({ ...p, grounding, witnessed: grounding !== 'fabricated' });
   });
