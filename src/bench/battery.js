@@ -132,4 +132,33 @@ export const TARGETS = Object.freeze({
       'Name the bug Gregor became.',
     ],
   },
+
+  // ── T5 · whole-document coverage: the arc, not one region ──────────────────
+  // (surfing-next.md §1, §6) The audit's failure was a whole-document task answered from
+  // one local region — a "summary" built off the lines that happened to fall under a single
+  // anchor's reach. This target scores COVERAGE across the arc: a faithful summary-note must
+  // reach the opening (the transformation, ~0), the sibling bond established early (~16), and
+  // the terminal break (~33) — beginning, middle, end — not just whatever sits near the top
+  // hit. Every required element here is gold VALIDATED by another target (gregor-samsa and
+  // the species silence in T4, the gregor↔grete sibling in T1, span 33 in T3), composed into
+  // a whole-document probe; nothing new is asserted about the text. The spine (perceiver/
+  // spine.js) is what should lift the mid/late span recall a local surf misses.
+  arc: {
+    kind: 'coverage',
+    required: {
+      entities: ['gregor-samsa', 'grete'],
+      relations: [{ src: 'gregor-samsa', tgt: 'grete', type: 'sibling', symmetric: true }],
+      spans: [0, 16, 33],
+    },
+    forbidden: { tokens: SPECIES.slice() },     // a summary that names a species fabricated it
+    silence: { slot: 'species', tokens: SPECIES.slice() },
+    angles: [
+      'Summarize the story.',
+      'What is this story about?',
+      'What happens to Gregor over the whole story?',
+      'Give an overview of the Samsa family.',
+      'Walk me through the story from beginning to end.',
+      'What is the story of Gregor Samsa?',
+    ],
+  },
 });

@@ -20,7 +20,7 @@
 // uses ("list the nine operators") — is NOT routed here: queryTouchesDoc keeps it on the
 // lexical path, so the audit's strong t6 ("what are the 9 operators?") is untouched.
 
-import { siteIndices } from '../perceiver/index.js';
+import { siteIndices, significanceSpine } from '../perceiver/index.js';
 import { docVocab } from './lexical.js';
 import { tok } from '../perceiver/parse/index.js';
 
@@ -88,9 +88,21 @@ export const retrieveStructural = (doc, k = 12) => {
     if (isHeading(units[i])) note(i, 0.7);
   }
 
-  // An even spread across the body — representative content the opening and headings miss.
+  // The body — representative content the opening and headings miss. Two complementary
+  // sources, so a summary gets both COVERAGE and SIGNIFICANCE:
+  //   · an even SPREAD (0.5) guarantees representative coverage end-to-end — never let a
+  //     region of a long document go wholly unseen;
+  //   · the document's TURNING POINTS (0.55, ranked above the spread) — the cursors of
+  //     highest Bayesian surprise read at document scale (perceiver/spine.js), where the
+  //     reading was rewritten. (surfing-next.md §1: the audit's thin summary was an even
+  //     stride of arbitrary lines; the spine adds the lines a summary is actually built
+  //     from, and ranks them ahead of the generic stride so they survive the k cap.)
+  // The spine degrades to nothing on a document with no measured surprise; the spread
+  // alone then behaves exactly as before — a strict superset of the old behaviour.
   const stride = Math.max(1, Math.floor(units.length / k));
   for (let i = 0; i < units.length; i += stride) note(i, 0.5);
+  const spine = significanceSpine(doc, { k });
+  for (const idx of spine.peaks) note(idx, 0.55);
 
   return [...picked.entries()]
     .map(([idx, score]) => ({ idx, score, text: units[idx], kind: 'structural', via: 'structural' }))
