@@ -24,6 +24,27 @@ import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
 
+// Weave the mind's recalled lines into the prompt as labelled BACKGROUND — only when
+// the user has the Mind chip in weave mode (ctx.mindSpans present). The memory is
+// offered for context and explicitly marked as NOT the document: grounded claims are
+// still cited to the document's spans, never to these. Appended to the final (user)
+// message so it rides inside the window without disturbing the grounded/chat assembly.
+// Guarded entirely by mindSpans — every default turn skips it, byte-identical.
+const weaveMemory = (messages, mindSpans) => {
+  if (!messages?.length || !mindSpans?.length) return messages;
+  const lines = mindSpans.slice(0, 5).map((s) => {
+    const who = s.book?.authors ? ` — ${String(s.book.authors).split(';')[0].trim()}` : '';
+    const line = String(s.text || '').replace(/\s+/g, ' ').trim();
+    return `- “${line}” (${s.book?.title || 'unknown'}${who})`;
+  }).join('\n');
+  const block = `\n\n[From memory — eoreader’s read corpus, offered as background only. ` +
+    `These are not the open document; cite the document for any grounded claim.]\n${lines}`;
+  const out = messages.map((m) => ({ ...m }));
+  const last = out.length - 1;
+  out[last] = { ...out[last], content: `${out[last].content}${block}` };
+  return out;
+};
+
 // The Significance column's opts for the fold's surf. Returns {} — the byte-identical
 // default — unless a MEANING-measuring embedder and a centroid prior are both present.
 // The async embedding work happens HERE (the fold stage is async); the surf itself
@@ -280,10 +301,13 @@ export const stages = {
           notes:    ctx.conversation?.notes || '',
           free:     ctx.grounding === 'free',   // general-knowledge register, explicitly ungrounded
         });
+    // Weave in the read corpus (the mind) when the user opted into weave mode. Null
+    // otherwise — the present prompt is untouched, golden parses byte-identical.
+    const woven = weaveMemory(messages, ctx.mindSpans);
     return {
       ...ctx,
-      messages,
-      promptText: messages.map(m => `${m.role}: ${m.content}`).join('\n\n'),
+      messages: woven,
+      promptText: woven.map(m => `${m.role}: ${m.content}`).join('\n\n'),
     };
   },
 

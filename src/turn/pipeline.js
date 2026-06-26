@@ -42,7 +42,7 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -66,7 +66,12 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // Significance column (Atmosphere · Lens · Paradigm); absent either, the column is
   // dark and the surf is byte-identical to today. Injected, never imported, so the
   // surfer stays acyclic.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha };
+  // `mindSpans` is the read corpus's contribution (src/mind) when the user has the
+  // Mind chip in WEAVE mode: provenance-tagged lines woven into the prompt as labelled
+  // background. Null on every default turn, so the prompt — and the golden parses — are
+  // byte-identical unless the user opts in. The mind stays epistemically separate: these
+  // are offered as background, never folded into the document's citable spans.
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model

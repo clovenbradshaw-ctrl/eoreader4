@@ -7,6 +7,7 @@ import { createStore, memoryBackend } from '../src/mind/store.js';
 import { buildMind } from '../src/mind/build.js';
 import { scoreQuery, materialize } from '../src/mind/retrieve.js';
 import { createMind } from '../src/mind/index.js';
+import { stages } from '../src/turn/stages.js';
 
 // A synthetic two-group corpus. Each "book" is a short text; segmentation and
 // tokenisation go through the SAME functions the live reader uses, which is the
@@ -113,4 +114,32 @@ test('createMind end-to-end: build then retrieve with provenance', async () => {
   assert.ok(spans.length > 0);
   assert.ok(spans.every(s => s.via === 'mind' && s.book?.uri));
   assert.equal((await mind.retrieve('', 5)).length, 0, 'empty query retrieves nothing');
+});
+
+// ── The weave path: the prompt stage folds memory ONLY when opted in ──────────
+const chatCtx = (extra = {}) => ({
+  question: 'tell me about whales', route: 'chat', grounding: 'free',
+  recentMessages: [], conversation: { notes: '' }, ...extra,
+});
+const MIND_SPANS = [
+  { idx: 1, text: 'Call me Ishmael.', via: 'mind', book: { title: 'Moby-Dick', authors: 'Melville, Herman', uri: 'https://www.gutenberg.org/ebooks/2701' } },
+];
+
+test('prompt stage is byte-identical with no mind spans (default path)', async () => {
+  const a = await stages.prompt(chatCtx());
+  const b = await stages.prompt(chatCtx({ mindSpans: null }));
+  assert.equal(a.promptText, b.promptText);
+  assert.doesNotMatch(a.promptText, /From memory/);
+});
+
+test('weave folds memory into the prompt only when mind spans are present', async () => {
+  const woven = await stages.prompt(chatCtx({ mindSpans: MIND_SPANS }));
+  assert.match(woven.promptText, /From memory/);
+  assert.match(woven.promptText, /Moby-Dick/);
+  assert.match(woven.promptText, /Call me Ishmael/);
+  // The base prompt (without memory) is a strict prefix-free difference: the woven
+  // text is the plain text plus the block, nothing else removed.
+  const plain = await stages.prompt(chatCtx());
+  assert.ok(woven.promptText.length > plain.promptText.length);
+  assert.ok(woven.promptText.startsWith(plain.promptText.slice(0, 20)));
 });
