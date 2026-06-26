@@ -76,15 +76,20 @@ const migrateFocus = (propositions, activation, visited, gamma) => {
 //                is what thinking hands to speaking: not the firm record (rumination) but the
 //                unsettled point where saying it out loud could still pay.
 
-// the figures the graph CHARACTERIZES — every label that is a subject of a CON/SIG bond. A
-// figure outside this set, yet reached by the wander, is appeared-but-not-characterized: open.
-const characterized = (doc) => {
+// Read off the graph the two sets the open-question test needs:
+//   entities      every admitted figure (INS label) — only a FIGURE can be an open void; a
+//                 bare object token ("milk", "away") that was never admitted is not a person
+//                 the train can wonder about.
+//   characterized every entity that ACTS — a subject of a CON/SIG bond. An entity reached by
+//                 the wander but outside this set is appeared-but-not-characterized: open.
+const graphFigures = (doc) => {
   const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
   const label = new Map();
   for (const e of events) if (e.op === 'INS' && e.id != null && !label.has(e.id)) label.set(e.id, String(e.label).toLowerCase());
-  const subjects = new Set();
-  for (const e of events) if ((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null) subjects.add(label.get(e.src) ?? String(e.src).toLowerCase());
-  return subjects;
+  const entities = new Set(label.values());
+  const characterized = new Set();
+  for (const e of events) if ((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null) characterized.add(label.get(e.src) ?? String(e.src).toLowerCase());
+  return { entities, characterized };
 };
 
 export const think = (doc, {
@@ -148,9 +153,12 @@ export const think = (doc, {
   // by how much the train kept returning to it (activation): the loudest silence is the most
   // pressing open question. These are the void band (voids.js) at doc-graph grain — the points
   // where saying it out loud could still pay, as opposed to re-narrating the firm record.
-  const acts = characterized(doc);
+  const { entities, characterized } = graphFigures(doc);
   const voids = [...activation.entries()]
-    .filter(([label, a]) => a > 0 && !acts.has(String(label).toLowerCase()))
+    .filter(([label, a]) => {
+      const lc = String(label).toLowerCase();
+      return a > 0 && entities.has(lc) && !characterized.has(lc);   // a FIGURE, reached, that never acts
+    })
     .sort((x, y) => y[1] - x[1])
     .map(([figure, a]) => Object.freeze({ figure, band: 'void', activation: a, reason: 'reached but never acts — appeared, not characterized' }));
 
@@ -185,7 +193,7 @@ export const worthSayingAloud = (thought, { limit = 3 } = {}) =>
 // Returns { closed, remaining, resolved, open } — closed carry a perceiver witness; remaining
 // are still the self's open questions.
 export const resolveVoids = (thought, doc) => {
-  const acts = characterized(doc);
+  const { characterized: acts } = graphFigures(doc);
   const closed = [];
   const remaining = [];
   for (const v of thought.voids || []) {
