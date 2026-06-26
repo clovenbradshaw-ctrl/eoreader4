@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/index.js';
-import { OPS, operatorProfiles, structuralHorizon, structuralCommutator } from '../src/surfer/index.js';
+import { OPS, RELTYPES, operatorProfiles, structuralActivations, structuralHorizon, structuralCommutator } from '../src/surfer/index.js';
 import { OPERATORS } from '../src/core/index.js';
 
 // The structural significance basis: ρ built from OPERATIONS (the cube's Act face), not
@@ -51,6 +51,24 @@ test('structuralCommutator: identical operational bases commute (~0); determinis
   const c = structuralCommutator(prof, prof);          // a basis against itself
   assert.ok(c < 1e-6, 'a basis commutes with itself');
   assert.equal(structuralCommutator(prof, prof), c, 'deterministic');
+});
+
+test('the enriched basis adds relation classes + polarity signs, still structural', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  const s = structuralActivations(doc, { relations: true });
+  assert.equal(s.dims.length, OPS.length + RELTYPES.length, 'operators + relation classes');
+  assert.deepEqual(s.dims.slice(OPS.length), RELTYPES);
+  assert.equal(s.activations.length, (doc.units || doc.sentences).length);
+  assert.ok(s.signs.every(v => v === 1 || v === -1), 'every unit carries a ±1 polarity sign');
+});
+
+test('enriched structuralHorizon reads operational-relational lenses (no embedder)', () => {
+  const doc = parseText(STORY, { docId: 's' });
+  const H = structuralHorizon(doc, { k: 5, relations: true, signs: true });
+  assert.equal(H.dims.length, OPS.length + RELTYPES.length);
+  const vocab = new Set(H.dims);
+  for (const l of H.lenses) for (const p of l.pattern) assert.ok(vocab.has(p.op), 'a lens component is an operator or a relation class — never a word');
+  assert.ok(H.tone.relation === null || RELTYPES.includes(H.tone.relation), 'the tone may name a relation class');
 });
 
 test('an op-less document degrades safely to a blank reading', () => {

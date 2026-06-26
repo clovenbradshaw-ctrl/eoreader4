@@ -15,13 +15,17 @@ const a = raw.search(/\*\*\* ?START OF TH/i), b = raw.search(/\*\*\* ?END OF TH/
 if (a >= 0 && b > a) raw = raw.slice(raw.indexOf('\n', a) + 1, b);
 const doc = parseText(raw, { docId: 'metamorphosis' });
 
-const H = structuralHorizon(doc, { k: 4 });
 console.log('STRUCTURAL significance — ρ from operations, no embedder, nothing distributional\n');
-console.log(`units performing operations: ${H.units}`);
-console.log(`departure from the bare operational ground: ${H.departure}   lensEntropy: ${H.lensEntropy}`);
-console.log(`tone: ${H.tone.label}   domain mix: ${JSON.stringify(H.tone.domainMix)}`);
-console.log('\noperational lenses (the document\'s recurring readings):');
-for (const l of H.lenses) console.log(`  weight ${String(l.weight).padEnd(7)} = ${l.pattern.map(p => `${p.w > 0 ? '+' : ''}${p.w}·${p.op}`).join('  ')}`);
+const base = structuralHorizon(doc, { k: 4 });
+console.log(`[operators only]  units ${base.units}  departure ${base.departure}  lensEntropy ${base.lensEntropy}`);
+console.log(`  tone: ${base.tone.label}   domain mix: ${JSON.stringify(base.tone.domainMix)}`);
+for (const l of base.lenses) console.log(`    ${String(l.weight).padEnd(7)} = ${l.pattern.map(p => `${p.w > 0 ? '+' : ''}${p.w}·${p.op}`).join('  ')}`);
+
+const H = structuralHorizon(doc, { k: 5, relations: true, signs: true });
+console.log(`\n[enriched: + relation classes + polarity signs]  ${H.dims.length} dims  departure ${H.departure}  lensEntropy ${H.lensEntropy}`);
+console.log(`  tone: ${H.tone.label}   dominant relation: ${H.tone.relation}`);
+console.log('  operational-relational lenses (finer readings, still structural):');
+for (const l of H.lenses) console.log(`    ${String(l.weight).padEnd(7)} = ${l.pattern.map(p => `${p.w > 0 ? '+' : ''}${p.w}·${p.op}`).join('  ')}`);
 
 const prof = operatorProfiles(doc); const half = prof.length >> 1;
 console.log(`\nParadigm (operational): first-half vs second-half commutator = ${structuralCommutator(prof.slice(0, half), prof.slice(half))}`);
