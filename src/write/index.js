@@ -60,6 +60,16 @@ export { conceptToPlan, speakConcept } from './traverse.js';
 // the pronouns that corefer to them) — not a name table. Silent where the text gives no
 // evidence, so the referrer falls back to the name rather than fabricating "it".
 export { inferGenders } from './genders.js';
+// The phraser → talker hand-off: this engine determines the grounded propositions (content,
+// fabrication-incapable); an LLM talker only rewords them fluently, behind a propositional
+// veto. phraserBrief packages the determined content; talkThenVerify realises it and strips
+// any proposition the talker added that the document does not witness.
+export { phraserBrief, realizationPrompt, talkThenVerify } from './brief.js';
+// Thinking is the phraser→talker arc turned INWARD: voice an impression to yourself, read
+// your own words back (READ_BACK-of-prior-self), let the hearing re-focus the graph, voice
+// again — inner speech as spreading activation, grounded, firewalled (every thought is mine
+// and cannot witness), self-terminating. The phraser is the inner voice; no model needed.
+export { think, everyThoughtIsMine, worthSayingAloud, resolveVoids, inquire } from './think.js';
 // Grammatical encoding (surface only): join adjacent same-subject clauses into one
 // sentence with a compound predicate — the standard NLG aggregation move, so the
 // generator says "He woke, saw his legs, and turned" rather than three choppy clauses. It

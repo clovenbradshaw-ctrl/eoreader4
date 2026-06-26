@@ -25,6 +25,16 @@ test('it retells the grounded excerpts as structural surface text', async () => 
   assert.ok(reply.endsWith('.'), 'realised as sentences');
 });
 
+test('it thinks before finishing — it surfaces a figure it could not resolve, as an open question', async () => {
+  const m = createModel('structure');
+  // Klamm is sought and feared but never acts — the engine should retell, then name what stays open.
+  const messages = [{ role: 'user', content:
+    `Q?\n\n${EXCERPTS_HEADER}\nGregor sought Klamm. Gregor feared Klamm. Grete trusted Gregor.` }];
+  const reply = await m.phrase(messages);
+  assert.match(reply, /Klamm/, 'it names the figure');
+  assert.match(reply, /stays open|never acts|What of/i, 'and surfaces it as its own unresolved question, not a fabricated answer');
+});
+
 test('it abstains honestly when there is no structure to speak from', async () => {
   const m = createModel('structure');
   const reply = await m.phrase([{ role: 'user', content: 'hello there' }]);

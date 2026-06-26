@@ -61,7 +61,7 @@ export { propositionRoles } from './roles.js';
 // → reconsolidate loop, one level below the basis REC. Composes the verb oracle (HOW
 // conventions), γ-recency re-retrieval (the coref kernel), and a logged REC; the mis-bond
 // stays on the append-only trail, so the garden path resolves auditably.
-export { reanalyze } from './reanalyze.js';
+export { reanalyze, applyReanalysis } from './reanalyze.js';
 // Meaning is not extracted — it is conjectured by a self and refuted by what follows. That
 // mechanism already exists, fully, in the enactor's commit loop: the gate PROPOSES a
 // candidate proposition (the conjecture), EVA/REC REFUTES it against the grounded basis and

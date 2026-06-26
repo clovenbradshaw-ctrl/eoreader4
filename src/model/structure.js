@@ -16,7 +16,7 @@ import { registerBackend } from './interface.js';
 import { EXCERPTS_HEADER } from './prompt.js';
 import { emitSurface } from './stream.js';
 import { parseText } from '../perceiver/parse/index.js';
-import { speakConcept, inferGenders } from '../write/index.js';
+import { speakConcept, inferGenders, think, worthSayingAloud } from '../write/index.js';
 
 registerBackend('structure', () => {
   return {
@@ -57,8 +57,21 @@ const structuralTelling = (messages) => {
   // genderCoref on: a title or a resolved pronoun fixes gender causally, so a later "she"
   // will not bind to a masculine antecedent — the reference line the retelling rides on.
   const doc = parseText(text, { docId: 'grounded-excerpts', genderCoref: true });
-  const out = speakConcept(doc, { genders: inferGenders(doc), max: 10 });
-  return out.text && out.text.trim()
+  const genders = inferGenders(doc);
+  const out = speakConcept(doc, { genders, max: 10 });
+  const retelling = out.text && out.text.trim()
     ? out.text
     : 'I read the excerpts but their graph held no traversable relations to retell.';
+
+  // Think before finishing: run the inner-speech wander over the same graph and surface the
+  // open question it found — a figure it kept hearing about that never acts. This is the
+  // "Open" ledger made conversational: the backend says what it can ground, THEN names, in its
+  // own voice, what it could not resolve. It never fabricates an answer to its own question —
+  // a thought cannot witness; only a further document could close it. So this is honest
+  // not-knowing surfaced, not a guess dressed as fact.
+  const thought = think(doc, { genders });
+  const open = worthSayingAloud(thought, { limit: 1 })[0];
+  return open
+    ? `${retelling} One figure stays open for me, though — ${open.figure} is in the scene but never acts. ${open.question}`
+    : retelling;
 };

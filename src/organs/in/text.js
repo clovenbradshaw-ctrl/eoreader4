@@ -24,7 +24,13 @@ export const ingestText = async (file, opts = {}) => {
   const rolesConflict = opts.rolesConflict === false ? () => false
     : (typeof opts.rolesConflict === 'function' ? opts.rolesConflict : areDisjoint);
   const coordSubjects = opts.coordSubjects ?? RULES_REV;   // §4 — coordinated subjects (flagged)
-  const doc   = parseText(text, { docId: name, rolesConflict, corefOpts: opts.corefOpts, coordSubjects });
+  // FEEDBACK channel for large documents. When the caller wires `opts.onProgress`, the
+  // parse runs chunked and yielding (returns a Promise) and reports as it goes; without
+  // it the parse is the synchronous, byte-identical sweep. `await` is safe either way —
+  // awaiting the plain doc the sync path returns just resolves to it.
+  const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : undefined;
+  const doc   = await parseText(text, { docId: name, rolesConflict, corefOpts: opts.corefOpts,
+                                        coordSubjects, onProgress, chunkSize: opts.chunkSize });
 
   // The graph is a fold of the log. Expose it as a frame-parameterised
   // projection so the UI can re-weight around a reading cursor (γ decay)
@@ -40,9 +46,20 @@ export const ingestText = async (file, opts = {}) => {
   // caller the stale hash vectors the first caller computed — silently defeating the
   // retrieval upgrade. Key by organ id so each space is memoised independently.
   const vecByOrgan = new Map();
-  doc.sentenceEmbeddings = async (embedder) => {
+  doc.sentenceEmbeddings = async (embedder, onProgress) => {
     const key = embedder?.id || 'default';
-    if (!vecByOrgan.has(key)) vecByOrgan.set(key, Promise.all(doc.sentences.map(s => embedder.embed(s))));
+    if (!vecByOrgan.has(key)) {
+      const total = doc.sentences.length;
+      // Wrap each embed so progress is reported AS vectors land — the embedder may be a
+      // real model (MiniLM/ONNX) whose warmup over a large document is the slow phase.
+      // The cache holds the fastest form (no wrapper) when no sink is watching.
+      const compute = typeof onProgress === 'function'
+        ? (() => { let done = 0; onProgress({ phase: 'embed', done: 0, total });
+            return Promise.all(doc.sentences.map(s => Promise.resolve(embedder.embed(s))
+              .then(v => { onProgress({ phase: 'embed', done: ++done, total }); return v; }))); })()
+        : Promise.all(doc.sentences.map(s => embedder.embed(s)));
+      vecByOrgan.set(key, compute);
+    }
     return vecByOrgan.get(key);
   };
 
