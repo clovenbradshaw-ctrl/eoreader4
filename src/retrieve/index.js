@@ -3,3 +3,4 @@
 export { retrieveLexical }  from './lexical.js';
 export { retrieveSemantic } from './semantic.js';
 export { retrieveHybrid, fuseConcordance, pickRetrievalEmbedder, selectExcerpts } from './hybrid.js';
+export { retrieveStructural, queryTouchesDoc } from './structural.js';

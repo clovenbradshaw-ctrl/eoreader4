@@ -174,6 +174,9 @@ const summarize = (name, ctx, ms) => {
     case 'converse': return { ...base, recent: ctx.convStats?.recent || 0,
                               folded: ctx.convStats?.folded || 0, notesLen: ctx.convStats?.notesLen || 0 };
     case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0,
+                              // the retrieval mode, when it left the default hybrid path (e.g. 'structural'
+                              // for a whole-document meta-query — the audit can see the skeleton was read)
+                              ...(ctx.retrieval ? { mode: ctx.retrieval } : {}),
                               // the conversation-resolved query, shown only when it differs from the raw question
                               ...(ctx.retrievalQuery && ctx.retrievalQuery !== ctx.question ? { q: ctx.retrievalQuery } : {}) };
     case 'fold':     return { ...base, noteLen: ctx.note?.text?.length || 0,

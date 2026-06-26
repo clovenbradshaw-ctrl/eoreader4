@@ -15,7 +15,7 @@ import { fuzzyMatches } from '../perceiver/parse/index.js';
 // once per document and cached on a WeakMap (no doc mutation), and from the SAME
 // `tok` the index was built from, so the fuzzy expansion can never drift from it.
 const vocabCache = new WeakMap();
-const docVocab = (doc) => {
+export const docVocab = (doc) => {
   let v = vocabCache.get(doc);
   if (v) return v;
   v = new Set();
