@@ -72,7 +72,12 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
   const units = [];
   const refer = (ent, role) => {
     if (!ent || ent.id == null) return typeof ent === 'string' ? ent : (ent?.name || '');
-    const pron = PRONOUN[ent.gender]?.[role];
+    // Pronominalise ONLY a gender the reading actually evidenced (m/f/p). An entity with no
+    // gender evidence is referred to by NAME — never a fabricated "it", which is the writing
+    // side of the same discipline reading uses: do not emit a referring form the reader
+    // cannot license back to the meant entity.
+    const evidenced = ent.gender === 'm' || ent.gender === 'f' || ent.gender === 'p';
+    const pron = evidenced ? PRONOUN[ent.gender]?.[role] : null;
     const usePronoun = pron && reader.resolvesTo(ent.id, ent.gender);
     const surface = usePronoun ? pron : ent.name;
     reader.note(ent.id, ent.gender, ent.name);               // now E is the most recent

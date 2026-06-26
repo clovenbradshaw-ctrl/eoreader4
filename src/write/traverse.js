@@ -33,29 +33,42 @@ export const conceptToPlan = (doc, { genders = {}, max = 12, minCoupling = 0 } =
   // speaks everything (byte-identical), so the floor is opt-in.
   const edges = events
     .filter(e => (e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null)
-    .map(e => ({ from: e.src, to: e.tgt, via: e.via, coupling: e.coupling != null ? e.coupling : (e.w != null ? e.w : 1) }))
+    .map(e => ({ from: e.src, to: e.tgt, via: e.via, sentIdx: e.sentIdx ?? 0, coupling: e.coupling != null ? e.coupling : (e.w != null ? e.w : 1) }))
     .filter(e => e.coupling >= minCoupling);
   if (!edges.length) return [];
 
+  // The order of saying is a COHERENCE walk, not a salience sort. Discourse reads well when
+  // each step keeps the center (Centering Theory: CONTINUE the entity in focus before
+  // shifting). So: start at the most-connected entity (the hub of the scene), then keep
+  // saying what the FOCUS does until it runs out, then shift to an entity already mentioned
+  // (a smooth RETAIN/SHIFT, not a jump to a stranger), and only then to a fresh start. Among
+  // equally-coherent next steps, the earliest-constituted edge goes first — the scene's own
+  // temporal order breaks ties, but connectivity, not coupling, drives the walk. Nothing is
+  // dropped: the loop runs until every edge is said (or max is hit).
   const deg = {};
   for (const e of edges) deg[e.from] = (deg[e.from] || 0) + 1;
-  let cur = Object.entries(deg).sort((a, b) => b[1] - a[1])[0]?.[0];
+  let focus = Object.entries(deg).sort((a, b) => b[1] - a[1])[0]?.[0];
 
-  const used = new Set();
+  const byOrder = edges.slice().sort((a, b) => a.sentIdx - b.sentIdx);   // constitution order = tiebreak
+  const remaining = new Set(byOrder);
+  const mentioned = [];                                                  // most-recent first, for smooth shift
+  const note = (id) => { const i = mentioned.indexOf(id); if (i >= 0) mentioned.splice(i, 1); mentioned.unshift(id); };
+  const firstWhere = (pred) => { for (const e of byOrder) if (remaining.has(e) && pred(e)) return e; return null; };
+
   const plan = [];
-  let guard = 0;
-  while (plan.length < max && guard++ < max * 3) {
-    let out = edges.filter(e => e.from === cur && !used.has(e));
-    if (!out.length) { const any = edges.find(e => !used.has(e)); if (!any) break; cur = any.from; continue; }
-    out.sort((a, b) => b.coupling - a.coupling);
-    const e = out[0]; used.add(e);
+  while (remaining.size && plan.length < max) {
+    let e = firstWhere(x => x.from === focus)            // CONTINUE: the focus keeps acting
+         || firstWhere(x => mentioned.includes(x.from))  // SHIFT smoothly: to someone already in play
+         || byOrder.find(x => remaining.has(x));          // fresh start: the earliest unsaid
+    remaining.delete(e);
     const objIsEntity = label.has(e.to);
     plan.push({
       subj: { id: e.from, gender: G(e.from), name: L(e.from) },
       verb: e.via,
       obj: objIsEntity ? { id: e.to, gender: G(e.to), name: L(e.to) } : L(e.to),
     });
-    if (objIsEntity) cur = e.to;
+    note(e.from); if (objIsEntity) note(e.to);
+    focus = objIsEntity ? e.to : e.from;                 // follow the bond to keep the chain connected
   }
   return plan;
 };

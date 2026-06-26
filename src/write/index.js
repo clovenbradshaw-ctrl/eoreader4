@@ -56,6 +56,10 @@ export { foldImpression } from './impression.js';
 // hold the activated graph as the imagistic concept, traverse it for the order of saying.
 export { createReaderModel, writeReferring } from './refer.js';
 export { conceptToPlan, speakConcept } from './traverse.js';
+// Gender inferred by reading (γ-recency over the committed entities + the lexical gender of
+// the pronouns that corefer to them) — not a name table. Silent where the text gives no
+// evidence, so the referrer falls back to the name rather than fabricating "it".
+export { inferGenders } from './genders.js';
 // Grammatical encoding (surface only): join adjacent same-subject clauses into one
 // sentence with a compound predicate — the standard NLG aggregation move, so the
 // generator says "He woke, saw his legs, and turned" rather than three choppy clauses. It

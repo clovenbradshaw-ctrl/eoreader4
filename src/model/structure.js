@@ -16,7 +16,7 @@ import { registerBackend } from './interface.js';
 import { EXCERPTS_HEADER } from './prompt.js';
 import { emitSurface } from './stream.js';
 import { parseText } from '../perceiver/parse/index.js';
-import { speakConcept } from '../write/index.js';
+import { speakConcept, inferGenders } from '../write/index.js';
 
 registerBackend('structure', () => {
   return {
@@ -45,30 +45,17 @@ const excerptsFrom = (messages) => {
   return '';
 };
 
-// Best-effort gender, so pronoun conformance has something to work with. Titles are
-// decisive when present; otherwise the nearest pronoun within a short window after a
-// capitalised name votes. Unknown stays neuter ("it") — honest, never guessed past the
-// evidence. (Real coref runs in the parse; this only labels the entities for the writer.)
-const inferGenders = (text) => {
-  const g = {};
-  for (const m of text.matchAll(/\b(Mrs|Ms|Miss|Lady|Mr|Sir|Lord)\b\.?\s+([A-Z][a-z]+)/g))
-    g[m[2]] = /^(mrs|ms|miss|lady)$/i.test(m[1]) ? 'f' : 'm';
-  for (const m of text.matchAll(/\b([A-Z][a-z]+)\b[^.!?]{0,40}?\b(he|him|his|she|her|hers|they|them|their)\b/gi)) {
-    const name = m[1], p = m[2].toLowerCase();
-    if (g[name]) continue;
-    g[name] = /^(he|him|his)$/.test(p) ? 'm' : /^(she|her|hers)$/.test(p) ? 'f' : 'p';
-  }
-  return g;
-};
-
 // Read the excerpts as a concept graph and speak the traversal. Returns a plain string.
+// Gender is inferred by reading (write/genders.js — γ-recency over the committed entities
+// and the gender of the pronouns that corefer to them), not from a name table; where the
+// text gives no evidence, the entity is named rather than mis-pronouned.
 const structuralTelling = (messages) => {
   const text = excerptsFrom(messages);
   if (!text || text.length < 8) {
     return 'There is no document structure to speak from — select a document to ground in, and I will retell what its graph holds (structure only, no model).';
   }
   const doc = parseText(text, { docId: 'grounded-excerpts' });
-  const out = speakConcept(doc, { genders: inferGenders(text), max: 10 });
+  const out = speakConcept(doc, { genders: inferGenders(doc), max: 10 });
   return out.text && out.text.trim()
     ? out.text
     : 'I read the excerpts but their graph held no traversable relations to retell.';
