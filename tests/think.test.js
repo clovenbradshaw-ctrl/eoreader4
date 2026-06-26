@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/index.js';
-import { think, everyThoughtIsMine } from '../src/write/index.js';
+import { think, everyThoughtIsMine, worthSayingAloud } from '../src/write/index.js';
 import { READ_BACK } from '../src/core/index.js';
 
 // Thinking = impressionistic talking turned inward. Voice an impression, hear it back,
@@ -45,6 +45,25 @@ test('thinking is grounded — every voiced proposition is one the graph holds',
   const said = t.train.flatMap((th) => th.propositions.map((p) => p.verb));
   // the relations thought are the doc's own verbs; nothing invented
   for (const v of said) assert.match(v, /saw|trusted|struck|loved/, `${v} is a relation the scene holds`);
+});
+
+test('the wander surfaces open questions — a figure heard about but never acting is a void', () => {
+  // Klamm is reached (Gregor sought Klamm) but never acts — appeared, not characterized.
+  const doc = parseText('Gregor saw Grete. Gregor sought Klamm. Grete trusted Gregor.', { docId: 'k' });
+  const t = think(doc, { cursor: 'Gregor', genders: { Gregor: 'm', Grete: 'f' } });
+  assert.ok(t.voids.some((v) => /klamm/i.test(v.figure)), 'Klamm — heard about, never acts — is an open void');
+  assert.ok(t.voids.every((v) => v.band === 'void'), 'each is the open-Resolution void band');
+  // a figure that DOES act (Grete trusts) is characterized — not a void
+  assert.ok(!t.voids.some((v) => /grete/i.test(v.figure)), 'Grete acts, so she is characterized, not open');
+});
+
+test('thinking hands its findings to speaking — the loudest silence becomes a question', () => {
+  const doc = parseText('Gregor saw Grete. Gregor sought Klamm. Gregor feared Klamm.', { docId: 'k' });
+  const t = think(doc, { cursor: 'Gregor', genders: { Gregor: 'm' } });
+  const aloud = worthSayingAloud(t);
+  assert.ok(aloud.length >= 1, 'the train surfaces something worth opening your mouth about');
+  assert.match(aloud[0].question, /What of/, 'the open void becomes a question to say out loud');
+  assert.match(aloud[0].figure, /klamm/i, 'and it is the figure the train kept circling, never resolving');
 });
 
 test('a doc with no relations yields no thoughts — nothing to think about', () => {

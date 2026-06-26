@@ -65,11 +65,28 @@ const migrateFocus = (propositions, activation, visited, gamma) => {
 //   max          propositions per single thought (per-voicing breadth).
 //   gamma        the activation decay — how fast a touched figure's pull fades (recency).
 //   enactment    this train's enactment id — the me-ness stamp every thought carries.
-// Returns { train, focusReached, quiesced, voiced }:
+// Returns { train, focusReached, quiesced, voiced, voids }:
 //   train        the thoughts, each { focus, draft, propositions, prov, classified, canWitness }
 //   focusReached the ordered set of figures the train actually thought from (its coverage)
 //   quiesced     true when it stopped because no fresh figure was reached (not the backstop)
 //   voiced       the inner monologue, the drafts joined — the words that never left
+//   voids        the OPEN QUESTIONS the wander surfaced: figures it kept hearing about (reached
+//                as an object) yet that never ACT (never a bond subject) — appeared but not
+//                characterized (voids.js's open-Resolution band, read at doc-graph grain). This
+//                is what thinking hands to speaking: not the firm record (rumination) but the
+//                unsettled point where saying it out loud could still pay.
+
+// the figures the graph CHARACTERIZES — every label that is a subject of a CON/SIG bond. A
+// figure outside this set, yet reached by the wander, is appeared-but-not-characterized: open.
+const characterized = (doc) => {
+  const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
+  const label = new Map();
+  for (const e of events) if (e.op === 'INS' && e.id != null && !label.has(e.id)) label.set(e.id, String(e.label).toLowerCase());
+  const subjects = new Set();
+  for (const e of events) if ((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null) subjects.add(label.get(e.src) ?? String(e.src).toLowerCase());
+  return subjects;
+};
+
 export const think = (doc, {
   cursor = null, genders = {}, maxThoughts = 16, max = 6, gamma = 0.7, enactment = 'think',
 } = {}) => {
@@ -125,7 +142,19 @@ export const think = (doc, {
   }
 
   const voiced = train.map((t) => t.draft).filter(Boolean).join(' ');
-  return Object.freeze({ train, focusReached, quiesced, voiced });
+
+  // the open questions the wander surfaced: every figure it reached (activation > 0) that the
+  // graph never characterizes (never a bond subject) — heard about, but it never acts. Ordered
+  // by how much the train kept returning to it (activation): the loudest silence is the most
+  // pressing open question. These are the void band (voids.js) at doc-graph grain — the points
+  // where saying it out loud could still pay, as opposed to re-narrating the firm record.
+  const acts = characterized(doc);
+  const voids = [...activation.entries()]
+    .filter(([label, a]) => a > 0 && !acts.has(String(label).toLowerCase()))
+    .sort((x, y) => y[1] - x[1])
+    .map(([figure, a]) => Object.freeze({ figure, band: 'void', activation: a, reason: 'reached but never acts — appeared, not characterized' }));
+
+  return Object.freeze({ train, focusReached, quiesced, voiced, voids });
 };
 
 // everyThoughtIsMine — the firewall as an assertable predicate (idle.js I2 surfaced): no
@@ -133,3 +162,13 @@ export const think = (doc, {
 // rumination laundering self-talk into fact; this is the type-level guarantee it cannot.
 export const everyThoughtIsMine = (train) =>
   train.every((t) => t.classified === READ_BACK && t.canWitness === false);
+
+// worthSayingAloud — thinking hands a finding to speaking. A train of thought is inner (the
+// words never leave); but the open questions it surfaces are precisely what a self would then
+// SAY — not the firm record it already holds (that would be rumination, no new likelihood),
+// but the unsettled figure it kept circling. Returns the open questions as utterances, the
+// loudest silence first. This is the seam from think.js (inner) to brief.js (the mouth): the
+// void becomes the thing worth opening your mouth about.
+export const worthSayingAloud = (thought, { limit = 3 } = {}) =>
+  (thought.voids || []).slice(0, limit).map((v) =>
+    Object.freeze({ figure: v.figure, question: `What of ${v.figure}?`, band: v.band, activation: v.activation }));

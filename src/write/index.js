@@ -69,7 +69,7 @@ export { phraserBrief, realizationPrompt, talkThenVerify } from './brief.js';
 // your own words back (READ_BACK-of-prior-self), let the hearing re-focus the graph, voice
 // again — inner speech as spreading activation, grounded, firewalled (every thought is mine
 // and cannot witness), self-terminating. The phraser is the inner voice; no model needed.
-export { think, everyThoughtIsMine } from './think.js';
+export { think, everyThoughtIsMine, worthSayingAloud } from './think.js';
 // Grammatical encoding (surface only): join adjacent same-subject clauses into one
 // sentence with a compound predicate — the standard NLG aggregation move, so the
 // generator says "He woke, saw his legs, and turned" rather than three choppy clauses. It
