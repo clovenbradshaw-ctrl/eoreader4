@@ -219,6 +219,7 @@ export const stages = {
     const re = pickRetrievalEmbedder(ctx);
     const widened = await rereadOnUnsettled({
       doc: ctx.doc, spans: folded.spans, surf: folded.surf, task: ctx.task,
+      referential: folded.referential,        // the diffuse-coref trigger (the live one on the default path)
       query: ctx.retrievalQuery || ctx.question,
       retrieve: (q, k) => retrieveHybrid(ctx.doc, q, re, k),
     });
