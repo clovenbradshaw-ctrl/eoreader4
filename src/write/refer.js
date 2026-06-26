@@ -20,6 +20,7 @@
 // graph, however rich, never has, because the given was authored by no one here.
 
 import { fromEnactor, fromPerceiver, reenter, isMine, isReadBackOfPriorSelf, canWitness } from '../core/index.js';
+import { createRule } from './eva.js';
 
 const PRONOUN = Object.freeze({
   m: { subj: 'he', obj: 'him', poss: 'his' },
@@ -69,6 +70,11 @@ export const createReaderModel = ({ gamma = 0.7, warmFloor = 0.35, margin = 1.25
 // read-back of the generated units, recognised as mine.
 export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given = null } = {}) => {
   const reader = createReaderModel({ gamma });
+  // Pronominalisation is a defeasible grammar rule: emit a pronoun only while it keeps
+  // reading back to the meant entity. Each pronominalisable mention is an EVA — resolvable
+  // in the reader's field → HOLD, ambiguous → BREAK. Enough breaks (a text thick with
+  // same-gender referents) DEFEAT the rule and the writer turns cautious, using names.
+  const pronRule = createRule();
   const units = [];
   const refer = (ent, role) => {
     if (!ent || ent.id == null) return typeof ent === 'string' ? ent : (ent?.name || '');
@@ -78,7 +84,9 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
     // cannot license back to the meant entity.
     const evidenced = ent.gender === 'm' || ent.gender === 'f' || ent.gender === 'p';
     const pron = evidenced ? PRONOUN[ent.gender]?.[role] : null;
-    const usePronoun = pron && reader.resolvesTo(ent.id, ent.gender);
+    const resolvable = !!pron && reader.resolvesTo(ent.id, ent.gender);
+    if (pron) (resolvable ? pronRule.hold() : pronRule.break());   // EVA: read the choice back
+    const usePronoun = pron && pronRule.on && resolvable;          // suppressed once the rule defeats
     const surface = usePronoun ? pron : ent.name;
     reader.note(ent.id, ent.gender, ent.name);               // now E is the most recent
     return { surface, form: usePronoun ? 'pronoun' : 'name', id: ent.id, fieldAfter: reader.snapshot() };

@@ -17,8 +17,13 @@
 // me-ness/self line are passed through untouched.
 
 import { writeReferring } from './refer.js';
+import { createRule } from './eva.js';
 
 const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
+// How many predicates a compound may conjoin before a reader cannot hold it in one breath.
+// Aggregation past this is the rule's failure mode (a run-on the read-back can't recover).
+const CONJUNCT_CAP = 3;
 
 // join a run of predicates the way English does: "a", "a and b", "a, b, and c".
 const conjoin = (preds) => {
@@ -34,6 +39,11 @@ const conjoin = (preds) => {
 // `units`, `given`, `self` pass through unchanged — the provenance/self line is refer.js's.
 export const realize = (plan, { gamma = 0.7, enactment = 'voice', given = null } = {}) => {
   const r = writeReferring(plan, { gamma, enactment, given });
+  // Aggregation is a defeasible grammar rule too: join adjacent same-subject clauses only
+  // while the compound stays readable. A run within the conjunct bound HOLDS; a run that
+  // would overflow it BREAKS (split, and strain the rule); enough breaks DEFEAT aggregation
+  // and the generator falls back to one clause per sentence — the safe surface.
+  const aggRule = createRule();
   const sentences = [];
   let i = 0;
   while (i < r.units.length) {
@@ -43,9 +53,11 @@ export const realize = (plan, { gamma = 0.7, enactment = 'voice', given = null }
     // extend the run while the next clause has the same subject AND refer.js chose to
     // pronominalise it (a fresh name signals the writer wanted it restated — don't absorb it).
     while (j < r.units.length && r.units[j].parts.subjId === head.subjId && r.units[j].subjForm === 'pronoun') {
+      if (!aggRule.on || preds.length >= CONJUNCT_CAP) { aggRule.break(); break; }   // too long to hold → split
       preds.push(predicate(r.units[j].parts));
       j++;
     }
+    if (preds.length > 1) aggRule.hold();    // a clean compound read back fine
     sentences.push(`${cap(head.subj)} ${conjoin(preds)}.`);
     i = j;
   }

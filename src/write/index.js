@@ -65,3 +65,6 @@ export { inferGenders } from './genders.js';
 // generator says "He woke, saw his legs, and turned" rather than three choppy clauses. It
 // does not re-inflect verbs or re-decide reference; provenance/self pass through.
 export { realize, speak } from './realize.js';
+// A grammar rule held and tested — the write-side EVA: apply while it reads back, toggle off
+// when it fails. Pronominalisation and aggregation are governed by it, as gender is in coref.
+export { createRule } from './eva.js';
