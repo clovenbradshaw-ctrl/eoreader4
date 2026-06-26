@@ -14,6 +14,7 @@
 // referring rules and the me-ness/self line active (refer.js).
 
 import { writeReferring } from './refer.js';
+import { realize } from './realize.js';
 
 // conceptToPlan — traverse the held relation graph into an ordered proposition plan.
 // Starts at the most-connected entity (the warmest hub of the scene) and walks the
@@ -54,11 +55,13 @@ export const conceptToPlan = (doc, { genders = {}, max = 12 } = {}) => {
   return plan;
 };
 
-// speakConcept — the whole arc: hold the graph as concept, traverse it, find the words.
-// Returns the writeReferring result (text + per-unit provenance + the read-back self),
-// so the generated saying is self-authored (me-ness) and its pronouns resolve back to
-// the concept (theory of mind, validated by reading forward).
-export const speakConcept = (doc, { genders = {}, max = 12, gamma = 0.7, enactment = 'voice' } = {}) => {
+// speakConcept — the whole arc: hold the graph as concept, traverse it, find the words,
+// and realise the surface (clause aggregation). Returns the realized result (aggregated
+// text + the choppy per-clause units + per-unit provenance + the read-back self), so the
+// generated saying is self-authored (me-ness) and its pronouns resolve back to the concept
+// (validated by reading forward). Pass { aggregate:false } for the unjoined clause stream.
+export const speakConcept = (doc, { genders = {}, max = 12, gamma = 0.7, enactment = 'voice', aggregate = true } = {}) => {
   const plan = conceptToPlan(doc, { genders, max });
-  return { plan, ...writeReferring(plan, { gamma, enactment, given: doc }) };
+  const render = aggregate ? realize : writeReferring;
+  return { plan, ...render(plan, { gamma, enactment, given: doc }) };
 };

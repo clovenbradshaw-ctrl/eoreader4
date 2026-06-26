@@ -89,6 +89,9 @@ export const writeReferring = (plan, { gamma = 0.7, enactment = 'voice', given =
       // me-ness: the writer's own output enters through the ENACTOR door.
       prov: fromEnactor(enactment), mine: true,
       readerField: s.fieldAfter,
+      // the recomposable pieces — so a grammatical-encoding stage (realize.js) can join
+      // adjacent same-subject clauses without re-deciding the referring forms.
+      parts: Object.freeze({ subjId: p.subj.id, subj: s.surface, verb: p.verb, obj: objText }),
     }));
   }
 

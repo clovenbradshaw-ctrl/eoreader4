@@ -56,3 +56,8 @@ export { foldImpression } from './impression.js';
 // hold the activated graph as the imagistic concept, traverse it for the order of saying.
 export { createReaderModel, writeReferring } from './refer.js';
 export { conceptToPlan, speakConcept } from './traverse.js';
+// Grammatical encoding (surface only): join adjacent same-subject clauses into one
+// sentence with a compound predicate — the standard NLG aggregation move, so the
+// generator says "He woke, saw his legs, and turned" rather than three choppy clauses. It
+// does not re-inflect verbs or re-decide reference; provenance/self pass through.
+export { realize, speak } from './realize.js';
