@@ -202,3 +202,59 @@ export const resolveVoids = (thought, doc) => {
   }
   return Object.freeze({ closed, remaining, resolved: closed.length, open: remaining.length });
 };
+
+// inquire — the self-directed reading loop: read to answer your OWN open question.
+//
+// think surfaces what it cannot resolve ("What of Klamm?"). A thought cannot answer it — but
+// it can DIRECT THE NEXT READING. So: think over the reading so far, take its loudest open
+// question, RETRIEVE more of the source ON THAT QUESTION, fold what comes back into the
+// reading, and think again. The engine chooses what to read next by what it found unresolved
+// — attention is steered by its own standing not-knowing (idle.js's voids-are-the-fuel, run
+// forward as inquiry rather than idle). It terminates when nothing stays open (its questions
+// are answered) or the source has no more to say on them (the world is silent). This is the
+// active-inference loop closed by the self's own direction: predict the gap, go read where it
+// would pay, update — exactly the §14 compression-progress criterion as a reading policy.
+//
+// Dependency-injected, like idle.js injects surf — think.js stays free of retrieve/ and
+// perceiver/. The caller wires the embedder-free organs in:
+//   retrieve(question) → [{text}]   spans of the SOURCE that bear on the question (e.g.
+//                                   q => retrieveLexical(sourceDoc, q))
+//   parse(text) → doc                re-read the grown reading into a graph (e.g. parseText)
+//   cursor, genders                  as think()
+//   maxSteps                         the backstop (it converges well before this)
+// Returns { reading, doc, trail, open } — the grown reading text, its final graph, the
+// step-by-step inquiry record, and the questions still open when it stopped.
+export const inquire = (seedDoc, { retrieve, parse, cursor = null, genders = {}, maxSteps = 4 } = {}) => {
+  if (typeof retrieve !== 'function') throw new Error('inquire: retrieve(question) must be injected');
+  if (typeof parse !== 'function') throw new Error('inquire: parse(text) must be injected');
+
+  const sentencesOf = (d) => (d?.sentences || []).join(' ');
+  let reading = sentencesOf(seedDoc);
+  const seen = new Set((seedDoc?.sentences || []).map((s) => String(s).trim()));
+  let doc = seedDoc;
+  let focus = cursor;
+  const trail = [];
+  let open = [];
+
+  for (let step = 0; step < maxSteps; step++) {
+    const thought = think(doc, { cursor: focus, genders });
+    const ask = worthSayingAloud(thought, { limit: 1 })[0];
+    if (!ask) { open = []; trail.push(Object.freeze({ step, asked: null, resolved: true })); break; }
+
+    // read more of the source ON the open question — attention steered by the not-knowing.
+    const found = retrieve(ask.question) || [];
+    const fresh = found.map((s) => String(s.text ?? s)).filter((txt) => txt && !seen.has(txt.trim()));
+    if (!fresh.length) {                                          // the source is silent on it → stop
+      open = thought.voids;
+      trail.push(Object.freeze({ step, asked: ask.question, read: 0, stuck: true }));
+      break;
+    }
+    for (const txt of fresh) seen.add(txt.trim());
+    reading = `${reading} ${fresh.join(' ')}`.trim();
+    doc = parse(reading);                                         // re-read the grown reading
+    const r = resolveVoids(thought, doc);                        // did the new reading close it?
+    trail.push(Object.freeze({ step, asked: ask.question, read: fresh.length, closed: r.closed.map((v) => v.figure) }));
+    focus = ask.figure;                                          // attention moves to what was asked about
+  }
+  return Object.freeze({ reading, doc, trail, open });
+};

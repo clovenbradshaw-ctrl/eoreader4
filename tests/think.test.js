@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/index.js';
-import { think, everyThoughtIsMine, worthSayingAloud, resolveVoids } from '../src/write/index.js';
+import { think, everyThoughtIsMine, worthSayingAloud, resolveVoids, inquire } from '../src/write/index.js';
+import { retrieveLexical } from '../src/retrieve/index.js';
 import { READ_BACK } from '../src/core/index.js';
 
 // Thinking = impressionistic talking turned inward. Voice an impression, hear it back,
@@ -77,6 +78,44 @@ test('only the world closes an open question — a fresh doc that makes the figu
   // a doc that does NOT touch the open figure leaves it open
   const irrelevant = parseText('Grete left.', { docId: 'c' });
   assert.equal(resolveVoids(t, irrelevant).open, t.voids.length, 'an unrelated doc resolves nothing');
+});
+
+test('inquire: the engine reads more of the source to answer its OWN open question', () => {
+  // The full source. The seed reading is only the first two sentences — Klamm is sought and
+  // feared but, in what has been read, never acts. The rest of the source says what Klamm does.
+  const source = parseText(
+    'Gregor sought Klamm. Gregor feared Klamm. Klamm summoned Gregor. Klamm ruled the village.',
+    { docId: 'src' },
+  );
+  const seed = parseText('Gregor sought Klamm. Gregor feared Klamm.', { docId: 'seed' });
+
+  const out = inquire(seed, {
+    retrieve: (q) => retrieveLexical(source, q, 8),   // embedder-free retrieval over the source
+    parse: (text) => parseText(text, { docId: 'reading' }),
+    cursor: 'Gregor',
+    maxSteps: 4,
+  });
+
+  // it asked its own question and read on it
+  assert.ok(out.trail.some((s) => /Klamm/i.test(s.asked || '')), 'it asked what it could not resolve');
+  assert.ok(out.trail.some((s) => (s.read || 0) > 0), 'and read more of the source to answer it');
+  // the grown reading now contains what Klamm does — the question is answered
+  assert.match(out.reading, /Klamm summoned|Klamm ruled/, 'the reading grew toward the open figure');
+  const closedKlamm = out.trail.some((s) => (s.closed || []).some((f) => /klamm/i.test(f)));
+  assert.ok(closedKlamm, 'reading on its own question characterized Klamm — the void closed');
+});
+
+test('inquire terminates when the source is silent — it does not spin on an unanswerable question', () => {
+  const source = parseText('Gregor sought Klamm. Gregor feared Klamm.', { docId: 'src' });   // Klamm never acts, anywhere
+  const seed = parseText('Gregor sought Klamm. Gregor feared Klamm.', { docId: 'seed' });
+  const out = inquire(seed, {
+    retrieve: (q) => retrieveLexical(source, q, 8),
+    parse: (text) => parseText(text, { docId: 'reading' }),
+    cursor: 'Gregor', maxSteps: 8,
+  });
+  assert.ok(out.trail.length <= 8, 'it does not spin to the backstop');
+  assert.ok(out.trail.some((s) => s.stuck) || out.trail.some((s) => s.resolved),
+    'it stops honestly — either the source had nothing to add, or nothing stayed open');
 });
 
 test('a doc with no relations yields no thoughts — nothing to think about', () => {
