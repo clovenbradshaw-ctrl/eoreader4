@@ -16,7 +16,8 @@
     "credence": "node scripts/credence-measure.mjs",
     "learn:grammar": "node scripts/learn-grammar.mjs",
     "build:centroids": "node scripts/build-centroids.mjs",
-    "serve": "python3 -m http.server 8000"
+    "serve": "python3 -m http.server 8000",
+    "grow-basis": "node scripts/grow-basis-demo.mjs"
   },
   "engines": {
     "node": ">=20"

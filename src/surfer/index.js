@@ -35,6 +35,11 @@ export { helixPredict, helixGenerate } from './helix-predict.js';
 // starts at σ, folds each reading in with recency decay, departs σ as it accumulates a
 // self, and re-grounds (the helix turning) on a measured defeat.
 export { createHorizon } from './horizon.js';
+// The growing basis: the cells themselves learned, not shipped. Where the frame has no
+// cell for what it keeps meeting, it composes one (REC Composing a Paradigm cell) — but
+// only when misfits cohere, the signal-from-noise discipline applied to category
+// formation. Re-grounding can then relocate to a frame element that did not exist.
+export { createGrowingBasis } from './grow-basis.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';
