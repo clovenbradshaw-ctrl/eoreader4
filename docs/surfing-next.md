@@ -90,15 +90,18 @@ The surf measures actionable signals and logs them to telemetry:
   (`stance-reserve`): on a pointed (`answer`) question, a Ground-grain commit is
   surfaced to the user as a thin-grounding flag, the surfer's own guard made
   visible. Pure wiring — the measurement already existed.
-- **paradigm `under-read` (staged).** The verdict literally means "the basis
-  still commutes → stay at the Lens, *retrieve more*" (`surf.js:286-288`). Wire
-  it to a retrieval-widening loop: under-read → extend the reach / re-retrieve
-  before answering. (Requires the structural paradigm pass, move 1's spine, and
-  a re-retrieve control point — staged.)
+- **paradigm `under-read` → re-read (staged; the loop now exists).** The verdict
+  means "the basis still commutes → stay at the Lens, *retrieve more*"
+  (`surf.js:286-288`). PR #127 landed exactly that loop as `inquire`
+  (`write/think.js`): read more of the source *on the engine's own open question*,
+  fold it in, repeat, self-terminating — embedder-free, dependency-injected. So
+  what remains is only the **trigger**: route the surf's `under-read` verdict (or a
+  `stance-reserve` / a think-void) into `inquire` to widen before answering. The
+  mechanism is built; the wiring is the work.
 - **lensEntropy (staged).** The von Neumann entropy is the NPOV scalar *and* the
   predictive uncertainty — a calibrated confidence the answer could carry.
 
-### 4. Thread the persistent Horizon — cure the amnesia, keep purity
+### 4. Thread the persistent Horizon — cure the amnesia, keep purity — (a)+(b) DONE
 
 `surfFold`'s statelessness is a virtue (deterministic, replayable); Horizon is
 stateful. Reconcile them the way `history` already is: the Horizon lives in the
@@ -110,16 +113,28 @@ place the **temporal hysteresis** the surf admits it "cannot enforce on its own"
 (`surf.js:255-259`) can live: a re-grounding requires a basis-defeat *sustained
 across turns*.
 
-**Prerequisite found (this branch).** `createHorizon` cold-starts at σ built from
-a **centroid basis** (`horizon.js:60-61`, `corpusSigma(basis)` needs `basis.keys`).
-But move 2 made the default significance basis the **embedder-free operator
-profiles**, which carry no centroid prior — only a maximally-mixed structural
-ground (`structure-basis.js` `groundSigma`). Threading the Horizon as-is would
-light it up **only on the meaning path** — dark by default, the exact mistake move
-2 fixed. So #4 must *first* generalise the Horizon to accept a structural ground σ,
-then thread it through `runTurn` and the app's session state, observe-only at first
-(no reading change, audited), and condition the surf as a measured second step.
-Larger change — staged; this is its real first task, not the threading.
+**(a) Generalise the Horizon to a structural ground — DONE.** `createHorizon` cold-
+started at σ built from a **centroid basis** (`horizon.js`, `corpusSigma` needs
+`basis.keys`), but move 2 made the default basis the embedder-free operator
+profiles — no centroids. Threading it as-is would light it up only on the meaning
+path, dark by default (the exact mistake move 2 fixed). `createHorizon` now accepts
+an explicit `ground` σ, and `structure-basis.js` `structuralGround()` supplies the
+maximally-mixed operator-space σ. The Horizon cold-starts and accumulates with no
+embedder (tested).
+
+**(b) Thread observe-only through the turn — DONE.** `runTurn` takes an optional
+`horizon`; the `settle` stage (after the answer is formed) folds the turn's
+operator-profile reading into it, so the conversation grows an interpretive state
+across turns. Observe-only: **no reading change**, audited in `settle.horizon`
+(turns · departure · turnSurprise · ∫surprise). A turn with no Horizon threaded is
+byte-identical.
+
+**Still open.** (c) close the loop — let the measured stance *move* ρ at the commit
+(`stance.js applyMeasuredStance`; needs the stance→family map surfaced). (d) read
+the next turn *against* the accumulated Horizon (surf reads `horizon.rho` as a prior
+— the conditioning step). (e) own the Horizon in the app's session state (`ui/app.js`)
+so a real conversation accumulates one. (a)+(b) are the foundation; (c)–(e) are the
+measured follow-ons.
 
 ### 5. Unify the REC sources
 
@@ -130,7 +145,17 @@ composition (cold). The project's discipline is "cursor and frame axes never
 disagree — they read the same scalar." Apply it here: route reanalyze and
 grow-basis RECs into the **one enacted loop the surf reads**, so a bond-level
 reanalysis or a basis-growth surfaces as a stop/reframe in the surf, instead of
-parallel detectors. (Larger change — staged, designed here.)
+parallel detectors.
+
+**Reshaped by PR #127.** `reanalyze` is no longer cold: `applyReanalysis` now
+appends its RECs to the **log**, and generation consumes them. So #5 shrinks — the
+RECs already live in the log; the surf's frame axis just needs to *surface the
+log-resident RECs* (reanalysis now, paradigm/grow-basis as they emit) as stops,
+rather than running a parallel detector. Also worth noting: PR #127's `think.js`
+**voids** ("a figure reached but never characterised — appeared, not acted") are a
+sibling of our `stance-reserve` — both are first-class "honest not-knowing"
+signals. The engine now has the inner-speech mechanism; unifying these signals is
+part of the same move. (Staged.)
 
 ### 6. Give the bench eyes for the failure that matters — DONE (this branch)
 
@@ -142,13 +167,19 @@ surf can be told apart from the local one.
 
 ## Sequencing
 
-Moves **1, 2, 3 (stance), 6** are landed on this branch — the embedder-free
-column, the surfer's guard as a veto, the document-scale spine, and the bench
-target that measures it. Moves **4** and **5** are the larger architectural
-closes the recent commits were building toward but stopped short of plugging in;
-they are designed above and staged, each wanting its own focused effort with
-cross-turn / multi-detector validation (and #4 has the structural-ground
-prerequisite recorded above — do that first or it lands dark).
+Moves **1, 2, 3 (stance), 6** are landed — the embedder-free column, the surfer's
+guard as a veto, the document-scale spine, and the bench target that measures it.
+Move **4 (a)+(b)** is landed — the Horizon generalised to a structural ground and
+threaded observe-only through the turn; its follow-ons (c)–(e) are the measured
+steps that condition the reading and own the Horizon in the app. Move **5** shrank
+after PR #127 wired `reanalyze` into the log — it is now "surface the log-resident
+RECs in the surf," not "build the detectors."
+
+After PR #127 (embedder-free thinking) merged into main, the engine grew `inquire`
+(the active-inference reading loop #3's re-read trigger plugs into) and `think.js`
+voids (a sibling of `stance-reserve`). The remaining work is convergent: a single
+"honest not-knowing → go read where it pays" loop, with the surf's verdicts and the
+think-voids as its triggers and the Horizon as its cross-turn memory.
 
 The honest read: the recent updates were a *building* phase — correct apparatus
 accreted faster than it got wired. The next phase is **lifting the reach and

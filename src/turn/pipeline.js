@@ -42,7 +42,7 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, horizon = null }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -71,7 +71,12 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // background. Null on every default turn, so the prompt — and the golden parses — are
   // byte-identical unless the user opts in. The mind stays epistemically separate: these
   // are offered as background, never folded into the document's citable spans.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans };
+  // `horizon` is the SESSION's persistent Horizon (surfer/horizon.js) — the moved density
+  // operator that accumulates across turns (surfing-next.md §4). When the caller threads one
+  // (created once per session), the `settle` stage folds this turn's reading into it, so the
+  // conversation grows an interpretive state instead of re-deriving one each turn. Null on a
+  // default turn → settle is byte-identical and the surf stays stateless, as today.
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, horizon };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -242,6 +247,16 @@ const summarize = (name, ctx, ms) => {
                               superseded: (ctx.revisions || []).map(r => r.draft) };
     case 'veto':     return { ...base,
                               fired:   ctx.vetoes?.map(v => v.id) || [] };
+    // The session Horizon's reading after this turn folded in (surfing-next.md §4): how far
+    // the accumulated ρ has left σ, the running ∫ surprise, and the turn's own surprise
+    // against the prior memory. Present only when a Horizon was threaded; absent otherwise.
+    case 'settle':   return ctx.horizonReading ? { ...base, horizon: {
+                              turns:      ctx.horizonReading.turns,
+                              departure:  ctx.horizonReading.departure,
+                              turnSurprise: ctx.horizonReading.turnSurprise,
+                              cumulativeSurprise: ctx.horizonReading.cumulativeSurprise,
+                              regrounded: ctx.horizonReading.regrounded,
+                            } } : base;
     default:         return base;
   }
 };

@@ -46,19 +46,28 @@ const mix = (A, B, g) => {
   return C;
 };
 
-// createHorizon({ prior, gamma, regroundStrength, alpha, k })
+// createHorizon({ prior | ground, gamma, regroundStrength, alpha, k })
 //
-//   prior            the centroid bundle / basis (the ground σ is built from it).
+//   prior            the centroid bundle / basis (the MEANING path: σ is built from it).
+//   ground           an explicit ground σ as { dim, rho } — the EMBEDDER-FREE path: pass the
+//                    structural ground (structure-basis.js `structuralGround()`) so the
+//                    Horizon cold-starts over the operator basis with no centroids. Exactly
+//                    one of `prior` / `ground` is needed; `ground` wins when both are given.
 //   gamma            recency of the fold — weight kept on the accumulated Horizon each
 //                    turn (0.8 = slow memory that outlasts a few turns; lower forgets).
 //   regroundStrength how far a re-ground pulls ρ back toward σ (0.8 = most of the way to
 //                    a bare ground — drop to a NUL in the frame).
 //   alpha            the Born budget for the surprise-only auto-reground null.
 //   k                how many eigen-lenses to surface in a reading.
-export const createHorizon = ({ prior, gamma = 0.8, regroundStrength = 0.8, alpha = 0.05, k = 3 } = {}) => {
-  const basis = prior?.keys ? prior : centroidBasis(prior);
-  const sigma = basis ? corpusSigma(basis) : null;
-  if (!sigma?.dim) throw new Error('createHorizon needs a prior whose σ is measurable');
+export const createHorizon = ({ prior, ground = null, gamma = 0.8, regroundStrength = 0.8, alpha = 0.05, k = 3 } = {}) => {
+  // The ground σ: an explicit one (the structural / embedder-free path) takes precedence;
+  // otherwise build it from the centroid prior (the meaning path). basis is null on the
+  // structural path — nothing internal needs it beyond the σ it would have produced.
+  const basis = ground ? null : (prior?.keys ? prior : centroidBasis(prior));
+  const sigma = ground || (basis ? corpusSigma(basis) : null);
+  if (!sigma?.dim || !Array.isArray(sigma.rho)) {
+    throw new Error('createHorizon needs a measurable ground σ — a centroid `prior`, or an explicit `ground` { dim, rho }');
+  }
 
   const state = {
     rho: sigma.rho.map(r => r.slice()),   // cold-start: the corpus ground

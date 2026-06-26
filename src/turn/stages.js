@@ -532,9 +532,25 @@ export const stages = {
     return { ...ctx, vetoes: fired };
   },
 
-  // Settle: a placeholder for conversation-field updates and form stamps.
-  // Kept here as a named stage so the place is obvious for the next change.
+  // Settle: fold this turn's reading into the session's persistent Horizon (surfing-next.md
+  // §4) — the moved density operator that accumulates across turns, curing the surf's
+  // per-turn amnesia. Observe-only and AFTER the answer is formed, so it never changes the
+  // reading the user just saw; it grows the cross-turn memory the NEXT turn can be read
+  // against (the conditioning step is the staged follow-on). The reading folded in is the
+  // embedder-free operator-profile activations — the same structural basis the significance
+  // column rides — so the Horizon accumulates on every turn, not only under a meaning model.
+  // Inert with no threaded Horizon (the default) and on a turn with no document; a fault here
+  // must never disturb the answer, so it is fully guarded.
   async settle(ctx) {
+    if (!ctx.horizon || !ctx.doc) return ctx;
+    try {
+      const { activations } = structuralActivations(ctx.doc);
+      const live = activations.filter(v => v.some(x => x > 0));
+      if (live.length) {
+        const reading = ctx.horizon.observe(live);
+        return { ...ctx, horizonReading: reading };
+      }
+    } catch { /* a memory fold must never break a settled answer */ }
     return ctx;
   },
 };
