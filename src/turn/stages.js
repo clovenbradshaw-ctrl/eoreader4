@@ -9,7 +9,9 @@
 // The user sees what the model actually said, with a flag pinned to it.
 
 import { answerSmalltalk, answerMath, answerVoid, answerMetadata } from '../answer/index.js';
-import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc } from '../retrieve/index.js';
+import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
+import { parseText } from '../perceiver/parse/index.js';
+import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold, centroidBasis, projectUnits } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
@@ -175,6 +177,36 @@ export const stages = {
       return { ...ctx, spans: [], route: 'chat', retrievalQuery: query };
     }
     return { ...ctx, spans, retrievalQuery: query };
+  },
+
+  // Self-directed inquiry (write/think.js). Before the talker speaks, read what has been
+  // retrieved, THINK over it, and if a figure stays open — one the spans keep mentioning but
+  // that never acts — read another pass ON THAT OWN QUESTION and fold the results in as
+  // citable spans. The engine chooses what to read next by what it found unresolved, rather
+  // than answering only the user's literal query (idle.js's voids-are-the-fuel, run forward).
+  //   Gated by ctx.inquire (default off → byte-identical: the stage returns the context
+  //   untouched). Scoped to the pointed `answer` task — a summary's connective gaps are not
+  //   voids to chase. Embedder-free (retrieveLexical), and every added span carries a real
+  //   document index, so the inquiry's reading is bound and cited exactly like the first pass.
+  async inquire(ctx) {
+    if (!ctx.inquire || !ctx.doc || !ctx.spans?.length || (ctx.task && ctx.task !== 'answer')) return ctx;
+    const seen = new Set(ctx.spans.map((s) => s.idx));
+    const added = [];
+    const asked = [];
+    const MAX_STEPS = 2;                                       // a couple of follow-up reads, never a spin
+    for (let step = 0; step < MAX_STEPS; step++) {
+      const spans = [...ctx.spans, ...added];
+      const reading = parseText(spans.map((s) => s.text).join(' '), { docId: 'inquiry', genderCoref: true });
+      const thought = think(reading, { genders: inferGenders(reading) });
+      const ask = worthSayingAloud(thought, { limit: 1 })[0];
+      if (!ask) break;                                        // nothing stays open → done
+      const more = retrieveLexical(ctx.doc, ask.question, 4).filter((s) => !seen.has(s.idx));
+      if (!more.length) { asked.push({ q: ask.question, read: 0 }); break; }   // source silent → stop
+      for (const s of more) { seen.add(s.idx); added.push({ ...s, via: 'inquire' }); }
+      asked.push({ q: ask.question, read: more.length });
+    }
+    if (!added.length) return ctx;                            // no fresh reading → byte-identical
+    return { ...ctx, spans: [...ctx.spans, ...added], inquiry: { asked } };
   },
 
   // Fold the spans into a single note the model can read — the reading. With a doc
