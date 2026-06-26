@@ -40,6 +40,10 @@ export { createHorizon } from './horizon.js';
 // only when misfits cohere, the signal-from-noise discipline applied to category
 // formation. Re-grounding can then relocate to a frame element that did not exist.
 export { createGrowingBasis } from './grow-basis.js';
+// The layered generative stack: generate many layers of meaning at once (Paradigm →
+// Lens → Proposition → Token), each a chain conditioned on the one above and
+// independently re-groundable — coherence lives high, fluency low, the helix run forward.
+export { createLayeredGenerator } from './layered-generator.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';
