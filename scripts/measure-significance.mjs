@@ -183,3 +183,49 @@ console.log('── GATE 3 · Paradigm ─────────────�
   console.log(`  verdict: ${cross.length && beat.length === cross.length ? 'PASS — distinct cube rows are incommensurable past the within-row baseline'
     : beat.length ? 'PARTIAL' : 'FAIL — not separable above baseline'}\n`);
 }
+
+// ── VALIDATION — held-out + permutation null (only meaningful at corpus scale) ──
+// A fix that is correct and one that merely turned the verdict green look identical at
+// the moment the number flips. Two cheap checks separate them: does the centering hold
+// on data its mean never saw (held-out), and does the Atmosphere ordering clear a label-
+// shuffle null? Run only with --npz (the 27-centroid archetype set is too thin).
+if (npzArg >= 0 && units.length > 1000) {
+  console.log('── VALIDATION · held-out + permutation null ───────────────────────────');
+  const buildBasisFrom = (us) => {
+    const sums = new Map(), cnt = new Map();
+    for (const u of us) { if (!sums.has(u.cell)) { sums.set(u.cell, new Array(u.raw.length).fill(0)); cnt.set(u.cell, 0); } const s = sums.get(u.cell); for (let j = 0; j < u.raw.length; j++) s[j] += u.raw[j]; cnt.set(u.cell, cnt.get(u.cell) + 1); }
+    const keys = [...sums.keys()].sort();
+    return { keys, vecs: keys.map(k => normalize(sums.get(k).map(x => x / cnt.get(k)))) };
+  };
+  const frameMargin = (us, key) => {
+    const ts = ['Atmosphere', 'Lens', 'Paradigm', 'Entity', 'Link']; const within = [], cross = [];
+    for (const t of ts) { const g = us.filter(u => u.terrain === t); if (g.length < 4) continue; const cells = [...new Set(g.map(u => u.cell))]; const bc = cells.map(c => g.filter(u => u.cell === c).slice(0, 40)); for (let a = 0; a < bc.length; a++) for (let i = 0; i < bc[a].length; i++) { for (let j = i + 1; j < bc[a].length; j++) within.push(cos(bc[a][i][key], bc[a][j][key])); for (let b = a + 1; b < bc.length; b++) for (let j = 0; j < bc[b].length; j++) cross.push(cos(bc[a][i][key], bc[b][j][key])); } }
+    return mean(within) - mean(cross);
+  };
+  // HELD-OUT: fit basis + centering mean on A (even), score the Lens margin on B (odd).
+  const A = units.filter((_, i) => i % 2 === 0), B = units.filter((_, i) => i % 2 === 1);
+  const basisA = buildBasisFrom(A);
+  for (const u of A) u.actA = projectUnit(u.raw, basisA);
+  const gmA = new Array(basisA.keys.length).fill(0);
+  for (const u of A) for (let j = 0; j < gmA.length; j++) gmA[j] += u.actA[j] / A.length;
+  for (const u of B) { u.actA = projectUnit(u.raw, basisA); u.cactA = u.actA.map((x, j) => x - gmA[j]); }
+  const hoRaw = frameMargin(B, 'raw'), hoCen = frameMargin(B, 'cactA');
+  console.log(`  held-out Lens margin on B (basis+mean fit on A):  raw ${round(hoRaw)}  centered ${round(hoCen)}`);
+  console.log(`    ${hoCen > hoRaw ? 'HOLDS out-of-sample — real frame structure, not in-sample fitting' : 'SAGS toward raw — part of the win was in-sample fitting'}`);
+  // PERMUTATION: does loaded(Interpretation) − factual(Existence) departure clear a
+  // label-shuffle null? Deterministic mulberry32 (no Math.random — the workflow rule).
+  const sigma = corpusSigma(basis);   // uncentered prior is fine as the shared reference for the statistic
+  const sigActs = basis.vecs.map(v => projectUnit(v, basis).map((x, j) => x - gmean[j]));
+  const sigmaC = buildDensity(sigActs).rho;
+  const depSet = (ix) => relEntropy(buildDensity(ix.map(i => units[i].cact)).rho, sigmaC);
+  const doms = units.map(u => u.domain);
+  const ixOf = (arr, d) => { const o = []; for (let i = 0; i < arr.length; i++) if (arr[i] === d) o.push(i); return o; };
+  const statOf = (arr) => depSet(ixOf(arr, 'Interpretation')) - depSet(ixOf(arr, 'Existence'));
+  const obs = statOf(doms);
+  let seed = 12345; const rnd = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const N = 300; let ge = 0, mx = -Infinity;
+  for (let p = 0; p < N; p++) { const sh = doms.slice(); for (let i = sh.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [sh[i], sh[j]] = [sh[j], sh[i]]; } const s = statOf(sh); if (s > mx) mx = s; if (s >= obs) ge++; }
+  console.log(`  permutation null (Atmosphere I−E): observed ${round(obs)}  max of ${N} shuffles ${round(mx)}  p ≈ ${round((ge + 1) / (N + 1))}`);
+  console.log(`    ${ge / N < 0.05 ? 'CLEARS the permutation null (p<0.05) — the loaded>factual ordering is not chance' : 'does NOT clear — underpowered / no real ordering'}\n`);
+  void sigma;
+}

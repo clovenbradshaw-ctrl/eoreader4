@@ -184,10 +184,19 @@ const summarize = (name, ctx, ms) => {
                                   departure: ctx.surf.atmosphere.departure,
                                   tone: ctx.surf.atmosphere.tone?.label || null,
                                   verdict: ctx.surf.atmosphere.verdict,
+                                  frame: ctx.surf.atmosphere.frame,   // which ρ each number came from
                                 } } : {}),
                                 ...(ctx.surf.lensEntropy != null ? { lensEntropy: ctx.surf.lensEntropy } : {}),
                                 ...(ctx.surf.lenses ? { lenses: ctx.surf.lenses.filter(l => l.real).length } : {}),
                                 ...(ctx.surf.paradigm ? { paradigm: ctx.surf.paradigm.verdict } : {}),
+                                // The Stance face (Track F): the measured commit — how the surfer
+                                // moved ρ — and whether the confabulation guard fired (a Ground-grain
+                                // commit: reserve, do not name a clause).
+                                ...(ctx.surf.stance ? { stance: {
+                                  op: ctx.surf.stance.op, stance: ctx.surf.stance.stance,
+                                  grain: ctx.surf.stance.grain, firmness: ctx.surf.stance.firmness,
+                                  guard: ctx.surf.stance.guard,
+                                } } : {}),
                               } : null };
     case 'answerable': return ctx.voidMeasure
       ? { ...base, verdict: 'answer', terrain: 'void', kind: ctx.voidMeasure.kind, rode: ctx.voidMeasure.rode }

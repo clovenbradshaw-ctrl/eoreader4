@@ -24,6 +24,7 @@ import { readingAt } from '../perceiver/index.js';
 import { deriveNull, buildDensity, eigenLenses, vonNeumann, commutator, projectorFrom } from '../core/index.js';
 import { createEnactedLoop, calibrateReader } from '../enact/index.js';
 import { atmosphereFromActivations, corpusSigma, centroidBasis } from './atmosphere.js';
+import { updateStance } from './stance.js';
 
 // The reach: a little behind the anchor (to read the frame it sits inside), mostly
 // ahead (a surf rides forward, and the arrow of time orders the frame axis).
@@ -161,15 +162,15 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   // fields never appear). The passes read off ONE density operator ρ built over the
   // doc's significance activations (core/spectral.js), each gated by deriveNull. Pure on
   // vectors, so this runs unchanged on text, music, video — omnimodal for free.
-  const wantSig = activations && (opts.atmosphere || opts.lensReport || opts.lens || opts.paradigm);
+  const wantSig = activations && (opts.atmosphere || opts.lensReport || opts.lens || opts.paradigm || opts.stance);
   if (!wantSig) return base;
-  return { ...base, ...significancePass(activations, opts) };
+  return { ...base, ...significancePass(activations, opts, { field, peak }) };
 };
 
 // Build ρ over the document's significance activations and read the three terrains off
 // it. Memo-free (surf is not memoised); cheap at the 27-cell grain. `signs` rides the
 // EVA stance when supplied (a defeated reading subtracts), default +1 (asserting).
-const significancePass = (activations, opts) => {
+const significancePass = (activations, opts, surf = {}) => {
   const out = {};
   const basis = opts.prior ? (opts.prior.keys ? opts.prior : centroidBasis(opts.prior)) : null;
   const { rho } = buildDensity(activations, opts.weights || null, opts.signs || null);
@@ -202,6 +203,14 @@ const significancePass = (activations, opts) => {
   // append-only REC at the Paradigm site is the loop's to emit (kept report-only here).
   if (opts.paradigm && basis) {
     out.paradigm = paradigmReading(activations, rho, basis, opts);
+  }
+
+  // STANCE (Track F): how the surfer MOVES ρ at the commit — the measured update stance,
+  // with the confabulation guard quantified. Read off the field shape around the peak,
+  // routed through cellAt: a Making only when a rank-1 lens clears its spectral null;
+  // a Ground-grain Cultivating/Clearing (reserve, do not name a clause) otherwise.
+  if (opts.stance) {
+    out.stance = updateStance(surf.field || [], surf.peak ?? 0, rho, { alpha: opts.alpha ?? 0.05 });
   }
   return out;
 };

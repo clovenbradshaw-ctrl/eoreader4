@@ -211,6 +211,11 @@ export const atmosphereFromActivations = (activations, basisOrPrior, { alpha = 0
 
   return Object.freeze({
     departure: round(departure), tone, verdict, anomalousWindows, rode: 'atmosphere-kl',
+    // The two numbers live in different frames: departure is the KL on the CENTERED
+    // activations (the common offset removed — measurement first, see corpusSigmaCentered),
+    // tone is the dominant Ground cell of the UNCENTERED mass-ρ (where the diagonal is a
+    // genuine Born mass). Recorded so a later reader does not read them as co-spatial.
+    frame: Object.freeze({ departure: 'centered', tone: 'uncentered-mass' }),
   });
 };
 

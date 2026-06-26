@@ -43,7 +43,7 @@ const significanceOpts = async (ctx, anchor) => {
     const activations = projectUnits(vectors, basis);
     const report = surfFold(ctx.doc, anchor, { activations, prior: basis, lensReport: true });
     const dom = report.lenses?.find(l => l.real)?.lens ?? report.lenses?.[0]?.lens ?? null;
-    return { activations, prior: basis, lensReport: true, atmosphere: true, alpha: ctx.alpha ?? 0.05,
+    return { activations, prior: basis, lensReport: true, atmosphere: true, stance: true, alpha: ctx.alpha ?? 0.05,
              ...(dom ? { lens: dom } : {}) };
   } catch { return {}; }
 };

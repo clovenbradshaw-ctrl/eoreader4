@@ -41,6 +41,27 @@ node scripts/measure-significance.mjs
 Cross-row commutators: Existence×Structure 0.345, Existence×Interpretation 0.232,
 Structure×Interpretation 0.383 — all above the within-row baseline null (0.230).
 
+## Held-out and permutation: the PASS is not in-sample fitting
+
+A fix that is *correct* and one that merely *turned the verdict green* look identical at
+the moment the number flips. Two checks separate them (both in the harness, `--npz`):
+
+- **Held-out Lens.** Fit the cell centroids AND the centering mean on one half of the
+  19,764 clauses; score the frame margin on the other half the mean never saw. Centered
+  margin out-of-sample: **0.111** (vs raw 0.025) — it *holds*, slightly above the
+  in-sample 0.103. So the win is real frame structure the projection exposes, not the
+  projection memorising the corpus it was fit on.
+- **Permutation null for the Atmosphere ordering.** The spec's own gate language refuses
+  "three numbers in order" as a pass; it asks for separation above a null. Shuffling the
+  loaded/factual/structure labels 300× (deterministic PRNG), the observed loaded−factual
+  departure gap (0.083) is never reached by chance (max shuffled 0.041), **p ≈ 0.003**.
+  The ordering clears the null.
+
+This matters because the gates' credibility is that they *can* come back negative — and
+the Atmosphere and Lens gates **did** come back negative first, on the uncentered
+projection. The PASS is only as trustworthy as that FAIL was because it now also holds on
+data the centering never touched, above a permutation null.
+
 ## The load-bearing finding: the projection must be mean-centered
 
 The naive measurement — project onto the 27 centroids by cosine, build ρ — **fails** the
@@ -66,6 +87,27 @@ activations; the MASS reads (tone, and the von-Neumann/Born spectrum used for th
 prediction-novelty reserve) stay on the **uncentered** ρ, where the diagonal is a
 genuine Born mass and the simplex/prediction story holds. This is now wired for the
 Atmosphere departure (`src/surfer/atmosphere.js`, `corpusSigmaCentered`).
+
+Because departure and tone now live in **different frames** (centered vs uncentered ρ),
+the atmosphere result carries a `frame` field (`{ departure:'centered',
+tone:'uncentered-mass' }`) and the audit (`fold.surf.atmosphere.frame`) records it — so a
+later reader does not mistake the two numbers for co-spatial.
+
+## Track F — the Stance face (how the surfer MOVES ρ)
+
+Tracks A–E read the Horizon; Track F is the commit. `applyStance` (`core/spectral.js`)
+is the nine cube stances as four real-symmetric primitives — floor-shift, project,
+rank-1 update, rotate — sorted by Mode (Differentiate sharpens, Relate preserves the
+spectrum, Generate produces). `updateStance` (`surfer/stance.js`) reads the move off the
+field at the peak and is the **confabulation guard, quantified**: a Making only when a
+rank-1 lens clears its spectral null; otherwise a Ground-grain Cultivating (flat field →
+reserve) or Clearing (a surprise with no clean lens → dephase), each routed through
+`cellAt` so a Figure commit at a Ground site is refused. The diagnostic-asymmetry the
+corpus shows (Figure moves are the sharpest, Ground the most diffuse) is then a theorem,
+not a statistic — a Figure move is a rank-1 change, the most detectable event that can
+happen to ρ; a Ground move is a featureless floor-shift with no signature direction.
+Off unless `opts.stance` is set; the live fold path turns it on only behind the meaning
+embedder, so the goldens are byte-identical.
 
 ## What changed in the code, and what is still gated
 

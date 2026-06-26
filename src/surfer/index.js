@@ -22,6 +22,11 @@ export { surfFold } from './surf.js';
 // surfer stays acyclic (it never reaches into classify).
 export { atmosphereOf, atmosphereFromActivations, projectUnit, projectUnits,
          centroidBasis, corpusSigma } from './atmosphere.js';
+// The Stance face (Track F): how the surfer MOVES ρ at the commit, and the
+// confabulation guard quantified — read the update stance off the field, refuse a
+// Making the field will not bear. applyStance (the four real-symmetric primitives)
+// lives on the core leaf; updateStance reads the move here.
+export { updateStance, applyMeasuredStance } from './stance.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';

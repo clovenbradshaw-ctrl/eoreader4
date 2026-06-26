@@ -268,5 +268,110 @@ export const commutator = (projA, projB) => {
   return frobenius(C);
 };
 
+// ── applyStance — the nine moves on ρ, as four real-symmetric primitives ──────
+//
+// Track F (the Stance face). Tracks A–E READ ρ; this is what the surfer DOES to it.
+// A real symmetric density operator admits only a few kinds of map, and they sort
+// exactly into the three Modes of core/cube.js read as operations on ρ:
+//
+//   Differentiate (Clearing/Dissecting/Unraveling) — SHARPEN: project, dephase,
+//     decompose. Lower entropy or remove a component.
+//   Relate (Tending/Binding/Tracing) — SPECTRUM-PRESERVING: identity, rotation,
+//     transport. Move the eigenvectors, conserve the eigenvalues.
+//   Generate (Cultivating/Making/Composing) — PRODUCE: raise the floor, mint a
+//     direction, build a basis. Raise rank or entropy.
+//
+// Crossed with the grain, the nine stances are nine specific moves — all expressible
+// without leaving real symmetric matrices, by FOUR primitives: floor-shift, project,
+// rank-1 update, rotate. (The honest seam: full CPTP / Lindblad open-system dynamics is
+// far more than this needs and is deliberately resisted; this finite real-symmetric
+// subset is the entire alphabet.) `firmness` ∈ (0,1] is the strength of the map — the
+// Resolution-face spectrum as the third coordinate: a firm Dissecting is a sharp
+// projector, a defeasible one a soft (POVM-like) partial measurement.
+
+const renorm = (rho) => {
+  const n = rho.length;
+  let tr = 0;
+  for (let i = 0; i < n; i++) tr += rho[i][i];
+  if (Math.abs(tr) > 1e-300) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) rho[i][j] /= tr;
+  return rho;
+};
+const clampPSD = (rho) => {
+  // project to the PSD cone by zeroing negative eigenvalues, then renormalise — keeps a
+  // floor-drop / signed move a valid density rather than letting it leave the cone.
+  const { values, vectors } = symmetricEig(rho);
+  const n = rho.length;
+  const out = zeros(n);
+  for (let m = 0; m < n; m++) {
+    const lam = Math.max(0, values[m]);
+    if (lam <= 0) continue;
+    const v = vectors[m];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) out[i][j] += lam * v[i] * v[j];
+  }
+  return renorm(out);
+};
+
+// rank-1 update: ρ ± f·|v⟩⟨v| — Making (+, mint a lens) and the signed Clearing of a
+// defeated component (−, dephase it out). v is unit-normalised internally.
+const rank1Update = (rho, v, f, sign = 1) => {
+  const n = rho.length;
+  let nv = 0; for (let i = 0; i < n; i++) nv += v[i] * v[i];
+  nv = Math.sqrt(nv) || 1;
+  const out = rho.map(r => r.slice());
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) out[i][j] += sign * f * (v[i] / nv) * (v[j] / nv);
+  return sign < 0 ? clampPSD(out) : renorm(out);
+};
+// floor-shift: ρ ± f·I/n — Cultivating (+, raise the floor uniformly, entropy up, no
+// direction) and Clearing-the-floor (−, drop it). The Generate×Ground / Diff×Ground move.
+const floorShift = (rho, f, sign = 1) => {
+  const n = rho.length;
+  const out = rho.map(r => r.slice());
+  for (let i = 0; i < n; i++) out[i][i] += sign * f / n;
+  return sign < 0 ? clampPSD(out) : renorm(out);
+};
+// soft projection onto a direction: (1−f)·ρ + f·(PρP)/tr — Dissecting (the sharp
+// collapse at f=1, a partial measurement below it). Lowers entropy.
+const projectOnto = (rho, v, f) => {
+  const n = rho.length;
+  let nv = 0; for (let i = 0; i < n; i++) nv += v[i] * v[i];
+  nv = Math.sqrt(nv) || 1;
+  const u = v.map(x => x / nv);
+  let vRv = 0; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) vRv += u[i] * rho[i][j] * u[j];
+  const out = zeros(n);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++)
+    out[i][j] = (1 - f) * rho[i][j] + f * vRv * u[i] * u[j];
+  return renorm(out);
+};
+// Givens rotation of the (i,j) plane by f·θ — Binding (link two lenses), Tracing
+// (transport the basis). Spectrum-preserving: ρ' = QρQᵀ.
+const rotatePlane = (rho, i, j, theta) => {
+  const n = rho.length;
+  const c = Math.cos(theta), s = Math.sin(theta);
+  const Q = identity(n);
+  Q[i][i] = c; Q[i][j] = -s; Q[j][i] = s; Q[j][j] = c;
+  return matMul(matMul(Q, rho), transpose(Q));
+};
+
+// The dispatch: (family, grain) → primitive. `lens` overrides the direction (else the
+// top eigen-lens); `theta`/`amount` are the rotation angle / floor-mass scales.
+export const applyStance = (rho, { family, grain, firmness = 1, lens = null, theta = Math.PI / 4, amount = 0.5 } = {}) => {
+  if (!rho?.length) return rho;
+  const f = Math.max(0, Math.min(1, firmness));
+  const dir = () => lens || eigenLenses(rho, { k: 1 })[0]?.lens || null;
+  const key = `${family}/${grain}`;
+  switch (key) {
+    case 'Generate/Figure':    { const v = dir(); return v ? rank1Update(rho, v, f * amount, +1) : rho; }   // Making
+    case 'Differentiate/Figure': { const v = dir(); return v ? projectOnto(rho, v, f) : rho; }              // Dissecting
+    case 'Differentiate/Ground': return floorShift(rho, f * amount, -1);                                    // Clearing
+    case 'Generate/Ground':      return floorShift(rho, f * amount, +1);                                    // Cultivating
+    case 'Generate/Pattern':     return floorShift(rho, f * amount, +1);                                    // Composing (basis-build)
+    case 'Relate/Figure':        return rotatePlane(rho, 0, 1, f * theta);                                  // Binding
+    case 'Relate/Pattern':       return rotatePlane(rho, 0, 1, f * theta);                                  // Tracing (transport)
+    case 'Relate/Ground':        return rho.map(r => r.slice());                                            // Tending (identity)
+    case 'Differentiate/Pattern': return rho.map(r => r.slice());                                           // Unraveling (decompose=read)
+    default: return rho.map(r => r.slice());
+  }
+};
+
 // matrix helpers exposed for the passes that assemble bases off ρ.
 export { matMul, transpose, frobenius };
