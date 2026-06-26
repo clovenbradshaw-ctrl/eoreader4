@@ -47,7 +47,7 @@ const STATE = {
   // build is paid once and cached to OPFS. See docs/the-mind.md.
   mind:      null,       // the createMind() instance, once constructed
   mindReady: false,      // the OPFS index is built and queryable
-  mindOn:    false,      // consult memory this session (persisted)
+  mindMode:  'off',      // 'off' | 'recall' (show beneath) | 'weave' (fold into prompt) — persisted
   mindBuilding: false,   // a build is in flight (chip shows progress)
 };
 
@@ -214,7 +214,7 @@ const buildMindNow = async () => {
           `${books} books · ${sentences.toLocaleString()} sentences`);
     });
     STATE.mindReady = true;
-    STATE.mindOn = true;
+    STATE.mindMode = 'recall';          // built → start by recalling beneath answers
     persistMind();
     const st = await mind.status();
     setStatus(`memory: ready · ${st.books.toLocaleString()} books · ${st.sentences.toLocaleString()} sentences`);
@@ -227,34 +227,38 @@ const buildMindNow = async () => {
 };
 
 const persistMind = () => {
-  try { localStorage.setItem('eoreader.mindOn', STATE.mindOn ? '1' : '0'); } catch { /* ignore */ }
+  try { localStorage.setItem('eoreader.mindMode', STATE.mindMode); } catch { /* ignore */ }
 };
 
-// The chip's click: not built → build it; built → toggle consulting on/off.
+// The chip's click: not built → build it; built → cycle off → recall → weave → off.
+//   recall = recalled lines shown beneath the answer (display-only)
+//   weave  = those lines also woven into the model's prompt as background
+const MIND_CYCLE = { off: 'recall', recall: 'weave', weave: 'off' };
 const onMindChip = () => {
   if (STATE.mindBuilding) return;
   if (!STATE.mindReady) { buildMindNow(); return; }
-  STATE.mindOn = !STATE.mindOn;
+  STATE.mindMode = MIND_CYCLE[STATE.mindMode] || 'off';
   persistMind();
   renderDocChips();
 };
 
+const MIND_CHIP = {
+  off:    { label: '✦ Mind · off',    title: 'Memory is ready but not consulted. Click to recall beneath answers.' },
+  recall: { label: '✦ Mind · recall', title: 'Recalling — memory’s lines appear beneath each answer (not in the answer). Click to weave them into the prompt.' },
+  weave:  { label: '✦ Mind · weave',  title: 'Weaving — memory’s lines are offered to the model as background and shown beneath. Click to stop consulting.' },
+};
 const renderMindChip = (root) => {
+  const mode = STATE.mindReady ? STATE.mindMode : 'off';
   const chip = document.createElement('span');
-  const on = STATE.mindReady && STATE.mindOn;
-  chip.className = 'doc-chip mind' + (on ? ' on' : '') + (STATE.mindBuilding ? ' building' : '');
+  chip.className = 'doc-chip mind' + (STATE.mindReady && mode !== 'off' ? ' on' : '') + (STATE.mindBuilding ? ' building' : '');
   const name = document.createElement('span');
   name.className = 'doc-chip-name';
   name.textContent = STATE.mindBuilding ? '✦ Mind · reading…'
     : !STATE.mindReady ? '✦ Mind · load memory'
-    : on ? '✦ Mind · on' : '✦ Mind · off';
-  chip.title = STATE.mindBuilding
-    ? 'Reading the corpus into memory (once; cached to OPFS).'
-    : !STATE.mindReady
-      ? 'eoreader’s read corpus — its memory. Click to read it in (once, then cached).'
-      : on
-        ? 'Consulting memory — its recalled lines appear beneath each answer. Click to stop.'
-        : 'Memory is ready but not consulted. Click to consult it.';
+    : MIND_CHIP[mode].label;
+  chip.title = STATE.mindBuilding ? 'Reading the corpus into memory (once; cached to OPFS).'
+    : !STATE.mindReady ? 'eoreader’s read corpus — its memory. Click to read it in (once, then cached).'
+    : MIND_CHIP[mode].title;
   chip.addEventListener('click', onMindChip);
   chip.appendChild(name);
   root.appendChild(chip);
@@ -387,10 +391,20 @@ const runQuery = async (question) => {
     return;
   }
 
+  // Consult MEMORY (the mind) before the turn, if on — one lexical reading over the
+  // read corpus, reused for both the display block and (in weave mode) the prompt.
+  let mindSpans = null;
+  if (STATE.mindReady && STATE.mindMode !== 'off' && STATE.mind) {
+    try { mindSpans = await STATE.mind.retrieve(question, 5); } catch { mindSpans = null; }
+  }
+
   const t0 = performance.now();
   const result = await runTurn({
     question,
     docs:     selectedDocs,     // the selected set — folded into one composite to ground against
+    // In WEAVE mode the recalled lines are offered to the model as labelled background;
+    // in recall mode they are display-only (not passed here). Epistemically separate either way.
+    mindSpans: STATE.mindMode === 'weave' ? mindSpans : null,
     model:    STATE.model,
     embedder: STATE.embedder,
     // The MiniLM organ for retrieval's SEMANTIC channel: when it is live, retrieval
@@ -445,14 +459,10 @@ const runQuery = async (question) => {
   // one doc pane (clicking a source chip switches to that document instead).
   if (result.sources?.length && selectedDocs.length <= 1) highlightSources(els.docView, result.sources);
 
-  // Consult MEMORY (the mind), if on — a separate, epistemically-distinct reading.
-  // It runs the SAME lexical score over the read corpus and surfaces its recalled,
-  // provenance-tagged lines beneath the answer. Never folded into the document
-  // answer here (display-only); failures are swallowed so memory can't break a turn.
-  if (STATE.mindOn && STATE.mindReady && STATE.mind && route !== 'error') {
-    try { renderMindBlock(thinking, await STATE.mind.retrieve(question, 5)); }
-    catch { /* memory is an enhancement — a fault leaves the answer untouched */ }
-  }
+  // Surface MEMORY beneath the answer — the recalled, provenance-tagged lines, shown
+  // in both recall and weave modes (transparency: what memory contributed is always
+  // visible and clickable to source, even when it was woven into the prompt).
+  if (mindSpans && route !== 'error') renderMindBlock(thinking, mindSpans);
 
   // Append the completed exchange so the next turn's session fold can read it back —
   // but never feed an error turn back into the conversation (it would poison the fold).
@@ -540,7 +550,10 @@ els.groundingChip.addEventListener('click', () => {
 // The Mind chip — pinned and always present. Restore the consult preference, show
 // the chip immediately, then probe OPFS after boot so a returning user whose memory
 // is already on disk sees "ready" without rebuilding. The probe never blocks boot.
-try { STATE.mindOn = localStorage.getItem('eoreader.mindOn') === '1'; } catch { /* default off */ }
+try {
+  const m = localStorage.getItem('eoreader.mindMode');
+  if (m === 'recall' || m === 'weave' || m === 'off') STATE.mindMode = m;
+} catch { /* default off */ }
 renderDocChips();
 (window.requestIdleCallback || ((f) => setTimeout(f, 200)))(probeMind);
 

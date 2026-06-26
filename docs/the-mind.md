@@ -83,12 +83,22 @@ OPFS rather than built there.
 | `retrieve.js` | The reading against the index — reproduces `retrieve/lexical.js` exactly, materialises the top-k spans with provenance. |
 | `index.js` | The holon surface: `createMind({ url }).status() / build(onProgress) / retrieve(query, k)`. |
 
-## What is not done yet
+## Surfacing it — the pinned Mind chip
 
-The engine is built, tested, and verified against the real corpus. How the mind
-**surfaces in an answer** is the open design choice: shown as a distinct "from
-the mind" evidence block beside the document-grounded answer, versus folded into
-the model's grounded prompt as labelled background context. Both keep the
-epistemic separation; they differ in UX and in how far they touch the
-golden-parse-sensitive turn pipeline. That wiring is intentionally left for a
-focused pass.
+The mind is reached through a **pinned "Mind" chip** that leads the document
+chips. It is framed as *memory*, not a document (a violet accent, no remove
+button — it is consulted, never deleted). Clicking it the first time reads the
+corpus in (progress in the status line, cached to OPFS); after that, clicks
+cycle three consult modes, persisted across reloads:
+
+| Mode | What it does |
+|------|--------------|
+| **off** | memory is ready but not consulted |
+| **recall** | every turn runs the mind's lexical reading; its recalled, provenance-tagged lines appear in a distinct "from memory" block beneath the answer — **display-only**, never folded into the document's answer |
+| **weave** | the recalled lines are *also* offered to the model as labelled background (`weaveMemory` in `turn/stages.js`), so the answer itself can lean on them — and they are still shown beneath, so what memory contributed is always visible and clickable to source |
+
+Both modes keep the epistemic separation: memory is background, the document is
+the ground, and grounded claims are still cited to the document's spans, never
+to memory. The weave is **guarded entirely by the presence of mind spans** — a
+default turn (chip off, or no mind) builds the exact same prompt as before, so
+the golden parses are byte-identical (`tests/mind.test.js` asserts it).
