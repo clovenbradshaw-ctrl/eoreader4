@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { parseText } from '../src/perceiver/parse/pipeline.js';
 import { retrieveLexical } from '../src/retrieve/lexical.js';
 import { retrieveHybrid, fuseConcordance, pickRetrievalEmbedder, selectExcerpts } from '../src/retrieve/hybrid.js';
+import { retrieveStructural, queryTouchesDoc } from '../src/retrieve/structural.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import { ingestText } from '../src/organs/in/text.js';
 
@@ -187,4 +188,49 @@ test('selectExcerpts keeps the relevant few and drops the weak / surfed tail', (
 test('selectExcerpts always keeps at least the strongest span', () => {
   assert.deepEqual(selectExcerpts([{ idx: 7, score: 0.03, text: 'weak' }]).map(s => s.idx), [7]);
   assert.deepEqual(selectExcerpts([]), []);
+});
+
+// ── Structural retrieval for whole-document meta-queries ──────────────────────
+// The audit's t1: "summarize" makes no lexical contact with the page, so lexical
+// retrieval fuzzy-matched the meta-word onto arbitrary fragments and the talker
+// confabulated. A whole-document meta-query reads the document's SKELETON instead —
+// opening, headings, an even spread — and a targeted whole-doc question stays lexical.
+
+const WIKI = `# EO Wiki
+EO is a framework for transformation. It models change with nine operators.
+## Protection
+Protection is one principle. It fails sometimes.
+## Operators
+The nine operators define what transformations are possible.
+Each operator names a kind of change.
+## Closing
+That is intended.`;
+
+test('queryTouchesDoc is false for a meta-query, true for a question naming a doc term', () => {
+  const doc = parseText(WIKI, { docId: 'eo.md' });
+  assert.equal(queryTouchesDoc(doc, 'summarize'), false, 'a pure meta-word touches nothing');
+  assert.equal(queryTouchesDoc(doc, 'what is this about'), false, 'question + task words touch nothing');
+  assert.equal(queryTouchesDoc(doc, 'what are the operators'), true, '"operators" is on the page');
+  assert.equal(queryTouchesDoc(doc, 'tell me about protection'), true, '"protection" is on the page');
+});
+
+test('retrieveStructural reads the opening, headings, and a spread — never empty on a real doc', () => {
+  const doc = parseText(WIKI, { docId: 'eo.md' });
+  const spans = retrieveStructural(doc, 6);
+  assert.ok(spans.length > 0, 'a structural read is never empty on a non-empty doc');
+  // The opening leads — it takes the frame's primacy slot and survives selectExcerpts.
+  assert.equal(spans[0].idx, 0, 'the opening is the strongest structural span');
+  assert.ok(spans.every(s => s.score > 0), 'structural spans carry a real score, not 0 (they must clear the floor)');
+  assert.ok(spans.every(s => s.via === 'structural'), 'tagged as a structural read for the audit');
+  // The shown few include real content, not disconnected fragments.
+  const kept = selectExcerpts(spans);
+  assert.ok(kept.some(s => /EO is a framework/.test(s.text)), 'the talker is shown what the document is');
+});
+
+test('retrieveStructural skips site/furniture units and blanks', () => {
+  const doc = parseText('Real opening sentence here. Boilerplate footer line.', { docId: 'd' });
+  // DEF the second unit as a site (furniture), as read/site.js would.
+  doc.log.append({ op: 'DEF', id: 'unit:1', key: 'role', value: 'site', sentIdx: 1 });
+  const spans = retrieveStructural(doc, 8);
+  assert.ok(!spans.some(s => s.idx === 1), 'a DEF-site unit is never offered as structural material');
 });

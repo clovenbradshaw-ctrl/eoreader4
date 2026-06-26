@@ -141,6 +141,26 @@ test('absent conversation slots are simply omitted; present ones ride in the rea
   assert.doesNotMatch(noConv.content, /Earlier in this reading/);
 });
 
+// The thread-leak fix (the audit's t5): a small talker fed bare "You asked: …" lines
+// answered every prior turn as a bulleted list. With a thread present, the block names
+// the prior turns as context-only and the closing clause anchors the LIVE question. With
+// no thread, the closing clause stays byte-identical (nothing to confuse).
+test('a carried thread is framed as context and the closing clause anchors the live question', () => {
+  const [, withConv] = buildGroundedMessages({
+    question: 'what is an operator?', spans: [{ idx: 0, text: 'x' }],
+    conversation: { notes: 'You asked: summarize\nYou asked: protection?' },
+  });
+  assert.match(withConv.content, /for context only; answer just their latest question/i,
+    'prior turns are named as context, not a checklist');
+  assert.match(withConv.content, /Answer their latest question now — “what is an operator\?”/,
+    'the closing clause anchors the live question so the model does not answer the thread');
+
+  const [, noConv] = buildGroundedMessages({ question: 'what is an operator?', spans: [{ idx: 0, text: 'x' }] });
+  assert.match(noConv.content, /^Answer them now, in your own words\./m,
+    'with no thread the closing clause is byte-identical to before');
+  assert.doesNotMatch(noConv.content, /latest question/, 'no thread → no anchor rephrase');
+});
+
 // ---------------------------------------------------------------------------
 // The grounded window under the subjective frame: the talker is handed the verbatim
 // lines it read — and ONLY those, no arrows (§2), no recognition (§3). The fold still

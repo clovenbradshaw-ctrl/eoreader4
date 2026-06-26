@@ -9,7 +9,7 @@
 // The user sees what the model actually said, with a flag pinned to it.
 
 import { answerSmalltalk, answerMath, answerVoid, answerMetadata } from '../answer/index.js';
-import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts } from '../retrieve/index.js';
+import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc } from '../retrieve/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold, centroidBasis, projectUnits } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
@@ -154,6 +154,17 @@ export const stages = {
     //   read path still holds the SUBJECT (the fold's cast); this is the complementary
     //   NOMINATION channel that finds the EVIDENCE spans the demonstrative points at.
     const query = resolveRetrievalQuery(ctx.question, ctx.history);
+    // A whole-document task (summary / list / explain) whose question makes no lexical
+    // contact with the page is a META-query — "summarize", "what is this about" — and
+    // retrieving on it fuzzy-matches the meta-word onto arbitrary fragments (the audit's
+    // t1 confabulated summary). Read the document's STRUCTURE instead: its opening,
+    // headings, and an even spread (retrieve/structural.js). A targeted whole-doc
+    // question naming a term the document uses stays on the lexical path (queryTouchesDoc
+    // is true), so the strong t6 ("what are the 9 operators?") is untouched.
+    if (ctx.task && ctx.task !== 'answer' && !queryTouchesDoc(ctx.doc, query)) {
+      const structural = retrieveStructural(ctx.doc, 12);
+      if (structural.length) return { ...ctx, spans: structural, retrievalQuery: query, retrieval: 'structural' };
+    }
     const spans = await retrieveHybrid(ctx.doc, query, re, 6);
     if (spans.length === 0) {
       // Strict grounded mode never falls through to free generation: it stays on the
@@ -586,5 +597,10 @@ const groundedConversation = (ctx) => {
     .split('\n').filter(l => /^#\d+\s*You:/.test(l)).map(l => l.replace(/^#\d+\s*You:\s*/, '').trim());
   const thread = [...olderUser, ...recentUser].filter(Boolean);
   if (!thread.length) return {};
-  return { notes: thread.map(q => `You asked: ${q}`).join('\n') };
+  // Carry only the most recent few. The full thread, fed verbatim as "You asked: …"
+  // lines, reads to a small talker as a checklist of open tasks — the audit's t5
+  // answered every prior question in a bulleted list and overran its token budget.
+  // The recent turns are what continuity ("now?", "prove it") actually needs; the
+  // tail only widens the leak surface.
+  return { notes: thread.slice(-3).map(q => `You asked: ${q}`).join('\n') };
 };

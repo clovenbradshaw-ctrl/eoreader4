@@ -35,6 +35,35 @@ test('mechanical math short-circuits the pipeline (no LLM stage runs)', async ()
   assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
 });
 
+test('a summary meta-query reads the document skeleton, not fuzzy-matched fragments', async () => {
+  // The audit's t1 failure: "summarize" has no lexical contact with the page, so the
+  // hybrid path fuzzy-matched it onto arbitrary lines. The whole-doc meta-query now
+  // routes to structural retrieval — the opening + headings + a spread.
+  const doc = setup('# Topic\nThis document is about widgets. Widgets are small machines.\n## Uses\nThey are used in factories. Each widget spins.');
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'summarize', doc, model, embedder: createHashEmbedder(), auditLog: audit,
+  });
+  const retrieve = result.turn.steps.find(s => s.name === 'retrieve');
+  assert.equal(retrieve.data.mode, 'structural', 'the meta-query routed to a structural read');
+  assert.ok(retrieve.data.n > 0, 'the structural read found material');
+  assert.equal(result.turn.route, 'grounded', 'it stays grounded — never falls through to chat');
+});
+
+test('a targeted whole-doc question still retrieves lexically (the strong t6 path is untouched)', async () => {
+  const doc = setup('# Topic\nThis document is about widgets. Widgets are small machines.\n## Uses\nThey are used in factories.');
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'what are the widgets', doc, model, embedder: createHashEmbedder(), auditLog: audit,
+  });
+  const retrieve = result.turn.steps.find(s => s.name === 'retrieve');
+  assert.notEqual(retrieve.data.mode, 'structural', '"widgets" is on the page — it stays on the lexical path');
+});
+
 test('grounded path produces an answer with citations', async () => {
   const doc = setup('Alice loves apples. Bob hates broccoli.');
   const model = createModel('echo');

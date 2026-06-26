@@ -184,8 +184,12 @@ export const buildGroundedMessages = ({
     blocks.push(`${EXCERPTS_HEADER}\n${orderSpansForFrame(spans).map(s => s.text).join('\n')}`);
 
   // The conversation so far, in the reader's register — never document content (§1, §6).
+  // The prior turns ride as CONTEXT, not as a checklist: a small talker fed bare
+  // "You asked: …" lines answers every one of them (the audit's t5 regurgitated the
+  // whole thread as bullets), so the block names them as already-handled and points the
+  // talker at the single live question below.
   if (conversation.notes)
-    blocks.push(`Earlier in this reading:\n${conversation.notes}`);
+    blocks.push(`Earlier in this reading:\n${conversation.notes}\n(Those came before — for context only; answer just their latest question below.)`);
   if (conversation.pastTurns?.length)
     blocks.push(`They had asked you:\n${conversation.pastTurns.join('\n')}`);
 
@@ -213,9 +217,14 @@ export const buildGroundedMessages = ({
   // attends hardest. Not a refusal instruction: if those lines are all the reader read,
   // "I did not find that" is just the honest report of an absence. This is what retires
   // VOID-as-coercion — the frame makes abstention coherent, no gag required.
-  blocks.push(
-    'Answer them now, in your own words. If they asked about something that was not in ' +
-    'what you read, tell them you did not find it — that is an honest answer, not a failure.');
+  //   When a prior thread rode above, the clause names the live question outright so the
+  //   talker answers THAT one and not the earlier turns it just saw (the t5 leak). With
+  //   no thread there is nothing to confuse, so the clause stays byte-identical.
+  blocks.push(conversation.notes
+    ? `Answer their latest question now — “${question}” — in your own words. If they asked about ` +
+      'something that was not in what you read, tell them you did not find it — that is an honest answer, not a failure.'
+    : 'Answer them now, in your own words. If they asked about something that was not in ' +
+      'what you read, tell them you did not find it — that is an honest answer, not a failure.');
 
   return [
     { role: 'system', content: strict ? SYSTEM_GROUND_STRICT : SYSTEM_GROUND },
