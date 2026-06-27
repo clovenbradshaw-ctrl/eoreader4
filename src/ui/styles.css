@@ -859,7 +859,6 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
   header select {
     flex: 1; min-width: 0; font-size: 16px; padding: .4rem .5rem;
   }
-  #player-link { flex-shrink: 0; }
 
   /* --- Panes: stack into a single switchable column. --------------------- */
   main {
