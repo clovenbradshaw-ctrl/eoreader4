@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { proposeWebSearch, COST_NOTICE } from '../src/turn/propose.js';
-import { runTurnWithWeb, runWebFollowup, verifyAgainstWeb } from '../src/turn/web.js';
+import { runTurnWithWeb, runWebFollowup, verifyAgainstWeb, formulateSearchQuery } from '../src/turn/web.js';
 import { admitWebSource } from '../src/ingest/websource.js';
 
 // "Search the internet to respond" actually firing (docs/web-search.md): the turn PROPOSES a
@@ -214,4 +214,50 @@ test('off mode (and a no-proposal turn) never reach for the net', async () => {
   const off = await runTurnWithWeb({ question: 'q', docs: [] }, { mode: 'off', webSearch, runTurnImpl: impl });
   assert.equal(fetched, false);
   assert.equal(off.answer, 'I did not find it.');
+});
+
+// ── Query formulation — the fix for "web search is useless" ──────────────────
+test('formulateSearchQuery resolves back-references into a standalone query', async () => {
+  const model = { phrase: async () => 'X-Files 2025 revival series producer' };
+  const history = [
+    { role: 'user', content: "what's the deal with the new x files?" },
+    { role: 'assistant', content: 'The X-Files revival...' },
+  ];
+  const q = await formulateSearchQuery({ model, question: 'who is making the new series as of 2026?', history });
+  assert.equal(q, 'X-Files 2025 revival series producer');
+});
+
+test('formulateSearchQuery falls back to the original with no model or a bad rewrite', async () => {
+  assert.equal(await formulateSearchQuery({ question: 'who is making it?' }), 'who is making it?');
+  const refusing = { phrase: async () => "I cannot help with that." };
+  assert.equal(await formulateSearchQuery({ model: refusing, question: 'who is making it?' }), 'who is making it?');
+  const throwing = { phrase: async () => { throw new Error('model down'); } };
+  assert.equal(await formulateSearchQuery({ model: throwing, question: 'who is making it?' }), 'who is making it?');
+  const tooLong = { phrase: async () => 'x'.repeat(200) };
+  assert.equal(await formulateSearchQuery({ model: tooLong, question: 'who is making it?' }), 'who is making it?');
+});
+
+test('formulateSearchQuery strips quotes and a leading "query:" label', async () => {
+  const model = { phrase: async () => 'Query: "X-Files new series 2026"' };
+  assert.equal(await formulateSearchQuery({ model, question: 'q' }), 'X-Files new series 2026');
+});
+
+test('runWebFollowup reformulates the raw query before searching (conversation in scope)', async () => {
+  let searched = null;
+  const model = { phrase: async () => 'X-Files new series 2026 producer' };
+  const webSearch = async (q) => { searched = q; return [{ doc: groundedDoc('Chris Carter is developing it.') }]; };
+  const first = { answer: 'It is made by someone.',
+    webProposal: { query: 'who is making the new series as of 2026?', trigger: 'verify', rationale: 'r', cost: COST_NOTICE }, flags: [] };
+  const out = await runWebFollowup({ question: 'q', docs: [], model, history: [] }, first, { webSearch });
+  assert.equal(searched, 'X-Files new series 2026 producer', 'the engine got the reformulated query, not the chat filler');
+  assert.equal(out.webFetched.query, 'X-Files new series 2026 producer', 'the audit records the query actually searched');
+});
+
+test('runWebFollowup: an explicit user query override skips reformulation', async () => {
+  let searched = null;
+  const model = { phrase: async () => 'should not be used' };
+  const webSearch = async (q) => { searched = q; return [{ doc: groundedDoc('x') }]; };
+  const first = { answer: 'a', webProposal: { query: 'raw', trigger: 'verify', rationale: 'r', cost: COST_NOTICE }, flags: [] };
+  await runWebFollowup({ question: 'q', docs: [], model }, first, { webSearch, query: 'user sharpened this' });
+  assert.equal(searched, 'user sharpened this');
 });

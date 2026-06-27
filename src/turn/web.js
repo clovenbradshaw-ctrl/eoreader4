@@ -43,15 +43,54 @@ export const verifyAgainstWeb = (answer, corpus, { question = '', floor = 0.5 } 
 // proposal as its own confirmation step, and run THIS only on a go-ahead — instead of blocking
 // the whole turn behind a popup. `query` overrides the proposal's query (the confirmation card
 // lets the user sharpen it before searching); absent, the proposal's own query stands.
+// Formulate a real SEARCH QUERY from the conversation — the fix for "web search is useless".
+// The proposer hands over the raw chat question ("no there's a newer one", "who is making the
+// new series as of 2026?"), which a search engine matches to nonsense (songs containing "no
+// there's"; random 2026 TV series) because the SUBJECT lives earlier in the thread, never in
+// the question. This asks the talker to rewrite the latest turn into a standalone query with
+// references resolved (the thread's "new series" → "X-Files (2025 revival)"). Model-assisted
+// and fully guarded: no model, a thin/odd rewrite, or any throw → the original query stands,
+// so behaviour only ever improves, never regresses. Returns a plain string.
+export const formulateSearchQuery = async ({ model, question, history = [], fallback = '' } = {}) => {
+  const base = String(question || fallback || '').trim();
+  if (!model?.phrase || !base) return base;
+  // The recent thread, compacted — enough to resolve "it / the new one / that show".
+  const thread = (history || [])
+    .slice(-6)
+    .map(m => `${m.role === 'assistant' ? 'A' : 'U'}: ${String(m.content || '').replace(/\s+/g, ' ').slice(0, 240)}`)
+    .join('\n');
+  const messages = [
+    { role: 'system', content:
+      'You turn a chat turn into ONE web search query. Resolve every pronoun and back-reference ' +
+      'from the conversation so the query stands alone (name the actual subject). Keep it short — ' +
+      'the keywords a search engine needs, no filler, no question words, no quotes. Output ONLY the query.' },
+    { role: 'user', content: `${thread ? `Conversation so far:\n${thread}\n\n` : ''}Latest turn: ${base}\n\nSearch query:` },
+  ];
+  try {
+    const out = await model.phrase(messages, { maxTokens: 32, temperature: 0 });
+    const q = String(out || '')
+      .split('\n').map(s => s.trim()).find(Boolean) || '';     // first non-empty line
+    const cleaned = q.replace(/^(search query|query)\s*:\s*/i, '').replace(/^["'`]+|["'`]+$/g, '').trim();
+    // Guard: a usable rewrite is short and not the model refusing/echoing. Else keep the original.
+    if (cleaned && cleaned.length <= 120 && !/^i (cannot|can't|am unable)/i.test(cleaned)) return cleaned;
+  } catch { /* fall through to the original */ }
+  return base;
+};
+
 export const runWebFollowup = async (args, first, {
   webSearch,
   k = 4,
   runTurnImpl = runTurn,
   query,
+  formulate = formulateSearchQuery,
 } = {}) => {
   const proposal = first?.webProposal;
   if (!proposal || !webSearch) return first;
-  const q = (query != null && String(query).trim()) ? String(query).trim() : proposal.query;
+  // A user-sharpened query (the confirmation card) wins outright. Otherwise reformulate the
+  // proposal's raw query against the conversation so the engine gets keywords, not chat filler.
+  const q = (query != null && String(query).trim())
+    ? String(query).trim()
+    : await formulate({ model: args?.model, question: proposal.query, history: args?.history || [], fallback: proposal.query });
 
   // Pick the source per trigger: verify/witness want FACTS (Wikipedia); a gap wants to FIND the
   // answer in the wild, so auto-route and pull the actual result pages (random websites).
