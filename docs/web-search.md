@@ -78,13 +78,31 @@ Adding the admitted doc to `runTurn`'s `docs[]` is the *whole* integration — t
 it in, so a web source **enters retrieval ranking and its cited spans trace to it with no
 pipeline change** (verified in `tests/websource.test.js`, embedder-free).
 
-## What is next (behind the proxy seam)
+## The live half — fetch & search over a CORS feed proxy (built)
 
-- **The proxy + search/fetch** — port eoreader3's `proxy/cleon-search-proxy.js` (`/search` →
-  SearXNG, `/fetch` → readability + sha256). Off by default; no public endpoint baked in.
+`src/ingest/webfetch.js`. The proxy is a **CORS fetch proxy**: `GET <proxy>?url=<http(s) URL>`
+returns that URL's raw body as text (the n8n `feed` webhook — feed-friendly `Accept`, 5
+redirects, 15s, CORS `*`). It is not a search engine, so **search is done by fetching a
+feed-search URL** (Google News RSS by default) and parsing its items — one `fetchUrl` primitive
+carries both fetch and search.
+
+- `createWebClient({ proxy, fetchImpl, searchUrl })` — `fetchUrl(url)` (`GET proxy?url=<encoded>`)
+  and `search(query)` (fetch a feed-search URL → `parseFeed`). `fetchImpl` is injectable (real
+  fetch in the app/Node, a fake in tests). `DEFAULT_FEED_PROXY` points at the configured proxy.
+- `parseFeed(xml)` — RSS `<item>` and Atom `<entry>` → `{ title, link, summary, published }`,
+  entities/CDATA decoded; `htmlToText(html)` reduces a fetched page to prose before admission.
+- `fetchAndAdmit(url)` / `searchAndAdmit(query)` — pull through the proxy and hand the result to
+  the admission core, so results drop into the answer scope as cited sources.
+
+Verified end to end against the live proxy (`tests/webfetch.test.js`, the `LIVE` case behind
+`EO_LIVE_PROXY=1`); the default test run injects a fake fetch and stays offline.
+
+## What is next
+
 - **Proposer + confirm** — the model emits a `fetch-proposal` (never fetches); the user edits the
   query and confirms, with the explicit-cost notice (the query reaches public engines). Chat
-  isolation: never a silent chat side effect.
+  isolation: never a silent chat side effect. The fetch/search client above is what a confirmed
+  action drives.
 - **Automatic content retrieval** — let a measured gap (void / witnessless claim) auto-fire a
   precision-gated search, web spans riding as provenance-tagged cited sources.
 - **Witness-seeking** — make the web a `witnessSource` for the existing `veto` witness-seek, so an

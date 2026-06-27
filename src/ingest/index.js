@@ -8,3 +8,6 @@ export { parseEOT, eotDoc } from './eot.js';
 // that drops into the answer scope, cited + veto-checked like any source (docs/web-search.md).
 export { admitWebSource, createWebStore, webRecord, webContentHash,
          toWebCitation, verifyCitation, engineDocId, recordIdForDoc, recordIdOf } from './websource.js';
+// The live fetch/search client over a CORS feed proxy (search-by-feed → admit into scope).
+export { createWebClient, searchAndAdmit, fetchAndAdmit, parseFeed, htmlToText,
+         DEFAULT_FEED_PROXY } from './webfetch.js';
