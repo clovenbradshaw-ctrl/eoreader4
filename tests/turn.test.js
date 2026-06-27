@@ -9,6 +9,7 @@ import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import '../src/model/echo.js';
 import { createModel } from '../src/model/interface.js';
+import { eotDoc } from '../src/ingest/index.js';
 
 const setup = (text) => {
   const doc = parseText(text, { docId: 't' });
@@ -326,4 +327,27 @@ test('inquiry is off by default — the turn is byte-identical without the flag'
   const step = result.turn.steps.find(s => s.name === 'inquire');
   // the stage is in the pipeline but returns the context untouched → no asked questions, no added spans
   assert.ok(!step || ((step.data.asked || []).length === 0 && (step.data.added || 0) === 0), 'no inquiry without the flag');
+});
+
+
+test('the veto actively SEEKS the witness — confirms an interpretation against the source', async () => {
+  // The grounding doc is the model's own EOT notes (reafference). The answer rests only on
+  // them, so without help it is interpretation. With a source corpus available, the veto stage
+  // fetches the spans about the claim's figures and re-checks.
+  const notes = eotDoc('Grete : Person\nGregor : Person\nGrete -> Gregor : fed');
+  const base = { doc: notes, rawOutput: 'Grete fed Gregor.', spans: [{ idx: 0, text: 'x' }], bound: [{ citation: 's0' }], task: 'answer' };
+
+  const alone = await stages.veto({ ...base });
+  assert.ok(alone.vetoes.some(v => v.id === 'interpretation'), 'rests only on the notes → interpretation flag');
+  assert.equal(alone.witnessSought, null, 'nothing sought without a source');
+
+  const source = parseText('Grete fed Gregor every morning.', { docId: 'src' });
+  const sought = await stages.veto({ ...base, witnessSource: source });
+  assert.equal(sought.witnessSought.confirmed, true, 'the source attests it — confirmed');
+  assert.ok(!sought.vetoes.some(v => v.id === 'interpretation'), 'the interpretation flag clears — now witnessed');
+
+  const silent = parseText('Grete saw Gregor.', { docId: 'src2' });
+  const unconfirmed = await stages.veto({ ...base, witnessSource: silent });
+  assert.equal(unconfirmed.witnessSought.confirmed, false, 'a silent source confirms nothing');
+  assert.ok(unconfirmed.vetoes.some(v => v.id === 'interpretation'), 'still interpretation — the witness is absent');
 });

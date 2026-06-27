@@ -10,6 +10,7 @@
 // honest place for a model: surface realisation behind a propositional veto, never content.
 
 import { speakConcept } from './traverse.js';
+import { toPast } from './morph.js';
 import { classifyProvenance } from '../ground/index.js';
 
 // phraserBrief(doc, opts) → the determined content for a talker, as IMPRESSIONS to voice.
@@ -28,24 +29,59 @@ export const phraserBrief = (doc, opts = {}) => {
   return Object.freeze({ propositions, draft: spoken.text, plan: spoken.plan });
 };
 
-// realizationPrompt(brief) → what the talker is GIVEN, not what it is forbidden.
-//
-// The propositions are IMPRESSIONS — the pre-verbal scene a reading left (Levelt's preverbal
-// message), held as who-did-what, waiting to be put into words. We feed the talker the scene
-// and ask it to voice it, with almost no caveats: a defensive, prohibition-heavy prompt makes
-// a model stilted, and the prohibitions are redundant anyway, because grounding is enforced
-// AFTER the fact by the veto (talkThenVerify / classifyProvenance), not by nagging the prompt.
-// So the prompt's job is to convey the impression richly and trust the talker to form words;
-// the veto's job, silent, is to strip anything that drifted. One light nudge to stay with the
-// scene, and no list of rules.
+// SUBJECT_PRONOUN — the gendered pronoun for a repeated subject, so natural speech does not
+// drone the name every clause. Only where gender is evidenced (m/f/p); else the name stands.
+const SUBJECT_PRONOUN = { m: 'he', f: 'she', p: 'they' };
+const cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+const joinList = (xs) => xs.length <= 1 ? (xs[0] || '')
+  : xs.length === 2 ? `${xs[0]} and ${xs[1]}`
+  : `${xs.slice(0, -1).join(', ')}, and ${xs[xs.length - 1]}`;
+
+// speakTriples(propositions, { genders }) → natural speech BUILT FROM THE TRIPLES, not from the
+// document's surface. The old path realised the parser's own bonds back into sentences and
+// compounded every parse glitch into word salad ("Grete aloned dared"). This instead takes the
+// grounded x→relation→y edges and says them: it groups a run of same-subject edges into one
+// sentence with a compound predicate ("Grete fed Gregor, opened the window, and turned away"),
+// pronominalises a repeated subject by evidenced gender, and puts the verb in past tense. The
+// CONTENT is the triples (so it can be no more wrong than the graph is); the FORM is clean,
+// because it is generated from structure, never from re-reading a mangled surface.
+export const speakTriples = (propositions, { genders = {} } = {}) => {
+  const props = (propositions || []).filter((p) => p && p.subj && p.verb);
+  const sentences = [];
+  let i = 0;
+  let lastSubj = null;
+  while (i < props.length) {
+    const subj = props[i].subj;
+    const run = [];
+    while (i < props.length && props[i].subj === subj) { run.push(props[i]); i += 1; }
+    const predicates = run.map((p) => {
+      const v = toPast(String(p.verb));
+      return p.obj ? `${v} ${p.obj}` : v;
+    });
+    const g = genders[subj] ?? genders[String(subj)] ?? 'n';
+    // a repeated subject (same as the previous sentence) pronominalises if gender is evidenced.
+    const subjForm = (subj === lastSubj && SUBJECT_PRONOUN[g]) ? SUBJECT_PRONOUN[g] : subj;
+    sentences.push(`${cap(subjForm)} ${joinList(predicates)}.`);
+    lastSubj = subj;
+  }
+  return sentences.join(' ');
+};
+
+// realizationPrompt(brief) → what the talker is GIVEN: the grounded relation EDGES, x→rel→y,
+// not a re-realised surface. Feeding a model the engine's own telegraphic draft anchored it on
+// whatever the surface realiser had mangled; the edges are the clean content. So the talker
+// gets the scene as a small relation graph and is asked to say it as natural speech — the
+// fluency is its job, the facts are the edges', and the veto (talkThenVerify) strips any edge
+// it invents. No prohibition list: grounding is enforced after the fact, not by nagging.
 export const realizationPrompt = (brief) => Object.freeze({
-  system: 'You are the voice that turns a reading into words. You are handed the impression a '
-    + 'reader was left with — a scene of who did what to whom. Say it as fluent, natural prose, '
-    + 'the way someone would who had just read it and is telling a friend what happened. Stay '
-    + 'with the scene as given; you need add nothing to make it whole.',
-  user: 'The scene, as impressions:\n'
-    + brief.propositions.map((p) => `· ${p.subj} ${p.verb}${p.obj ? ' ' + p.obj : ''}`).join('\n')
-    + `\n\nIn rough words it came out: ${brief.draft}\n\nNow say it naturally:`,
+  system: 'You are the voice that turns a reading into words. You are given a small set of '
+    + 'relations from a text — who did what to whom, as edges (x → relation → y). Say them as '
+    + 'fluent, natural speech, the way someone would who had just read it and is telling a '
+    + 'friend what happened: join related facts, use pronouns, let it flow. Keep to the '
+    + 'relations given — you need add nothing to make it natural.',
+  user: 'The relations:\n'
+    + brief.propositions.map((p) => `  ${p.subj} → ${p.verb}${p.obj ? ' → ' + p.obj : ''}`).join('\n')
+    + '\n\nNow say it as natural speech:',
 });
 
 // talkThenVerify(brief, model, { doc }) → realise via the talker, then VETO its drift.

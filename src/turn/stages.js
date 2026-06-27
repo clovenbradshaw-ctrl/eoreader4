@@ -20,7 +20,7 @@ import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { rereadOnUnsettled } from './reread.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
-import { runVetoes, isUnbound } from '../ground/index.js';
+import { runVetoes, isUnbound, classifyProvenance } from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
 import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
@@ -573,9 +573,30 @@ export const stages = {
   // grounding vetoes entirely.
   async veto(ctx) {
     if (!ctx.spans?.length) return { ...ctx, vetoes: [] };
+    // The WITNESS check: classify the answer's propositions against the document's graph and
+    // ask whether they rest on the WORLD (exafference) or only on the engine's own reading
+    // (reafference — e.g. an EOT notes doc). When everything grounded is interpretation, the
+    // `interpretation` veto flags it. Inert for prose (the text is the world → exafference).
+    let provenance = ctx.doc && ctx.rawOutput ? classifyProvenance(ctx.rawOutput, { doc: ctx.doc }) : null;
+    let witnessSought = null;
+    // ACTIVELY SEEK THE WITNESS: when the answer rests only on the engine's reading AND an
+    // exafferent SOURCE is available (ctx.witnessSource — the corpus the notes were read from),
+    // go fetch the spans about the interpretation's figures and re-check. A claim the source
+    // attests is CONFIRMED (upgraded to witnessed); one it is silent on stays interpretation.
+    // The engine does not just accept a witness when offered — it goes and looks for one.
+    if (provenance?.onlyInterpretation && ctx.witnessSource) {
+      const figs = [...new Set(provenance.propositions.filter((p) => p.interpretation)
+        .flatMap((p) => [p.subj, p.obj].filter(Boolean)))];
+      const spans = [...new Set(figs.flatMap((f) => retrieveLexical(ctx.witnessSource, f, 3).map((s) => s.text)))];
+      if (spans.length) {
+        const witness = parseText(spans.join(' '), { docId: 'witness' });
+        provenance = classifyProvenance(ctx.rawOutput, { doc: ctx.doc, witness });
+        witnessSought = { figures: figs, read: spans.length, confirmed: !provenance.onlyInterpretation };
+      }
+    }
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
-      referential: ctx.referential, task: ctx.task,
+      referential: ctx.referential, task: ctx.task, provenance,
       // The surfer's measured commit stance — its own confabulation guard (stance-reserve):
       // a Ground-grain reserve at the peak means the reading did not settle on a figure.
       // Computed on every turn now the structural significance column is the default (§2).
@@ -585,7 +606,7 @@ export const stages = {
       // computed and discarded; now a claim the graph DENIES becomes a flag.
       edgeVerdicts: ctx.edgeVerdicts,
     });
-    return { ...ctx, vetoes: fired };
+    return { ...ctx, vetoes: fired, witnessSought };
   },
 
   // Settle: fold this turn's reading into the session's persistent Horizon (surfing-next.md

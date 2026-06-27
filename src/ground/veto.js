@@ -184,6 +184,17 @@ export const VETOES = [
     message: 'The reading did not settle on a figure to commit to here — it reserved rather than name one.',
   },
   {
+    id: 'interpretation',
+    // every grounded claim rests only on REAFFERENCE — the model's own notes (enactor-door
+    // EOT), nothing the world witnesses. The answer is the engine's interpretation, not an
+    // asserted fact. Flag-only: the reading still rides, marked as interpretation. Never fires
+    // for prose (the text IS the world read → exafference), so the present pipeline is unchanged.
+    test: ({ provenance, task }) =>
+      (task === 'answer' || task == null) && !!provenance && provenance.onlyInterpretation === true,
+    refuses: false,
+    message: 'This rests on the engine’s own reading (interpretation), not on anything the source witnesses.',
+  },
+  {
     id: 'low-coverage',
     test: ({ bound, task, draft }) => {
       const total = bound.length;

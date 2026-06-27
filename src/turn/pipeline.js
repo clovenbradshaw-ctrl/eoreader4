@@ -15,6 +15,7 @@
 import { stages } from './stages.js';
 import { createCompositeDoc } from '../organs/in/index.js';
 import { siteTerrainAt } from '../surfer/index.js';
+import { assembleBrief } from '../write/index.js';
 
 // The documents a turn's citations actually drew on. For a composite (several selected
 // documents folded into one), map each cited sentence index back through the provenance
@@ -53,7 +54,21 @@ const buildReading = (ctx) => {
       })),
     } : null,
     inquiry: ctx.inquiry?.asked?.length ? ctx.inquiry.asked : null,
+    // WHAT THE LLM WOULD BE TOLD — the whole pipeline assembled into the talker's payload:
+    // thread salience → adaptive surf → salient edges → EO-enriched RDF-star → the realization
+    // prompt. Recorded so the audit shows not just what was read but exactly what a talker
+    // would be handed (system + user), and the structure behind the selection.
+    llm: ctx.doc ? llmBrief(ctx) : null,
   };
+};
+
+// the LLM-facing brief for the audit — assembled from the doc and the activated thread, with
+// any fault degrading to null rather than sinking the turn record.
+const llmBrief = (ctx) => {
+  try {
+    const b = assembleBrief(ctx.doc, { question: ctx.question, history: ctx.history });
+    return { system: b.prompt.system, user: b.prompt.user, focus: b.surf.focus, thread: b.thread, draft: b.draft };
+  } catch { return null; }
 };
 
 // route → converse → retrieve → fold → answerable → prompt → llm → bind → factcheck → revise → veto → settle.
@@ -77,7 +92,7 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, inquire = false, horizon = null, reread = false }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, inquire = false, horizon = null, reread = false, witnessSource = null }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -118,7 +133,11 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // when the surf could not settle on a figure (stance-reserve) on a pointed turn, the fold
   // reads more of the document on the circled figure and folds again. Off by default — the
   // present single-pass fold is byte-identical when `reread` is false.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, inquire, horizon, reread };
+  // `witnessSource` is an optional EXAFFERENT corpus (a parsed source doc) the veto stage
+  // retrieves from to confirm an interpretation: when the grounding doc is the model's own
+  // notes (reafference) and the answer rests only on them, the engine fetches the source spans
+  // on the claim's figures and re-checks. Null → no seeking, byte-identical.
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, inquire, horizon, reread, witnessSource };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -296,7 +315,10 @@ const summarize = (name, ctx, ms) => {
                               // the superseded draft(s) ride in the step trail too, verbatim
                               superseded: (ctx.revisions || []).map(r => r.draft) };
     case 'veto':     return { ...base,
-                              fired:   ctx.vetoes?.map(v => v.id) || [] };
+                              fired:   ctx.vetoes?.map(v => v.id) || [],
+                              // the active witness-seek, when it ran: which figures it read the
+                              // source on, and whether the source confirmed the interpretation
+                              ...(ctx.witnessSought ? { witness: ctx.witnessSought } : {}) };
     // The session Horizon's reading after this turn folded in (surfing-next.md §4): how far
     // the accumulated ρ has left σ, the running ∫ surprise, and the turn's own surprise
     // against the prior memory. Present only when a Horizon was threaded; absent otherwise.
