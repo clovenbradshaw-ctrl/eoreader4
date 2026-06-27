@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseEOT } from '../src/ingest/index.js';
+import { parseEOT, eotDoc } from '../src/ingest/index.js';
+import { projectGraph } from '../src/core/index.js';
+import { trajectory, siteTerrainAt } from '../src/surfer/index.js';
 
 // EOT (docs/eot-surface-syntax.md): punctuation shape carries the common operators; the
 // ingester recovers the operator, mints anchors, derives the Site cell, and stamps provenance.
@@ -90,4 +92,58 @@ test('comments and blank lines produce no events (§4.2)', () => {
   const { events } = parseEOT('# a heading\n\nAlice : Person   # trailing comment\n');
   assert.equal(events.length, 1);
   assert.equal(events[0].operand.type, 'Person');
+});
+
+// EOT NATIVE — the surface mints straight into the engine's append-only log, so an EOT
+// document is a first-class doc the graph stack reads. The sign is surface; the hashId is
+// identity; every coref resolves to it; every SEG carves its own referent.
+
+test('eotDoc mints a real log the graph stack reads natively', () => {
+  const doc = eotDoc('Alice : Person\nAlice -> Bob : knows');
+  const ev = doc.log.snapshot();
+  assert.ok(ev.some(e => e.op === 'INS' && e.label === 'Alice' && /^r#/.test(e.id)), 'Alice is INS\'d with an immutable hashId');
+  const con = ev.find(e => e.op === 'CON');
+  assert.equal(con.via, 'knows');
+  assert.equal(con.src, doc.signs.get('Alice'), 'the link\'s src is Alice\'s id, not her label');
+  assert.equal(con.tgt, doc.signs.get('Bob'), 'Bob is a span too, with his own id');
+  assert.ok(projectGraph(doc.log, { cursor: Infinity }), 'projectGraph reads the EOT log');
+  assert.equal(siteTerrainAt(doc, 1), 'Link', 'the link locus types as Link, natively');
+});
+
+test('the sign is surface; the hashId is identity — every coref resolves to one id', () => {
+  // "Alice" is what the model writes; on the backend it is ONE span. A later mention, and a
+  // reconciled alias (==), both resolve to the same immutable id.
+  const doc = eotDoc([
+    'Alice : Person',
+    'Alice -> Bob : knows',     // a later mention of Alice
+    'Alice == Ali',             // Ali is the same span
+    'Ali -> Carol : trusts',    // a mention via the alias
+  ].join('\n'));
+  const aliceId = doc.signs.get('Alice');
+  const cons = doc.log.snapshot().filter(e => e.op === 'CON');
+  assert.equal(cons[0].src, aliceId, 'the later mention of Alice is the same id');
+  assert.equal(doc.signs.get('Ali'), aliceId, 'the alias resolves to Alice\'s id');
+  assert.equal(cons[1].src, aliceId, 'a mention via the alias carries Alice\'s id — all corefs share it');
+});
+
+test('every SEG carves its own referent with its own hashId', () => {
+  const doc = eotDoc('Cases : Set\nCases | status');
+  const ins = doc.log.snapshot().filter(e => e.op === 'INS');
+  const seg = doc.log.snapshot().find(e => e.op === 'SEG');
+  assert.ok(seg.seg && /^r#/.test(seg.seg), 'the SEG carries a fresh segment id');
+  assert.ok(ins.some(e => e.id === seg.seg && e.label === 'status'), 'the carved segment is itself INS\'d — a referent, not a mention');
+  assert.notEqual(seg.seg, seg.src, 'the segment id is distinct from the partitioned entity');
+});
+
+test('an EOT doc drives the trajectory like any other (focus by sign, read by id)', () => {
+  const doc = eotDoc([
+    'Grete -> Gregor : fed',
+    'Grete -> Gregor : tended',
+    'Grete -> Gregor : renounced',
+  ].join('\n'));
+  const t = trajectory(doc, { focus: 'Grete', segments: [2] });
+  assert.equal(t.terrain, 'Network');
+  assert.ok(t.phases.length >= 1, 'the EOT graph yields a trajectory');
+  const vias = t.phases.flatMap(p => p.relations.map(r => r.via));
+  assert.ok(vias.includes('fed') && vias.includes('renounced'), 'the arc reads the EOT relations');
 });

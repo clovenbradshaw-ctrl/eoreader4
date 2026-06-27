@@ -8,7 +8,8 @@
 // malformed line is never dropped — it becomes a diagnostic (§9). Regular, line-oriented, no
 // nesting in the core profile: the parser is a handful of regexes, as the spec intends.
 
-import { isOperator, mintHash, terrainOf } from '../core/index.js';
+import { isOperator, mintHash, terrainOf, createLog } from '../core/index.js';
+import { tok } from '../perceiver/parse/index.js';
 
 // ── Site / decal derivation (Appendix B) ──────────────────────────────────────
 // The Act face is the operator (Mode × Domain). The SITE is WHERE it lands — the target's
@@ -119,6 +120,7 @@ export const parseEOT = (text, context = {}) => {
       ts: meta.ts ?? ctx.ts,
       mode: ctx.mode,
       frame: ctx.frame,
+      line: meta.lineNo,           // the source line (1-based) — the arrow of time for the log
     }));
   };
 
@@ -201,6 +203,86 @@ export const parseEOT = (text, context = {}) => {
   }
 
   return Object.freeze({ events, diagnostics, signs });
+};
+
+// eotDoc(text, context) → a FIRST-CLASS document, EOT minted straight into the engine's own
+// append-only log. The graph stack (projectGraph, trajectory, salience, site-terrain) reads it
+// natively — an EOT document is indistinguishable from a parsed-text one to those faculties.
+//
+// The sign↔anchor law (§4.4, §8.4) is the spine: the SIGN ("Alice") is surface — what the
+// model writes and reads — but on the backend every referent is a SPAN with an immutable
+// hashId, and every later mention of that sign (a coref) resolves to the SAME id. The label
+// rides for display; the id is identity. And every SEG carves a new span, which gets its OWN
+// hashId — a segment is a referent, not a mention.
+export const eotDoc = (text, context = {}) => {
+  const { events: tuples, diagnostics, signs: _signs } = parseEOT(text, context);
+  const lines = String(text ?? '').split('\n').map((l) => l.replace(/\r$/, ''));
+  const log = createLog({ docId: context.docId || 'eot' });
+
+  const anchors = new Map();     // sign → immutable hashId (the coref identity)
+  let seq = 0;
+  // mint-or-reuse the id for a sign, INS'ing it once. The label is surface; the id is identity.
+  const idOf = (sign, sentIdx, label = sign) => {
+    if (anchors.has(sign)) return anchors.get(sign);
+    const id = mintHash(seq++);
+    anchors.set(sign, id);
+    log.append({ op: 'INS', id, label, sentIdx });
+    return id;
+  };
+  const fieldOf = (path) => { const i = String(path).indexOf('.'); return i < 0 ? null : String(path).slice(i + 1); };
+
+  for (const t of tuples) {
+    const sentIdx = (t.line ?? 1) - 1;
+    const op = t.op;
+    if (op === 'INS') {
+      const id = idOf(t.target, sentIdx);                          // mint the span, INS it
+      log.append({ op: 'SIG', src: id, via: 'is', tgt: t.operand.type, sentIdx });   // is-a, as a readable attribute
+    } else if (op === 'SIG') {
+      const id = idOf(rootSign(t.target), sentIdx);
+      log.append({ op: 'SIG', src: id, via: 'is', tgt: t.operand.designation, sentIdx, ...(t.operand.register ? { register: t.operand.register } : {}) });
+    } else if (op === 'DEF') {
+      const id = idOf(rootSign(t.target), sentIdx);
+      log.append({ op: 'DEF', src: id, via: fieldOf(t.target) ?? 'value', tgt: t.operand.value, sentIdx });
+    } else if (op === 'NUL') {
+      const id = idOf(rootSign(t.target), sentIdx);
+      log.append({ op: 'NUL', src: id, via: fieldOf(t.target) ?? 'value', sentIdx });
+    } else if (op === 'CON') {
+      const s = idOf(t.target, sentIdx);
+      const o = idOf(t.operand.to, sentIdx);                       // the object is a span too — its own id
+      log.append({ op: 'CON', src: s, tgt: o, via: t.operand.relation, sentIdx });
+    } else if (op === 'SYN' && t.operand.mode === 'identity') {
+      // reconcile two SIGNS onto ONE immutable id (the coref law). The left is canonical; the
+      // right's sign is repointed at it so every LATER mention resolves to the survivor — all
+      // corefs share the id. If the right was already its own span, the SYN records the
+      // identity (history preserved, §8.6); if unseen, it is simply another sign for the span.
+      const a = idOf(t.target, sentIdx);
+      const bSign = t.operand.same_as;
+      if (anchors.has(bSign)) log.append({ op: 'SYN', src: a, tgt: anchors.get(bSign), kind: 'identity', sentIdx });
+      else log.append({ op: 'SYN', src: a, tgt: a, kind: 'identity', alias: bSign, sentIdx });
+      anchors.set(bSign, a);
+    } else if (op === 'SYN') {
+      const whole = idOf(t.target, sentIdx);
+      const parts = (t.operand.parts || []).map((p) => idOf(p, sentIdx));             // each part is its own span
+      log.append({ op: 'SYN', src: whole, parts, promotes: whole, sentIdx });
+    } else if (op === 'SEG') {
+      const s = idOf(rootSign(t.target), sentIdx);
+      const segId = mintHash(seq++);                               // the carved segment is its OWN referent
+      log.append({ op: 'INS', id: segId, label: t.operand.key, sentIdx });
+      log.append({ op: 'SEG', src: s, seg: segId, key: t.operand.key, sentIdx });
+    } else if (op === 'EVA') {
+      const id = idOf(rootSign(t.target), sentIdx);
+      log.append({ op: 'EVA', src: id, via: fieldOf(t.target) ?? 'state', from: t.operand.from, to: t.operand.to, sentIdx });
+    } else if (op === 'REC') {
+      log.append({ op: 'REC', target: t.target, old_terms: t.operand.old_terms, new_terms: t.operand.new_terms, ...(t.operand.mapping ? { mapping: t.operand.mapping } : {}), sentIdx });
+    }
+  }
+
+  return Object.freeze({
+    docId: log.docId, log, eot: true,
+    sentences: lines,
+    tokensBySentence: lines.map((l) => new Set(tok(l))),
+    signs: anchors, diagnostics,
+  });
 };
 
 // parse the !rec remap body (§5.5): set form `{a,b} => {c,d}` or map form `=> {k:[...]}`.
