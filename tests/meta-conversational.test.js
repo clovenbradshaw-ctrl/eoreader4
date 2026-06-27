@@ -24,6 +24,9 @@ const echo = async () => { const m = createModel('echo'); await m.load(); return
 test('questions that invoke the conversation are meta-conversational', () => {
   for (const q of [
     "which topic we've discussed is in the same country as the Eiffel Tower?",
+    'which topic is in the same country as the Eiffel Tower?',   // IMPLICIT — no "we", still about the discussed set
+    'of the topics, which is the oldest?',                        // "of the topics" without a we/you/I
+    'which of those subjects came up first?',
     'of the topics we discussed, which is the oldest?',
     'what did you say earlier?',
     'you mentioned a river — which one?',

@@ -89,6 +89,16 @@ const META_CONV = new RegExp(
   `|\\b(?:did|do|does)\\s+${META_SUBJ}\\s+(?:say|said|tell|mention|ask|asked|put|word|claim|cover|discuss|mean)\\b` +  // "did you say earlier?"
   '|\\b(?:this|our|that)\\s+(?:conversation|chat|thread|discussion|exchange|dialogue|session)\\b' +  // "this conversation"
   `|\\b(?:topics?|things?|subjects?|questions?|points?)\\b(?:\\s+\\w+){0,3}\\s+\\b${META_SUBJ}\\b` +  // "the topics we explored"
+  // The IMPLICIT meta form — selecting over a TOPIC/SUBJECT without naming the conversation
+  // ("which topic is in France?", "of the topics, which is oldest?"). "topic"/"subject" used as
+  // a selector presupposes a set the conversation already established — you ask which CHARACTER
+  // or PLACE inside a document, but which TOPIC refers back to what was discussed. This was the
+  // residual routing gap: the question is about the conversation but trips the grounded route,
+  // and without an explicit we/you/I the older branches missed it, so the assistant side stayed
+  // closed and the cross-conversation answer failed. Narrow on purpose — only these two nouns,
+  // only in a selection frame; the ordinary document questions stay non-meta.
+  '|\\bwhich(?:ever)?\\s+(?:of\\s+(?:the|those|these)\\s+)?(?:topics?|subjects?)\\b' +  // "which topic", "which of the subjects"
+  '|\\bof\\s+(?:the|those|these)\\s+(?:topics?|subjects?)\\b' +                          // "of the topics, which…"
   '|\\b(?:my|your|the)\\s+(?:first|second|third|last|previous|earlier|original|initial|prior|other)' + // "my first question", "your earlier answer"
     '\\s+(?:questions?|answers?|points?|repl(?:y|ies)|messages?|responses?|asks?)\\b',
   'i',
