@@ -330,24 +330,44 @@ test('inquiry is off by default — the turn is byte-identical without the flag'
 });
 
 
-test('the veto actively SEEKS the witness — confirms an interpretation against the source', async () => {
+test('the witness stage SEEKS the witness; the veto reads the confirmation', async () => {
   // The grounding doc is the model's own EOT notes (reafference). The answer rests only on
-  // them, so without help it is interpretation. With a source corpus available, the veto stage
-  // fetches the spans about the claim's figures and re-checks.
+  // them, so without help it is interpretation. The `witness` stage fetches the source spans
+  // about the claim's figures and re-checks; the `veto` then reads the result.
   const notes = eotDoc('Grete : Person\nGregor : Person\nGrete -> Gregor : fed');
   const base = { doc: notes, rawOutput: 'Grete fed Gregor.', spans: [{ idx: 0, text: 'x' }], bound: [{ citation: 's0' }], task: 'answer' };
 
-  const alone = await stages.veto({ ...base });
+  const alone = await stages.veto(await stages.witness({ ...base }));
   assert.ok(alone.vetoes.some(v => v.id === 'interpretation'), 'rests only on the notes → interpretation flag');
-  assert.equal(alone.witnessSought, null, 'nothing sought without a source');
+  assert.ok(!alone.witnessSought, 'nothing sought without a source');
 
   const source = parseText('Grete fed Gregor every morning.', { docId: 'src' });
-  const sought = await stages.veto({ ...base, witnessSource: source });
-  assert.equal(sought.witnessSought.confirmed, true, 'the source attests it — confirmed');
+  const w = await stages.witness({ ...base, witnessSource: source });
+  assert.equal(w.witnessSought.confirmed, true, 'the source attests it — confirmed');
+  const sought = await stages.veto(w);
   assert.ok(!sought.vetoes.some(v => v.id === 'interpretation'), 'the interpretation flag clears — now witnessed');
 
   const silent = parseText('Grete saw Gregor.', { docId: 'src2' });
-  const unconfirmed = await stages.veto({ ...base, witnessSource: silent });
-  assert.equal(unconfirmed.witnessSought.confirmed, false, 'a silent source confirms nothing');
-  assert.ok(unconfirmed.vetoes.some(v => v.id === 'interpretation'), 'still interpretation — the witness is absent');
+  const ws = await stages.witness({ ...base, witnessSource: silent });
+  assert.equal(ws.witnessSought.confirmed, false, 'a silent source confirms nothing');
+  assert.ok((await stages.veto(ws)).vetoes.some(v => v.id === 'interpretation'), 'still interpretation — the witness is absent');
+});
+
+test('the gate REGENERATES on a confirmed witness — grounding the answer in the source span', async () => {
+  // A confirmed witness is not a failure; it is grounds to re-prompt the talker to CITE the
+  // source, so the answer ships WITH its witness rather than only un-flagged.
+  let sawCorrective = false;
+  const model = { async phrase(messages) {
+    const u = messages.find(m => m.role === 'user')?.content || '';
+    if (/confirms what you said/.test(u)) { sawCorrective = true; return 'Grete fed Gregor, as the source records.'; }
+    return 'Grete fed Gregor.';
+  } };
+  const notes = eotDoc('Grete : Person\nGregor : Person\nGrete -> Gregor : fed');
+  const source = parseText('Grete fed Gregor every morning.', { docId: 'src' });
+  const base = { doc: notes, rawOutput: 'Grete fed Gregor.', spans: [{ idx: 0, text: 'x' }], bound: [{ citation: 's0' }], task: 'answer', model, witnessSource: source };
+
+  const ctx = await stages.revise(await stages.witness({ ...base }));
+  assert.equal(ctx.witnessCited, true, 'the gate engaged to cite the witness');
+  assert.ok(sawCorrective, 'the talker was re-prompted with the source line');
+  assert.match(ctx.rawOutput, /source/, 'the regenerated answer grounds in the source');
 });

@@ -528,35 +528,35 @@ export const stages = {
     // (band:'void' at the cursor) and any drift rode forward into the next beat — the
     // correction is already in the trail, so there is nothing to rewrite here.
     if (ctx.streamed) return ctx;
-    if (!ctx.doc || !ctx.spans?.length || !ctx.model || !needsRegen(ctx)) return ctx;
-    // The §5 gate engaged at entry — recorded for the audit even if the regenerate clears.
+    if (!ctx.doc || !ctx.spans?.length || !ctx.model) return ctx;
+    // Three reasons to re-prompt the talker once: a confabulation/gate FAILURE (steer it back
+    // onto the lines), OR a confirmed WITNESS (the source attested an interpretation — now
+    // ground the answer IN it, so the answer ships with its witness, not merely un-flagged).
+    const gate = needsRegen(ctx);
+    const upgrade = !gate && witnessConfirmed(ctx);
+    if (!gate && !upgrade) return ctx;
     const gated = gateCondition(ctx);
-    let cur = ctx, attempts = 0;
-    const revisions = [];
-    while (attempts < REWRITE_ATTEMPTS && needsRegen(cur)) {
-      attempts++;
-      // Record the superseded draft BESIDE its successor — never erase it. The
-      // off-diagonal verdicts that condemned it travel with it, so the trail shows
-      // verbatim what the machine said and why it was made to answer again. This is the
-      // log's own SEG/retract law (core/log.js) applied to the conversational record:
-      // a truer word may be appended, the false one is not unwritten.
-      const supersededDraft   = cur.rawOutput;
-      const supersededVerdicts = (cur.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
-      const messages = buildGroundedMessages({
-        question:    ctx.question,
-        spans:       selectExcerpts(ctx.spans),   // same trimmed lines the first pass saw
-        orientation: orientationOf(ctx.doc),
-        task:        ctx.task,
-        budget:      ctx.budget,
-        conversation: {},                     // history still withheld on the grounded path
-        corrective:  correctiveFor(cur),      // confab → drop the link; gate → keep to the lines
-      });
-      const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
-      cur = await stages.factcheck(await stages.bind({ ...cur, rawOutput: raw, messages }));
-      revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw }));
-    }
-    return { ...cur, revised: { attempts, resolved: !needsRegen(cur) }, revisions,
-             ...(gated ? { gated: true } : {}) };
+    // Record the superseded draft BESIDE its successor — never erase it (the log's SEG/retract
+    // law applied to the conversational record: a truer word is appended, the false one is not
+    // unwritten).
+    const supersededDraft   = ctx.rawOutput;
+    const supersededVerdicts = (ctx.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
+    const messages = buildGroundedMessages({
+      question:    ctx.question,
+      spans:       selectExcerpts(ctx.spans),   // same trimmed lines the first pass saw
+      orientation: orientationOf(ctx.doc),
+      task:        ctx.task,
+      budget:      ctx.budget,
+      conversation: {},                     // history still withheld on the grounded path
+      // failure → steer back to the lines / drop the unsupported link; a confirmed witness →
+      // ground the claim in the source span the engine found, and point to it.
+      corrective:  upgrade ? witnessCorrective(ctx) : correctiveFor(ctx),
+    });
+    const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
+    const cur = await stages.factcheck(await stages.bind({ ...ctx, rawOutput: raw, messages }));
+    const revisions = [Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw })];
+    return { ...cur, revised: { attempts: 1, resolved: !needsRegen(cur) }, revisions,
+             ...(gated ? { gated: true } : {}), ...(upgrade ? { witnessCited: true } : {}) };
   },
 
   // The veto pass — flag-and-tell, ALWAYS. The vetoes ride alongside the model's answer
@@ -571,29 +571,39 @@ export const stages = {
   // the talker truly needs to know more before it can speak, that is the upstream retrieval
   // / revise loop's problem, not a reason to gag the answer here. Without a doc we skip the
   // grounding vetoes entirely.
+  // Seek the witness (before the gate). When the answer rests only on the engine's own reading
+  // (reafference — an EOT notes doc) AND an exafferent SOURCE is available, go fetch the spans
+  // about the interpretation's figures and re-check: a claim the source attests is CONFIRMED.
+  // Runs BEFORE revise so the gate can act on the confirmation — re-prompting the talker to
+  // ground the answer in the newfound witness — not merely clear the flag afterward. Inert
+  // without a witnessSource, or for prose (the text is the world → already exafference).
+  async witness(ctx) {
+    if (!ctx.doc || !ctx.rawOutput || !ctx.witnessSource) return ctx;
+    const prov = classifyProvenance(ctx.rawOutput, { doc: ctx.doc });
+    if (!prov.onlyInterpretation) return ctx;
+    const figs = [...new Set(prov.propositions.filter((p) => p.interpretation).flatMap((p) => [p.subj, p.obj].filter(Boolean)))];
+    const hits = []; const seen = new Set();
+    for (const f of figs) for (const h of retrieveLexical(ctx.witnessSource, f, 3)) if (!seen.has(h.text)) { seen.add(h.text); hits.push(h); }
+    if (!hits.length) return { ...ctx, witnessSought: { figures: figs, read: 0, confirmed: false } };
+    const witnessDoc = parseText(hits.map((h) => h.text).join(' '), { docId: 'witness' });
+    const confirmed = !classifyProvenance(ctx.rawOutput, { doc: ctx.doc, witness: witnessDoc }).onlyInterpretation;
+    return {
+      ...ctx,
+      witnessDoc: confirmed ? witnessDoc : null,
+      witnessSpans: confirmed ? hits : [],
+      witnessSought: { figures: figs, read: hits.length, confirmed },
+    };
+  },
+
   async veto(ctx) {
     if (!ctx.spans?.length) return { ...ctx, vetoes: [] };
-    // The WITNESS check: classify the answer's propositions against the document's graph and
-    // ask whether they rest on the WORLD (exafference) or only on the engine's own reading
-    // (reafference — e.g. an EOT notes doc). When everything grounded is interpretation, the
-    // `interpretation` veto flags it. Inert for prose (the text is the world → exafference).
-    let provenance = ctx.doc && ctx.rawOutput ? classifyProvenance(ctx.rawOutput, { doc: ctx.doc }) : null;
-    let witnessSought = null;
-    // ACTIVELY SEEK THE WITNESS: when the answer rests only on the engine's reading AND an
-    // exafferent SOURCE is available (ctx.witnessSource — the corpus the notes were read from),
-    // go fetch the spans about the interpretation's figures and re-check. A claim the source
-    // attests is CONFIRMED (upgraded to witnessed); one it is silent on stays interpretation.
-    // The engine does not just accept a witness when offered — it goes and looks for one.
-    if (provenance?.onlyInterpretation && ctx.witnessSource) {
-      const figs = [...new Set(provenance.propositions.filter((p) => p.interpretation)
-        .flatMap((p) => [p.subj, p.obj].filter(Boolean)))];
-      const spans = [...new Set(figs.flatMap((f) => retrieveLexical(ctx.witnessSource, f, 3).map((s) => s.text)))];
-      if (spans.length) {
-        const witness = parseText(spans.join(' '), { docId: 'witness' });
-        provenance = classifyProvenance(ctx.rawOutput, { doc: ctx.doc, witness });
-        witnessSought = { figures: figs, read: spans.length, confirmed: !provenance.onlyInterpretation };
-      }
-    }
+    // The WITNESS check, on the FINAL answer: classify against the document's graph, AND against
+    // the confirming source the witness stage found (ctx.witnessDoc) when there was one. A claim
+    // resting only on the engine's reading is `interpretation`; one the source attests is
+    // witnessed. The `interpretation` veto flags the former. Inert for prose (already exafference).
+    const provenance = ctx.doc && ctx.rawOutput
+      ? classifyProvenance(ctx.rawOutput, ctx.witnessDoc ? { doc: ctx.doc, witness: ctx.witnessDoc } : { doc: ctx.doc })
+      : null;
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
       referential: ctx.referential, task: ctx.task, provenance,
@@ -606,7 +616,7 @@ export const stages = {
       // computed and discarded; now a claim the graph DENIES becomes a flag.
       edgeVerdicts: ctx.edgeVerdicts,
     });
-    return { ...ctx, vetoes: fired, witnessSought };
+    return { ...ctx, vetoes: fired, provenance };
   },
 
   // Settle: fold this turn's reading into the session's persistent Horizon (surfing-next.md
@@ -674,6 +684,19 @@ const gateCondition      = (ctx) => ctx.task === 'answer' && (refusingEdge(ctx) 
 
 // A regenerate is owed when the off-diagonal confab guard fired OR the §5 gate holds.
 const needsRegen = (ctx) => confabulating(ctx) || gateCondition(ctx);
+
+// The WITNESS UPGRADE: the seek (witness stage) confirmed that the source attests what the
+// answer asserted only as interpretation. This is not a failure — it is grounds to re-prompt
+// the talker to cite the source, so the answer ships WITH its witness (not just un-flagged).
+const witnessConfirmed = (ctx) => ctx.witnessSought?.confirmed === true && (ctx.task === 'answer' || ctx.task == null);
+
+// The corrective for a confirmed witness: hand the talker the source line(s) the engine found
+// and ask it to ground the claim in them — turning an inference into a sourced statement.
+const witnessCorrective = (ctx) => {
+  const lines = (ctx.witnessSpans || []).slice(0, 2).map((s) => `“${String(s.text).replace(/\s+/g, ' ').trim()}”`).join(' ');
+  return 'A source in the record confirms what you said. Ground your answer in it and point to '
+    + `it — ${lines} — restating the claim so it rests on this source, not on inference.`;
+};
 
 // The corrective for the regenerate, by failure: a pure §5 gate (no confab) steers back
 // onto the lines; otherwise the confab refine drops the unsupported link.

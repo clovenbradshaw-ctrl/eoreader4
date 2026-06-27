@@ -85,8 +85,12 @@ const llmBrief = (ctx) => {
 // byte-identical), it reads another pass on the engine's OWN open question — a figure the
 // retrieved spans keep mentioning but that never acts — and folds the results in as citable
 // spans before the fold builds the reading (turn/stages.js, write/think.js).
+// `witness` sits between `factcheck` and `revise`: when the answer rests only on the engine's
+// own reading (reafference) and an exafferent source is available, it seeks the source spans
+// that attest the interpretation. A confirmed witness lets `revise` re-prompt the talker to
+// ground in the source (the answer ships WITH its witness), not merely clear the flag.
 const PIPELINE = [
-  'route', 'converse', 'retrieve', 'inquire', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
+  'route', 'converse', 'retrieve', 'inquire', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'witness', 'revise', 'veto', 'settle',
 ];
 
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
@@ -314,11 +318,14 @@ const summarize = (name, ctx, ms) => {
                               resolved: ctx.revised?.resolved ?? null,
                               // the superseded draft(s) ride in the step trail too, verbatim
                               superseded: (ctx.revisions || []).map(r => r.draft) };
+    case 'witness':  return { ...base,
+                              // the active witness-seek: which figures it read the source on,
+                              // how much it read, and whether the source confirmed the reading
+                              ...(ctx.witnessSought ? { sought: ctx.witnessSought } : { sought: null }) };
     case 'veto':     return { ...base,
                               fired:   ctx.vetoes?.map(v => v.id) || [],
-                              // the active witness-seek, when it ran: which figures it read the
-                              // source on, and whether the source confirmed the interpretation
-                              ...(ctx.witnessSought ? { witness: ctx.witnessSought } : {}) };
+                              // whether the gate re-prompted to ground in the newfound witness
+                              ...(ctx.witnessCited ? { witnessCited: true } : {}) };
     // The session Horizon's reading after this turn folded in (surfing-next.md §4): how far
     // the accumulated ρ has left σ, the running ∫ surprise, and the turn's own surprise
     // against the prior memory. Present only when a Horizon was threaded; absent otherwise.
