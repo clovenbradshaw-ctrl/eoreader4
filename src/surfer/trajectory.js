@@ -88,7 +88,14 @@ export const trajectory = (doc, { focus = null, segments = [] } = {}) => {
   const gained = phases.length > 1 ? dedupe(pick(phases[phases.length - 1], (k) => !firstSet.has(k))) : [];
   const lost = phases.length > 1 ? dedupe(pick(phases[0], (k) => !lastSet.has(k))) : [];
 
-  return Object.freeze({ focus: focusId != null ? L(focusId) : null, focusId, phases, gained, lost, turns: cuts });
+  // The trajectory is a regularity OVER links — a pattern of relations across the sequence —
+  // so on the Site face it is a NETWORK (Structure × Pattern). Each individual bond it reads is
+  // a LINK (Structure × Figure). Naming the terrain is the omnimodal fix: the engine now knows
+  // it is producing a Network here, in any modality, not an untyped 'Entity'.
+  return Object.freeze({
+    focus: focusId != null ? L(focusId) : null, focusId, phases, gained, lost, turns: cuts,
+    terrain: 'Network', linkTerrain: 'Link',
+  });
 };
 
 const dedupe = (bonds) => {

@@ -85,7 +85,7 @@ const renderRow = (turn) => {
     body.insertAdjacentHTML('beforeend', `<div class="label">reading — spans delivered to the phraser</div>`);
     for (const s of (r.spans || [])) {
       body.insertAdjacentHTML('beforeend',
-        `<div class="step span"><span class="name">[s${s.idx}]${s.via ? ' ' + escapeHtml(s.via) : ''}</span>` +
+        `<div class="step span"><span class="name">[s${s.idx}]${s.via ? ' ' + escapeHtml(s.via) : ''}${s.terrain ? ' · ' + escapeHtml(s.terrain) : ''}</span>` +
         `<span class="ms">${s.score ?? ''}</span>` +
         `<span class="data">${escapeHtml(s.text)}</span></div>`);
     }

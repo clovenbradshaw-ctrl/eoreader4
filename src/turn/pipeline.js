@@ -14,6 +14,7 @@
 
 import { stages } from './stages.js';
 import { createCompositeDoc } from '../organs/in/index.js';
+import { siteTerrainAt } from '../surfer/index.js';
 
 // The documents a turn's citations actually drew on. For a composite (several selected
 // documents folded into one), map each cited sentence index back through the provenance
@@ -37,6 +38,9 @@ const buildReading = (ctx) => {
   return {
     spans: (ctx.spans || []).slice(0, 40).map(s => ({
       idx: s.idx, via: s.via || s.kind || null, score: round3(s.score),
+      // the cube SITE this locus IS — read off its operators (Link if it carries a bond,
+      // Entity if a bare figure, Void if thin). The Structure row is now typed, not collapsed.
+      terrain: (ctx.doc && Number.isFinite(s.idx)) ? siteTerrainAt(ctx.doc, s.idx) : null,
       text: String(s.text || '').replace(/\s+/g, ' ').trim().slice(0, 300),
     })),
     note: ctx.note?.text ? String(ctx.note.text).slice(0, 2000) : null,

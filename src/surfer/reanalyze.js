@@ -52,7 +52,14 @@ export const reanalyze = (doc, { isVerb = null } = {}) => {
       formed: { src: subj, via: tgt },                                       // orphaned verb → main predicate
       demoted: { modifierOf: b.src, via: b.via },                            // original verb → modifier
       // the reconsolidation event, ready to append — the auditable record of the re-grounding.
-      rec: Object.freeze({ op: 'REC', kind: 'reanalysis', site: 'Bond', stance: 'Composing',
+      // A garden-path reanalysis RE-READS one sentence under a corrected frame: that is a REC
+      // at the LENS terrain (Interpretation × Figure, stance Making — the legal cell
+      // REC_Making_Lens), not the off-cube 'Bond' it used to name. The Structure-row
+      // consequence — the corrected bond, a LINK (Structure × Figure) — is carried in `forms`
+      // (formsTerrain), and the mis-bond it supersedes is a Link too. So the event sits on the
+      // cube: a Lens reconsolidation whose Structure footprint is a re-formed Link.
+      rec: Object.freeze({ op: 'REC', kind: 'reanalysis', site: 'Lens', stance: 'Making',
+        grain: 'Figure', cell: 'REC_Making_Lens', formsTerrain: 'Link',
         rode: 'garden-path', supersedes: { src: b.src, via: b.via, tgt: b.tgt },
         forms: { src: subj, via: tgt }, subjectReretrieved: subj, sentIdx: b.sentIdx }),
     }));
