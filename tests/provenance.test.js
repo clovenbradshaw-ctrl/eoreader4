@@ -103,3 +103,17 @@ test('a prose-grounded answer does NOT fire the interpretation veto (the text is
   const { fired } = runVetoes({ draft: 'Grete fed Gregor.', bound: [{ citation: 's0' }], task: 'answer', provenance });
   assert.ok(!fired.some(f => f.id === 'interpretation'), 'witnessed by exafference — no interpretation flag');
 });
+
+test('seek the witness: an interpretation the SOURCE attests is upgraded to witnessed', () => {
+  const notes = eotDoc('Grete : Person\nGregor : Person\nGrete -> Gregor : fed');   // the model's reading
+  // with no source, the claim rests only on the notes — interpretation.
+  assert.equal(classifyProvenance('Grete fed Gregor.', { doc: notes }).propositions[0].witness, 'reafference');
+  // hand it the SOURCE the notes were read from, and it attests the same relation → witnessed.
+  const source = parseText('Grete fed Gregor every day.', { docId: 'src' });
+  const confirmed = classifyProvenance('Grete fed Gregor.', { doc: notes, witness: source });
+  assert.equal(confirmed.propositions[0].witness, 'exafference', 'the source confirms the interpretation');
+  assert.equal(confirmed.onlyInterpretation, false, 'no longer interpretation-only — the world attests it');
+  // a source that does NOT attest the relation leaves it interpretation (the witness is absent).
+  const silent = parseText('Grete saw Gregor.', { docId: 'src2' });
+  assert.equal(classifyProvenance('Grete fed Gregor.', { doc: notes, witness: silent }).onlyInterpretation, true);
+});

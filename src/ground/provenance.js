@@ -82,6 +82,13 @@ export const classifyProvenance = (answer, source = []) => {
   // event. A relation present only through reafference (the model's EOT notes) is grounded but
   // NOT witnessed: it is the engine's interpretation, defeasible, not the asserted ground.
   const witnessedRel = new Set(docProps.filter((p) => p.door !== 'enactor').map(relKey));
+  // SEEK THE WITNESS: when a separate exafferent SOURCE is supplied (source.witness — the text
+  // the notes were read from), a claim grounded only in the notes is checked against it. If the
+  // source attests the same relation, the interpretation is CONFIRMED — it becomes witnessed,
+  // grounded to the source, not just the engine's reading. This is the engine actively seeking
+  // the witness for what it had only conjectured (active inference for grounding).
+  const witnessDoc = fromDoc ? source.witness : null;
+  if (witnessDoc) for (const p of docPropositions(witnessDoc)) if (p.door !== 'enactor') witnessedRel.add(relKey(p));
 
   // are the "spans" the WORLD, or the model's own notes? Prose sentences (and string spans) are
   // exafference; an EOT doc's "sentences" are its note-lines — reafference — so a verbatim match
