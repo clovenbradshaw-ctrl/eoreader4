@@ -238,8 +238,9 @@ const summarize = (name, ctx, ms) => {
   const base = { ms: Math.round(ms) };
   switch (name) {
     case 'route':    return { ...base, route: ctx.route, task: ctx.task, grounding: ctx.grounding };
-    case 'expect':   return { ...base, slot: ctx.expectation?.slot,
-                              precision: ctx.expectation?.precision, gates: ctx.expectation?.gates };
+    case 'expect':   return { ...base,
+                              constraints: (ctx.expectation?.constraints || []).map(c => c.id),
+                              gates: ctx.expectation?.gates || false };
     case 'converse': return { ...base, recent: ctx.convStats?.recent || 0,
                               folded: ctx.convStats?.folded || 0, notesLen: ctx.convStats?.notesLen || 0 };
     case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0,

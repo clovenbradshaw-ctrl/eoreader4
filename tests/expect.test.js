@@ -1,103 +1,108 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { expectAnswer, answerSlotError, isProperName, SLOT } from '../src/turn/expect.js';
+import { expectAnswer, answerConstraintErrors, isProperName, SLOT } from '../src/turn/expect.js';
 import { runVetoes } from '../src/ground/veto.js';
 import { stages } from '../src/turn/stages.js';
 import { parseText } from '../src/perceiver/parse/index.js';
 
-// The question read as a PREDICTION of its own answer (docs/answer-expectation.md). A good
-// answer is the one that fills the slot the question opened; a "what is her name?" answered
-// with no name leaves the prediction error standing — and the engine should catch that,
-// stop, and begin again, visibly.
+// The prompt read as a PREDICTION of its own answer (docs/answer-expectation.md). A good
+// answer satisfies the constraints the prompt opened; a miss leaves a prediction error the
+// engine should catch — stop, and begin again, visibly. The deciding axis is CHECKABILITY:
+// mechanical constraints (name, length, order) gate a restart; soft ones (form) flag; an
+// open-ended prompt yields no constraint at all, so the engine just answers.
 
-// ── The prediction: the question types its answer ────────────────────────────
+const idsOf = (q) => expectAnswer(q).constraints.map((c) => c.id);
 
-test('a name question predicts a high-precision, gating slot', () => {
+// ── The prediction: read the prompt's constraints ────────────────────────────
+
+test('a name question predicts a high-precision, gating name constraint', () => {
   for (const q of ['what is her name?', "what's his name", 'what is the name of the clerk',
-                   'what is she called?', 'what are they called']) {
-    const e = expectAnswer(q);
-    assert.equal(e.slot, SLOT.NAME, `“${q}” should type a NAME slot`);
-    assert.ok(e.gates, 'a name slot is precise enough to gate a restart');
-    assert.ok(e.precision >= 0.8);
+                   'what is she called?']) {
+    assert.deepEqual(idsOf(q), ['name'], `“${q}” → a name constraint`);
+    assert.ok(expectAnswer(q).gates);
   }
 });
 
-test('a who question is detected but does not gate (a role-only answer can be acceptable)', () => {
-  const e = expectAnswer('who is his sister?');
-  assert.equal(e.slot, SLOT.WHO);
-  assert.equal(e.gates, false);
+test('a length bound is predicted and gates — in N words / sentences', () => {
+  assert.deepEqual(expectAnswer('summarize in one word').constraints.map((c) => [c.dim, c.params.unit, c.params.max]),
+    [['length', 'word', 1]]);
+  assert.equal(expectAnswer('tell it in three sentences').constraints[0].params.max, 3);
+  assert.equal(expectAnswer('answer in 50 words').constraints[0].params.max, 50);
+  assert.ok(expectAnswer('in two sentences please').gates);
 });
 
-test('a summary or open question types no shape — byte-identical default', () => {
-  for (const q of ['summarize', 'sumarize', 'what is this about?', 'why did he leave?',
-                   'what is a chrysalis?', 'list the characters']) {
+test('an order/transform is predicted — backwards vs in order', () => {
+  assert.equal(expectAnswer('say the story backwards').constraints[0].dim, 'order');
+  assert.equal(expectAnswer('say the story backwards').constraints[0].params.dir, 'desc');
+  assert.equal(expectAnswer('retell it in order').constraints[0].params.dir, 'asc');
+});
+
+test('an open-ended or taste prompt yields NO constraint — the engine just answers', () => {
+  for (const q of ['write a poem about his loneliness', 'summarize', 'sumarize',
+                   'what is this about?', 'explain the ending', 'how does he feel?']) {
     const e = expectAnswer(q);
-    assert.equal(e.slot, SLOT.OPEN, `“${q}” must not be typed as a name lookup`);
-    assert.equal(e.gates, false);
-    assert.equal(e.precision, 0);
+    // a poem prompt carries only a SOFT (non-gating) form constraint; the rest carry none
+    assert.ok(!e.gates, `“${q}” must not gate`);
   }
+  assert.deepEqual(idsOf('summarize'), []);                       // pure open → nothing to check
+  assert.deepEqual(idsOf('write a poem'), ['form-poem']);         // a soft, non-gating form hint
+  assert.equal(expectAnswer('write a poem').constraints[0].gates, false);
 });
 
 test('a proper name is told from a description', () => {
-  assert.ok(isProperName('Grete'));
-  assert.ok(isProperName('Gregor Samsa'));
-  assert.ok(!isProperName('his sister'));
-  assert.ok(!isProperName('the chief clerk'));
-  assert.ok(!isProperName('her'));
+  assert.ok(isProperName('Grete') && isProperName('Gregor Samsa'));
+  assert.ok(!isProperName('his sister') && !isProperName('the chief clerk') && !isProperName('her'));
 });
 
-// ── The error signal: did the answer fill the slot? ──────────────────────────
+// ── The error signal: which constraints did the answer miss? ──────────────────
 
-test('a name slot fires when the reading knows the name but the answer withholds it', () => {
+test('a name miss fires when the reading knows the name but the answer withholds it', () => {
   const expect = expectAnswer('what is her name?');
   const referent = { id: 1, label: 'Grete' };
-  // The t3 failure: a fluent description that never gives the name.
-  const miss = answerSlotError(expect, 'Gregor’s sister is a kind and caring person.', { referent });
-  assert.ok(miss, 'a description in place of a name is a miss');
-  assert.equal(miss.slot, SLOT.NAME);
-  assert.equal(miss.expectedName, 'Grete');
-
-  // The answer that gives the resolved name fills the slot.
-  assert.equal(answerSlotError(expect, 'Her name is Grete.', { referent }), null);
-  assert.equal(answerSlotError(expect, 'She is called Grete Samsa.', { referent }), null);
+  const errs = answerConstraintErrors(expect, 'Gregor’s sister is a kind and caring person.', { referent });
+  assert.equal(errs.length, 1);
+  assert.equal(errs[0].dim, 'name');
+  assert.equal(errs[0].expectedName, 'Grete');
+  // giving the name clears it; an honest abstention also fills the slot
+  assert.deepEqual(answerConstraintErrors(expect, 'Her name is Grete.', { referent }), []);
+  assert.deepEqual(answerConstraintErrors(expect, 'I did not find her name in what I read.', { referent }), []);
 });
 
-test('an honest abstention fills the slot — the typed gap is the correct terminal', () => {
-  const expect = expectAnswer('what is her name?');
-  const referent = { id: 1, label: 'Grete' };
-  assert.equal(answerSlotError(expect, 'I did not find her name in what I read.', { referent }), null);
-  assert.equal(answerSlotError(expect, 'The document does not say.', { referent }), null);
+test('a length miss fires on overrun and clears when short enough', () => {
+  const expect = expectAnswer('answer in one word');
+  assert.equal(answerConstraintErrors(expect, 'Her name is Grete.').length, 1);   // 4 words > 1
+  assert.deepEqual(answerConstraintErrors(expect, 'Grete.'), []);                  // 1 word
+  assert.deepEqual(answerConstraintErrors(expectAnswer('in two sentences'),
+    'He woke transformed. His family despaired.'), []);                            // 2 ≤ 2
+  assert.equal(answerConstraintErrors(expectAnswer('in two sentences'),
+    'A. B. C.').length, 1);                                                        // 3 > 2
 });
 
-test('with no resolved name, an answer that names no admitted figure still fires', () => {
-  const doc = parseText('His sister Grete brought him fresh milk. Gregor watched her leave.', { docId: 'a' });
-  const expect = expectAnswer('what is her name?');
-  // names nobody → dodged the question
-  assert.ok(answerSlotError(expect, 'She is gentle and patient.', { doc }));
-  // names an admitted figure → satisfies the (weaker) no-resolution check
-  assert.equal(answerSlotError(expect, 'Her name is Grete.', { doc }), null);
+test('an order miss fires when the cited source order runs the wrong way', () => {
+  const expect = expectAnswer('say the story backwards');
+  const forwards  = [{ citation: 's1' }, { citation: 's3' }, { citation: 's5' }];   // ascending
+  const backwards = [{ citation: 's5' }, { citation: 's3' }, { citation: 's1' }];   // descending
+  assert.equal(answerConstraintErrors(expect, 'told forwards', { bound: forwards }).length, 1);
+  assert.deepEqual(answerConstraintErrors(expect, 'told backwards', { bound: backwards }), []);
+  // too few cited claims to judge → don't gate
+  assert.deepEqual(answerConstraintErrors(expect, 'x', { bound: [{ citation: 's2' }] }), []);
 });
 
-test('a non-gating expectation never produces a shape error', () => {
-  assert.equal(answerSlotError(expectAnswer('summarize'), 'anything at all', { doc: null }), null);
-  assert.equal(answerSlotError(expectAnswer('who is his sister?'), 'a description', { doc: null }), null);
-});
+// ── The residual flag: an unmet constraint is told, not hidden ───────────────
 
-// ── The residual flag: an unmet slot is told, not hidden ─────────────────────
+test('the veto battery flags a gating miss loud, and a soft form miss quietly', () => {
+  const nameErr = answerConstraintErrors(expectAnswer('what is her name?'),
+    'She is kind and caring.', { referent: { id: 1, label: 'Grete' } });
+  const v1 = runVetoes({ draft: 'She is kind and caring.', bound: [], question: 'what is her name?',
+    task: 'answer', constraintErrors: nameErr });
+  assert.ok(v1.fired.some((f) => f.id === 'answer-shape' && f.refuses), 'gating miss → loud');
 
-test('the veto battery flags an unmet name slot, and clears once it is filled', () => {
-  const referent = { id: 1, label: 'Grete' };
-  const shapeError = answerSlotError(expectAnswer('what is her name?'),
-    'Gregor’s sister is a kind and caring person.', { referent });
-  const flagged = runVetoes({ draft: 'Gregor’s sister is a kind and caring person.',
-    bound: [], question: 'what is her name?', task: 'answer', shapeError });
-  assert.ok(flagged.fired.some(f => f.id === 'answer-shape' && f.refuses), 'the unmet slot is a serious flag');
-
-  // No shapeError (the answer gave the name) → no answer-shape flag; battery unchanged.
-  const clean = runVetoes({ draft: 'Her name is Grete.', bound: [{ claim: 'Her name is Grete.', citation: 's0' }],
-    question: 'what is her name?', task: 'answer', shapeError: null });
-  assert.ok(!clean.fired.some(f => f.id === 'answer-shape'));
+  const formErr = answerConstraintErrors(expectAnswer('write a poem'), 'A single prose blob with no line breaks.', {});
+  const v2 = runVetoes({ draft: 'A single prose blob.', bound: [], question: 'write a poem',
+    task: 'answer', constraintErrors: formErr });
+  assert.ok(v2.fired.some((f) => f.id === 'answer-shape-weak' && !f.refuses), 'soft form miss → quiet flag');
+  assert.ok(!v2.fired.some((f) => f.id === 'answer-shape'), 'and never the loud one');
 });
 
 // ── The loop: start, stop when off, begin again — visibly ────────────────────
@@ -105,30 +110,25 @@ test('the veto battery flags an unmet name slot, and clears once it is filled', 
 test('revise catches a name miss, restarts, and records the superseded draft beside its reason', async () => {
   const doc = parseText('His sister Grete brought him fresh milk. Gregor watched her leave.', { docId: 'a' });
   const spans = [{ idx: 0, text: 'His sister Grete brought him fresh milk.', score: 1, via: 'lex' }];
-  // A model that, asked again with the name-seeking corrective, finally gives the name.
   const model = { phrase: async () => 'Her name is Grete.' };
 
   const ctx = {
-    question: 'what is her name?',
-    expectation: expectAnswer('what is her name?'),
-    refTarget: { id: 1, label: 'Grete' },     // the reading resolved her name (coref fold)
-    doc, spans, model, task: 'answer', history: [],
-    rawOutput: 'Gregor’s sister is a kind and caring person.',   // the first draft — a miss
-    bound: [], edgeVerdicts: [],
+    question: 'what is her name?', expectation: expectAnswer('what is her name?'),
+    refTarget: { id: 1, label: 'Grete' }, doc, spans, model, task: 'answer', history: [],
+    rawOutput: 'Gregor’s sister is a kind and caring person.', bound: [], edgeVerdicts: [],
   };
 
   const out = await stages.revise(ctx);
   assert.equal(out.revised.attempts, 1, 'it stopped and answered again once');
   assert.ok(out.revised.resolved, 'the restart filled the slot');
   assert.equal(out.revisions.length, 1);
-  const r = out.revisions[0];
-  assert.match(r.draft, /kind and caring/, 'the superseded draft is preserved verbatim');
-  assert.match(r.replacedBy, /Grete/, 'the truer answer names her');
-  assert.match(r.why, /name/i, 'the trail records WHY it began again');
-  assert.match(out.answer, /Grete/, 'the answer the user sees gives the name');
+  assert.match(out.revisions[0].draft, /kind and caring/, 'the superseded draft is preserved');
+  assert.match(out.revisions[0].replacedBy, /Grete/, 'the truer answer names her');
+  assert.match(out.revisions[0].why, /name/i, 'the trail records WHY it began again');
+  assert.match(out.answer, /Grete/);
 });
 
-test('revise is byte-identical (a no-op) when the answer already fills the slot', async () => {
+test('revise is a no-op when the answer already satisfies every constraint', async () => {
   const doc = parseText('His sister Grete brought him fresh milk.', { docId: 'a' });
   const spans = [{ idx: 0, text: 'His sister Grete brought him fresh milk.', score: 1, via: 'lex' }];
   let called = 0;
@@ -140,6 +140,6 @@ test('revise is byte-identical (a no-op) when the answer already fills the slot'
     edgeVerdicts: [],
   };
   const out = await stages.revise(ctx);
-  assert.equal(called, 0, 'no restart — the answer already gave the name');
+  assert.equal(called, 0, 'no restart — the answer already fits');
   assert.equal(out, ctx, 'the context passes through untouched');
 });

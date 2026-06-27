@@ -74,10 +74,40 @@ synthesis loosely — now extends to *whether the answer is even the right kind 
 - `src/ground/veto.js` — the `answer-shape` flag for the residual.
 - The audit carries `expect` (slot · precision · gates) and, per revision, the `why`.
 
-## What is deliberately left
+## The prompt could be anything
 
-The slot vocabulary is two entries (`name`, `who`) plus `OPEN`. The frame generalizes —
-a count question predicts a number, a when predicts a time, a list predicts an
-enumeration of a known cardinality — but each new slot is a new predicate with its own
-error signal, added only where the check can be made honestly. The point proven here is
-the *loop*, on the sharpest case.
+A regex per question form does not scale to "write a poem", "say the story backwards",
+"explain it to a five-year-old". The fix is not more regexes — it is to see that the
+deciding axis is **checkability**, and that a prompt induces a *set* of constraints, each
+with its own precision and its own checker:
+
+- **mechanical / self-verifying** — a transform against the source the engine owns:
+  `length` ("in three sentences" → count), `order` ("backwards" → the answer's cited
+  source indices run descending), `name` ("→ Grete"). High precision → a miss **gates** a
+  restart.
+- **structural heuristic** — `form` ("as a poem" → does it read as verse?). Low precision
+  → **flag**, never gate.
+- **taste** — "write a *good* poem". No honest check → **no constraint** → `OPEN`. The
+  engine just answers; it must not pretend to grade poetry.
+
+So an open-ended prompt is handled by *default*: it yields no constraint, no gate, no
+flag. `expectAnswer` returns a constraint list (empty for open prompts); `gates` is true
+iff some constraint is mechanically checkable. The loop arms only where the miss can be
+measured — the same discipline the reading side runs, acting where the signal can be
+gated against chance and abstaining where it cannot.
+
+## Next: the engine's own generation as the prediction
+
+The constraint checkers above are hand-written predicates. The deeper move — the engine
+already half-builds it — is to use its **own non-LLM, grounded generation as the content
+prediction**. The mechanical writer (`write/rdf.js`, `write/think.js`, the streamed
+one-sentence-per-stop draft) produces a clumsy but *grounded* answer straight off the
+graph: for "what is her name?" it already contains *Grete*; for "say it backwards" it can
+emit the units in reverse order. That draft is the **prior / efference copy**; the LLM's
+fluent reply is the return; the **prediction error is their divergence** — a name the
+mechanical draft predicted but the LLM dropped, or a relation the LLM asserted that the
+graph never generated (a confabulation). This subsumes the regex constraints: most
+expectations stop being hand-written and become *whatever the engine would itself say,
+grounded*. (It is sitting in the audit already, as the discarded `llm.draft`.) The
+constraint vocabulary here is the bridge; the mechanical-draft predictor is where it
+wants to go.

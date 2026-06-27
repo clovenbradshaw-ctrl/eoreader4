@@ -17,7 +17,7 @@ import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerra
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
-import { expectAnswer, answerSlotError } from './expect.js';
+import { expectAnswer, answerConstraintErrors, needsReferent } from './expect.js';
 import { rereadOnUnsettled } from './reread.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
@@ -546,14 +546,16 @@ export const stages = {
     // name the engine CAN resolve — the knowledge the answer path used to discard — without
     // changing what retrieval/fold already did. Computed only for a gating expectation (a
     // name question), so every other turn is byte-identical, referent stays null.
-    const referent = ctx.expectation?.gates
+    const referent = needsReferent(ctx.expectation)
       ? (ctx.refTarget || referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans))
       : null;
     // A regenerate is owed on the grounding triggers (confab / §5 gate) OR when the answer
-    // does not fill the question's predicted SHAPE — "what is her name?" answered with no
-    // name. The shape miss is the prediction error; restarting is the error-correction.
-    const shapeOf = (c) => answerSlotError(c.expectation, c.rawOutput, { doc: c.doc, referent });
-    const regenNeeded = (c) => needsRegen(c) || !!shapeOf(c);
+    // misses a GATING constraint the prompt predicted — a name not given, a length overrun, a
+    // backwards retelling told forwards. The miss is the prediction error; restarting is the
+    // error-correction. Soft (non-gating) misses are left to the veto flag, not retried.
+    const errsOf  = (c) => answerConstraintErrors(c.expectation, c.rawOutput, { doc: c.doc, referent, bound: c.bound });
+    const gatingOf = (c) => errsOf(c).filter((e) => e.gates);
+    const regenNeeded = (c) => needsRegen(c) || gatingOf(c).length > 0;
     if (!regenNeeded(ctx)) return ctx;
     // The §5 gate engaged at entry — recorded for the audit even if the regenerate clears.
     const gated = gateCondition(ctx);
@@ -569,7 +571,7 @@ export const stages = {
       // unwritten — and the user can WATCH it catch itself and begin again.
       const supersededDraft    = cur.rawOutput;
       const supersededVerdicts = (cur.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
-      const shapeErr = shapeOf(cur);
+      const shapeErr = gatingOf(cur)[0];      // the first unmet constraint, if any
       const why = shapeErr ? shapeErr.reason
         : (gateCondition(cur) && !confabulating(cur))
           ? 'a load-bearing claim was not grounded in the lines'
@@ -581,15 +583,15 @@ export const stages = {
         task:        ctx.task,
         budget:      ctx.budget,
         conversation: {},                     // history still withheld on the grounded path
-        // shape miss → name them (with the resolved name when we have it); else confab →
+        // a missed constraint steers the redo (name them / shorten / reverse); else confab →
         // drop the link; gate → keep to the lines.
-        corrective:  shapeErr ? shapeCorrective(shapeErr) : correctiveFor(cur),
+        corrective:  shapeErr ? constraintCorrective(shapeErr) : correctiveFor(cur),
       });
       const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
       cur = await stages.factcheck(await stages.bind({ ...cur, rawOutput: raw, messages }));
       revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw, why }));
     }
-    return { ...cur, revised: { attempts, resolved: !regenNeeded(cur) }, revisions,
+    return { ...cur, revised: { attempts, resolved: !regenNeeded(cur), errors: errsOf(cur).map(e => e.id) }, revisions,
              ...(gated ? { gated: true } : {}) };
   },
 
@@ -634,13 +636,14 @@ export const stages = {
     // revise loop already corrected the miss this is null; when it could not (or no model
     // ran), the unmet slot ships as a flag — the prediction error the engine could not
     // discharge, told to the user rather than hidden.
-    const shapeReferent = ctx.expectation?.gates
+    const shapeReferent = needsReferent(ctx.expectation)
       ? (ctx.refTarget || referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans))
       : null;
-    const shapeError = answerSlotError(ctx.expectation, ctx.rawOutput, { doc: ctx.doc, referent: shapeReferent });
+    const constraintErrors = answerConstraintErrors(ctx.expectation, ctx.rawOutput,
+      { doc: ctx.doc, referent: shapeReferent, bound: ctx.bound });
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
-      referential: ctx.referential, task: ctx.task, provenance, shapeError,
+      referential: ctx.referential, task: ctx.task, provenance, constraintErrors,
       // The surfer's measured commit stance — its own confabulation guard (stance-reserve):
       // a Ground-grain reserve at the peak means the reading did not settle on a figure.
       // Computed on every turn now the structural significance column is the default (§2).
@@ -700,17 +703,26 @@ const GROUNDING_CORRECTIVE =
   'there at all, or it conflicts with what they show. Answer again, keeping strictly to ' +
   'what the lines say. If the answer is not in them, tell them plainly you did not find it.';
 
-// The shape corrective — handed when the answer did not FILL the question's predicted slot
-// (turn/expect.js). The question asked for a name and the reply described instead of naming.
-// When the reading already resolved the name, hand it to the talker outright — the engine
-// knows it; the first draft simply failed to say it. Otherwise steer it to name or, honestly,
-// to report the gap — never to substitute a description for a name.
-const shapeCorrective = (err) =>
-  err.expectedName
-    ? `They asked for a name. The reading resolves it as “${err.expectedName}”. Answer with that ` +
-      'name plainly — do not describe the person in place of naming them.'
-    : 'They asked for a name — a specific person’s name. Give the name if the lines provide one; ' +
-      'if they do not, say plainly you did not find it. Do not answer with a description in place of a name.';
+// The corrective for a missed CONSTRAINT (turn/expect.js), by dimension. A REFINE, not a
+// retreat: it names the one thing the draft got wrong and asks for it again, in the talker's
+// own words. For a name the reading already resolved, hand it over outright — the engine knows
+// it; the first draft simply failed to say it.
+const constraintCorrective = (err) => {
+  if (err.dim === 'name')
+    return err.expectedName
+      ? `They asked for a name. The reading resolves it as “${err.expectedName}”. Answer with that ` +
+        'name plainly — do not describe the person in place of naming them.'
+      : 'They asked for a name — a specific person’s name. Give the name if the lines provide one; ' +
+        'if they do not, say plainly you did not find it. Do not answer with a description in place of a name.';
+  if (err.dim === 'length')
+    return `They asked for the answer in ${err.params.max} ${err.params.unit}${err.params.max > 1 ? 's' : ''}. ` +
+      'Give it that short — no more.';
+  if (err.dim === 'order')
+    return err.params.dir === 'desc'
+      ? 'They asked for it backwards — tell it from the end to the beginning, the latest events first.'
+      : 'They asked for it in order — tell it from the beginning through to the end.';
+  return CONFAB_CORRECTIVE;
+};
 
 // Did the diagonal guard catch the confabulation proper — a specific claim asserted at
 // a measured Void (the figure-at-a-void shape)? The hard case the rewrite targets.
