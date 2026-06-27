@@ -324,6 +324,8 @@ section h2 .hint {
   margin: .4rem 0 .2rem; font-size: .82rem; line-height: 1.5; color: #e2e8f0;
   white-space: pre-wrap; word-break: break-word;
 }
+.msg.assistant .wr-intro { margin: .15rem 0 .35rem; font-size: .68rem; color: #94a3b8; line-height: 1.45; }
+.msg.assistant .wr-source-meta { flex: 0 0 auto; font-size: .62rem; color: #64748b; white-space: nowrap; }
 .msg.assistant .wr-graph { margin: .3rem 0 .1rem; }
 .msg.assistant .wr-graph summary {
   cursor: pointer; font-size: .7rem; color: #a78bfa; letter-spacing: .02em; user-select: none;

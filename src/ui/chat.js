@@ -372,53 +372,76 @@ export const renderWebProposal = (el, proposal, { onSearch, onDismiss } = {}) =>
 // A verify search reports whether the web backed the answer; a gap/witness search lists the pages
 // it pulled in. Either way the user sees that the search RAN and what it found, rather than a lone
 // pill — the answer to "but it doesn't do the search". Sources link out to the fetched page.
+// Set the in-flight status note in the thinking bubble (e.g. "🌐 searching the web…").
+// Empty string restores the default "thinking…" label.
+export const setThinkingNote = (el, msg) => {
+  const label = el?.querySelector?.('.body > .label');
+  if (label) label.textContent = msg || 'thinking…';
+};
+
+// host → just the domain, for a compact, honest source chip ("en.wikipedia.org").
+const domainOf = (url) => { try { return new URL(url).host.replace(/^www\./, ''); } catch { return ''; } };
+// ISO → a short local date/time, so each source carries WHEN it was fetched (provenance).
+const whenOf = (iso) => { if (!iso) return ''; try { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(); } catch { return ''; } };
+
 export const renderWebResult = (el, fetched) => {
   if (!el || !fetched) return;
   el.querySelector('.webresult')?.remove();
   const box = document.createElement('div');
   box.className = 'webresult';
+  const n = fetched.results;
+  const plural = n > 1 ? 's' : '';
 
   const head = document.createElement('div');
   head.className = 'wr-head';
-  if (!fetched.results) {
+  if (!n) {
     box.classList.add('empty');
     head.textContent = `No web results for “${fetched.query}”.`;
-  } else if (fetched.trigger === 'verify') {
-    // AUGMENT: a "From the web" answer built from the real pages, shown beside the model's own.
+  } else if (fetched.grounded) {
+    // INVERTED FLOW: the answer above was built FROM these sources (web + docs + memory),
+    // surfed into one reading. The block is the provenance — every source, traceable.
     box.classList.add('ok');
-    head.textContent = fetched.augmented
-      ? `🌐 From the web — answered from ${fetched.results} source${fetched.results > 1 ? 's' : ''}:`
-      : `🔍 Searched the web (${fetched.results} source${fetched.results > 1 ? 's' : ''}).`;
+    head.textContent = `🌐 Grounded in ${n} web source${plural} (searched “${fetched.query}”):`;
+  } else if (fetched.trigger === 'verify' && fetched.augmented) {
+    box.classList.add('ok');
+    head.textContent = `🌐 From the web — answered from ${n} source${plural}:`;
   } else {
     box.classList.add('ok');
-    head.textContent = `🔍 Searched the web — pulled ${fetched.results} source${fetched.results > 1 ? 's' : ''} into this answer.`;
+    head.textContent = `🔍 Searched the web (${n} source${plural}).`;
   }
   box.appendChild(head);
 
-  // The web-grounded answer itself (verify/augment) — the good answer, kept separate from the
-  // model's own above it. Plain text; the sources it drew on follow as chips.
+  // The provenance contract, borrowed from EO_Reader: name the sources as what they are —
+  // pages read, each with a link and a fetch time — so nothing the answer used is opaque.
+  if (n && (fetched.grounded || fetched.augmented)) {
+    const intro = document.createElement('div');
+    intro.className = 'wr-intro';
+    intro.textContent = 'Each source below is a page I read — title, link, and when I fetched it. The answer is my fold of them.';
+    box.appendChild(intro);
+  }
+
+  // A "From the web" answer (the verify/augment flavor only) — the inverted flow has no separate
+  // answer here; the main bubble above IS the grounded answer.
   if (fetched.augmented?.answer) {
     const ans = document.createElement('div');
     ans.className = 'wr-answer';
-    // Strip the bound [sN] markers: they index the web re-run's own scope, not this turn's
-    // sources, so linkifying would mis-reference. The sources ride as chips just below.
     ans.textContent = String(fetched.augmented.answer).replace(/\s*\[s\d+\]/g, '').trim();
     box.appendChild(ans);
+  }
 
-    // The MEANING GRAPH the talker actually reasoned over — the typed relations the fold read
-    // off the web content (not the raw text). Collapsed by default; this is what "fed the meant
-    // graph, not just web data" looks like in the open.
-    if (fetched.augmented.graph) {
-      const det = document.createElement('details');
-      det.className = 'wr-graph';
-      const sum = document.createElement('summary');
-      sum.textContent = 'meaning graph fed to the model';
-      det.appendChild(sum);
-      const pre = document.createElement('pre');
-      pre.textContent = fetched.augmented.graph;
-      det.appendChild(pre);
-      box.appendChild(det);
-    }
+  // The MEANING GRAPH the talker reasoned over — the typed relations the fold read off the
+  // gathered content (not the raw text). Collapsed by default.
+  const graph = fetched.graph || fetched.augmented?.graph;
+  if (graph) {
+    const det = document.createElement('details');
+    det.className = 'wr-graph';
+    const sum = document.createElement('summary');
+    sum.textContent = 'meaning graph fed to the model';
+    det.appendChild(sum);
+    const pre = document.createElement('pre');
+    pre.textContent = graph;
+    det.appendChild(pre);
+    box.appendChild(det);
   }
 
   const sources = fetched.augmented?.sources || fetched.sources || [];
@@ -429,8 +452,16 @@ export const renderWebResult = (el, fetched) => {
     if (s.url) { item.href = s.url; item.target = '_blank'; item.rel = 'noopener'; item.title = s.url; }
     const label = document.createElement('span');
     label.className = 'wr-source-label';
-    label.textContent = s.title || s.url || s.docId || 'source';
+    label.textContent = s.title || domainOf(s.url) || s.url || s.docId || 'source';
     item.appendChild(label);
+    // Provenance tail: domain · when. Makes the origin of each piece of content explicit.
+    const meta = [domainOf(s.url), whenOf(s.fetched_at)].filter(Boolean).join(' · ');
+    if (meta) {
+      const m = document.createElement('span');
+      m.className = 'wr-source-meta';
+      m.textContent = meta;
+      item.appendChild(m);
+    }
     box.appendChild(item);
   }
 

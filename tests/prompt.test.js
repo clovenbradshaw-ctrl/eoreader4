@@ -218,7 +218,9 @@ test('currentMomentLine is empty without a clock and formatted with one (byte-id
   const d = new Date(2026, 5, 27, 14, 5);   // local: Sat 27 June 2026, 14:05
   const line = currentMomentLine(d);
   assert.match(line, /Saturday, 27 June 2026, 14:05/);
-  assert.match(line, /do not say you lack a clock/);
+  // Ambient context only — no clock-announcement framing for the model to echo back.
+  assert.doesNotMatch(line, /clock|real-time|do not say/i);
+  assert.match(line, /for context/i);
 });
 
 test('buildChatMessages: now folds the moment into the system message; absent → unchanged', () => {
@@ -243,10 +245,11 @@ test('buildGroundedMessages: a graph block feeds the typed relations; absent →
   const plain = buildGroundedMessages({ question: 'who is making it?', spans });
   assert.doesNotMatch(plain[1].content, /What it means/, 'no graph block by default (subjective frame holds)');
 
-  const graph = 'revival --developed-by--> Ryan Coogler\nseries --produced-for--> 20th Television';
+  const graph = 'revival -> Ryan Coogler : developed-by\nseries -> 20th Television : produced-for';   // EOT
   const withGraph = buildGroundedMessages({ question: 'who is making it?', spans, graph });
   assert.match(withGraph[1].content, /What it means — the relations you read/, 'the graph block is present');
-  assert.match(withGraph[1].content, /revival --developed-by--> Ryan Coogler/, 'the relations are fed verbatim');
+  assert.match(withGraph[1].content, /EOT triples/, 'the block names the EOT surface');
+  assert.match(withGraph[1].content, /revival -> Ryan Coogler : developed-by/, 'the EOT triples are fed verbatim');
   assert.match(withGraph[1].content, /Reason over THESE/, 'the talker is told to reason over the graph');
   // The verbatim lines still ride as grounding beneath the graph.
   assert.match(withGraph[1].content, new RegExp(EXCERPTS_HEADER));

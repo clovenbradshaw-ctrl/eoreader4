@@ -58,10 +58,16 @@ export const webRecord = (payload = {}) => {
 // pipeline path treats it identically — eoreader3 reconciliation #1) whose WEB identity rides as
 // additive metadata, and whose docId is unique + colon-free so its cited spans trace back through
 // the composite's origin().
+// Cap the prose handed to parseText. A real web page reduces to tens of thousands of chars
+// (thousands of sentences); parseText is synchronous O(n) work on the main thread, so an
+// uncapped page FREEZES the tab — the observed jank when search runs. The lede + first sections
+// carry the answer for grounding; cap there. (~8k chars ≈ 100–130 sentences.)
+const MAX_WEB_CHARS = 8000;
+
 export const admitWebSource = (payload = {}) => {
   const record = webRecord(payload);
   const docId  = engineDocId(record.id);
-  const doc    = parseText(String(payload.text || ''), { docId });
+  const doc    = parseText(String(payload.text || '').slice(0, MAX_WEB_CHARS), { docId });
   doc.sourceKind = 'web-source';
   doc.web = {
     url: record.url, final_url: record.final_url, title: record.title,

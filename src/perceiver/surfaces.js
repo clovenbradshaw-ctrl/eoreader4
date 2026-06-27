@@ -215,6 +215,36 @@ export const serializeNotes = (structure, { max = 8 } = {}) => {
   return lines;
 };
 
+// The EOT register — the same folded graph, serialized in EOT surface syntax
+// (docs/eot-surface-syntax.md) instead of plain arrows. The model already emits these three
+// shapes fluently, so the notes read as canonical EO triples:
+//   LINK  (CON)      SUBJECT -> OBJECT : relation
+//   IS-A  (DEF/INS)  SIGN : value/type
+// Polarity rides as the spec's negation token on the relation (`not-rel`), never dropped. Same
+// surface discipline as serializeNotes — labels only, never an id/code/index (the membrane scrub
+// in turn/stages.js still runs over the output).
+export const serializeEOT = (structure, { max = 24 } = {}) => {
+  const lines = [];
+  const seen = new Set();
+  for (const r of (structure?.relations || [])) {
+    const rel = plainRel(r.via);
+    const neg = r.polarity === '−' ? 'not-' : '';
+    const key = `${r.src.id}|${neg}${rel}|${r.tgt.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(`${r.src.label} -> ${r.tgt.label} : ${neg}${rel}`);   // LINK → CON
+    if (lines.length >= max) return lines;
+  }
+  for (const d of (structure?.defs || [])) {
+    const key = `def|${d.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(`${d.label} : ${d.value}`);                            // IS-A → DEF/INS
+    if (lines.length >= max) return lines;
+  }
+  return lines;
+};
+
 // A relation label the talker may read: the edge's own verb, plain, hyphenated
 // so it reads as one arrow label ("originated in" → "originated-in"). Never a
 // code; the generic stands only when the graph carried no verb.

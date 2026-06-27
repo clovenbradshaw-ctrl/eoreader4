@@ -14,7 +14,7 @@ import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerrainAt } from '../surfer/index.js';
-import { namedReferents, referentialConfidence, siteIndices, serializeNotes, structureSurface } from '../perceiver/index.js';
+import { namedReferents, referentialConfidence, siteIndices, serializeEOT, structureSurface } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
@@ -437,7 +437,7 @@ export const stages = {
     if (grounded && ctx.groundGraph && ctx.doc) {
       const allIdxs = (ctx.doc.units || ctx.doc.sentences || []).map((_, i) => i);
       try {
-        const lines = serializeNotes(structureSurface(ctx.doc, allIdxs), { max: 24 });
+        const lines = serializeEOT(structureSurface(ctx.doc, allIdxs), { max: 24 });  // EOT surface (docs/eot-surface-syntax.md)
         fedGraph = scrubGraphLines(lines).join('\n');
       } catch { fedGraph = ''; }
     }

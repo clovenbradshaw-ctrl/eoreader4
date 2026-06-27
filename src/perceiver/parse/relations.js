@@ -272,6 +272,28 @@ export const headVerb = (text, { isCopula = defIsCopula, isModifier = defIsModif
   return null;
 };
 
+// PASSIVE VOICE → the typed active edge. "<patient> is/was [being|been] <participle> by <agent>"
+// becomes AGENT --participle--> PATIENT, so "developed/produced/created/directed/founded by X"
+// reaches the graph as a relation instead of a flat copular DEF that buries the agent — the
+// difference between a rich graph and a list of "X: is being developed by …" on real web prose.
+// Conservative by construction: the participle is -ed or a known irregular, there must be a
+// "by" agent, and (at the call site) the agent must be an ADMITTED named entity.
+const PASSIVE_IRREGULAR = new Set([
+  'made', 'written', 'built', 'led', 'shown', 'run', 'cast', 'told', 'given', 'taken', 'held',
+  'set', 'put', 'sent', 'kept', 'drawn', 'known', 'found', 'won', 'begun', 'born', 'grown',
+  'sung', 'done', 'seen', 'brought', 'sold', 'paid', 'read', 'left', 'won',
+]);
+// Returns { verb, partStart, byEnd } when `rest` (the text after the copula) opens a passive
+// with a "by" agent; null otherwise. `partStart`/`byEnd` are offsets within `rest`.
+const passiveParticiple = (rest) => {
+  const lead = (rest.match(/^\s*(?:(?:being|been)\s+)?/i) || [''])[0].length;
+  const m = rest.slice(lead).match(/^([A-Za-z]+)\s+by\s+/i);
+  if (!m) return null;
+  const lw = m[1].toLowerCase();
+  if (!(/[a-z]ed$/.test(lw) || PASSIVE_IRREGULAR.has(lw))) return null;
+  return { verb: lw, partStart: lead, byEnd: lead + m[0].length };
+};
+
 // Each admitted object, with its offsets within `text` so the caller can place
 // the object span back into the sentence. (Was ids only — the spans were computed
 // and thrown away, the v1 gap this spec closes.)
@@ -587,6 +609,29 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
     const restBase = vEnd;
 
     if (head.copular) {
+      // PASSIVE → typed active edge: "<patient> is/was [being] <participle> by <AGENT>" becomes
+      // AGENT --participle--> patient, when the agent is an admitted named entity. Otherwise the
+      // copular predicate flattens to a DEF as before.
+      const pv = passiveParticiple(head.rest);
+      if (pv) {
+        const agentText = head.rest.slice(pv.byEnd);
+        const agentBase = restBase + pv.byEnd;
+        const vStartP = restBase + pv.partStart, vEndP = vStartP + pv.verb.length;
+        const verbSpan = { text: s.slice(vStartP, vEndP), start: vStartP, end: vEndP };
+        let emitted = false;
+        for (const csub of subjects) {
+          const cw = coupling(csub);
+          const patient = { text: csub.text, start: base + csub.start, end: base + csub.end, id: csub.id };
+          for (const ag of objectEntities(agentText, admission, csub.id)) {
+            const aStart = agentBase + ag.start, aEnd = agentBase + ag.end;
+            const agent = { text: s.slice(aStart, aEnd), start: aStart, end: aEnd, id: ag.id };
+            out.push({ op: 'CON', src: ag.id, tgt: csub.id, via: pv.verb, ...cw, ...polmod(head),
+                       args: { subject: agent, verb: verbSpan, object: patient, op: 'CON' } });
+            emitted = true;
+          }
+        }
+        if (emitted) continue;   // the typed edge stands in for the flat copular DEF
+      }
       const pred = head.rest.replace(/^[\s,]+/, '').replace(/[.!?]+\s*$/, '').trim();
       if (pred) {
         for (const csub of subjects) {

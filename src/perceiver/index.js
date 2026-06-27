@@ -17,7 +17,7 @@
 
 export {
   existenceSurface, structureSurface, figureSurface, namedReferents,
-  significanceSurface, consciousness, serializeNotes,
+  significanceSurface, consciousness, serializeNotes, serializeEOT,
   composeGroupedNote, NOTE_GROUPS, plainRel,
 } from './surfaces.js';
 export { readingAt } from './reading.js';
