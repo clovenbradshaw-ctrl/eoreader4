@@ -45,7 +45,9 @@ const STATE = {
   history:   [],         // the running transcript, fed back each turn (the session fold)
   grounding: 'auto',     // how answers use the document: 'auto' | 'grounded' | 'free' (the chip)
   inquire:   false,      // self-directed inquiry — read another pass on the engine's own open question (the chip)
-  webSearch: 'off',      // web search: 'off' | 'confirm' | 'auto' — when a turn can't ground, search the web (the chip)
+  webSearch: 'auto',     // web search: 'off' | 'confirm' | 'auto' — default AUTO: every turn searches on its
+                         //   own up front and answers grounded in what it gathered (no manual search). The
+                         //   chip can drop it to 'confirm' (offer first) or 'off'. localStorage overrides below.
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
   // chip distinct from the document chips: when on, every turn consults the corpus and
   // surfaces its provenance-tagged spans beneath the answer. Lazily constructed; the
