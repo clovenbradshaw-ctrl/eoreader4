@@ -277,6 +277,38 @@ section h2 .hint {
 .msg.assistant .docsource.clickable { cursor: pointer; }
 .msg.assistant .docsource.clickable:hover { background: #16294a; }
 
+/* Transparency view — every proposition the answer makes, traced to its source (or marked
+   unsupported / inaccurate). The toggle persists on/off; the panel reuses the coverage palette. */
+.msg.assistant .transparency-toggle {
+  background: transparent; border: none; padding: 0;
+  color: #818cf8; font-size: .7rem; cursor: pointer;
+  margin-top: .4rem; font-family: ui-monospace, monospace;
+}
+.msg.assistant .transparency-toggle:hover { color: #a5b4fc; background: transparent; }
+.msg.assistant .transparency { display: none; flex-direction: column; gap: .3rem; margin-top: .4rem; }
+.msg.assistant .transparency.open { display: flex; }
+.msg.assistant .prop {
+  display: flex; align-items: baseline; gap: .45rem; flex-wrap: wrap;
+  font-size: .72rem; line-height: 1.4; padding: .3rem .5rem;
+  border-radius: 6px; border: 1px solid #27272a; background: #131316;
+}
+.msg.assistant .prop-status {
+  flex: 0 0 auto; font-size: .62rem; font-family: ui-monospace, monospace;
+  padding: .08rem .4rem; border-radius: 999px; border: 1px solid #27272a; cursor: default;
+}
+.msg.assistant .prop-status.good    { color: #6ee7b7; border-color: #065f46; background: #07241c; }
+.msg.assistant .prop-status.partial { color: #fbbf24; border-color: #78350f; background: #271a06; }
+.msg.assistant .prop-status.weak    { color: #fca5a5; border-color: #7f1d1d; background: #2a1216; }
+.msg.assistant .prop-status.free    { color: #a1a1aa; border-color: #3f3f46; background: #1f1f23; }
+.msg.assistant .prop-claim { flex: 1 1 12rem; color: #d4d4d8; min-width: 0; }
+.msg.assistant .prop-source {
+  flex: 0 0 auto; font-size: .66rem; color: #93c5fd;
+  font-family: ui-monospace, monospace; max-width: 14rem; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+a.prop-source:hover { text-decoration: underline; }
+.msg.assistant .prop.inaccurate { border-color: #7f1d1d; }
+
 /* Retry affordance on an errored turn. */
 .msg.assistant .retry { margin-top: .55rem; }
 

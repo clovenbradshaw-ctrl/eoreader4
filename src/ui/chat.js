@@ -158,7 +158,7 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   // Idempotent: a web follow-up re-renders this same bubble with the updated answer, so drop the
   // blocks a prior finalize appended (kept as siblings of .body) before re-appending them — else
   // coverage / flags / meta / trace stack up. The web proposal/result cards are preserved.
-  el.querySelectorAll(':scope > .coverage, :scope > .docsources, :scope > .flags, :scope > .meta, :scope > .retry, :scope > .trail-toggle')
+  el.querySelectorAll(':scope > .coverage, :scope > .docsources, :scope > .flags, :scope > .meta, :scope > .retry, :scope > .trail-toggle, :scope > .transparency-toggle, :scope > .transparency')
     .forEach(n => n.remove());
   el.classList.remove('thinking');
   el.classList.remove('streaming');     // the live stream is replaced by the cited answer
@@ -196,6 +196,10 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
     }
     el.appendChild(wrap);
   }
+
+  // The transparency view — every proposition the answer makes, traced to its source (or marked
+  // unsupported / inaccurate). Rendered between the coverage headline and the terse flag pills.
+  renderTransparency(el, opts);
 
   // Flags ride alongside the answer — never substitute it.
   if (opts.flags?.length) {
@@ -535,6 +539,131 @@ const formatVal = (v) => {
   if (Array.isArray(v)) return `[${v.join(',')}]`;
   if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(3);
   return String(v ?? '');
+};
+
+// ── Transparency: every proposition the answer makes, traced to its source (or marked unsupported)
+//
+// The user's ask — "see the source on everything it's saying; all output turned into propositions
+// and grounded (or found inaccurate) based on the source." buildPropositions turns the pipeline's
+// per-claim record into that list: each bound claim (an answer sentence) paired with the source it
+// cited, then overlaid with the fact-check's verdicts so a claim the source DENIES is marked
+// inaccurate. Pure and exported so the mapping is unit-testable without the DOM.
+
+const STOPWORDS = new Set(('the a an of to in on for and or but is are was were be been with as at by from this that ' +
+  'it its his her their he she they i you we not no do does did has have had will would can could s t'). split(/\s+/));
+const contentWords = (s) => new Set((String(s || '').toLowerCase().match(/[a-z][a-z0-9'-]{2,}/g) || []).filter(w => !STOPWORDS.has(w)));
+// The claim a verdict is about — highest content-word overlap with the verdict's relation text.
+const bestMatch = (claims, text) => {
+  const want = contentWords(text);
+  if (!want.size) return null;
+  let best = null, bestScore = 0;
+  for (const c of claims) {
+    const have = contentWords(c.text);
+    let n = 0; for (const w of want) if (have.has(w)) n++;
+    if (n > bestScore) { bestScore = n; best = c; }
+  }
+  return bestScore >= 1 ? best : null;
+};
+
+export const buildPropositions = (res = {}, citationSources = {}) => {
+  const route = res.route || res.turn?.route || 'grounded';
+  const sourceFor = (citation) => {
+    if (!citation) return null;
+    const idx = parseInt(String(citation).slice(1), 10);
+    return Number.isFinite(idx) ? (citationSources[idx] || citationSources[String(idx)] || null) : null;
+  };
+  // One proposition per bound claim (an answer sentence). On a chat turn nothing is grounded —
+  // the answer is the model's own knowledge, and the view says so plainly.
+  const claims = (res.bound || [])
+    .map((b) => String(b.claim || '').trim())
+    .filter(Boolean)
+    .map((text, i) => {
+      const b = res.bound[i];
+      const source = sourceFor(b.citation);
+      return {
+        text, citation: b.citation || null, source,
+        status: route === 'chat' ? 'general' : (b.citation ? 'grounded' : 'ungrounded'),
+        reason: null,
+      };
+    });
+  // Overlay the fact-check verdicts: a contradicted / off-diagonal relation marks the claim it
+  // belongs to as inaccurate; a corroborated relation that earned a citation the binder missed
+  // upgrades that claim to grounded with the source it was confirmed against.
+  for (const v of (res.verdicts || [])) {
+    const text = v.sentence || [v.src, v.tgt].filter(Boolean).join(' ');
+    const claim = bestMatch(claims, text);
+    if (!claim) continue;
+    if (v.verdict === 'contradicted' || v.verdict === 'off_diagonal') {
+      claim.status = 'inaccurate';
+      claim.reason = v.reason || 'the source does not support this';
+    } else if (v.verdict === 'corroborated' && claim.status === 'ungrounded') {
+      claim.status = 'grounded';
+      if (!claim.source) claim.source = sourceFor(v.citation);
+    }
+  }
+  return claims;
+};
+
+const PROP_STATUS = {
+  grounded:   { glyph: '✓', label: 'grounded',     cls: 'good' },
+  inaccurate: { glyph: '✗', label: 'not supported', cls: 'weak' },
+  ungrounded: { glyph: '·', label: 'not in sources', cls: 'partial' },
+  general:    { glyph: '◇', label: 'general knowledge', cls: 'free' },
+};
+
+// The transparency panel — a toggleable list of every proposition and what backs it. Collapsed
+// or expanded per `opts.transparency` (the persisted on/off); the toggle flips it and reports
+// back through `opts.onTransparency` so the choice sticks across turns.
+export const renderTransparency = (el, opts = {}) => {
+  el.querySelector('.transparency')?.remove();
+  el.querySelector('.transparency-toggle')?.remove();
+  const props = opts.propositions || [];
+  if (!props.length) return;
+
+  const open = opts.transparency !== false;   // default ON — the user asked to see the sourcing
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'transparency-toggle';
+  const setLabel = (o) => { toggle.textContent = `${o ? '▾' : '▸'} sources for every claim (${props.length})`; };
+  setLabel(open);
+
+  const panel = document.createElement('div');
+  panel.className = 'transparency' + (open ? ' open' : '');
+  for (const p of props) {
+    const row = document.createElement('div');
+    row.className = `prop ${p.status}`;
+    const meta = PROP_STATUS[p.status] || PROP_STATUS.ungrounded;
+
+    const pill = document.createElement('span');
+    pill.className = `prop-status ${meta.cls}`;
+    pill.textContent = `${meta.glyph} ${meta.label}`;
+    if (p.reason) pill.title = p.reason;
+    row.appendChild(pill);
+
+    const claim = document.createElement('span');
+    claim.className = 'prop-claim';
+    claim.textContent = p.text;
+    row.appendChild(claim);
+
+    if (p.source && (p.source.label || p.source.url)) {
+      const src = p.source.url ? document.createElement('a') : document.createElement('span');
+      src.className = 'prop-source';
+      if (p.source.url) { src.href = p.source.url; src.target = '_blank'; src.rel = 'noopener'; }
+      src.textContent = p.source.label || p.source.url;
+      src.title = `Source — ${p.source.url || p.source.label}`;
+      row.appendChild(src);
+    }
+    panel.appendChild(row);
+  }
+
+  toggle.addEventListener('click', () => {
+    const nowOpen = panel.classList.toggle('open');
+    setLabel(nowOpen);
+    if (typeof opts.onTransparency === 'function') opts.onTransparency(nowOpen);
+  });
+
+  el.appendChild(toggle);
+  el.appendChild(panel);
 };
 
 // Per-claim attribution: each [sN] becomes a chip that names the source it cites. When a source

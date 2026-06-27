@@ -20,7 +20,7 @@ import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
-         renderWebProposal, renderWebResult, setThinkingNote } from './chat.js';
+         renderWebProposal, renderWebResult, setThinkingNote, buildPropositions } from './chat.js';
 import { createMind } from '../mind/index.js';
 import { foldImpression } from '../write/index.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
@@ -48,6 +48,8 @@ const STATE = {
   webSearch: 'auto',     // web search: 'off' | 'confirm' | 'auto' — default AUTO: every turn searches on its
                          //   own up front and answers grounded in what it gathered (no manual search). The
                          //   chip can drop it to 'confirm' (offer first) or 'off'. localStorage overrides below.
+  transparency: true,    // the per-claim source view: every proposition traced to its source (or marked
+                         //   unsupported). Default ON; the toggle beneath each answer persists the choice.
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
   // chip distinct from the document chips: when on, every turn consults the corpus and
   // surfaces its provenance-tagged spans beneath the answer. Lazily constructed; the
@@ -572,11 +574,21 @@ const runQuery = async (question) => {
     for (const [idx, docId] of Object.entries(res.citeOrigins || {})) {
       citationSources[idx] = { label: webLabel.get(docId) || docId, url: webUrl.get(docId) || '' };
     }
+    // The transparency record: every proposition the answer makes, paired with the source it is
+    // grounded in (or the verdict that it is unsupported / contradicted). This turns "the answer"
+    // into a list of claims each traceable to a page — what the transparency toggle reveals.
+    const propositions = buildPropositions(res, citationSources);
     finalizeThinking(thinking, res.answer, res.sources, {
       route, ms, flags: res.flags,
       mode: STATE.grounding,
       docNames,
       citationSources,
+      propositions,
+      transparency: STATE.transparency,   // the persisted on/off for the per-claim source view
+      onTransparency: (open) => {         // remember the choice so it sticks across turns
+        STATE.transparency = open;
+        try { localStorage.setItem('eoreader.transparency', open ? '1' : '0'); } catch { /* ignore */ }
+      },
       onDocSource: (name) => {
         if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('doc');
         if (name && STATE.docs.has(name)) viewDoc(name);
@@ -760,7 +772,11 @@ const applyWeb = () => {
 try {
   const w = localStorage.getItem('eoreader.webSearch');
   if (WEB_MODES.includes(w)) STATE.webSearch = w;
-} catch { /* default off stands */ }
+} catch { /* default auto stands */ }
+try {
+  const t = localStorage.getItem('eoreader.transparency');
+  if (t === '0' || t === '1') STATE.transparency = t === '1';
+} catch { /* default on stands */ }
 applyWeb();
 els.webChip.addEventListener('click', () => {
   STATE.webSearch = WEB_MODES[(WEB_MODES.indexOf(STATE.webSearch) + 1) % WEB_MODES.length];
