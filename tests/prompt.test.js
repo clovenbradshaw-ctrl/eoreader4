@@ -67,8 +67,8 @@ test('the grounded prompt is the subjective frame: the lines you read, no arrows
     orientation: 'pg5200.txt · text · 757 sentences',
   });
   assert.equal(system.role, 'system');
-  // The boundary is stated as a fact about the reader, not a rule about sources (§1).
-  assert.match(system.content, /they are all you read/i);
+  // The boundary is stated honestly: what surfaced for this question, not the whole source (§1).
+  assert.match(system.content, /came to mind for this question/i);
   // The ONE channel — the verbatim lines under the reader-register header (§2).
   assert.match(user.content, new RegExp(EXCERPTS_HEADER));
   assert.match(user.content, /Topps slammed the man to the ground\./);
@@ -81,7 +81,7 @@ test('the grounded prompt is the subjective frame: the lines you read, no arrows
   // "only from the document" restriction is lifted: if the lines don't cover it, the talker may
   // answer from general knowledge and say so (ungrounded is flagged downstream, not forbidden).
   assert.match(user.content, /They asked you: what happened\?/);
-  assert.match(user.content, /answer from general knowledge and say it is not from the document/);
+  assert.match(user.content, /answer from general knowledge and say that part isn't from the reading/);
   // Orientation is filename · type · length — no recognition (§3).
   assert.match(user.content, /What it was: pg5200\.txt · text · 757 sentences/);
   // NO length prescription by default — max_tokens is the real bound (the task register)
@@ -235,7 +235,7 @@ test('buildChatMessages: now folds the moment into the system message; absent �
 
 test('buildGroundedMessages: now folds the moment in without disturbing the subjective frame', () => {
   const dated = buildGroundedMessages({ question: 'what day is it?', spans: [{ text: 'a line' }], now: new Date(2026, 5, 27, 9, 30) });
-  assert.match(dated[0].content, /You just finished reading/);   // the frame is intact
+  assert.match(dated[0].content, /the voice of a reader/i);   // the honest frame is intact
   assert.match(dated[0].content, /27 June 2026/);                // the moment is appended
 });
 
@@ -247,7 +247,7 @@ test('buildGroundedMessages: a graph block feeds the typed relations; absent →
 
   const graph = 'revival -> Ryan Coogler : developed-by\nseries -> 20th Television : produced-for';   // EOT
   const withGraph = buildGroundedMessages({ question: 'who is making it?', spans, graph });
-  assert.match(withGraph[1].content, /What it means — the relations you read/, 'the graph block is present');
+  assert.match(withGraph[1].content, /What it means — the relations that come to mind/, 'the graph block is present');
   assert.match(withGraph[1].content, /EOT triples/, 'the block names the EOT surface');
   assert.match(withGraph[1].content, /revival -> Ryan Coogler : developed-by/, 'the EOT triples are fed verbatim');
   assert.match(withGraph[1].content, /Reason over THESE/, 'the talker is told to reason over the graph');

@@ -12,7 +12,7 @@
 
 import { ingestText }       from '../organs/in/index.js';
 import { runTurn, runWebFollowup, formulateSearchQuery, loadShapeLibrary } from '../turn/index.js';
-import { createWebClient, searchAndAdmit } from '../ingest/index.js';
+import { createWebClient, searchAndAdmit, createRawStore } from '../ingest/index.js';
 import { createSpeculativeWeb } from './prefetch.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
@@ -20,7 +20,7 @@ import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
-         renderWebProposal, renderWebResult, setThinkingNote } from './chat.js';
+         renderWebProposal, renderWebResult, setThinkingNote, buildPropositions } from './chat.js';
 import { createMind } from '../mind/index.js';
 import { foldImpression } from '../write/index.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
@@ -45,7 +45,11 @@ const STATE = {
   history:   [],         // the running transcript, fed back each turn (the session fold)
   grounding: 'auto',     // how answers use the document: 'auto' | 'grounded' | 'free' (the chip)
   inquire:   false,      // self-directed inquiry — read another pass on the engine's own open question (the chip)
-  webSearch: 'off',      // web search: 'off' | 'confirm' | 'auto' — when a turn can't ground, search the web (the chip)
+  webSearch: 'auto',     // web search: 'off' | 'confirm' | 'auto' — default AUTO: every turn searches on its
+                         //   own up front and answers grounded in what it gathered (no manual search). The
+                         //   chip can drop it to 'confirm' (offer first) or 'off'. localStorage overrides below.
+  transparency: true,    // the per-claim source view: every proposition traced to its source (or marked
+                         //   unsupported). Default ON; the toggle beneath each answer persists the choice.
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
   // chip distinct from the document chips: when on, every turn consults the corpus and
   // surfaces its provenance-tagged spans beneath the answer. Lazily constructed; the
@@ -536,7 +540,7 @@ const runQuery = async (question) => {
     setThinkingNote(thinking, '🌐 searching the web…');
     try {
       const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history });
-      const admitted = await searchAndAdmit(q, { client: webClientOf(), kind: 'auto', fetchPages: true, k: 4 });
+      const admitted = await searchAndAdmit(q, { client: webClientOf(), rawStore: rawStoreOf(), kind: 'auto', fetchPages: true, k: 4 });
       const webDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
       if (webDocs.length) {
         turnArgs.docs = [...selectedDocs, ...webDocs];   // web joins the grounding scope, beside any loaded docs
@@ -570,11 +574,21 @@ const runQuery = async (question) => {
     for (const [idx, docId] of Object.entries(res.citeOrigins || {})) {
       citationSources[idx] = { label: webLabel.get(docId) || docId, url: webUrl.get(docId) || '' };
     }
+    // The transparency record: every proposition the answer makes, paired with the source it is
+    // grounded in (or the verdict that it is unsupported / contradicted). This turns "the answer"
+    // into a list of claims each traceable to a page — what the transparency toggle reveals.
+    const propositions = buildPropositions(res, citationSources);
     finalizeThinking(thinking, res.answer, res.sources, {
       route, ms, flags: res.flags,
       mode: STATE.grounding,
       docNames,
       citationSources,
+      propositions,
+      transparency: STATE.transparency,   // the persisted on/off for the per-claim source view
+      onTransparency: (open) => {         // remember the choice so it sticks across turns
+        STATE.transparency = open;
+        try { localStorage.setItem('eoreader.transparency', open ? '1' : '0'); } catch { /* ignore */ }
+      },
       onDocSource: (name) => {
         if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('doc');
         if (name && STATE.docs.has(name)) viewDoc(name);
@@ -633,7 +647,7 @@ const runQuery = async (question) => {
         // exact query, take() returns it instantly and marks it PRESERVED (it proved useful).
         // A miss falls through to a live fetch — the normal proposer-only path.
         webSearch: async (q, opts) => (await prefetcherOf().take(q)) ||
-          searchAndAdmit(q, { client: webClientOf(), ...opts }),
+          searchAndAdmit(q, { client: webClientOf(), rawStore: rawStoreOf(), ...opts }),
         query,
       });
     } catch { updated = result; }
@@ -657,8 +671,12 @@ const runQuery = async (question) => {
 // use and shared across turns. The prefetcher fetches+admits exactly as a real turn would
 // (kind:'auto', fetchPages) so a taken entry is byte-identical to one fetched live.
 const webClientOf = () => (STATE.webClient ||= createWebClient());
+// The session's OPFS raw store — every fetched page kept in full, as binary, re-readable without a
+// refetch. Built once, shared across every search/admit so the content accumulates (the user's
+// "save it all into opfs"). Degrades to in-memory where OPFS is unavailable.
+const rawStoreOf  = () => (STATE.rawStore ||= createRawStore());
 const prefetcherOf = () => (STATE.prefetcher ||= createSpeculativeWeb({
-  search: (q, opts) => searchAndAdmit(q, { client: webClientOf(), kind: 'auto', fetchPages: true, ...opts }),
+  search: (q, opts) => searchAndAdmit(q, { client: webClientOf(), rawStore: rawStoreOf(), kind: 'auto', fetchPages: true, ...opts }),
 }));
 
 // Speculative prefetch — DISABLED on the typing path. It fetched + parsed full web pages on
@@ -758,7 +776,11 @@ const applyWeb = () => {
 try {
   const w = localStorage.getItem('eoreader.webSearch');
   if (WEB_MODES.includes(w)) STATE.webSearch = w;
-} catch { /* default off stands */ }
+} catch { /* default auto stands */ }
+try {
+  const t = localStorage.getItem('eoreader.transparency');
+  if (t === '0' || t === '1') STATE.transparency = t === '1';
+} catch { /* default on stands */ }
 applyWeb();
 els.webChip.addEventListener('click', () => {
   STATE.webSearch = WEB_MODES[(WEB_MODES.indexOf(STATE.webSearch) + 1) % WEB_MODES.length];

@@ -4,10 +4,12 @@ import assert from 'node:assert/strict';
 import {
   admitWebSource, createWebStore, webRecord, webContentHash,
   toWebCitation, verifyCitation, engineDocId, recordIdForDoc, recordIdOf,
+  stripWebBoilerplate,
 } from '../src/ingest/websource.js';
 import { parseText } from '../src/perceiver/parse/index.js';
 import { createCompositeDoc } from '../src/organs/in/index.js';
 import { retrieveLexical } from '../src/retrieve/index.js';
+import { surfFold } from '../src/surfer/index.js';
 
 // Web pages as first-class groundable sources (docs/web-search.md). The admission core is
 // offline and pure: a fetched payload becomes a provenance-tagged prose doc that drops into the
@@ -38,6 +40,54 @@ test('admitWebSource yields a normal prose doc with web identity as additive met
   assert.equal(doc.docId, engineDocId(record.id));
   assert.match(doc.docId, /^web-[0-9a-f]{16}$/);
   assert.equal(recordIdForDoc(doc.docId), record.id, 'the bridge round-trips');
+});
+
+// ── Boilerplate: page chrome is stripped so the surf rides the article, not the furniture ────
+
+// A rendered Wikipedia page: nav menus, table-of-contents entries, and footer furniture wrapped
+// around the prose. The surfer arrests on Bayesian surprise, so these rare chrome lines used to
+// be the MOST surprising thing on the page and the surf rode to "Toggle the table of contents"
+// (the observed bad result). stripWebBoilerplate must drop the furniture and keep the prose.
+const CHROME_PAGE = [
+  'Jump to content', 'Main menu', 'move to sidebar', 'hide', 'Navigation', 'Main page',
+  'Random article', 'Toggle the table of contents', 'Ryan Coogler',
+  '6.2 Comic books', '6.4 Ryan Coogler reboot', '7.1 Critical reception',
+  'Ryan Kyle Coogler (born May 23, 1986) [ 1 ] [ 2 ] is an American filmmaker.',
+  'In 2024 it was reported that Coogler is developing a new X-Files television reboot for FX.',
+  'Coogler directed Fruitvale Station, Creed, and Black Panther.',
+  'Wikimedia Commons', 'Download as PDF', 'Categories: 1986 births',
+  'Retrieved from "https://en.wikipedia.org/wiki/Ryan_Coogler"',
+].join('\n');
+
+test('stripWebBoilerplate removes chrome, the TOC, and inline markers, keeping the prose', () => {
+  const out = stripWebBoilerplate(CHROME_PAGE);
+  for (const chrome of ['Toggle the table of contents', 'Jump to content', 'Main menu',
+                        '6.4 Ryan Coogler reboot', 'Wikimedia Commons', 'Download as PDF',
+                        'Categories:', 'Retrieved from'])
+    assert.ok(!out.includes(chrome), `chrome dropped: ${chrome}`);
+  assert.ok(out.includes('developing a new X-Files television reboot'), 'the answer prose survives');
+  assert.ok(!/\[\s*1\s*\]/.test(out), 'inline reference markers stripped');
+});
+
+test('a clean prose payload passes through stripWebBoilerplate unchanged', () => {
+  // Conservative: nothing that is not recognisably furniture is touched (the existing tests, an
+  // uploaded-style page). PAGE.text is a single prose line with no chrome.
+  assert.equal(stripWebBoilerplate(PAGE.text), PAGE.text.trim());
+});
+
+test('after admission the surf lands on the answer prose, not the page chrome', () => {
+  const { doc } = admitWebSource({ url: 'https://en.wikipedia.org/wiki/Ryan_Coogler',
+    title: 'Ryan Coogler', text: CHROME_PAGE });
+  const units = doc.units || doc.sentences;
+  assert.ok(!units.some(u => /Toggle the table of contents/.test(String(u))), 'no chrome in the doc');
+  // Retrieval surfaces the answer sentence as the top hit (it no longer competes with the TOC
+  // entry "6.4 Ryan Coogler reboot", which used to win on keyword density).
+  const hits = retrieveLexical(doc, 'is ryan coogler making a new x-files series', 3);
+  assert.match(String(units[hits[0].idx]), /X-Files television reboot/, 'top hit is the answer');
+  // The surf peak lands on article PROSE (a full sentence), not page furniture — the bad result
+  // was the peak landing on "Toggle the table of contents".
+  const peak = surfFold(doc, hits[0].idx).peak;
+  assert.match(String(units[peak]), /Coogler|X-Files|filmmaker/, 'the surf peak is content, not chrome');
 });
 
 test('the content hash is stable on the text and moves when the page changes', () => {

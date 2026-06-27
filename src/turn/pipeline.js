@@ -236,6 +236,12 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
       referential: ctx.referential || null, flags, unbound, webProposal,
       fedGraph: ctx.fedGraph || null,   // the meaning graph fed to the talker (web path); null otherwise
       citeOrigins: citeOriginsOf(groundingDoc, ctx.sources),   // per-claim attribution: [sN] idx → source docId
+      // The per-PROPOSITION record the transparency view reads: every claim the answer makes
+      // (`bound` — its text + the sentence it cited) and every relation the fact-check judged
+      // against the source (`verdicts` — corroborated / contradicted / unsupported / …). Together
+      // they let the UI show the source (or the inaccuracy) behind everything the answer says.
+      bound: ctx.bound || [],
+      verdicts: ctx.factcheck?.edgeVerdicts || [],
       route: ctx.route || 'grounded', grounding, turn,
     };
   } catch (err) {

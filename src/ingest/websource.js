@@ -54,20 +54,69 @@ export const webRecord = (payload = {}) => {
   });
 };
 
+// Page CHROME that survives htmlToText / the wiki extract as bare lines — navigation menus, the
+// table of contents, footer furniture, edit/reference markers. These matter disproportionately:
+// the surfer arrests on BAYESIAN SURPRISE (surfer/surf.js) and a rare, out-of-prose line like
+// "Toggle the table of contents" reads as the MOST surprising thing on the page, so the surf rode
+// to the furniture and the answer grounded on it ("Main -> Random : page" instead of the article
+// facts — the observed bad result). Drop them before the doc is built so the field the surfer
+// reads is the article, not its scaffolding. Matched case-insensitively against the trimmed line.
+const BOILERPLATE_LINE = new Set([
+  'jump to content', 'jump to navigation', 'jump to search', 'main menu', 'move to sidebar',
+  'hide', 'show', 'toggle the table of contents', 'navigation', 'main page', 'contents',
+  'current events', 'random article', 'about wikipedia', 'contact us', 'help', 'learn to edit',
+  'community portal', 'recent changes', 'upload file', 'special pages', 'pages for logged out editors',
+  'donate', 'create account', 'log in', 'log out', 'tools', 'what links here', 'related changes',
+  'permanent link', 'page information', 'cite this page', 'get shortened url', 'download qr code',
+  'wikidata item', 'download as pdf', 'printable version', 'in other projects', 'wikimedia commons',
+  'wikiquote', 'wikidata', 'wikisource', 'wikinews', 'wikiversity', 'print/export', 'languages',
+  'add languages', 'from wikipedia, the free encyclopedia', 'appearance', 'small', 'standard',
+  'large', 'width', 'color (beta)', 'automatic', 'light', 'dark', 'read', 'edit', 'view history',
+  'view source', 'talk', 'sandbox', 'preferences', 'watchlist', 'contributions', 'search',
+]);
+
+// Reduce a fetched page's text to its PROSE: drop the chrome lines above, the dotted table-of-
+// contents entries ("6.4 Ryan Coogler reboot" — the section *number* marks a TOC duplicate of the
+// body heading), category/footer furniture, and inline [1] / [edit] markers. Conservative by
+// construction: a line that is not recognisably furniture is kept verbatim, so a clean prose
+// payload (an uploaded-style page, the tests) passes through unchanged. Pure and exported so the
+// behaviour is unit-testable without the network.
+export const stripWebBoilerplate = (text) => {
+  const kept = [];
+  for (const raw of String(text || '').split('\n')) {
+    let line = raw.replace(/\[\s*(?:edit|citation needed|\d+)\s*\]/gi, '')  // inline ref / edit markers
+                  .replace(/\s+/g, ' ').trim();
+    if (!line) { kept.push(''); continue; }
+    const low = line.toLowerCase();
+    if (BOILERPLATE_LINE.has(low)) continue;                       // an exact chrome line
+    if (/^\d+(\.\d+)+\s+\S/.test(line) && line.length < 80) continue;  // dotted TOC entry "6.4 …"
+    if (/^(categories|hidden categories|category)\s*:/i.test(line)) continue;
+    if (/^retrieved from\b/i.test(low)) continue;
+    if (/^this (page|article) was last edited\b/i.test(low)) continue;
+    kept.push(line);
+  }
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+};
+
 // admitWebSource(payload) → { doc, record }. The doc is a normal prose document (so every
 // pipeline path treats it identically — eoreader3 reconciliation #1) whose WEB identity rides as
 // additive metadata, and whose docId is unique + colon-free so its cited spans trace back through
 // the composite's origin().
-// Cap the prose handed to parseText. A real web page reduces to tens of thousands of chars
-// (thousands of sentences); parseText is synchronous O(n) work on the main thread, so an
-// uncapped page FREEZES the tab — the observed jank when search runs. The lede + first sections
-// carry the answer for grounding; cap there. (~8k chars ≈ 100–130 sentences.)
-const MAX_WEB_CHARS = 8000;
+//
+// ABSORB AS MUCH AS POSSIBLE (the user's directive). The page is READ in full on ingestion —
+// chrome stripped, then parsed entire — so the surfer can ride any section, not just the head
+// (the old caps truncated the very section a question asked about, e.g. "Ryan Coogler reboot",
+// and the answer came back "I couldn't find it"). The FULL original is retained as binary in
+// OPFS by the fetch layer (ingest/opfs-store.js); this is the reading half of "save it all, and
+// read it on ingestion". parseText is synchronous, so a single, very high HANG_GUARD remains —
+// not a content limit but a backstop against a pathological multi-megabyte page locking the tab.
+// Real articles fall far below it, so in practice nothing is dropped.
+const HANG_GUARD = 2_000_000;
 
 export const admitWebSource = (payload = {}) => {
   const record = webRecord(payload);
   const docId  = engineDocId(record.id);
-  const doc    = parseText(String(payload.text || '').slice(0, MAX_WEB_CHARS), { docId });
+  const doc    = parseText(stripWebBoilerplate(String(payload.text || '')).slice(0, HANG_GUARD), { docId });
   doc.sourceKind = 'web-source';
   doc.web = {
     url: record.url, final_url: record.final_url, title: record.title,
