@@ -25,6 +25,33 @@ const sourceDocsOf = (doc, sources) => {
   return doc.docId ? [doc.docId] : [];
 };
 
+const round3 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 1000) / 1000 : null);
+
+// The MECHANICAL reading, assembled for the audit: every piece that came through between the
+// question and the phrase. The spans the surfer/retrieval delivered (idx + text + how it was
+// found + score), the surfer's own per-cursor field (the surprise/warmth trace, its peak and
+// frame-break stops — what the surfer "gets back mechanically"), and the fold's assembled note
+// (the reading the phraser was handed). Sizes capped so one turn cannot bloat the JSONL.
+const buildReading = (ctx) => {
+  if (!ctx.spans?.length && !ctx.surf && !ctx.note) return null;
+  return {
+    spans: (ctx.spans || []).slice(0, 40).map(s => ({
+      idx: s.idx, via: s.via || s.kind || null, score: round3(s.score),
+      text: String(s.text || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+    })),
+    note: ctx.note?.text ? String(ctx.note.text).slice(0, 2000) : null,
+    surf: ctx.surf ? {
+      anchor: ctx.surf.anchor, peak: ctx.surf.peak,
+      stops: ctx.surf.stops, recCursors: ctx.surf.recCursors,
+      rode: ctx.surf.rode,
+      field: (ctx.surf.field || []).slice(0, 80).map(f => ({
+        idx: f.idx, focus: f.focus, bayes: round3(f.bayes), surprisalBits: round3(f.surprisalBits),
+      })),
+    } : null,
+    inquiry: ctx.inquiry?.asked?.length ? ctx.inquiry.asked : null,
+  };
+};
+
 // route → converse → retrieve → fold → answerable → prompt → llm → bind → factcheck → revise → veto → settle.
 // `converse` (the session fold) sits right after `route`, before retrieval — it runs
 // for both grounded and chat turns and is independent of the document. The mechanical
@@ -124,6 +151,7 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
     turn.finish({
       route:     ctx.route || 'grounded',
       grounding,                                  // the register the user selected (audit trail)
+      reading:   buildReading(ctx),               // the full mechanical reading: spans · surf field · note
       prompt:    ctx.promptText || null,
       rawOutput: ctx.rawOutput  || null,
       bound:     ctx.bound      || null,
