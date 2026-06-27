@@ -311,10 +311,21 @@ const passiveParticiple = (rest) => {
 // Each admitted object, with its offsets within `text` so the caller can place
 // the object span back into the sentence. (Was ids only — the spans were computed
 // and thrown away, the v1 gap this spec closes.)
+//
+// The object scope STOPS at an attribution opener ("…, per series creator Chris Carter"):
+// a name introduced by per / according to / as per is the SOURCE the claim is reported
+// from, never the verb's patient. Without the cut, "developing a new reboot, per … Chris
+// Carter" bonds the named Carter as the object — "Ryan Coogler -> Chris Carter : developing",
+// the nonsense edge behind the audit's wrong answer — because a named patient outranks the
+// "reboot" NP head. Truncating here lets the NP head ("reboot") win, and attributionEdges
+// records Carter as the SIG source separately.
+const ATTRIBUTION_CUT = /\b(?:per|according to|as per|citing)\s+/i;
 const objectEntities = (text, admission, excludeId) => {
+  const cut = text.match(ATTRIBUTION_CUT);
+  const scope = cut ? text.slice(0, cut.index) : text;
   const out = [];
   const seen = new Set([excludeId]);
-  for (const e of scanEntities(text)) {
+  for (const e of scanEntities(scope)) {
     if (!admission.isAdmitted(e.label)) continue;
     const id = admission.idOf(e.label);
     if (seen.has(id)) continue;
@@ -441,6 +452,39 @@ const kinshipEdges = (sentence, admission, coref) => {
     const relId = admission.idOf(relName);
     if (relId === ownerId) continue;
     out.push({ op: 'CON', src: ownerId, tgt: relId, via: kin });
+  }
+  return out;
+};
+
+// Attribution — "per X" / "according to X" / "as per X" names the SOURCE the claim is
+// reported FROM, not a participant IN it. The t2 audit answered "Chris Carter is making
+// the reboot" because "…Ryan Coogler was developing a new reboot of the series, per series
+// creator Chris Carter" left Carter an unconnected admitted figure the realizer then
+// grabbed as the agent. Carter is the attributor: emit a SIG (the attribution op, the
+// LINK-shaped sibling of speech) from the source to the claim's figure, so the graph marks
+// him a source — never the maker. The source is the first admitted figure AFTER the opener
+// (lowercase role words like "series creator" are stepped over by the capitalised scan);
+// the figure attributed-about is the nearest admitted figure before it (the clause subject),
+// or, for a sentence-initial "According to X, Y …", the next admitted figure after X. A
+// bare "miles per hour" / "per cent" never fires — the opener must be followed by a figure.
+const ATTRIBUTION_OPENER = /\b(per|according to|as per|citing)\s+/gi;
+const attributionEdges = (sentence, admission) => {
+  const out = [];
+  const re = new RegExp(ATTRIBUTION_OPENER.source, ATTRIBUTION_OPENER.flags);
+  let m;
+  while ((m = re.exec(sentence)) !== null) {
+    const srcEnts = scanEntities(sentence.slice(m.index + m[0].length)).filter(e => admission.isAdmitted(e.label));
+    if (!srcEnts.length) continue;
+    const srcId = admission.idOf(srcEnts[0].label);
+    const before = scanEntities(sentence.slice(0, m.index))
+      .filter(e => admission.isAdmitted(e.label) && admission.idOf(e.label) !== srcId);
+    let topicId = before.length ? admission.idOf(before[before.length - 1].label) : null;
+    if (!topicId) {
+      const follow = srcEnts.slice(1).find(e => admission.idOf(e.label) !== srcId);
+      topicId = follow ? admission.idOf(follow.label) : null;
+    }
+    if (!topicId || topicId === srcId) continue;
+    out.push({ op: 'SIG', src: srcId, tgt: topicId, via: m[1].toLowerCase().replace(/\s+/g, '-') });
   }
   return out;
 };
@@ -685,6 +729,10 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
 
   for (const k of kinshipEdges(s, admission, coref)) {
     if (!out.some(o => o.op === k.op && o.src === k.src && o.tgt === k.tgt)) out.push(k);
+  }
+
+  for (const a of attributionEdges(s, admission)) {
+    if (!out.some(o => o.op === a.op && o.src === a.src && o.tgt === a.tgt)) out.push(a);
   }
 
   return out;

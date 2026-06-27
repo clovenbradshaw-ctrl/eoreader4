@@ -169,6 +169,32 @@ test('a progressive "was developing" yields the active verb edge, not a copula D
   assert.ok(!drels.some(r => r.op === 'CON' && r.via === 'is'), 'a copula does not become a CON verb');
 });
 
+// ATTRIBUTION — "per X" / "according to X" names the SOURCE a claim is reported from, not
+// a participant in it. The t2 audit's "…Ryan Coogler was developing a new reboot, per series
+// creator Chris Carter" answered "Carter is making it" two ways: Carter was grabbed as the
+// PATIENT of "developing" (a named object outranks the NP head), and otherwise floated free
+// for the realizer to seize. Now the object scope stops at the opener (so the NP head
+// "reboot" wins the agent edge) and Carter is recorded as a SIG attribution source.
+test('"per X" attribution: the source is a SIG, the agent edge keeps the real object', () => {
+  const doc = parseText('Ryan Coogler was developing a new reboot, per series creator Chris Carter.', { docId: 'attr' });
+  const rels = [];
+  for (const sent of (doc.sentences || doc.units)) rels.push(...parseRelations(sent, doc.admission, {}, { referents: true }));
+
+  const con = rels.filter(r => r.op === 'CON').map(r => `${r.src} -> ${r.tgt} : ${r.via}`);
+  assert.ok(con.includes('ryan-coogler -> reboot : developing'), `agent edge keeps the NP object, got ${JSON.stringify(con)}`);
+  assert.ok(!rels.some(r => r.op === 'CON' && r.tgt === 'chris-carter'), 'the attribution source is never a patient');
+
+  const sig = rels.find(r => r.op === 'SIG' && r.src === 'chris-carter');
+  assert.ok(sig, 'the attribution source is recorded as a SIG');
+  assert.equal(sig.via, 'per');
+
+  // Guard: a distributive "per" with no named source never fires.
+  const g = parseText('The show lost ten per cent of its viewers.', { docId: 'pc' });
+  const grels = [];
+  for (const sent of (g.sentences || g.units)) grels.push(...parseRelations(sent, g.admission, {}, { referents: true }));
+  assert.ok(!grels.some(r => r.op === 'SIG' && /^(per|according-to|as-per)$/.test(r.via || '')), 'no attribution without a named source');
+});
+
 // EOT serialization of the meaning graph (docs/eot-surface-syntax.md): relations render as
 // LINK triples (A -> B : rel) and predicates as IS-A (A : value) — the notes fed to the model.
 test('serializeEOT renders the graph as EOT triples (LINK + IS-A), negation preserved', () => {
