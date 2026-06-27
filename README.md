@@ -44,7 +44,7 @@ and baked into the code here:
 - **`createParser` owns the parse-time state.** The eoreader3
   `extractEoGraph` mutates `TRANSCRIPT_ACTIVE` and `LANGUAGE_MODULES`
   from module-scoped lets at `engine.js:4228–4249`. Here
-  [`createParser`](src/parse/pipeline.js) returns an instance that owns
+  [`createParser`](src/perceiver/parse/pipeline.js) returns an instance that owns
   that state on itself; `parseText` is the one-shot convenience for
   cases that don't need a long-lived parser.
 - **The turn is a literal `stages.reduce(...)`.**
@@ -81,14 +81,14 @@ or image regions. New modalities are new adapters, not a new spine.
 
 Two of those adapters probe how far the spine reaches, in `scripts/`. `ingestMusic`
 hands the reader a bare note sequence (no key, no labels): flat γ-mass recovers the
-tonic and dominant, and the learned-sequence reader (`read/sequence.js`, an order-k
+tonic and dominant, and the learned-sequence reader (`surfer/sequence.js`, an order-k
 n-gram folded the same way conventions are — *the signal teaches the reader*)
 anticipates a tune's phrase repeats, no music theory supplied. `ingestFrequencies`
 goes lower still — raw Hz as overtone token sets, every tone its own entity — and the
 **same Level-1 set-overlap** the reader runs over the words of a sentence
 (`hits/qLen`) discovers octave equivalence and the consonance ordering from shared
 overtones alone, with no scale, no `mod 12`, and no ratio table. And with no
-*threshold* either: `read/equivalence.js` merges tones that are mutual nearest
+*threshold* either: `perceiver/equivalence.js` merges tones that are mutual nearest
 neighbours in overlap (the engine's own `SYN` union-find), so "the same note"
 **emerges** — the four octaves of A collapse to one entity while the fifth stays
 separate — the category being the output of the grouping, never its input.
@@ -253,8 +253,21 @@ so "who wrote this?" / "when is it from?" are answerable.
 | `ingest`      | `ingestText(file)` · `ingestImage(detections)` → doc          | `parse`, `core` |
 | `ui`          | DOM presentation + graph view / reading cursor               | `turn`, `read`, `audit` |
 
-Each holon's `index.js` is its only entrance. No file imports the internals
-of another. The rule is a discipline enforced by inspection, not by tooling.
+Each holon's `index.js` is meant to be its only entrance, and most are reached
+that way. The rule is a discipline enforced by inspection, not by tooling — so
+it leaks: `ui/`, `organs/`, and `reader/` expose no `index.js` at all, and a
+handful of files still reach into a sibling's internals (`converse/reference.js`
+into `perceiver/parse/pipeline.js`, `ui/idle-view.js` into `write/fold.js`).
+Where the boundary holds it is real; where it is named above and not yet
+enforced it is an aspiration, not a fact.
+
+> **This table is the conceptual holon map, not the directory tree.** Several
+> holons are realized under grouped folders rather than top-level dirs of the
+> same name: `parse` lives in `src/perceiver/parse/`, `conventions` in
+> `src/core/conventions/`, and `read` is split across `src/perceiver/`,
+> `src/surfer/`, and `src/predict/`. The tree also carries organs this table
+> omits — `perceiver`, `surfer`, `predict`, `reader`, `mind`, `enactor`,
+> `probe`, `credence`, `write`, `bench`.
 
 ## Phasepost perception — the geometric reader
 
@@ -346,7 +359,7 @@ surfaces as a fourth strip in reading mode that deepens to *semantic surprise* w
 the geometric reader is live.
 
 **The cursor predictor — predicting the next move, testably.** The open prediction
-(`read/predict.js`) asks a model for the next *sentence*. The grounded one predicts
+(`perceiver/predict.js`) asks a model for the next *sentence*. The grounded one predicts
 the next **move** — an operator-Site-Resolution triple over a ten-symbol alphabet —
 from a fusion of recurrence (an n-gram over this reading's move-log), structure (the
 fold's live frame strain), and a small move-grammar learned once from a held-out
@@ -410,7 +423,7 @@ operator. It is what makes a citation hold a claim to a source. See
 
 ```js
 // src/turn/pipeline.js (excerpt)
-const ctx = await GROUNDED_PIPELINE.reduce(
+const ctx = await PIPELINE.reduce(
   async (accPromise, name) => {
     const acc = await accPromise;
     if (acc.terminate) return acc;
@@ -597,10 +610,10 @@ comments on gates that were on.
 - **Chrome is a semantic role, not a list.** Parse holds only the genuinely
   *degenerate* (a bare number, a roman numeral, a separator). Everything else's
   role is read semantically: a unit off the document's distribution that anchors
-  no figure is DEF'd as a **site** (`read/site.js`), and retrieval skips it. A
+  no figure is DEF'd as a **site** (`perceiver/site.js`), and retrieval skips it. A
   mini-LLM nudges the borderline; nothing is matched against a pattern list.
 - **Predictive surprise.** Beyond the mechanical surprisal baseline, reading
-  mode runs predictive coding (`read/predict.js`): the LLM reads the passage,
+  mode runs predictive coding (`perceiver/predict.js`): the LLM reads the passage,
   predicts the next line, and surprise is the **embedding distance** to what the
   document actually says next.
 - **The Log tab** shows the append-only event log the graph is a fold of,
