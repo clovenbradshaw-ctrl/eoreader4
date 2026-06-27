@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/index.js';
 import { parseRelations } from '../src/perceiver/parse/relations.js';
+import { serializeEOT } from '../src/perceiver/index.js';
 import { answerRelation, answerWho } from '../src/answer/mechanical.js';
 import { editWithin, fuzzyMatches, fuzzCeiling } from '../src/perceiver/parse/fuzzy.js';
 
@@ -145,4 +146,21 @@ test('a copular non-passive still defines, and a passive with no named agent sta
   assert.ok(rels.some(r => r.op === 'DEF' && /a writer/.test(r.value || '')), 'the copula predicate is still a DEF');
   // "the curse" is not an admitted named entity → no spurious CON, stays a DEF.
   assert.ok(!rels.some(r => r.op === 'CON' && r.via === 'transformed'), 'no edge to an unnamed agent');
+});
+
+// EOT serialization of the meaning graph (docs/eot-surface-syntax.md): relations render as
+// LINK triples (A -> B : rel) and predicates as IS-A (A : value) — the notes fed to the model.
+test('serializeEOT renders the graph as EOT triples (LINK + IS-A), negation preserved', () => {
+  const structure = {
+    relations: [
+      { src: { id: 'coogler', label: 'Ryan Coogler' }, tgt: { id: 'room', label: 'room' }, via: 'leads', polarity: '+' },
+      { src: { id: 'g', label: 'Gregor' }, tgt: { id: 'w', label: 'words' }, via: 'understand', polarity: '−' },
+    ],
+    defs: [{ id: 'cc', label: 'Chris Carter', value: 'an executive producer' }],
+  };
+  assert.deepEqual(serializeEOT(structure), [
+    'Ryan Coogler -> room : leads',
+    'Gregor -> words : not-understand',
+    'Chris Carter : an executive producer',
+  ]);
 });

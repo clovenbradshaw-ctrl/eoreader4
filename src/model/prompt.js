@@ -209,8 +209,9 @@ export const buildGroundedMessages = ({
   // graph leads, the verbatim lines follow as its grounding — so the answer is built from the
   // structure and cited to the text.
   if (graph)
-    blocks.push(`What it means — the relations you read, as a graph (subject —relation→ object; ` +
-      `“not-” = negation). Reason over THESE; the lines below are their grounding, not a list to recite:\n${graph}`);
+    blocks.push(`What it means — the relations you read, as EOT triples ` +
+      `(“A -> B : rel” is a relationship; “A : fact” is a property; a “not-” prefix is negation). ` +
+      `Reason over THESE; the lines below are their grounding, not a list to recite:\n${graph}`);
 
   // What you read — the verbatim lines, ordered for the frame (§3). The ONE channel.
   if (spans.length)

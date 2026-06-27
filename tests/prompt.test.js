@@ -245,10 +245,11 @@ test('buildGroundedMessages: a graph block feeds the typed relations; absent →
   const plain = buildGroundedMessages({ question: 'who is making it?', spans });
   assert.doesNotMatch(plain[1].content, /What it means/, 'no graph block by default (subjective frame holds)');
 
-  const graph = 'revival --developed-by--> Ryan Coogler\nseries --produced-for--> 20th Television';
+  const graph = 'revival -> Ryan Coogler : developed-by\nseries -> 20th Television : produced-for';   // EOT
   const withGraph = buildGroundedMessages({ question: 'who is making it?', spans, graph });
   assert.match(withGraph[1].content, /What it means — the relations you read/, 'the graph block is present');
-  assert.match(withGraph[1].content, /revival --developed-by--> Ryan Coogler/, 'the relations are fed verbatim');
+  assert.match(withGraph[1].content, /EOT triples/, 'the block names the EOT surface');
+  assert.match(withGraph[1].content, /revival -> Ryan Coogler : developed-by/, 'the EOT triples are fed verbatim');
   assert.match(withGraph[1].content, /Reason over THESE/, 'the talker is told to reason over the graph');
   // The verbatim lines still ride as grounding beneath the graph.
   assert.match(withGraph[1].content, new RegExp(EXCERPTS_HEADER));

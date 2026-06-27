@@ -11,7 +11,7 @@
 //      thinking is visible while the turn is in flight.
 
 import { ingestText }       from '../organs/in/index.js';
-import { runTurn, runWebFollowup, loadShapeLibrary } from '../turn/index.js';
+import { runTurn, runWebFollowup, formulateSearchQuery, loadShapeLibrary } from '../turn/index.js';
 import { createWebClient, searchAndAdmit } from '../ingest/index.js';
 import { createSpeculativeWeb } from './prefetch.js';
 import { createAuditLog }   from '../audit/index.js';
@@ -20,7 +20,7 @@ import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
-         renderWebProposal, renderWebResult } from './chat.js';
+         renderWebProposal, renderWebResult, setThinkingNote } from './chat.js';
 import { createMind } from '../mind/index.js';
 import { foldImpression } from '../write/index.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
@@ -525,14 +525,42 @@ const runQuery = async (question) => {
   // run for the user (auto). This replaces the old native window.confirm popup that fired
   // mid-turn, before the answer was even shown.
   const webMode = STATE.webSearch || 'off';
+
+  // INVERTED FLOW (auto): search the web FIRST, fold the results into the turn's scope, and let
+  // the model answer from the surfer's reading of [web + documents + memory] in ONE grounded
+  // pass — instead of answering from parametric knowledge and augmenting after (the old
+  // double-LLM path). The meaning graph of the fetched content is fed to the talker; every
+  // source is recorded for the transparency block. Confirm/off keep the proposer-only path.
+  let webGather = null;
+  if (webMode === 'auto') {
+    setThinkingNote(thinking, '🌐 searching the web…');
+    try {
+      const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history });
+      const admitted = await searchAndAdmit(q, { client: webClientOf(), kind: 'auto', fetchPages: true, k: 4 });
+      const webDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
+      if (webDocs.length) {
+        turnArgs.docs = [...selectedDocs, ...webDocs];   // web joins the grounding scope, beside any loaded docs
+        turnArgs.groundGraph = true;                     // feed the talker the MEANING GRAPH of what was gathered
+        webGather = { query: q, docs: webDocs };
+      }
+    } catch { /* network/search failed — fall through to the ungrounded turn */ }
+    setThinkingNote(thinking, '');
+  }
+
   let result = await runTurn(turnArgs);
 
   // Render (or re-render) the answer bubble. Idempotent — the web follow-up calls it again with
   // the updated answer. Returns nothing; it paints `thinking` and the doc-pane highlights.
+  // Web docs cite back with an opaque "web-<hash>" docId; show the page's title/domain instead,
+  // so the answer's source chips are transparent (not raw ids). Built from this turn's gather.
+  const webLabel = new Map();
+  for (const d of (webGather?.docs || [])) {
+    webLabel.set(d.docId, d.web?.title || (() => { try { return new URL(d.web?.url || '').host.replace(/^www\./, ''); } catch { return d.docId; } })());
+  }
   const render = (res, ms) => {
     const route = res.route || res.turn?.route;
     const docNames = route === 'grounded'
-      ? (res.sourceDocs?.length ? res.sourceDocs : selectedDocs.map(d => d.docId))
+      ? (res.sourceDocs?.length ? res.sourceDocs : selectedDocs.map(d => d.docId)).map(n => webLabel.get(n) || n)
       : [];
     finalizeThinking(thinking, res.answer, res.sources, {
       route, ms, flags: res.flags,
@@ -572,6 +600,18 @@ const runQuery = async (question) => {
 
   render(result, Math.round(performance.now() - t0));
   if (mindSpans && (result.route || result.turn?.route) !== 'error') renderMindBlock(thinking, mindSpans);
+  // Source transparency: when the web was gathered up front, show every page it grounded on
+  // (title · link · fetched-at) and the meaning graph the talker reasoned over.
+  if (webGather && (result.route || result.turn?.route) !== 'error') {
+    renderWebResult(thinking, {
+      query: webGather.query, results: webGather.docs.length, grounded: true,
+      sources: webGather.docs.map(d => ({
+        docId: d.docId, title: d.web?.title || '', url: d.web?.url || d.web?.final_url || '',
+        fetched_at: d.web?.fetched_at || null,
+      })),
+      graph: result.fedGraph || '',
+    });
+  }
   commitHistory(result);
 
   // The search itself — fetch+admit the proposed query and verify/re-run, then re-render the
@@ -595,12 +635,10 @@ const runQuery = async (question) => {
     commitHistory(result);
   };
 
-  if (webMode !== 'off' && result.webProposal) {
-    if (webMode === 'auto') {
-      await runFollowup(result.webProposal.query);
-    } else {   // confirm — offer the search beneath the answer, the user's query to sharpen
-      renderWebProposal(thinking, result.webProposal, { onSearch: (q) => runFollowup(q) });
-    }
+  // CONFIRM mode keeps the proposer-only path: answer first, then offer the search beneath it.
+  // AUTO already gathered up front (above), so it does not run a follow-up here.
+  if (webMode === 'confirm' && result.webProposal) {
+    renderWebProposal(thinking, result.webProposal, { onSearch: (q) => runFollowup(q) });
   }
 
   els.send.disabled = false;
