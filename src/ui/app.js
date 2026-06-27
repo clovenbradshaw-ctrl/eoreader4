@@ -11,14 +11,15 @@
 //      thinking is visible while the turn is in flight.
 
 import { ingestText }       from '../organs/in/index.js';
-import { runTurn, runTurnWithWeb, loadShapeLibrary } from '../turn/index.js';
+import { runTurn, runWebFollowup, loadShapeLibrary } from '../turn/index.js';
 import { createWebClient, searchAndAdmit } from '../ingest/index.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
 import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { renderUserMessage, createThinkingMessage,
-         updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock } from './chat.js';
+         updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
+         renderWebProposal, renderWebResult } from './chat.js';
 import { createMind } from '../mind/index.js';
 import { foldImpression } from '../write/index.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
@@ -86,7 +87,6 @@ const els = {
   exportBtn: document.getElementById('export-audit'),
   backend:   document.getElementById('backend'),
   groundingChip: document.getElementById('grounding-chip'),
-  inquireChip: document.getElementById('inquire-chip'),
   webChip:   document.getElementById('web-chip'),
   docChips:  document.getElementById('doc-chips'),
 };
@@ -517,57 +517,84 @@ const runQuery = async (question) => {
     // answer. No `stream:true` — that arms the grounded beat-loop, not the default.
     onToken:  (piece) => streamThinking(thinking, piece),
   };
-  // Web search (docs/web-search.md): OFF by default. When the user enables it (STATE.webSearch
-  // = 'confirm' | 'auto'), a turn that PROPOSES a search (a gap the document can't close) gets a
-  // go-ahead — a cost-noticed browser confirm, or auto — then fetch+admit via the proxy and
-  // re-run with the web sources in scope. Proposer-only: the pipeline never fetches; this does.
+  // Run the turn. Web search (docs/web-search.md) is PROPOSER-ONLY: the pipeline measures the
+  // gap and proposes a query, but never fetches. The answer is rendered FIRST, then — if web
+  // search is enabled and a query was proposed — the search is OFFERED beneath it (confirm) or
+  // run for the user (auto). This replaces the old native window.confirm popup that fired
+  // mid-turn, before the answer was even shown.
   const webMode = STATE.webSearch || 'off';
-  const result = (webMode === 'off')
-    ? await runTurn(turnArgs)
-    : await runTurnWithWeb(turnArgs, {
-        mode: webMode,
+  let result = await runTurn(turnArgs);
+
+  // Render (or re-render) the answer bubble. Idempotent — the web follow-up calls it again with
+  // the updated answer. Returns nothing; it paints `thinking` and the doc-pane highlights.
+  const render = (res, ms) => {
+    const route = res.route || res.turn?.route;
+    const docNames = route === 'grounded'
+      ? (res.sourceDocs?.length ? res.sourceDocs : selectedDocs.map(d => d.docId))
+      : [];
+    finalizeThinking(thinking, res.answer, res.sources, {
+      route, ms, flags: res.flags,
+      mode: STATE.grounding,
+      docNames,
+      onDocSource: (name) => {
+        if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('doc');
+        if (name && STATE.docs.has(name)) viewDoc(name);
+        setTab('text');
+      },
+      onRetry: () => runQuery(question),
+    });
+    // Highlight only when grounding a single document — composite indices don't map onto
+    // one doc pane (clicking a source chip switches to that document instead).
+    if (res.sources?.length && selectedDocs.length <= 1) highlightSources(els.docView, res.sources);
+  };
+
+  // Append the completed exchange so the next turn's session fold can read it back — but never
+  // feed an error turn back into the conversation (it would poison the fold). An UNBOUND answer
+  // (claims, but none tied to a source) is tagged so the fold keeps it out of the next turn's
+  // ground (§7). Re-committable: a web follow-up that changes the answer UPDATES this turn's
+  // assistant entry IN PLACE — so even if the user sent another message while the search card
+  // sat open, the right pair is rewritten and the newer turn is untouched.
+  let asstEntry = null;
+  const commitHistory = (res) => {
+    const route = res.route || res.turn?.route;
+    if (route === 'error') return;
+    if (!asstEntry) {
+      STATE.history.push({ role: 'user', content: question });
+      asstEntry = { role: 'assistant', content: res.answer || '' };
+      STATE.history.push(asstEntry);
+    } else {
+      asstEntry.content = res.answer || '';
+    }
+    if (res.unbound) asstEntry.unbound = true; else delete asstEntry.unbound;
+  };
+
+  render(result, Math.round(performance.now() - t0));
+  if (mindSpans && (result.route || result.turn?.route) !== 'error') renderMindBlock(thinking, mindSpans);
+  commitHistory(result);
+
+  // The search itself — fetch+admit the proposed query and verify/re-run, then re-render the
+  // answer and show what the search found. Driven by the in-app confirmation card (or auto).
+  const runFollowup = async (query) => {
+    let updated;
+    try {
+      updated = await runWebFollowup(turnArgs, result, {
         webSearch: (q, opts) => searchAndAdmit(q, { client: (STATE.webClient ||= createWebClient()), ...opts }),
-        confirm: (p) => (typeof window !== 'undefined' && window.confirm)
-          ? window.confirm(`${p.cost}\n\nSearch the web for:\n“${p.query}”\n\n(${p.rationale})`)
-          : false,
+        query,
       });
-  const ms = Math.round(performance.now() - t0);
-  const route = result.route || result.turn.route;
+    } catch { updated = result; }
+    result = updated;
+    render(result, Math.round(performance.now() - t0));
+    if (mindSpans && (result.route || result.turn?.route) !== 'error') renderMindBlock(thinking, mindSpans);
+    if (result.webFetched) renderWebResult(thinking, result.webFetched);
+    commitHistory(result);
+  };
 
-  // Tag the documents the answer actually drew on as sources (each cited document).
-  const docNames = route === 'grounded'
-    ? (result.sourceDocs?.length ? result.sourceDocs : selectedDocs.map(d => d.docId))
-    : [];
-
-  finalizeThinking(thinking, result.answer, result.sources, {
-    route, ms, flags: result.flags,
-    mode: STATE.grounding,
-    docNames,
-    onDocSource: (name) => {
-      if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('doc');
-      if (name && STATE.docs.has(name)) viewDoc(name);
-      setTab('text');
-    },
-    onRetry: () => runQuery(question),
-  });
-  // Highlight only when grounding a single document — composite indices don't map onto
-  // one doc pane (clicking a source chip switches to that document instead).
-  if (result.sources?.length && selectedDocs.length <= 1) highlightSources(els.docView, result.sources);
-
-  // Surface MEMORY beneath the answer — the recalled, provenance-tagged lines, shown
-  // in both recall and weave modes (transparency: what memory contributed is always
-  // visible and clickable to source, even when it was woven into the prompt).
-  if (mindSpans && route !== 'error') renderMindBlock(thinking, mindSpans);
-
-  // Append the completed exchange so the next turn's session fold can read it back —
-  // but never feed an error turn back into the conversation (it would poison the fold).
-  // An UNBOUND answer (claims, but none tied to a source) is tagged so the fold keeps it
-  // out of the next turn's ground (§7): a claim that did not bind cannot become a
-  // follow-up's premise, the way the audit's wrong t1 answer became t4's premise.
-  if (route !== 'error') {
-    STATE.history.push({ role: 'user', content: question });
-    STATE.history.push({ role: 'assistant', content: result.answer || '',
-                         ...(result.unbound ? { unbound: true } : {}) });
+  if (webMode !== 'off' && result.webProposal) {
+    if (webMode === 'auto') {
+      await runFollowup(result.webProposal.query);
+    } else {   // confirm — offer the search beneath the answer, the user's query to sharpen
+      renderWebProposal(thinking, result.webProposal, { onSearch: (q) => runFollowup(q) });
+    }
   }
 
   els.send.disabled = false;
@@ -642,24 +669,10 @@ els.groundingChip.addEventListener('click', () => {
   applyGrounding();
 });
 
-// Inquiry chip — toggles self-directed inquiry (the inquire stage, turn/stages.js). When
-// on, a grounded answer turn THINKS over what it retrieved and, if a figure stays open (one
-// the spans keep mentioning but that never acts), reads another pass on its OWN question and
-// folds the answering lines in as citable spans before the talker speaks. The follow-up
-// questions it asked ride in the `inquire` step of the audit trace. Off by default.
-const applyInquire = () => {
-  els.inquireChip.textContent     = `Inquiry: ${STATE.inquire ? 'on' : 'off'}`;
-  els.inquireChip.dataset.on      = String(STATE.inquire);
-};
-try {
-  STATE.inquire = localStorage.getItem('eoreader.inquire') === 'on';
-} catch { /* localStorage may be unavailable — default off stands */ }
-applyInquire();
-els.inquireChip.addEventListener('click', () => {
-  STATE.inquire = !STATE.inquire;
-  try { localStorage.setItem('eoreader.inquire', STATE.inquire ? 'on' : 'off'); } catch { /* ignore */ }
-  applyInquire();
-});
+// Self-directed inquiry (the inquire stage, turn/stages.js) stays OFF — it was an experimental
+// power-user toggle whose chip confused more than it helped, so it's no longer surfaced in the
+// composer. STATE.inquire defaults false; the pipeline behaves exactly as "off". (Restore a
+// chip here if it's ever worth exposing again.)
 
 // Web chip — cycles web search off → confirm → auto (docs/web-search.md). When a turn can't
 // ground an answer (a no-doc chat question, or a measured gap), it PROPOSES a query; `confirm`

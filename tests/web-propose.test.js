@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { proposeWebSearch, COST_NOTICE } from '../src/turn/propose.js';
-import { runTurnWithWeb, verifyAgainstWeb } from '../src/turn/web.js';
+import { runTurnWithWeb, runWebFollowup, verifyAgainstWeb } from '../src/turn/web.js';
 import { admitWebSource } from '../src/ingest/websource.js';
 
 // "Search the internet to respond" actually firing (docs/web-search.md): the turn PROPOSES a
@@ -36,6 +36,16 @@ test('a chat turn (no document) proposes a VERIFY — check the general-knowledg
   assert.equal(p.trigger, 'verify');
   assert.equal(p.query, 'what is the capital of france?');
   assert.match(p.rationale, /general knowledge/);
+});
+
+test('a bare grounded question is sharpened with the reading’s figure (surf.focus), so it does not match a namesake', () => {
+  // The Metamorphosis bug: "what happens at the end?" with no figure went to the world as-is and
+  // matched a film called "What Happens Later", whose pages then polluted the answer. The fold's
+  // surf focus ("Gregor Samsa") is the subject when no prediction/referent named one.
+  const p = proposeWebSearch({ route: 'grounded', task: 'answer', question: 'what happens at the end?',
+    voidMeasure: true, bound: [], vetoes: [], surf: { focus: 'Gregor Samsa' } });
+  assert.ok(p);
+  assert.equal(p.query, 'what happens at the end? Gregor Samsa');
 });
 
 test('a mechanical route (math / metadata / smalltalk) never proposes', () => {
@@ -156,6 +166,21 @@ test('verify trigger: the answer is kept and a flag is attached (not replaced)',
   assert.equal(out.webFetched.trigger, 'verify');
   assert.equal(out.webFetched.supported, false);
   assert.ok(out.flags.some(f => f.id === 'web-unconfirmed'), 'a flag tells the user it could not be confirmed');
+});
+
+test('runWebFollowup honours a query override (the confirmation card lets the user sharpen it)', async () => {
+  const calls = [];
+  const impl = async (args) => { calls.push(args); return { answer: 'Gregor dies.', flags: [], sources: [0] }; };
+  const first = { answer: 'I did not find it.',
+    webProposal: { query: 'what happens at the end?', trigger: 'gap', rationale: 'void', cost: COST_NOTICE }, flags: [] };
+  let searched = null;
+  const webSearch = async (q) => { searched = q; return [{ doc: groundedDoc('The Metamorphosis ends with Gregor dead.') }]; };
+  const out = await runWebFollowup({ question: 'q', docs: [] }, first,
+    { webSearch, query: 'Metamorphosis Kafka ending', runTurnImpl: impl });
+  assert.equal(searched, 'Metamorphosis Kafka ending', 'the user-edited query is what gets searched');
+  assert.equal(out.answer, 'Gregor dies.');
+  assert.equal(out.webFetched.query, 'Metamorphosis Kafka ending');
+  assert.equal(out.webFetched.results, 1);
 });
 
 test('off mode (and a no-proposal turn) never reach for the net', async () => {

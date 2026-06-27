@@ -278,6 +278,54 @@ section h2 .hint {
 /* Retry affordance on an errored turn. */
 .msg.assistant .retry { margin-top: .55rem; }
 
+/* Web-search confirmation card — the in-app replacement for the native confirm popup
+   (docs/web-search.md). Sits beneath a finalized answer; the query is editable so the user
+   can sharpen it before anything leaves the machine. */
+.msg.assistant .webproposal {
+  margin-top: .6rem; padding: .55rem .65rem;
+  border: 1px solid #1e3a8a; border-radius: 8px;
+  background: #0d1830;
+}
+.msg.assistant .wp-head { color: #93c5fd; font-size: .8rem; font-weight: 600; }
+.msg.assistant .wp-why  { color: #94a3b8; font-size: .7rem; margin-top: .2rem; line-height: 1.4; }
+.msg.assistant .wp-query {
+  display: block; width: 100%; box-sizing: border-box; margin: .45rem 0;
+  background: #060c18; color: #e2e8f0; border: 1px solid #1e3a8a; border-radius: 6px;
+  padding: .35rem .5rem; font-size: .8rem; font-family: inherit;
+}
+.msg.assistant .wp-query:focus { outline: none; border-color: #3b82f6; }
+.msg.assistant .wp-actions { display: flex; gap: .4rem; }
+.msg.assistant .wp-go {
+  background: #1d4ed8; color: #eff6ff; border: 1px solid #3b82f6; border-radius: 6px;
+  padding: .25rem .6rem; font-size: .72rem; cursor: pointer;
+}
+.msg.assistant .wp-go:hover:not(:disabled) { background: #2563eb; }
+.msg.assistant .wp-go:disabled { opacity: .6; cursor: default; }
+.msg.assistant .wp-no {
+  background: transparent; color: #94a3b8; border: 1px solid #3f3f46; border-radius: 6px;
+  padding: .25rem .6rem; font-size: .72rem; cursor: pointer;
+}
+.msg.assistant .wp-no:hover:not(:disabled) { color: #e2e8f0; border-color: #52525b; }
+.msg.assistant .wp-cost { color: #64748b; font-size: .65rem; margin-top: .4rem; line-height: 1.4; }
+
+/* Web-search outcome — what the search actually brought back, made visible. */
+.msg.assistant .webresult {
+  margin-top: .6rem; padding: .5rem .6rem;
+  border: 1px solid #27272a; border-radius: 8px; background: #111118;
+}
+.msg.assistant .webresult.ok          { border-color: #065f46; background: #07241c; }
+.msg.assistant .webresult.unconfirmed { border-color: #78350f; background: #271a06; }
+.msg.assistant .webresult.empty       { border-color: #3f3f46; background: #1f1f23; }
+.msg.assistant .wr-head { font-size: .75rem; color: #e2e8f0; line-height: 1.4; }
+.msg.assistant .webresult.ok .wr-head          { color: #6ee7b7; }
+.msg.assistant .webresult.unconfirmed .wr-head { color: #fbbf24; }
+.msg.assistant .webresult.empty .wr-head       { color: #a1a1aa; }
+.msg.assistant .wr-source {
+  display: block; margin-top: .3rem; font-size: .72rem;
+  color: #93c5fd; text-decoration: none; word-break: break-word;
+}
+a.wr-source:hover { text-decoration: underline; }
+
 /* Document chips — the loaded documents, tagged for grounding. They sit above the
    composer and persist across turns; a selected (tagged) chip is grounded against. */
 .doc-chips { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: .5rem; flex-shrink: 0; }
@@ -811,7 +859,6 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
   header select {
     flex: 1; min-width: 0; font-size: 16px; padding: .4rem .5rem;
   }
-  #player-link { flex-shrink: 0; }
 
   /* --- Panes: stack into a single switchable column. --------------------- */
   main {
