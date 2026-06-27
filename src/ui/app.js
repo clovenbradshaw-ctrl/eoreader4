@@ -33,6 +33,14 @@ import { mountPredict } from './predict-view.js';
 import { mountIdle } from './idle-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 
+// CHATBOT SURFACE. The chat pane is a bare chatbot — a thinking indicator and
+// the answer, nothing else. The full per-turn record (the trace, the verbatim
+// prompt/output, the spans, the coverage verdict, the per-claim transparency,
+// the recalled-memory and web-source blocks) is NOT shown inline; it lives in
+// the Audit pane (fed independently off STATE.audit) and the Log tab. Flip this
+// to true to bring every block back inline for debugging.
+const CHAT_VERBOSE = false;
+
 const STATE = {
   doc:       null,       // the document currently shown in the doc pane
   docs:      new Map(),  // docId → parsed doc, every loaded document
@@ -531,11 +539,13 @@ const runQuery = async (question) => {
     grounding: STATE.grounding, // the Auto / Chat with document / Free form register (the chip)
     inquire:  STATE.inquire,    // self-directed inquiry — read another pass on the open question (the chip)
     onStep:   (name, ctx, data) => {
-      updateThinking(thinking, name, data, ctx);
+      updateThinking(thinking, name, data, ctx, { verbose: CHAT_VERBOSE });
       // As soon as the fold has read the passage, type its IMPRESSION into the bubble
       // while the talker warms — model-free streaming during the long time-to-first-
-      // token (docs/streaming-answer.md). Cleared when the real answer begins.
-      if (name === 'fold' && ctx?.surf && !thinking._impression) {
+      // token (docs/streaming-answer.md). Cleared when the real answer begins. This
+      // exposes the engine's internal reading (the figures/edges it settled on), so it
+      // stays behind the verbose gate — the bare chatbot just shows "reading…".
+      if (CHAT_VERBOSE && name === 'fold' && ctx?.surf && !thinking._impression) {
         try { streamImpression(thinking, foldImpression(ctx).phrases); } catch { /* preview only */ }
       }
     },
@@ -607,6 +617,7 @@ const runQuery = async (question) => {
       docNames,
       citationSources,
       propositions,
+      verbose: CHAT_VERBOSE,               // bare chatbot by default — blocks suppressed, kept in the Audit pane
       transparency: STATE.transparency,   // the persisted on/off for the per-claim source view
       onTransparency: (open) => {         // remember the choice so it sticks across turns
         STATE.transparency = open;
@@ -645,10 +656,13 @@ const runQuery = async (question) => {
   };
 
   render(result, Math.round(performance.now() - t0));
-  if (mindSpans && (result.route || result.turn?.route) !== 'error') renderMindBlock(thinking, mindSpans);
+  // The recalled-memory and web-source blocks are part of the verbose surface — the
+  // sources stay reachable through the answer's inline [sN] citation links and the
+  // Audit pane. The bare chatbot shows neither inline.
+  if (CHAT_VERBOSE && mindSpans && (result.route || result.turn?.route) !== 'error') renderMindBlock(thinking, mindSpans);
   // Source transparency: when the web was gathered up front, show every page it grounded on
   // (title · link · fetched-at) and the meaning graph the talker reasoned over.
-  if (webGather && (result.route || result.turn?.route) !== 'error') {
+  if (CHAT_VERBOSE && webGather && (result.route || result.turn?.route) !== 'error') {
     renderWebResult(thinking, {
       query: webGather.query, results: webGather.docs.length, grounded: true,
       sources: webGather.docs.map(d => ({
@@ -676,8 +690,8 @@ const runQuery = async (question) => {
     } catch { updated = result; }
     result = updated;
     render(result, Math.round(performance.now() - t0));
-    if (mindSpans && (result.route || result.turn?.route) !== 'error') renderMindBlock(thinking, mindSpans);
-    if (result.webFetched) renderWebResult(thinking, result.webFetched);
+    if (CHAT_VERBOSE && mindSpans && (result.route || result.turn?.route) !== 'error') renderMindBlock(thinking, mindSpans);
+    if (CHAT_VERBOSE && result.webFetched) renderWebResult(thinking, result.webFetched);
     commitHistory(result);
   };
 
