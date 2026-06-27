@@ -22,7 +22,10 @@ const setup = (text) => {
   return doc;
 };
 
-test('mechanical math short-circuits the pipeline (no LLM stage runs)', async () => {
+test('math now reaches the talker — the mechanical short-circuit is retired', async () => {
+  // The model-free math/smalltalk/metadata short-circuits were removed: every turn goes
+  // through grounding + the talker, where the guards adjudicate what it says. With a doc
+  // loaded the turn grounds and the llm stage runs — no arithmetic answered at the route.
   const doc = setup('Anything.');
   const model = createModel('echo');
   await model.load();
@@ -31,9 +34,8 @@ test('mechanical math short-circuits the pipeline (no LLM stage runs)', async ()
     question: 'What is 2 + 2?',
     doc, model, embedder: createHashEmbedder(), auditLog: audit,
   });
-  assert.ok(result.answer.includes('4'));
-  assert.equal(result.turn.route, 'math');
-  assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
+  assert.notEqual(result.turn.route, 'math', 'no mechanical math short-circuit');
+  assert.ok(result.turn.steps.find(s => s.name === 'llm'), 'the talker runs');
 });
 
 test('a summary meta-query reads the document skeleton, not fuzzy-matched fragments', async () => {
@@ -152,7 +154,7 @@ test('runs without a doc — chat mode, no veto noise', async () => {
   assert.ok(result.turn.steps.find(s => s.name === 'llm'));
 });
 
-test('math short-circuits even without a doc', async () => {
+test('math without a doc now reaches the talker (chat) — no mechanical short-circuit', async () => {
   const model = createModel('echo');
   await model.load();
   const audit = createAuditLog();
@@ -163,9 +165,8 @@ test('math short-circuits even without a doc', async () => {
     embedder: createHashEmbedder(),
     auditLog: audit,
   });
-  assert.equal(result.turn.route, 'math');
-  assert.ok(result.answer.includes('42'));
-  assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
+  assert.equal(result.turn.route, 'chat', 'no doc → chat, not a mechanical math answer');
+  assert.ok(result.turn.steps.find(s => s.name === 'llm'), 'the talker runs');
 });
 
 // The flag-and-tell sentinel — that a veto rides ALONGSIDE the model's answer and never
@@ -204,7 +205,7 @@ test('onStep callback fires once per executed stage', async () => {
   assert.ok(seen.includes('bind'));
 });
 
-test('a greeting routes to smalltalk — never grounded, never warms the model', async () => {
+test('a greeting now reaches the talker — the smalltalk short-circuit is retired', async () => {
   const doc = setup('Alice loves apples. Bob hates broccoli.');
   const model = createModel('echo');
   await model.load();
@@ -212,9 +213,8 @@ test('a greeting routes to smalltalk — never grounded, never warms the model',
   const result = await runTurn({
     question: 'hi', doc, model, embedder: createHashEmbedder(), auditLog: audit,
   });
-  assert.equal(result.turn.route, 'smalltalk');
-  assert.equal(result.turn.steps.find(s => s.name === 'llm'), undefined);
-  assert.equal(result.sources.length, 0);
+  assert.notEqual(result.turn.route, 'smalltalk', 'no mechanical smalltalk short-circuit');
+  assert.ok(result.turn.steps.find(s => s.name === 'llm'), 'the talker runs');
 });
 
 test('who-is now reaches the talker — the mechanical document short-circuit is retired (P0.1)', async () => {

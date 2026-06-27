@@ -201,15 +201,20 @@ test('answerMetadata falls through (null) when the document carries no such fact
   assert.equal(answerMetadata({}, 'who wrote this?'), null, 'no metadata at all → fall through');
 });
 
-test('a metadata question routes to the metadata answer — the title never enters a content prompt', async () => {
+test('a metadata question is no longer answered mechanically — it routes through grounding', async () => {
+  // The metadata short-circuit is retired (it shipped Project-Gutenberg front-matter as
+  // confident, unflagged fact — e.g. "when was this written?" → the eBook release date).
+  // A front-matter question now grounds against the doc and goes through the talker, where
+  // the guards adjudicate it. The answerMetadata function is kept (unit-tested above), just
+  // not wired into the route.
   const doc = parseText('Gregor woke transformed. He had become an insect.', { docId: 'pg5200.txt' });
   doc.metadata = { title: 'The Metamorphosis', author: 'Franz Kafka' };
   doc.sentenceEmbeddings = async (e) => Promise.all(doc.sentences.map(s => e.embed(s)));
   const model = createModel('echo'); await model.load();
   const audit = createAuditLog();
   const result = await runTurn({ question: 'who wrote this?', doc, model, embedder: createHashEmbedder(), auditLog: audit });
-  assert.equal(result.route, 'metadata', 'a front-matter question short-circuits to the metadata answer');
-  assert.match(result.answer, /Franz Kafka/, 'the author is answered as a distinct fact');
+  assert.notEqual(result.route, 'metadata', 'no front-matter short-circuit');
+  assert.equal(result.route, 'grounded', 'the turn grounds against the document instead');
 });
 
 // ── Omnimodal — the metadata slot is part of the universal contract ───────────
