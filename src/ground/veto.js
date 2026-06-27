@@ -195,6 +195,30 @@ export const VETOES = [
     message: 'This rests on the engine’s own reading (interpretation), not on anything the source witnesses.',
   },
   {
+    // The answer missed a CONSTRAINT the prompt predicted (turn/expect.js): a name asked for
+    // and not given, a length overrun, a backwards retelling told forwards. The grounding
+    // vetoes ask whether the claims are WITNESSED; this asks whether the answer is RESPONSIVE
+    // — the adequacy check the battery lacked. The GATING miss is serious (shown loud): the
+    // restart in turn/stages.js `revise` is the correction, this is the residue when it could
+    // not land (or no model ran), told rather than hidden. `constraintErrors` is precomputed in
+    // the turn (empty on every prompt that types nothing checkable), so this is byte-identical
+    // wherever the prompt is open-ended.
+    id: 'answer-shape',
+    test: ({ constraintErrors }) => (constraintErrors || []).some((e) => e.gates),
+    refuses: true,
+    message: 'The question asked for a specific kind or shape of answer the reply does not provide.',
+  },
+  {
+    // The SOFT sibling — a low-precision form constraint the engine cannot honestly gate on
+    // (a "poem" that reads as a prose block). Flag-only: the answer rides, the mismatch is
+    // told. Where taste is the only judge, the battery stays silent (no constraint is emitted
+    // upstream), so this never fires on "write a GOOD poem" — only on a measurable form miss.
+    id: 'answer-shape-weak',
+    test: ({ constraintErrors }) => (constraintErrors || []).some((e) => !e.gates),
+    refuses: false,
+    message: 'The reply does not fully match the form the question asked for.',
+  },
+  {
     id: 'low-coverage',
     test: ({ bound, task, draft }) => {
       const total = bound.length;

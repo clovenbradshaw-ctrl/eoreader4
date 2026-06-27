@@ -17,6 +17,8 @@ import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerra
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
+import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
+import { answerFormError } from './shape.js';
 import { rereadOnUnsettled } from './reread.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
@@ -142,6 +144,16 @@ export const stages = {
     if (grounding === 'grounded') return { ...ctx, route: 'grounded', ...reg };
     if (ctx.doc) return { ...ctx, route: 'grounded', ...reg };
     return { ...ctx, route: 'chat', ...reg };
+  },
+
+  // The expectation — the question read as a PREDICTION of its own answer (turn/expect.js).
+  // The shape the answer must take to count, and with what precision: what the revise loop
+  // error-corrects toward and the veto battery flags when uncorrected. Pure, needs only the
+  // question; OPEN (precision 0, no gate) on every question that does not type its answer
+  // sharply, so the default turn is byte-identical. Skipped after a mechanical short-circuit
+  // (those terminate at `route` and never reach here).
+  async expect(ctx) {
+    return { ...ctx, expectation: expectAnswer(ctx.question) };
   },
 
   // The session fold — the conversation's own two registers, mirroring the document
@@ -327,6 +339,49 @@ export const stages = {
     return { ...ctx, spans, note, surf, focus, referential, refTarget };
   },
 
+  // The PREDICTION — the engine's own grounded generation, before the talker speaks
+  // (docs/answer-expectation.md). The mechanical writer (src/write `think`) says, from the
+  // graph alone, what it would answer; that draft is the prior the fluent answer is checked
+  // against. We read only its CONTENT — the named figures the grounded reading centers on —
+  // not its surface: the mechanical SURFACE is corpus-dependent (learned conventions, often
+  // telegraphic), but WHICH figures it is about is read straight off the log, so it is a
+  // reliable content prediction even when the prose is clumsy. A confident grounded reading
+  // that centers on a named figure the talker then drops is an under-answer (the mirror of a
+  // confabulation). Fully guarded: a clumsy predictor must never break the answer.
+  async predict(ctx) {
+    if (!ctx.doc || !ctx.spans?.length) return ctx;
+    try {
+      const cursor = ctx.surf?.peak ?? ctx.spans[0]?.idx ?? 0;
+      const t = think(ctx.doc, { cursor, genders: ctx.genders || {} });
+      const draft = String(t?.voiced || '');
+      const labelOf = (id) => ctx.doc.admission?.labelOf?.(id) || id;
+      const entities = [...new Set(namedReferents(ctx.doc, draft).map(labelOf))];
+      // the figure the grounded reading centers on: the fold's focus when it resolved one,
+      // else the strongest figure the mechanical draft named.
+      const focusId = ctx.focus?.[0] ?? null;
+      const primaryName = focusId != null ? labelOf(focusId) : (entities[0] || null);
+      const confident = !!ctx.referential?.concentrated;
+      const prediction = { draft, entities, primaryName, confident };
+
+      // The FORM prediction, from the sample-answer library (turn/shape.js): read the wanted
+      // shape off the question's nearest sample answers. Embedder-gated — a cosine is meaning
+      // only under a meaning-measuring embedder — and inert without a threaded library, so the
+      // default turn is byte-identical. The question's embedding rides to `veto`, where the
+      // talker's answer is scored against this shape.
+      let shapeTarget = null, shapeQueryVec = null;
+      if (ctx.shapeLibrary) {
+        const emb = pickRetrievalEmbedder(ctx);
+        if (emb?.measuresMeaning && emb.isWarm?.()) {
+          try {
+            shapeQueryVec = await emb.embed(ctx.question);
+            shapeTarget = ctx.shapeLibrary.selectForQuestion(shapeQueryVec);
+          } catch { /* a clumsy predictor must never break the answer */ }
+        }
+      }
+      return { ...ctx, prediction, shapeTarget, shapeQueryVec };
+    } catch { return ctx; }
+  },
+
   // The answerability gate — is there an answer to give, or is the field VOID?
   // (docs/answerability.md) Before the talker is warmed, measure whether the field
   // where the question landed holds any structure. When it does not — no referent
@@ -383,6 +438,9 @@ export const stages = {
           task:         ctx.task,               // the summary guard rides on a summary task
           budget:       ctx.budget,             // none by default; a caller may impose one
           conversation: groundedConversation(ctx),  // the USER's thread only — never the talker's prior answers
+          // the nearest sample answer's SHAPE, when the form library matched one (turn/shape.js)
+          // — so the first draft is laid out right, not only corrected after. Empty by default.
+          exemplar:     ctx.shapeTarget?.promptMatch?.best_response || '',
           strict:       ctx.grounding === 'grounded',   // "only what you read" — abstention is the honest fallback
         })
       : buildChatMessages({
@@ -528,20 +586,66 @@ export const stages = {
     // (band:'void' at the cursor) and any drift rode forward into the next beat — the
     // correction is already in the trail, so there is nothing to rewrite here.
     if (ctx.streamed) return ctx;
-    if (!ctx.doc || !ctx.spans?.length || !ctx.model || !needsRegen(ctx)) return ctx;
+    if (!ctx.doc || !ctx.spans?.length || !ctx.model) return ctx;
+    // The referent the question asks about — resolved ONCE, used to judge a NAME answer
+    // (turn/expect.js) and to steer the corrective. Best-effort and read-only: it calls the
+    // reference reader directly (even with RULES_REV off) so the adequacy check can use the
+    // name the engine CAN resolve — the knowledge the answer path used to discard — without
+    // changing what retrieval/fold already did. Computed only for a gating expectation (a
+    // name question), so every other turn is byte-identical, referent stays null.
+    const referent = needsReferent(ctx.expectation)
+      ? (ctx.refTarget || referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans))
+      : null;
+    // A regenerate is owed on the grounding triggers (confab / §5 gate) OR when the answer
+    // misses a GATING constraint the prompt predicted — a name not given, a length overrun, a
+    // backwards retelling told forwards. The miss is the prediction error; restarting is the
+    // error-correction. Soft (non-gating) misses are left to the veto flag, not retried.
+    const errsOf  = (c) => {
+      const ce = answerConstraintErrors(c.expectation, c.rawOutput, { doc: c.doc, referent, bound: c.bound });
+      const pe = answerPredictionError(c.prediction, c.rawOutput);   // the mechanical-draft divergence
+      return pe ? [...ce, pe] : ce;
+    };
+    const gatingOf = (c) => errsOf(c).filter((e) => e.gates);
+    // FORM DRIVES REVISION (turn/shape.js): the sample-answer library scores the draft's shape
+    // against what this kind of question wants. Embedder-gated; where it can measure, an
+    // off-basin draft is a gating trigger here (a reshape), with the matched sample as the
+    // target — flag-only in veto, but a reason to answer again here. Async (it embeds the
+    // draft), inert without a threaded library / warm meaning embedder.
+    const meaning = (() => { const e = pickRetrievalEmbedder(ctx); return (e?.measuresMeaning && e.isWarm?.()) ? e : null; })();
+    const formErrOf = async (c) => {
+      if (!ctx.shapeLibrary || !ctx.shapeQueryVec || !meaning || !c.rawOutput) return null;
+      try {
+        const e = answerFormError(ctx.shapeLibrary, ctx.shapeQueryVec, await meaning.embed(c.rawOutput));
+        return e ? { ...e, gates: true, sample: ctx.shapeTarget?.promptMatch?.best_response || '' } : null;
+      } catch { return null; }
+    };
+    let curForm = await formErrOf(ctx);
+    const regenNeeded = (c) => needsRegen(c) || gatingOf(c).length > 0;
+    if (!regenNeeded(ctx) && !curForm) return ctx;
     // The §5 gate engaged at entry — recorded for the audit even if the regenerate clears.
     const gated = gateCondition(ctx);
     let cur = ctx, attempts = 0;
     const revisions = [];
-    while (attempts < REWRITE_ATTEMPTS && needsRegen(cur)) {
+    while (attempts < REWRITE_ATTEMPTS && (regenNeeded(cur) || curForm)) {
       attempts++;
-      // Record the superseded draft BESIDE its successor — never erase it. The
-      // off-diagonal verdicts that condemned it travel with it, so the trail shows
-      // verbatim what the machine said and why it was made to answer again. This is the
-      // log's own SEG/retract law (core/log.js) applied to the conversational record:
-      // a truer word may be appended, the false one is not unwritten.
-      const supersededDraft   = cur.rawOutput;
+      // Record the superseded draft BESIDE its successor — never erase it. The reason it was
+      // made to answer again travels with it (the off-diagonal verdicts that condemned it,
+      // and a plain `why`), so the trail shows verbatim what the machine said, why it stopped,
+      // and what it said instead. This is the log's own SEG/retract law (core/log.js) applied
+      // to the conversational record: a truer word may be appended, the false one is not
+      // unwritten — and the user can WATCH it catch itself and begin again.
+      const supersededDraft    = cur.rawOutput;
       const supersededVerdicts = (cur.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
+      // The trigger, content/constraint before form: the first unmet gating constraint, else
+      // the off-shape form miss.
+      const shapeErr = gatingOf(cur)[0] || curForm;
+      const why = shapeErr ? shapeErr.reason
+        : (gateCondition(cur) && !confabulating(cur))
+          ? 'a load-bearing claim was not grounded in the lines'
+          : 'a specific claim was asserted where the lines mark an absence';
+      const corrective = !shapeErr ? correctiveFor(cur)
+        : shapeErr.dim === 'form' ? reshapeCorrective(shapeErr)   // answer like this sample
+        : constraintCorrective(shapeErr);                          // name them / shorten / reverse
       const messages = buildGroundedMessages({
         question:    ctx.question,
         spans:       selectExcerpts(ctx.spans),   // same trimmed lines the first pass saw
@@ -549,13 +653,14 @@ export const stages = {
         task:        ctx.task,
         budget:      ctx.budget,
         conversation: {},                     // history still withheld on the grounded path
-        corrective:  correctiveFor(cur),      // confab → drop the link; gate → keep to the lines
+        corrective,
       });
       const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
       cur = await stages.factcheck(await stages.bind({ ...cur, rawOutput: raw, messages }));
-      revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw }));
+      curForm = await formErrOf(cur);
+      revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw, why }));
     }
-    return { ...cur, revised: { attempts, resolved: !needsRegen(cur) }, revisions,
+    return { ...cur, revised: { attempts, resolved: !(regenNeeded(cur) || curForm), errors: errsOf(cur).map(e => e.id) }, revisions,
              ...(gated ? { gated: true } : {}) };
   },
 
@@ -594,9 +699,35 @@ export const stages = {
         witnessSought = { figures: figs, read: spans.length, confirmed: !provenance.onlyInterpretation };
       }
     }
+    // The residual SHAPE error: did the final answer fill the slot the question predicted
+    // (turn/expect.js)? Computed only for a gating expectation (a name question), so every
+    // other turn passes `shapeError: null` and the battery is byte-identical. When the
+    // revise loop already corrected the miss this is null; when it could not (or no model
+    // ran), the unmet slot ships as a flag — the prediction error the engine could not
+    // discharge, told to the user rather than hidden.
+    const shapeReferent = needsReferent(ctx.expectation)
+      ? (ctx.refTarget || referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans))
+      : null;
+    const constraintErrors = answerConstraintErrors(ctx.expectation, ctx.rawOutput,
+      { doc: ctx.doc, referent: shapeReferent, bound: ctx.bound });
+    const predErr = answerPredictionError(ctx.prediction, ctx.rawOutput);
+    if (predErr) constraintErrors.push(predErr);
+    // The FORM check (turn/shape.js): embed the answer and score it against the shape the
+    // question's sample answers predicted. A soft (non-gating) miss rides as a flag — taste is
+    // not refusable. Embedder-gated and inert without a threaded library → byte-identical.
+    if (ctx.shapeLibrary && ctx.shapeTarget && ctx.shapeQueryVec && ctx.rawOutput) {
+      const emb = pickRetrievalEmbedder(ctx);
+      if (emb?.measuresMeaning && emb.isWarm?.()) {
+        try {
+          const draftVec = await emb.embed(ctx.rawOutput);
+          const formErr = answerFormError(ctx.shapeLibrary, ctx.shapeQueryVec, draftVec);
+          if (formErr) constraintErrors.push(formErr);
+        } catch { /* the form check never breaks the answer */ }
+      }
+    }
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
-      referential: ctx.referential, task: ctx.task, provenance,
+      referential: ctx.referential, task: ctx.task, provenance, constraintErrors,
       // The surfer's measured commit stance — its own confabulation guard (stance-reserve):
       // a Ground-grain reserve at the peak means the reading did not settle on a figure.
       // Computed on every turn now the structural significance column is the default (§2).
@@ -655,6 +786,42 @@ const GROUNDING_CORRECTIVE =
   'Read the lines again. Part of what you just said is not in them — either it is not ' +
   'there at all, or it conflicts with what they show. Answer again, keeping strictly to ' +
   'what the lines say. If the answer is not in them, tell them plainly you did not find it.';
+
+// The corrective for a missed CONSTRAINT (turn/expect.js), by dimension. A REFINE, not a
+// retreat: it names the one thing the draft got wrong and asks for it again, in the talker's
+// own words. For a name the reading already resolved, hand it over outright — the engine knows
+// it; the first draft simply failed to say it.
+const constraintCorrective = (err) => {
+  if (err.dim === 'coverage')
+    return `Your answer is about the right passage but never names ${err.expectedName}, who the ` +
+      'reading centers on. Answer again and name them where they belong.';
+  if (err.dim === 'name')
+    return err.expectedName
+      ? `They asked for a name. The reading resolves it as “${err.expectedName}”. Answer with that ` +
+        'name plainly — do not describe the person in place of naming them.'
+      : 'They asked for a name — a specific person’s name. Give the name if the lines provide one; ' +
+        'if they do not, say plainly you did not find it. Do not answer with a description in place of a name.';
+  if (err.dim === 'length')
+    return `They asked for the answer in ${err.params.max} ${err.params.unit}${err.params.max > 1 ? 's' : ''}. ` +
+      'Give it that short — no more.';
+  if (err.dim === 'order')
+    return err.params.dir === 'desc'
+      ? 'They asked for it backwards — tell it from the end to the beginning, the latest events first.'
+      : 'They asked for it in order — tell it from the beginning through to the end.';
+  return CONFAB_CORRECTIVE;
+};
+
+// The reshape corrective — handed when the FORM predictor (turn/shape.js) found the draft
+// off-shape for this kind of question. It hands over the matched sample answer as a SHAPE
+// target (its facts are about a different text), so the redo copies the register and length,
+// not the content.
+const reshapeCorrective = (err) =>
+  err.sample
+    ? `Your last answer did not read like the kind of answer this question wants. Here is the ` +
+      `right SHAPE (it is about a different text — copy its register and length, NOT its facts):\n` +
+      `“${err.sample}”\nAnswer again in that shape, grounded in the lines you read.`
+    : 'Your last answer did not read like the kind of answer this question wants. Answer again in a ' +
+      'fitting register and length, grounded in the lines you read.';
 
 // Did the diagonal guard catch the confabulation proper — a specific claim asserted at
 // a measured Void (the figure-at-a-void shape)? The hard case the rewrite targets.

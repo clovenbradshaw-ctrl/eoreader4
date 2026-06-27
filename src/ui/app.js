@@ -11,7 +11,8 @@
 //      thinking is visible while the turn is in flight.
 
 import { ingestText }       from '../organs/in/index.js';
-import { runTurn }          from '../turn/index.js';
+import { runTurn, runTurnWithWeb, loadShapeLibrary } from '../turn/index.js';
+import { createWebClient, searchAndAdmit } from '../ingest/index.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
 import { bootGeometricReader } from '../boot/index.js';
@@ -463,9 +464,21 @@ const runQuery = async (question) => {
     try { mindSpans = await STATE.mind.retrieve(question, 5); } catch { mindSpans = null; }
   }
 
+  // Build the sample-answer library ONCE, when the meaning embedder is warm (it embeds 430
+  // responses, so it is deferred and cached on STATE; the first turn after warm-up runs
+  // without it, every turn after with it). Inert until MiniLM warms — the form predictor
+  // (turn/shape.js) stays dark, exactly like the significance column, until then.
+  if (!STATE.shapeLibrary && !STATE.shapeLibraryBuilding
+      && STATE.geometricEmbedder?.measuresMeaning && STATE.geometricEmbedder.isWarm?.()) {
+    STATE.shapeLibraryBuilding = loadShapeLibrary((t) => STATE.geometricEmbedder.embed(t))
+      .then((lib) => { STATE.shapeLibrary = lib; return lib; })
+      .catch(() => null);
+  }
+
   const t0 = performance.now();
-  const result = await runTurn({
+  const turnArgs = {
     question,
+    shapeLibrary: STATE.shapeLibrary,   // the form predictor, once built (null until MiniLM warms)
     docs:     selectedDocs,     // the selected set — folded into one composite to ground against
     // In WEAVE mode the recalled lines are offered to the model as labelled background;
     // in recall mode they are display-only (not passed here). Epistemically separate either way.
@@ -501,7 +514,21 @@ const runQuery = async (question) => {
     // preview; finalizeThinking then replaces the raw stream with the bound, cited
     // answer. No `stream:true` — that arms the grounded beat-loop, not the default.
     onToken:  (piece) => streamThinking(thinking, piece),
-  });
+  };
+  // Web search (docs/web-search.md): OFF by default. When the user enables it (STATE.webSearch
+  // = 'confirm' | 'auto'), a turn that PROPOSES a search (a gap the document can't close) gets a
+  // go-ahead — a cost-noticed browser confirm, or auto — then fetch+admit via the proxy and
+  // re-run with the web sources in scope. Proposer-only: the pipeline never fetches; this does.
+  const webMode = STATE.webSearch || 'off';
+  const result = (webMode === 'off')
+    ? await runTurn(turnArgs)
+    : await runTurnWithWeb(turnArgs, {
+        mode: webMode,
+        webSearch: (q, opts) => searchAndAdmit(q, { client: (STATE.webClient ||= createWebClient()), ...opts }),
+        confirm: (p) => (typeof window !== 'undefined' && window.confirm)
+          ? window.confirm(`${p.cost}\n\nSearch the web for:\n“${p.query}”\n\n(${p.rationale})`)
+          : false,
+      });
   const ms = Math.round(performance.now() - t0);
   const route = result.route || result.turn.route;
 
