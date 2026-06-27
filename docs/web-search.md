@@ -97,14 +97,31 @@ carries both fetch and search.
 Verified end to end against the live proxy (`tests/webfetch.test.js`, the `LIVE` case behind
 `EO_LIVE_PROXY=1`); the default test run injects a fake fetch and stays offline.
 
+## Proposer + confirm + auto (built)
+
+The turn proposes; a go-ahead fetches. `src/turn/propose.js` `proposeWebSearch(ctx)` reads the
+SAME gaps the answer loop measures — a measured void, an answer bound to nothing, an unsettled
+referent, thin coverage — and turns the gap into a query (the question, sharpened with the figure
+the reading centres on). Scoped to the pointed `answer` task; **null on a sound turn** (a
+well-grounded answer never reaches for the net). `runTurn` returns it as `result.webProposal`
+and records a `propose-web` audit step. Proposer-only: the pipeline never fetches.
+
+`src/turn/web.js` `runTurnWithWeb(args, { mode, webSearch, confirm })` is the orchestration:
+run the turn → if it proposes and the go-ahead is given (`auto`, or `confirm(proposal)` in
+`confirm` mode) → fetch+admit via `webSearch` → **re-run with the web sources added to the
+scope**, so the second answer can stand on and cite what the search brought back. `runTurnImpl`
+is injected, so the whole flow is tested without a model or the network
+(`tests/web-propose.test.js`).
+
+Wired into the app **off by default** (`STATE.webSearch` = `'off' | 'confirm' | 'auto'`):
+`confirm` mode shows a cost-noticed browser confirm with the query and rationale before any hop;
+`auto` fires on a measured gap. The privacy thesis holds — nothing leaves without a go-ahead (or
+an explicit auto opt-in), and every hop is in the glass box.
+
 ## What is next
 
-- **Proposer + confirm** — the model emits a `fetch-proposal` (never fetches); the user edits the
-  query and confirms, with the explicit-cost notice (the query reaches public engines). Chat
-  isolation: never a silent chat side effect. The fetch/search client above is what a confirmed
-  action drives.
-- **Automatic content retrieval** — let a measured gap (void / witnessless claim) auto-fire a
-  precision-gated search, web spans riding as provenance-tagged cited sources.
 - **Witness-seeking** — make the web a `witnessSource` for the existing `veto` witness-seek, so an
-  interpretation is confirmed against the world.
-- **Cross-source promotion** — the deep part above.
+  interpretation is confirmed against the world (not just gaps filled).
+- **Source-aware UI** — globe-glyph source chips with provenance + a retract control; the
+  `propose-web` / fetch steps rendered inline in the trace.
+- **Cross-source promotion** — the deep part above (the web completes the local graph).
