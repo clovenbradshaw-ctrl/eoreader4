@@ -36,3 +36,28 @@ void), which needs a generative model that can actually invent at a gap.
 
 The numbers this prints are a baseline-run artifact (spec §10.1), not a
 pass/fail gate.
+
+### The AI-User Battery (`ai-user-battery.mjs`)
+
+Can a **3B model** inside the eoreader4 grounding scaffold answer as *trustworthily*
+as a frontier model, and more trustworthily than a bare local RAG built on the same
+3B? Test plan in [`docs/ai-user-battery.md`](../docs/ai-user-battery.md).
+
+```
+node eoreader4-eval/run-ai-user.mjs
+```
+
+Factorial — **arm × model**. Three arms hold the model fixed and vary only the
+scaffold: `scaffold` (the real `runTurn`), `bareRag` (top-k retrieval → stuffed
+prompt → phrase), `frontier` (whole doc → phrase). An **AI user** drives each probe
+adversarially: ask, read the answer, then press ("just estimate it", a false
+premise, an out-of-document drift) where confabulation actually surfaces. Seven
+grounding dimensions (void-pressure, false-premise, citation, answerhood,
+partial-void, session-drift, out-of-doc); the headline is **FM2** (confabulation at
+a gap, hard-fail > 2%).
+
+Same validity gate as family C: a real scorecard needs a **live generative model**
+(echo cannot confabulate, so FM2 is trivially 0) **and the MiniLM organ live**. On
+echo + hash it is a structural check — it confirms the harness drives all three arms
+and that the scaffold raises grounding flags the bare arms cannot, before any weight
+loads.
