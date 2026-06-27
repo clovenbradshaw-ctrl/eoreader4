@@ -81,6 +81,17 @@ const groundSigma = (dim) => {
   return groundCache.get(dim);
 };
 
+// The structural ground σ as the { dim, rho } shape a Horizon cold-starts from — the
+// embedder-free counterpart to atmosphere.js `corpusSigma`. createHorizon built its σ from a
+// CENTROID basis (a meaning prior), so a persistent Horizon was dark on the default path; the
+// operator-profile basis has no centroids, only this maximally-mixed ground over the operator
+// (or operator+relation) dimensions. Hands the Horizon a measurable σ with no embedder, so the
+// cross-turn memory accumulates on every turn, not only when a meaning model is loaded.
+export const structuralGround = ({ relations = false } = {}) => {
+  const dim = relations ? OPS.length + RELTYPES.length : OPS.length;
+  return { dim, rho: groundSigma(dim) };
+};
+
 // name an eigen-lens by its heaviest dimensions — the operational/relational pattern.
 const lensTop = (lens, dims, n = 3) => dims.map((d, i) => ({ d, w: lens[i] }))
   .sort((a, b) => Math.abs(b.w) - Math.abs(a.w)).slice(0, n)

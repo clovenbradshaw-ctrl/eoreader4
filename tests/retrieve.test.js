@@ -214,6 +214,24 @@ test('queryTouchesDoc is false for a meta-query, true for a question naming a do
   assert.equal(queryTouchesDoc(doc, 'tell me about protection'), true, '"protection" is on the page');
 });
 
+// The audit's t3: "summarize the full document" rode the lexical path and confabulated
+// because the incidental SCOPE word "full" happened to be in the doc's vocabulary, so
+// queryTouchesDoc returned true and the structural skeleton was skipped. A scope word
+// (full / whole / rest / part / …) is about HOW MUCH of the page, never its subject — it
+// must not by itself make a meta-query touch the document.
+test('a scope word ("full", "whole", "the rest") does not make a meta-query touch the doc', () => {
+  const FULL = `# EO Wiki
+EO is a framework. The full system models change across the whole space.
+## Operators
+That is the rest of it.`;
+  const doc = parseText(FULL, { docId: 'eo.md' });
+  assert.equal(queryTouchesDoc(doc, 'summarize the full document'), false, '"full" is scope, not subject');
+  assert.equal(queryTouchesDoc(doc, 'summarize the whole thing'), false, '"whole" is scope, not subject');
+  assert.equal(queryTouchesDoc(doc, 'what about the rest'), false, '"rest" is scope, not subject');
+  // A real subject term beside the scope word still keeps the lexical path.
+  assert.equal(queryTouchesDoc(doc, 'tell me about the full operators'), true, '"operators" is on the page');
+});
+
 test('retrieveStructural reads the opening, headings, and a spread — never empty on a real doc', () => {
   const doc = parseText(WIKI, { docId: 'eo.md' });
   const spans = retrieveStructural(doc, 6);

@@ -13,10 +13,11 @@ import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructur
 import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold, centroidBasis, projectUnits, siteTerrainAt } from '../surfer/index.js';
+import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerrainAt } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
+import { rereadOnUnsettled } from './reread.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
 import { runVetoes, isUnbound } from '../ground/index.js';
@@ -56,18 +57,41 @@ const weaveMemory = (messages, mindSpans) => {
 // unchanged. Degrades to {} on any embedding fault — a flaky meaning organ must never
 // crash the fold.
 const significanceOpts = async (ctx, anchor) => {
+  if (!ctx.doc) return {};
   const emb = ctx.geometricEmbedder;
-  if (!ctx.doc || !ctx.centroids || !emb?.measuresMeaning ||
-      typeof ctx.doc.sentenceEmbeddings !== 'function') return {};
-  const basis = centroidBasis(ctx.centroids);
-  if (!basis) return {};
+  // THE MEANING PATH (the upgrade). A live meaning-measuring embedder AND a centroid prior
+  // → the embedding column: the full atmosphere/paradigm/stance read, ridden forward inside
+  // the dominant lens (lens-conditioned arrest). This is the richest reading and unchanged.
+  if (ctx.centroids && emb?.measuresMeaning && typeof ctx.doc.sentenceEmbeddings === 'function') {
+    const basis = centroidBasis(ctx.centroids);
+    if (basis) {
+      try {
+        const vectors = await ctx.doc.sentenceEmbeddings(emb);
+        const activations = projectUnits(vectors, basis);
+        const report = surfFold(ctx.doc, anchor, { activations, prior: basis, lensReport: true });
+        const dom = report.lenses?.find(l => l.real)?.lens ?? report.lenses?.[0]?.lens ?? null;
+        return { activations, prior: basis, lensReport: true, atmosphere: true, paradigm: true, stance: true,
+                 alpha: ctx.alpha ?? 0.05, ...(dom ? { lens: dom } : {}) };
+      } catch { /* fall through to the structural default — never a dark fold */ }
+    }
+  }
+  // THE STRUCTURAL DEFAULT (the embedder-free column, surfing-next.md §2). ρ from the
+  // OPERATOR PROFILES (structure-basis.js) — read off the log, no model — so the column
+  // (lenses, lensEntropy, stance) lights up on EVERY turn, not only when a meaning model
+  // is loaded. Conservative by construction: the dominant lens is NOT passed, so the surf
+  // is not lens-conditioned and `stops`/`peak` (the fields the answer rides) stay
+  // byte-identical to the no-significance surf. Lens-conditioned arrest on this basis is
+  // the follow-on, bench-validated before it changes the reading. The stance it computes
+  // is what the veto battery now reads (the surfer's own confabulation guard, §3).
   try {
-    const vectors = await ctx.doc.sentenceEmbeddings(emb);
-    const activations = projectUnits(vectors, basis);
-    const report = surfFold(ctx.doc, anchor, { activations, prior: basis, lensReport: true });
-    const dom = report.lenses?.find(l => l.real)?.lens ?? report.lenses?.[0]?.lens ?? null;
-    return { activations, prior: basis, lensReport: true, atmosphere: true, paradigm: true, stance: true,
-             alpha: ctx.alpha ?? 0.05, ...(dom ? { lens: dom } : {}) };
+    const { activations, signs } = structuralActivations(ctx.doc);
+    if (!activations.length || !activations.some(v => v.some(x => x > 0))) return {};
+    // `alpha` is deliberately NOT passed: it would flip the cursor axis from the median
+    // rule to the derived VOID boundary (surf.js `useBoundary`), changing which cursors
+    // arrest — a reading change for the bench-gated follow-on, not here. The significance
+    // pass falls back to its own internal 0.05 for the lens/stance nulls, so the column is
+    // fully measured while the arrest stays byte-identical.
+    return { activations, signs, lensReport: true, stance: true };
   } catch { return {}; }
 };
 
@@ -217,6 +241,29 @@ export const stages = {
   // missed is folded in as a citable span (via:'surf', its index real), so it is both
   // read by the consciousness and bindable.
   async fold(ctx) {
+    const folded = await stages.foldReading(ctx);
+    // THE ACTIVE-INFERENCE RE-READ (surfing-next.md §3, opt-in via ctx.reread). When the surf
+    // could not SETTLE on a figure at the peak (the stance-reserve guard) on a pointed
+    // question, read more of the document on the figure the reading circled and fold AGAIN
+    // from the wider evidence — `inquire`'s loop brought in-turn, bounded to one extra pass.
+    // Inert unless the caller opts in, so the default turn is byte-identical to foldReading.
+    if (!ctx.reread || !folded.surf) return folded;
+    const re = pickRetrievalEmbedder(ctx);
+    const widened = await rereadOnUnsettled({
+      doc: ctx.doc, spans: folded.spans, surf: folded.surf, task: ctx.task,
+      referential: folded.referential,        // the diffuse-coref trigger (the live one on the default path)
+      query: ctx.retrievalQuery || ctx.question,
+      retrieve: (q, k) => retrieveHybrid(ctx.doc, q, re, k),
+    });
+    if (!widened.added) return folded;
+    const refolded = await stages.foldReading({ ...ctx, spans: widened.spans });
+    return { ...refolded, rereadInfo: { added: widened.added, asked: widened.asked } };
+  },
+
+  // The reading proper — fold the spans into the note (the surf + significance column). Split
+  // out from `fold` so the re-read can run it twice: once on the retrieved spans, once on the
+  // widened set. Byte-identical to the former fold body.
+  async foldReading(ctx) {
     if (!ctx.spans?.length) return { ...ctx, note: null };
     // Reference by reading (RULES_REV, docs/reference-by-reading.md §2–§3). The turn's
     // DEF target is read off the CONVERSATION CAST — the warmest figure the conversation
@@ -529,6 +576,10 @@ export const stages = {
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
       referential: ctx.referential, task: ctx.task,
+      // The surfer's measured commit stance — its own confabulation guard (stance-reserve):
+      // a Ground-grain reserve at the peak means the reading did not settle on a figure.
+      // Computed on every turn now the structural significance column is the default (§2).
+      stance: ctx.surf?.stance,
       // The edge-grounding verdicts the factcheck stage just deposited — the link-
       // shaped sibling of the node-level `unbound` check. Without this they were
       // computed and discarded; now a claim the graph DENIES becomes a flag.
@@ -537,9 +588,25 @@ export const stages = {
     return { ...ctx, vetoes: fired };
   },
 
-  // Settle: a placeholder for conversation-field updates and form stamps.
-  // Kept here as a named stage so the place is obvious for the next change.
+  // Settle: fold this turn's reading into the session's persistent Horizon (surfing-next.md
+  // §4) — the moved density operator that accumulates across turns, curing the surf's
+  // per-turn amnesia. Observe-only and AFTER the answer is formed, so it never changes the
+  // reading the user just saw; it grows the cross-turn memory the NEXT turn can be read
+  // against (the conditioning step is the staged follow-on). The reading folded in is the
+  // embedder-free operator-profile activations — the same structural basis the significance
+  // column rides — so the Horizon accumulates on every turn, not only under a meaning model.
+  // Inert with no threaded Horizon (the default) and on a turn with no document; a fault here
+  // must never disturb the answer, so it is fully guarded.
   async settle(ctx) {
+    if (!ctx.horizon || !ctx.doc) return ctx;
+    try {
+      const { activations } = structuralActivations(ctx.doc);
+      const live = activations.filter(v => v.some(x => x > 0));
+      if (live.length) {
+        const reading = ctx.horizon.observe(live);
+        return { ...ctx, horizonReading: reading };
+      }
+    } catch { /* a memory fold must never break a settled answer */ }
     return ctx;
   },
 };

@@ -43,12 +43,28 @@ const SUMMARY = new RegExp(
   ')',
   'i',
 );
+// A COVERAGE continuation — "what about the rest?", "the rest of it", "the whole thing",
+// "everything else". The audit's t2: after a "summarize", the user pushed back that the
+// reply was "just the top part, what about the rest?" — a request to cover the WHOLE
+// document, which the bare `answer` task read as a pointed lookup and answered from a
+// handful of arbitrary spans. It is a whole-document task like a summary: routing it here
+// takes retrieval onto the structural skeleton (an even spread across the body), which is
+// the coverage the user is asking for. Kept narrow — it matches scope-of-document phrases,
+// not a pointed "what about X" naming a real term.
+const COVERAGE = new RegExp(
+  '\\bthe\\s+rest\\b' +                                      // "the rest", "what about the rest"
+  `|\\brest\\s+of\\s+(?:it|this|that|the)\\b` +              // "the rest of it / the document"
+  `|\\bthe\\s+whole\\s+(?:thing|${DOCNOUN})\\b` +            // "the whole thing / document"
+  '|\\beverything\\s+else\\b|\\bwhat\\s+else\\b',            // "everything else", "what else"
+  'i',
+);
 const LIST    = /\b(list|enumerate|bullet(?:s|ed)?|name\s+(?:every|all|each)|what\s+are\s+the)\b/i;
 const EXPLAIN = /\b(explain|elaborate|walk\s+me\s+through|in\s+detail|why|how)\b/i;
 
 export const readTask = (question) => {
   const q = String(question || '');
-  if (SUMMARY.test(q)) return 'summary';
+  if (SUMMARY.test(q))  return 'summary';
+  if (COVERAGE.test(q)) return 'summary';
   if (LIST.test(q))    return 'list';
   if (EXPLAIN.test(q)) return 'explain';
   return 'answer';

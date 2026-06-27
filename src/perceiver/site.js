@@ -29,10 +29,12 @@ export const siteRoles = (units, vecs, anchored, cut = 0.16) => {
 // Apply the role pass to a doc: embed its units, read each role, and DEF the
 // sites. Async because reading a role is the embedder's job. Idempotent-ish:
 // it appends DEF role events; downstream skips units already marked site.
-export const markSites = async (doc, embedder, cut = 0.16) => {
+export const markSites = async (doc, embedder, cut = 0.16, onProgress) => {
   if (!embedder || typeof doc.sentenceEmbeddings !== 'function') return [];
   const units = doc.units || doc.sentences || [];
-  const vecs = await doc.sentenceEmbeddings(embedder);
+  // onProgress (optional) rides into the embedding warmup so a large document's slow
+  // role pass reports as its vectors land, instead of freezing silently behind it.
+  const vecs = await doc.sentenceEmbeddings(embedder, onProgress);
   const anchored = new Set(
     doc.log.filter(e => e.op === 'INS' || e.op === 'CON' || e.op === 'SIG').map(e => e.sentIdx),
   );

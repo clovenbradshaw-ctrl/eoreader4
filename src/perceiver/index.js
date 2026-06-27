@@ -21,6 +21,7 @@ export {
   composeGroupedNote, NOTE_GROUPS, plainRel,
 } from './surfaces.js';
 export { readingAt } from './reading.js';
+export { significanceSpine } from './spine.js';
 export { predictNext } from './predict.js';
 export { mutualNearestPairs, discoverEquivalences } from './equivalence.js';
 export {
