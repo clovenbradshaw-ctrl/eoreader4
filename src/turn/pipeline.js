@@ -86,13 +86,13 @@ const llmBrief = (ctx) => {
 // retrieved spans keep mentioning but that never acts — and folds the results in as citable
 // spans before the fold builds the reading (turn/stages.js, write/think.js).
 const PIPELINE = [
-  'route', 'converse', 'retrieve', 'inquire', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
+  'route', 'expect', 'converse', 'retrieve', 'inquire', 'fold', 'predict', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
 ];
 
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, inquire = false, horizon = null, reread = false, witnessSource = null }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, inquire = false, horizon = null, reread = false, witnessSource = null, shapeLibrary = null }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -137,7 +137,7 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // retrieves from to confirm an interpretation: when the grounding doc is the model's own
   // notes (reafference) and the answer rests only on them, the engine fetches the source spans
   // on the claim's figures and re-checks. Null → no seeking, byte-identical.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, inquire, horizon, reread, witnessSource };
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, inquire, horizon, reread, witnessSource, shapeLibrary };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -238,6 +238,24 @@ const summarize = (name, ctx, ms) => {
   const base = { ms: Math.round(ms) };
   switch (name) {
     case 'route':    return { ...base, route: ctx.route, task: ctx.task, grounding: ctx.grounding };
+    case 'expect':   return { ...base,
+                              constraints: (ctx.expectation?.constraints || []).map(c => c.id),
+                              gates: ctx.expectation?.gates || false };
+    // The engine's own grounded generation (src/write), kept beside the talker's answer so
+    // the audit shows the prediction the fluent reply was checked against — what it is
+    // ABOUT (primary · entities) and the clumsy draft verbatim.
+    case 'predict':  return ctx.prediction ? { ...base,
+                              primary:  ctx.prediction.primaryName || null,
+                              entities: ctx.prediction.entities || [],
+                              confident: ctx.prediction.confident || false,
+                              draft: String(ctx.prediction.draft || '').slice(0, 400),
+                              // the form prediction from the sample-answer library, when threaded:
+                              // the matched intent and the nearest sample answer (the prediction)
+                              ...(ctx.shapeTarget ? { shape: {
+                                intent: ctx.shapeTarget.intent,
+                                confidence: ctx.shapeTarget.promptMatch?.confidence ?? null,
+                                nearest: String(ctx.shapeTarget.promptMatch?.best_response || '').slice(0, 200),
+                              } } : {}) } : base;
     case 'converse': return { ...base, recent: ctx.convStats?.recent || 0,
                               folded: ctx.convStats?.folded || 0, notesLen: ctx.convStats?.notesLen || 0 };
     case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0,
@@ -312,8 +330,11 @@ const summarize = (name, ctx, ms) => {
     case 'revise':   return { ...base,
                               attempts: ctx.revised?.attempts || 0,
                               resolved: ctx.revised?.resolved ?? null,
-                              // the superseded draft(s) ride in the step trail too, verbatim
-                              superseded: (ctx.revisions || []).map(r => r.draft) };
+                              // the superseded draft(s) ride in the step trail too, verbatim,
+                              // each beside the reason it was made to answer again — so the
+                              // audit shows the engine catching itself and beginning again
+                              superseded: (ctx.revisions || []).map(r => r.draft),
+                              reasons:    (ctx.revisions || []).map(r => r.why).filter(Boolean) };
     case 'veto':     return { ...base,
                               fired:   ctx.vetoes?.map(v => v.id) || [],
                               // the active witness-seek, when it ran: which figures it read the
