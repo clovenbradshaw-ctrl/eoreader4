@@ -446,9 +446,12 @@ those questions.
 
 ## Smooth load, fast response
 
-- **No bundler, no React.** Vanilla ES modules served byte-for-byte.
-  Open `index.html` and the pipeline is already alive against the
-  deterministic `echo` backend.
+- **Self-contained index, nothing to build to serve it.** `index.html` is a
+  single generated file — `scripts/build-reader.mjs` inlines the engine bundle
+  and a small React + `dc-runtime` view layer from `vendor/`. Open it and the
+  pipeline is already alive against the deterministic `echo` backend; rebuild it
+  only after editing `src/reader/`. The original vanilla-ES-module chat app is
+  preserved at `chat.html`.
 - **Model loads on first message, not on page open.** Page-open cost: 0.
   When the user sends their first message, the chosen local backend is
   fetched — a GGUF pulled by URL through the wllama WASM runtime, or an
