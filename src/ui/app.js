@@ -87,7 +87,6 @@ const els = {
   exportBtn: document.getElementById('export-audit'),
   backend:   document.getElementById('backend'),
   groundingChip: document.getElementById('grounding-chip'),
-  inquireChip: document.getElementById('inquire-chip'),
   webChip:   document.getElementById('web-chip'),
   docChips:  document.getElementById('doc-chips'),
 };
@@ -670,24 +669,10 @@ els.groundingChip.addEventListener('click', () => {
   applyGrounding();
 });
 
-// Inquiry chip — toggles self-directed inquiry (the inquire stage, turn/stages.js). When
-// on, a grounded answer turn THINKS over what it retrieved and, if a figure stays open (one
-// the spans keep mentioning but that never acts), reads another pass on its OWN question and
-// folds the answering lines in as citable spans before the talker speaks. The follow-up
-// questions it asked ride in the `inquire` step of the audit trace. Off by default.
-const applyInquire = () => {
-  els.inquireChip.textContent     = `Inquiry: ${STATE.inquire ? 'on' : 'off'}`;
-  els.inquireChip.dataset.on      = String(STATE.inquire);
-};
-try {
-  STATE.inquire = localStorage.getItem('eoreader.inquire') === 'on';
-} catch { /* localStorage may be unavailable — default off stands */ }
-applyInquire();
-els.inquireChip.addEventListener('click', () => {
-  STATE.inquire = !STATE.inquire;
-  try { localStorage.setItem('eoreader.inquire', STATE.inquire ? 'on' : 'off'); } catch { /* ignore */ }
-  applyInquire();
-});
+// Self-directed inquiry (the inquire stage, turn/stages.js) stays OFF — it was an experimental
+// power-user toggle whose chip confused more than it helped, so it's no longer surfaced in the
+// composer. STATE.inquire defaults false; the pipeline behaves exactly as "off". (Restore a
+// chip here if it's ever worth exposing again.)
 
 // Web chip — cycles web search off → confirm → auto (docs/web-search.md). When a turn can't
 // ground an answer (a no-doc chat question, or a measured gap), it PROPOSES a query; `confirm`
