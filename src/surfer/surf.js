@@ -25,7 +25,7 @@ import { deriveNull, buildDensity, eigenLenses, vonNeumann, commutator, projecto
 import { createEnactedLoop, calibrateReader } from '../enact/index.js';
 import { atmosphereFromActivations, corpusSigma, centroidBasis } from './atmosphere.js';
 import { updateStance } from './stance.js';
-import { bornSalience, figureSalience } from './salience.js';
+import { bornSalience, figureSalience, linkSalience, linksBySentence } from './salience.js';
 
 // The reach: a little behind the anchor (to read the frame it sits inside), mostly
 // ahead (a surf rides forward, and the arrow of time orders the frame axis).
@@ -143,10 +143,15 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   const threadTerms = opts.thread ? (opts.thread.terms || opts.thread) : null;
   const threadFigs  = opts.thread && opts.thread.figures ? opts.thread.figures : null;
   const hasThread   = (threadTerms && threadTerms.size) || (threadFigs && threadFigs.size);
+  // the LINK channel: the salient unit is the edge, not the node. A span's link salience is
+  // the strongest link it carries — a link BETWEEN thread figures scores above one merely
+  // incident on one, so the relation outranks the mention. Built once (reads the log).
+  const threadLinks = (threadFigs && threadFigs.size) ? linksBySentence(doc) : null;
   const threadCond = hasThread
     ? (c) => Math.max(
-        threadTerms ? bornSalience(threadTerms, doc.tokensBySentence?.[c]) : 0,
-        threadFigs ? figureSalience(threadFigs, readings[c]?.predicted?.figures || []) : 0,
+        threadTerms ? bornSalience(threadTerms, doc.tokensBySentence?.[c]) : 0,         // lexical
+        threadFigs ? figureSalience(threadFigs, readings[c]?.predicted?.figures || []) : 0,  // coref figures
+        threadLinks ? Math.max(0, ...(threadLinks.get(c) || []).map((l) => linkSalience(threadFigs, l))) : 0,  // the link
       )
     : null;
   // Compose the conditioners multiplicatively — a cursor must be both on the chosen reading

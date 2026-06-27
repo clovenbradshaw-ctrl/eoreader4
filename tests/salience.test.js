@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import { parseText } from '../src/perceiver/parse/index.js';
-import { surfFold, threadBasis, bornSalience, figureSalience, salienceField } from '../src/surfer/index.js';
+import { surfFold, threadBasis, bornSalience, figureSalience, linkSalience, linksBySentence, salienceField } from '../src/surfer/index.js';
 
 // Salience by the Born rule against the activated conversation thread. The thread is a state
 // |T⟩ over terms (and the figures those terms name); a span's salience is |⟨T|s⟩|². The same
@@ -57,6 +57,41 @@ test('thread conditioning keeps the coref reversal a lexical basis would drop (M
 
   const salient = surfFold(doc, 11, { reach: 'adaptive', thread });
   assert.ok(salient.stops.includes(30), 'the reversal ("the creature must go") stays among the salient stops');
+});
+
+test('the salient unit is the LINK, not the node or the pair — and of any arity', () => {
+  // Two was arbitrary: a link is an operator edge incident on N participants, and its salience
+  // is the Born weight of its participants against the thread. A link BETWEEN thread figures
+  // outranks one merely incident on one; a link off the thread is penalised by the cosine.
+  const T = new Set(['grete', 'gregor']);
+  const between = linkSalience(T, { participants: ['grete', 'gregor'] });   // the relation
+  const incident = linkSalience(T, { participants: ['gregor', 'window'] }); // a mention, wandering off
+  const solo = linkSalience(T, { participants: ['gregor'] });
+  assert.ok(between > solo && solo > incident, 'the relation outranks the bare mention, which outranks the wandering link');
+  assert.equal(linkSalience(T, { participants: ['father', 'window'] }), 0, 'a link off the thread is not salient');
+  // arity independence — a ternary link all on the thread is fully salient; no "two" anywhere.
+  const T3 = new Set(['a', 'b', 'c']);
+  assert.ok(Math.abs(linkSalience(T3, { participants: ['a', 'b', 'c'] }) - 1) < 1e-9, 'a ternary link covering the thread is fully salient');
+  assert.ok(linkSalience(T3, { participants: ['a', 'b', 'x'] }) < 1, 'a ternary link that wanders off scores less');
+});
+
+test('linksBySentence reads the per-span edges (the link channel input)', () => {
+  const doc = parseText('Grete fed Gregor. Gregor crawled.', { docId: 'l', genderCoref: true });
+  const m = linksBySentence(doc);
+  const s0 = m.get(0) || [];
+  assert.ok(s0.some(l => l.participants.includes('grete') && l.participants.includes('gregor samsa') || l.participants.includes('gregor')),
+    'the first span carries a link between Grete and Gregor');
+});
+
+test('the link channel sharpens the surf onto the relation (Metamorphosis)', () => {
+  // A link between the two thread figures (Grete feeds Gregor) should score above a span that
+  // merely mentions one of them — so the relational arc is what the surf keeps.
+  const doc = parseText(readFileSync('data/metamorphosis.txt', 'utf8'), { docId: 'm', genderCoref: true });
+  const thread = threadBasis({ query: "How does Grete's feeling toward Gregor change?", doc });
+  const links = linksBySentence(doc);
+  const sal = (i) => Math.max(0, ...(links.get(i) || []).map(l => linkSalience(thread.figures, l)));
+  // s15 "Grete ... fed Gregor" relates both; s10 "Gregor crawled ... hid" relates Gregor alone.
+  assert.ok(sal(15) >= sal(10), 'a Grete–Gregor link is at least as salient as a Gregor-only span');
 });
 
 test('no thread → the surf is byte-identical (salience is opt-in)', () => {

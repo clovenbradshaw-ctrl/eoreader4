@@ -89,6 +89,46 @@ export const bornSalience = (basis, tokenSet) => {
   return o * o;
 };
 
+// linkSalience(threadFigures, link) → the Born weight of a LINK against the thread.
+//
+// The salient unit is not a node, and not a PAIR of nodes (two is arbitrary) — it is the LINK:
+// the edge, the operator, incident on however many participants it relates. So salience is a
+// projection of the link's participant set onto the thread: |⟨T|p⟩|², the squared cosine of
+// the link's participants against the thread's figures. A link whose participants are all on
+// the thread scores 1; a link incident on one of them scores less; a link wandering off the
+// thread is penalised by the cosine. This generalises the figure channel from the node to the
+// edge and of any arity — and it discriminates the relation from the mere mention: a link
+// BETWEEN two thread figures ("Grete fed Gregor") outranks a link merely touching one ("Gregor
+// crawled"), with no rule that says "two", because the cosine rewards coverage of the link.
+export const linkSalience = (threadFigures, link) => {
+  if (!threadFigures || threadFigures.size === 0 || !link) return 0;
+  const parts = (Array.isArray(link.participants) ? link.participants : [link.src, link.tgt])
+    .filter((x) => x != null).map((x) => String(x).toLowerCase());
+  if (parts.length === 0) return 0;
+  let hit = 0;
+  for (const p of parts) if (threadFigures.has(p)) hit += 1;
+  if (hit === 0) return 0;
+  const o = hit / (Math.sqrt(threadFigures.size) * Math.sqrt(parts.length));
+  return o * o;
+};
+
+// linksBySentence(doc) → Map<sentIdx, link[]> — the links each span carries, participants
+// resolved to labels. A link is a CON/SIG bond (an operator edge); its participants are its
+// endpoints (src and, if any, tgt). This is the per-span edge set the link channel scores.
+export const linksBySentence = (doc) => {
+  const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
+  const label = new Map();
+  for (const e of events) if (e.op === 'INS' && e.id != null && !label.has(e.id)) label.set(e.id, String(e.label).toLowerCase());
+  const L = (id) => label.get(id) ?? String(id).toLowerCase();
+  const map = new Map();
+  for (const e of events) {
+    if (!((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null && e.sentIdx != null)) continue;
+    if (!map.has(e.sentIdx)) map.set(e.sentIdx, []);
+    map.get(e.sentIdx).push({ via: String(e.via), participants: [L(e.src), e.tgt != null ? L(e.tgt) : null].filter((x) => x != null) });
+  }
+  return map;
+};
+
 // figureSalience(threadFigures, cursorFigures) → the Born overlap² of two figure sets — the
 // referential channel. Both the thread's figures and the cursor's COREF-RESOLVED figures (the
 // surfer's warm field, so "the creature"/"it"/"the thing" already count as Gregor). |⟨T|s⟩|²
