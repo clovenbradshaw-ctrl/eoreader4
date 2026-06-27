@@ -320,6 +320,10 @@ section h2 .hint {
 .msg.assistant .webresult.ok .wr-head          { color: #6ee7b7; }
 .msg.assistant .webresult.unconfirmed .wr-head { color: #fbbf24; }
 .msg.assistant .webresult.empty .wr-head       { color: #a1a1aa; }
+.msg.assistant .wr-answer {
+  margin: .4rem 0 .2rem; font-size: .82rem; line-height: 1.5; color: #e2e8f0;
+  white-space: pre-wrap; word-break: break-word;
+}
 .msg.assistant .wr-source {
   display: flex; align-items: baseline; gap: .4rem; margin-top: .3rem; font-size: .72rem;
   color: #93c5fd; text-decoration: none; word-break: break-word;

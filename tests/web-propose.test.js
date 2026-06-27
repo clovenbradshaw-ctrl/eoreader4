@@ -154,42 +154,37 @@ test('verifyAgainstWeb: the answer’s DISTINCTIVE term decides — Paris confir
   assert.ok(bad.missing.includes('lyon'));
 });
 
-test('verify trigger: the answer is kept and a flag is attached (not replaced)', async () => {
+test('verify trigger: the model answer is kept and a web-grounded answer is attached (augment, not replace)', async () => {
   const calls = [];
-  const impl = async (args) => { calls.push(args); return { answer: 'The capital of France is Lyon.',
-    webProposal: { query: 'capital of france', trigger: 'verify', rationale: 'general knowledge', cost: COST_NOTICE }, flags: [] }; };
-  const webSearch = async () => [{ doc: groundedDoc('Paris is the capital of France.') }];
+  const impl = async (args) => {
+    calls.push(args);
+    if (calls.length === 1) return { answer: 'The capital of France is Lyon.',
+      webProposal: { query: 'capital of france', trigger: 'verify', rationale: 'general knowledge', cost: COST_NOTICE }, flags: [] };
+    return { answer: 'Paris is the capital of France.', route: 'grounded', flags: [], sources: [0] };  // the re-run over web pages
+  };
+  const webSearch = async () => [{ doc: { ...groundedDoc('Paris is the capital of France.'), docId: 's1', web: { title: 'Paris', url: 'https://a/p' } } }];
   const out = await runTurnWithWeb({ question: 'what is the capital of france?', docs: [] },
     { mode: 'auto', webSearch, runTurnImpl: impl });
-  assert.equal(out.answer, 'The capital of France is Lyon.', 'the model answer is kept, not replaced');
-  assert.equal(calls.length, 1, 'verify does NOT re-run the turn');
+
+  assert.equal(out.answer, 'The capital of France is Lyon.', 'the model answer is KEPT, not replaced');
+  assert.equal(calls.length, 2, 'verify re-runs once to build the web-grounded answer');
   assert.equal(out.webFetched.trigger, 'verify');
-  assert.equal(out.webFetched.supported, false);
-  assert.ok(out.flags.some(f => f.id === 'web-unconfirmed'), 'a flag tells the user it could not be confirmed');
+  assert.equal(out.webFetched.augmented.answer, 'Paris is the capital of France.', 'a web-grounded answer is attached');
+  assert.equal(out.webFetched.augmented.sources[0].title, 'Paris');
+  assert.equal(out.webFetched.augmented.sources[0].url, 'https://a/p');
+  assert.equal(calls[1].onToken, undefined, 'the side re-run does not stream into the live bubble');
+  assert.equal(calls[1].stream, false);
 });
 
-test('verify trigger: each source is tagged independently, the answer is kept', async () => {
-  const impl = async () => ({ answer: 'The capital of France is Paris.',
-    webProposal: { query: 'capital of france', trigger: 'verify', rationale: 'general knowledge', cost: COST_NOTICE }, flags: [] });
-  // Two sources: one backs "Paris", one is off-topic (no novel term).
-  const webSearch = async () => [
-    { doc: { ...groundedDoc('Paris is the capital of France.'), docId: 's-paris', web: { title: 'Paris', url: 'https://a.example/paris' } } },
-    { doc: { ...groundedDoc('The Loire is a river in France.'), docId: 's-loire', web: { title: 'Loire', url: 'https://b.example/loire' } } },
-  ];
-  const out = await runTurnWithWeb({ question: 'what is the capital of france?', docs: [] },
-    { mode: 'auto', webSearch, runTurnImpl: impl });
-
-  assert.equal(out.answer, 'The capital of France is Paris.', 'the answer is not replaced');
-  assert.equal(out.webFetched.sources.length, 2);
-  const paris = out.webFetched.sources.find(s => s.docId === 's-paris');
-  const loire = out.webFetched.sources.find(s => s.docId === 's-loire');
-  assert.equal(paris.supported, true, 'the Paris source backs the answer');
-  assert.equal(loire.supported, false, 'the off-topic source does not');
-  assert.equal(paris.title, 'Paris');
-  assert.equal(paris.url, 'https://a.example/paris');
-  assert.equal(out.webFetched.supportingCount, 1);
-  assert.equal(out.webFetched.supported, true, 'one independent source corroborating is enough');
-  assert.ok(out.flags.some(f => f.id === 'web-supported'));
+test('verify trigger: a failed web-grounded re-run still keeps the model answer and lists the sources', async () => {
+  const impl = async (args) => (!args.docs?.length
+    ? { answer: 'Model answer.', webProposal: { query: 'q', trigger: 'verify', rationale: 'r', cost: COST_NOTICE }, flags: [] }
+    : { route: 'error', answer: '' });   // the re-run failed
+  const webSearch = async () => [{ doc: { ...groundedDoc('Some page text.'), docId: 's1', web: { title: 'S1', url: 'https://a/1' } } }];
+  const out = await runTurnWithWeb({ question: 'q?', docs: [] }, { mode: 'auto', webSearch, runTurnImpl: impl });
+  assert.equal(out.answer, 'Model answer.', 'the model answer is kept');
+  assert.equal(out.webFetched.augmented, null, 'no augmented answer when the re-run fails');
+  assert.equal(out.webFetched.sources[0].title, 'S1', 'the sources are still listed');
 });
 
 test('runWebFollowup honours a query override (the confirmation card lets the user sharpen it)', async () => {
