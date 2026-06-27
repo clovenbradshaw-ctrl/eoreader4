@@ -1,13 +1,13 @@
 // The prompt-assembly contract — what the talker is handed.
 //
-// THE SUBJECTIVE FRAME (docs/subjective-frame.md). The talker is not handed
-// "sources" and asked to report over them; it is positioned as the one who just
-// READ some lines, and its prose is its reading of them. There is exactly one
-// channel in the prompt — the verbatim lines, the only thing it read — and the
-// boundary is stated as a fact about the reader ("they are all you read"), not a
-// rule about sources. This retires VOID-as-coercion: if those lines are all the
-// reader saw, speaking past them is incoherent rather than forbidden, and "I did
-// not find that" becomes the honest report of an absence, not a refusal.
+// THE HONEST FRAME (docs/subjective-frame.md). The talker is not told "HERE IS YOUR
+// ANSWER", nor made to pretend it read a document. It is told the truth: it is the voice
+// of a reader, and when the user asks something, the parts of what's been read that bear
+// on the question come to mind — the verbatim lines below are what surfaced this time.
+// "Here's what's coming to mind when you ask that", not "here are your sources". There is
+// exactly one channel — those recalled lines — and the boundary falls out of the honesty:
+// what surfaced is not the whole source, so speaking past it is incoherent rather than
+// forbidden, and "that didn't come to mind" is the honest report of an absence, not a refusal.
 //
 // What this REVERSES from the earlier (prompt-assembly.md) contract, per the
 // June 20 correction and docs/subjective-frame.md:
@@ -33,10 +33,11 @@
 // the per-turn user block carries the lines, the conversation so far, the
 // question, and the absence clause last, where a small model attends hardest.
 
-// The verbatim lines the reader read sit under this header. Exported so the echo
-// backend (and pleias's RAG re-extraction) can find them. Recognition-free, and
-// in the reader's register — never "excerpts from the document."
-export const EXCERPTS_HEADER = 'What you read:';
+// The verbatim lines that surfaced sit under this header — what came to mind for this
+// question (associative recall, like a person asked a question). Exported so the echo
+// backend (and pleias's RAG re-extraction) can find them. Recognition-free, and in the
+// reader's register — never "excerpts from the document."
+export const EXCERPTS_HEADER = 'What comes to mind:';
 
 // NO default length prescription. The earlier contract carried a sentence cap, which
 // a small model read as the TASK, not a ceiling — "summarize" came back as a literal
@@ -53,28 +54,30 @@ export const SUMMARY_GUARD =
   'They want a summary: say what it is about in your own words, drawing the lines ' +
   'together — never reword a single line as the whole answer.';
 
-// THE SUBJECTIVE FRAME (§1). The talker is positioned as the one who just read the
-// lines below — not a reporter handed sources. The boundary is a FACT about the reader
-// ("they are all you read"), so abstention is coherent, not forbidden: there is no
-// refusal instruction here, and none is needed. The words "sources / context /
-// passages / documents / memory" are deliberately kept OUT — a reader read some lines,
-// and that framing is what holds the boundary. The voice is stable across turns so the
-// prefix cache holds; the per-turn absence clause rides last in the user block, where a
-// small model attends hardest (buildGroundedMessages).
-export const SYSTEM_GROUND = `You just finished reading some lines — the ones below. They are all you read; you have not seen the rest of it.
+// THE HONEST FRAME (§1). The talker is told plainly WHAT it is and WHERE its knowledge comes
+// from, rather than being made to pretend it read a document. The reading the engine did
+// (retrieval + the surf's fold) is associative RECALL: when the user asks something, the parts
+// of what's been read that bear on the question come to mind, and the notes and lines below are
+// what surfaced this time. That is the honest ontology — "here's what comes to mind when this
+// person asks" — and it is also the boundary: what surfaced is not the whole source, so "that
+// didn't come to mind / the notes don't settle it" is coherent, and no refusal instruction is
+// needed. (Earlier versions told the talker "you just finished reading these lines; they are all
+// you read" — the ontological confusion this removes: the talker read nothing; a reading came to
+// it.) The voice is stable across turns so the prefix cache holds; the per-turn absence clause
+// rides last in the user block, where a small model attends hardest (buildGroundedMessages).
+export const SYSTEM_GROUND = `You are the voice of a reader. When the user asks something, the parts of what's been read that bear on it come to mind — and the notes and lines below are what surfaced this time. That is what you have to go on: not the whole source, only what came to mind for this question.
 
-Speak as the one who read them. Answer the user in your own words — say what you found, don't quote the lines back or tell them to go look. Write natural prose; don't write citations or tags, those are added for you.`;
+Speak from it, in your own words — say what it shows, don't quote it back or tell the user to go look. If it doesn't settle the question, say so plainly. Write natural prose; don't write citations or tags, those are added for you.`;
 
 export const SYSTEM_CHAT = `You are a helpful, knowledgeable assistant. Answer the user's question directly and accurately, drawing on the conversation and your general knowledge. Be clear and concise.`;
 
-// The STRICT grounded register — "only what you read" (the Grounded chip). The same
-// subjective frame, with one thing added: do not reach past the lines into outside
-// knowledge. The frame already makes "I did not find that" coherent; strict only forbids
-// filling the gap from elsewhere. A faithful "it wasn't in what I read" is the right
-// answer here, never a failure.
-export const SYSTEM_GROUND_STRICT = `You just finished reading some lines — the ones below. Answer from them first.
+// The STRICT grounded register — "only what came to mind" (the Grounded chip). The same honest
+// frame, with one thing added: do not reach past what surfaced into outside knowledge. The frame
+// already makes "that didn't come to mind" coherent; strict only forbids filling the gap from
+// elsewhere. A faithful "it didn't surface for me" is the right answer here, never a failure.
+export const SYSTEM_GROUND_STRICT = `You are the voice of a reader. When the user asks something, the parts of what's been read that bear on it come to mind — the notes and lines below are what surfaced. That is your only window onto the source.
 
-Speak as the one who read them. If the lines cover the question, answer from them. If they don't, you may answer from your general knowledge — just make clear that part isn't from the document (the grounding is marked for you, so don't claim the lines said something they didn't). Write natural prose; don't write citations or tags, those are added for you.`;
+Answer from what came to mind. If it covers the question, answer from it. If it doesn't, you may answer from your general knowledge — just make clear that part isn't from the source, and never claim the notes said something they didn't. Write natural prose; don't write citations or tags, those are added for you.`;
 
 // The FREE register — general-knowledge chat that ignores the document (the Free form
 // chip). Distinct from SYSTEM_CHAT, which is the conversation-only fallback: this one
@@ -209,11 +212,11 @@ export const buildGroundedMessages = ({
   // graph leads, the verbatim lines follow as its grounding — so the answer is built from the
   // structure and cited to the text.
   if (graph)
-    blocks.push(`What it means — the relations you read, as EOT triples ` +
+    blocks.push(`What it means — the relations that come to mind, as EOT triples ` +
       `(“A -> B : rel” is a relationship; “A : fact” is a property; a “not-” prefix is negation). ` +
       `Reason over THESE; the lines below are their grounding, not a list to recite:\n${graph}`);
 
-  // What you read — the verbatim lines, ordered for the frame (§3). The ONE channel.
+  // What comes to mind — the verbatim lines that surfaced, ordered for the frame (§3). The ONE channel.
   if (spans.length)
     blocks.push(`${EXCERPTS_HEADER}\n${orderSpansForFrame(spans).map(s => s.text).join('\n')}`);
 
@@ -253,7 +256,7 @@ export const buildGroundedMessages = ({
   // absence so the talker says it plainly rather than reaching past the frame for outside
   // knowledge (the strict system message already forbids that; this is the in-register cue).
   if (strict && !spans.length)
-    blocks.push('You read no lines bearing on their question. Say the document does not cover it, then, if you can, answer from general knowledge — just make clear that part is not from the document.');
+    blocks.push('Nothing came to mind bearing on their question. Say so plainly — it is not covered by the reading — then, if you can, answer from general knowledge, making clear that part is not from the reading.');
 
   // The ANSWER CLAUSE, last (§1) — where a small model attends hardest. The restriction is
   // lifted: the talker answers, from the lines when they cover it and from general knowledge
@@ -261,10 +264,10 @@ export const buildGroundedMessages = ({
   //   When a prior thread rode above, the clause names the live question outright so the talker
   //   answers THAT one and not the earlier turns it just saw.
   blocks.push(conversation.notes
-    ? `Answer their latest question now — “${question}” — in your own words. If the lines don't ` +
-      'cover it, answer from general knowledge and say it is not from the document.'
-    : 'Answer them now, in your own words. If the lines don\'t cover it, answer from general ' +
-      'knowledge and say it is not from the document.');
+    ? `Answer their latest question now — “${question}” — in your own words. If what came to mind ` +
+      'doesn\'t cover it, answer from general knowledge and say that part isn\'t from the reading.'
+    : 'Answer them now, in your own words. If what came to mind doesn\'t cover it, answer from ' +
+      'general knowledge and say that part isn\'t from the reading.');
 
   const sysBase = strict ? SYSTEM_GROUND_STRICT : SYSTEM_GROUND;
   const moment = currentMomentLine(now);
