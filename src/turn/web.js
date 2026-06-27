@@ -37,19 +37,21 @@ export const verifyAgainstWeb = (answer, corpus, { question = '', floor = 0.5 } 
   return { supported: overlap >= floor, overlap, missing: check.filter(t => !c.has(t)) };
 };
 
-export const runTurnWithWeb = async (args, {
-  webSearch,                 // (query, { k }) → [{ doc, … }] admitted web sources
-  mode = 'confirm',          // 'confirm' | 'auto' | 'off'
-  confirm = null,            // (proposal) → boolean | Promise<boolean>, for confirm mode
+// runWebFollowup(args, first, opts) → the post-approval half: fetch+admit the proposal's query
+// and either VERIFY the first answer against it or RE-RUN the turn with the web sources in scope.
+// Split out of runTurnWithWeb so a UI can render the first answer immediately, surface the
+// proposal as its own confirmation step, and run THIS only on a go-ahead — instead of blocking
+// the whole turn behind a popup. `query` overrides the proposal's query (the confirmation card
+// lets the user sharpen it before searching); absent, the proposal's own query stands.
+export const runWebFollowup = async (args, first, {
+  webSearch,
   k = 4,
   runTurnImpl = runTurn,
+  query,
 } = {}) => {
-  const first = await runTurnImpl(args);
-  const proposal = first.webProposal;
-  if (mode === 'off' || !proposal || !webSearch) return first;
-
-  const approved = mode === 'auto' ? true : (confirm ? await confirm(proposal) : false);
-  if (!approved) return first;     // proposer-only: no go-ahead, nothing fetched
+  const proposal = first?.webProposal;
+  if (!proposal || !webSearch) return first;
+  const q = (query != null && String(query).trim()) ? String(query).trim() : proposal.query;
 
   // Pick the source per trigger: verify/witness want FACTS (Wikipedia); a gap wants to FIND the
   // answer in the wild, so auto-route and pull the actual result pages (random websites).
@@ -57,22 +59,23 @@ export const runTurnWithWeb = async (args, {
     ? { k, kind: 'wikipedia' }
     : { k, kind: 'auto', fetchPages: true };
   let admitted = [];
-  try { admitted = await webSearch(proposal.query, opts); } catch { admitted = []; }
+  try { admitted = await webSearch(q, opts); } catch { admitted = []; }
   const webDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
-  if (!webDocs.length) return { ...first, webFetched: { query: proposal.query, trigger: proposal.trigger, results: 0 } };
+  if (!webDocs.length) return { ...first, webFetched: { query: q, trigger: proposal.trigger, results: 0 } };
 
   // VERIFY — keep the model's answer (general knowledge is fine), check it against the web, and
   // attach a flag. The answer is NOT replaced: the engine's job here is to flag what's wrong or
   // unconfirmed, not to restrict the answer.
   if (proposal.trigger === 'verify') {
     const corpus = webDocs.map(d => String(d.text || '')).join('\n');
-    const v = verifyAgainstWeb(first.answer, corpus, { question: proposal.query });
+    const v = verifyAgainstWeb(first.answer, corpus, { question: q });
     const flag = v.supported
       ? { id: 'web-supported', refuses: false, message: `The web results back this up (${Math.round(v.overlap * 100)}% of the answer's terms appear).` }
       : { id: 'web-unconfirmed', refuses: false, message: `Couldn't confirm this against the web${v.missing?.length ? ` — not found: ${v.missing.slice(0, 5).join(', ')}` : ''}.` };
     return { ...first, flags: [...(first.flags || []), flag],
       webProposal: proposal,
-      webFetched: { query: proposal.query, trigger: 'verify', results: webDocs.length, supported: v.supported, overlap: v.overlap } };
+      webFetched: { query: q, trigger: 'verify', results: webDocs.length, supported: v.supported, overlap: v.overlap,
+                    sources: webDocs.map(d => ({ docId: d.docId, title: d.web?.title || d.title || '', url: d.web?.url || d.web?.final_url || '' })) } };
   }
 
   // GAP / WITNESS — re-run with the web sources added to the answer scope, so the second answer
@@ -87,6 +90,24 @@ export const runTurnWithWeb = async (args, {
   return {
     ...second,
     webProposal: proposal,
-    webFetched: { query: proposal.query, trigger: proposal.trigger, results: webDocs.length, sources: webDocs.map(d => d.docId) },
+    webFetched: { query: q, trigger: proposal.trigger, results: webDocs.length,
+                  sources: webDocs.map(d => ({ docId: d.docId, title: d.web?.title || d.title || '', url: d.web?.url || d.web?.final_url || '' })) },
   };
+};
+
+export const runTurnWithWeb = async (args, {
+  webSearch,                 // (query, { k }) → [{ doc, … }] admitted web sources
+  mode = 'confirm',          // 'confirm' | 'auto' | 'off'
+  confirm = null,            // (proposal) → boolean | Promise<boolean>, for confirm mode
+  k = 4,
+  runTurnImpl = runTurn,
+} = {}) => {
+  const first = await runTurnImpl(args);
+  const proposal = first.webProposal;
+  if (mode === 'off' || !proposal || !webSearch) return first;
+
+  const approved = mode === 'auto' ? true : (confirm ? await confirm(proposal) : false);
+  if (!approved) return first;     // proposer-only: no go-ahead, nothing fetched
+
+  return runWebFollowup(args, first, { webSearch, k, runTurnImpl });
 };

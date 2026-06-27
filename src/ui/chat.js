@@ -155,6 +155,11 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   if (!el) return;
   if (el._elapsedTimer) { clearInterval(el._elapsedTimer); el._elapsedTimer = null; }
   clearImpression(el);                  // stop any preview gloss still typing
+  // Idempotent: a web follow-up re-renders this same bubble with the updated answer, so drop the
+  // blocks a prior finalize appended (kept as siblings of .body) before re-appending them — else
+  // coverage / flags / meta / trace stack up. The web proposal/result cards are preserved.
+  el.querySelectorAll(':scope > .coverage, :scope > .docsources, :scope > .flags, :scope > .meta, :scope > .retry, :scope > .trail-toggle')
+    .forEach(n => n.remove());
   el.classList.remove('thinking');
   el.classList.remove('streaming');     // the live stream is replaced by the cited answer
   const body  = el.querySelector('.body');
@@ -286,6 +291,122 @@ export const renderMindBlock = (el, spans, opts = {}) => {
   el.appendChild(box);
   const root = el.parentElement;
   if (root) root.scrollTop = root.scrollHeight;
+};
+
+// The web-search CONFIRMATION — the in-app replacement for the native window.confirm popup
+// (docs/web-search.md). It renders BENEATH a finalized answer, never over a thinking bubble:
+// the answer is shown first, then this offers to reach past the document. The proposed query
+// is EDITABLE — the proposer builds it from the question + the reading's figure, but a bare
+// "what happens at the end?" needs the user's hand to become "Metamorphosis Kafka ending", so
+// the box is theirs to sharpen before anything leaves the machine. `onSearch(query)` runs the
+// fetch; `onDismiss()` drops the card. Proposer-only: nothing is sent until a button is pressed.
+export const renderWebProposal = (el, proposal, { onSearch, onDismiss } = {}) => {
+  if (!el || !proposal) return;
+  el.querySelector('.webproposal')?.remove();   // one card per message
+  const card = document.createElement('div');
+  card.className = 'webproposal';
+
+  const head = document.createElement('div');
+  head.className = 'wp-head';
+  head.textContent = proposal.trigger === 'verify'
+    ? 'Check this against the web?'
+    : 'Search the web to answer this?';
+  card.appendChild(head);
+
+  if (proposal.rationale) {
+    const why = document.createElement('div');
+    why.className = 'wp-why';
+    why.textContent = proposal.rationale;
+    card.appendChild(why);
+  }
+
+  const field = document.createElement('input');
+  field.type = 'text';
+  field.className = 'wp-query';
+  field.value = proposal.query || '';
+  field.setAttribute('aria-label', 'Search query — edit before searching');
+  field.title = 'Edit the search query before sending it';
+  card.appendChild(field);
+
+  const actions = document.createElement('div');
+  actions.className = 'wp-actions';
+  const go = document.createElement('button');
+  go.type = 'button';
+  go.className = 'wp-go small';
+  go.textContent = '🔍 Search the web';
+  const no = document.createElement('button');
+  no.type = 'button';
+  no.className = 'wp-no small';
+  no.textContent = 'Not now';
+  actions.appendChild(go);
+  actions.appendChild(no);
+  card.appendChild(actions);
+
+  if (proposal.cost) {
+    const cost = document.createElement('div');
+    cost.className = 'wp-cost';
+    cost.textContent = proposal.cost;
+    card.appendChild(cost);
+  }
+
+  const close = () => card.remove();
+  go.addEventListener('click', () => {
+    const q = field.value.trim();
+    if (!q) { field.focus(); return; }
+    card.classList.add('searching');
+    go.disabled = true; no.disabled = true; field.disabled = true;
+    go.textContent = 'Searching…';
+    if (typeof onSearch === 'function') onSearch(q);
+  });
+  no.addEventListener('click', () => { close(); if (typeof onDismiss === 'function') onDismiss(); });
+  field.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click(); } });
+
+  el.appendChild(card);
+  const root = el.parentElement;
+  if (root) root.scrollTop = root.scrollHeight;
+  field.focus();
+  return card;
+};
+
+// The web-search OUTCOME — what the search actually brought back, made visible (docs/web-search.md).
+// A verify search reports whether the web backed the answer; a gap/witness search lists the pages
+// it pulled in. Either way the user sees that the search RAN and what it found, rather than a lone
+// pill — the answer to "but it doesn't do the search". Sources link out to the fetched page.
+export const renderWebResult = (el, fetched) => {
+  if (!el || !fetched) return;
+  el.querySelector('.webresult')?.remove();
+  const box = document.createElement('div');
+  box.className = 'webresult';
+
+  const head = document.createElement('div');
+  head.className = 'wr-head';
+  if (!fetched.results) {
+    box.classList.add('empty');
+    head.textContent = `No web results for “${fetched.query}”.`;
+  } else if (fetched.trigger === 'verify') {
+    box.classList.add(fetched.supported ? 'ok' : 'unconfirmed');
+    head.textContent = fetched.supported
+      ? `✓ The web backs this up (${fetched.results} source${fetched.results > 1 ? 's' : ''} checked).`
+      : `⚠ Couldn't confirm this against the web (${fetched.results} source${fetched.results > 1 ? 's' : ''} checked).`;
+  } else {
+    box.classList.add('ok');
+    head.textContent = `🔍 Searched the web — pulled ${fetched.results} source${fetched.results > 1 ? 's' : ''} into this answer.`;
+  }
+  box.appendChild(head);
+
+  for (const s of (fetched.sources || [])) {
+    if (!s) continue;
+    const item = document.createElement(s.url ? 'a' : 'div');
+    item.className = 'wr-source';
+    if (s.url) { item.href = s.url; item.target = '_blank'; item.rel = 'noopener'; item.title = s.url; }
+    item.textContent = s.title || s.url || s.docId || 'source';
+    box.appendChild(item);
+  }
+
+  el.appendChild(box);
+  const root = el.parentElement;
+  if (root) root.scrollTop = root.scrollHeight;
+  return box;
 };
 
 // Back-compat for any caller that still wants a one-shot assistant render.

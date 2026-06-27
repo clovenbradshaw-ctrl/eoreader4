@@ -53,9 +53,14 @@ export const proposeWebSearch = (ctx) => {
   if (!reasons.length) return null;
 
   // The query: the question, sharpened with the figure the reading centres on when we have a
-  // proper name for it and the question does not already carry it.
+  // proper name for it and the question does not already carry it. Without this, a bare
+  // question like "what happens at the end?" goes to the world with no subject and matches
+  // whatever shares its words — a film called "What Happens Later", not the document — and
+  // those irrelevant pages then pollute the answer scope. The reading's surf `focus` (the
+  // figure the fold settled on, e.g. "Gregor Samsa") is the subject when no prediction or
+  // referent target named one, so it backstops the fallback chain.
   const q = String(ctx.question || '').trim();
-  const figure = ctx.refTarget?.label || ctx.prediction?.primaryName || '';
+  const figure = ctx.refTarget?.label || ctx.prediction?.primaryName || ctx.surf?.focus || '';
   const query = (figure && !q.toLowerCase().includes(String(figure).toLowerCase()))
     ? `${q} ${figure}`.trim() : q;
 
