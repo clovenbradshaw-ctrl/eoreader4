@@ -56,6 +56,55 @@ export const selectExcerpts = (spans = [], { max = 5, ratio = 0.4, floor = 0.1 }
   return kept.length ? kept : ranked.slice(0, 1);
 };
 
+// Sources are things with activation (docs/source-activation.md). When the answer scope holds
+// SEVERAL sources — a loaded document AND the web pages a search just fetched to answer THIS
+// question — a flat global top-k hands every slot to the largest/loudest source: an
+// 884-sentence book buries the four web pages, so the findings the search brought back never
+// reach the talker (the audit's "what movies…" answered from Gregor-Samsa prose, the fetched
+// adaptation pages never surfaced). A source's ACTIVATION for a query is the strength of its
+// strongest evidence — its best span's fused score. This guarantees every ACTIVATED salient
+// source (best span clears `activationFloor`) its single best span in the result, evicting the
+// weakest NON-salient span to stay within k, capped at `maxReserve` so the loaded document is
+// never fully displaced. Pure; returns the global top-k unchanged when no salient source is
+// activated, so a single-source retrieve is byte-identical.
+export const reserveBySource = (spans = [], originOf, isSalient, { k = 6, activationFloor = 0.15, maxReserve = null } = {}) => {
+  const ranked = [...spans].sort((a, b) => (b.score || 0) - (a.score || 0));
+  const docOf = (s) => originOf?.(s.idx)?.doc || null;
+  const salientSpan = (s) => { const d = docOf(s); return !!(d && isSalient(d)); };
+  const base = ranked.slice(0, k);
+  const cap = maxReserve ?? Math.ceil(k / 2);
+
+  // The best (strongest-scoring) span per salient source — its activation for this query.
+  const bestBySource = new Map();
+  for (const s of ranked) {
+    const d = docOf(s);
+    if (!d || !isSalient(d) || bestBySource.has(d.docId)) continue;   // ranked → first seen is best
+    bestBySource.set(d.docId, s);
+  }
+  const activated = [...bestBySource.values()]
+    .filter(s => (s.score || 0) >= activationFloor)
+    .sort((a, b) => (b.score || 0) - (a.score || 0))
+    .slice(0, cap);
+
+  const result = [...base];
+  let reserved = result.filter(salientSpan).length;
+  for (const best of activated) {
+    if (result.some(s => s.idx === best.idx)) continue;     // already represented
+    if (reserved >= cap) break;
+    let evictAt = -1, evictScore = Infinity;                // evict the weakest NON-salient base span
+    for (let i = 0; i < result.length; i++) {
+      if (salientSpan(result[i])) continue;
+      const sc = result[i].score || 0;
+      if (sc < evictScore) { evictScore = sc; evictAt = i; }
+    }
+    if (evictAt >= 0) { result[evictAt] = best; reserved++; }
+    else if (result.length < k) { result.push(best); reserved++; }
+    else break;
+  }
+  result.sort((a, b) => (b.score || 0) - (a.score || 0));
+  return result;
+};
+
 export const retrieveHybrid = async (doc, query, embedder, k = 8) => {
   const lex = retrieveLexical(doc, query, k);
   const sem = await retrieveSemantic(doc, query, embedder, k);

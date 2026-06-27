@@ -9,7 +9,7 @@
 // The user sees what the model actually said, with a flag pinned to it.
 
 import { answerVoid } from '../answer/index.js';
-import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
+import { retrieveHybrid, reserveBySource, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
 import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
@@ -198,7 +198,19 @@ export const stages = {
       const structural = retrieveStructural(ctx.doc, 12);
       if (structural.length) return { ...ctx, spans: structural, retrievalQuery: query, retrieval: 'structural' };
     }
-    const spans = await retrieveHybrid(ctx.doc, query, re, 6);
+    // Source activation (docs/source-activation.md): retrieve a wider pool, then — when the
+    // scope is a composite that holds a freshly-fetched WEB source beside the loaded document —
+    // reserve a slot for each activated web source's best span, so the findings the search
+    // brought back actually reach the talker instead of being buried under a long local doc.
+    // Gated to web-bearing composites; a single doc (or a doc-only composite) takes the plain
+    // top-6, byte-identical to before.
+    const pool = await retrieveHybrid(ctx.doc, query, re, 18);
+    const isWebSource = (d) => !!(d && (d.web || d.sourceKind === 'web-source'));
+    const hasWebSource = ctx.doc?.isComposite && typeof ctx.doc.origin === 'function' &&
+      pool.some(s => isWebSource(ctx.doc.origin(s.idx)?.doc));
+    const spans = hasWebSource
+      ? reserveBySource(pool, ctx.doc.origin, isWebSource, { k: 6 })
+      : pool.slice(0, 6);
     if (spans.length === 0) {
       // Strict grounded mode never falls through to free generation: it stays on the
       // grounded route and answers the absence ("the document doesn't cover this")
