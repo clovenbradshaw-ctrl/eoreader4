@@ -400,7 +400,9 @@ export const renderWebResult = (el, fetched) => {
   if (fetched.augmented?.answer) {
     const ans = document.createElement('div');
     ans.className = 'wr-answer';
-    ans.textContent = fetched.augmented.answer;
+    // Strip the bound [sN] markers: they index the web re-run's own scope, not this turn's
+    // sources, so linkifying would mis-reference. The sources ride as chips just below.
+    ans.textContent = String(fetched.augmented.answer).replace(/\s*\[s\d+\]/g, '').trim();
     box.appendChild(ans);
   }
 

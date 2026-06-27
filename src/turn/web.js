@@ -12,6 +12,7 @@
 
 import { runTurn } from './pipeline.js';
 import { createCompositeDoc } from '../organs/in/index.js';
+import { createAuditLog } from '../audit/index.js';
 
 // verifyAgainstWeb(answer, corpus) → does the web corpus SUPPORT the answer? An embedder-free
 // lexical check: how many of the answer's salient (content) terms appear in the fetched text.
@@ -119,7 +120,8 @@ export const runWebFollowup = async (args, first, {
       const grounded = await runTurnImpl({
         ...args, doc: undefined, docs: [...baseDocs, ...webDocs],
         onToken: undefined, onStep: undefined, stream: false,   // a side answer — don't touch the live bubble
-        auditLog: undefined,                                    // one audit entry per turn; this is a sub-step
+        auditLog: createAuditLog(),                             // a DETACHED log — runTurn needs one, but this
+                                                                // sub-step must not add a turn to the user's audit pane
       });
       const route = grounded?.route || grounded?.turn?.route;
       if (grounded?.answer && route !== 'error')
