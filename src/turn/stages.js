@@ -8,7 +8,7 @@
 // Vetoes are flag-only — they never substitute the model's answer.
 // The user sees what the model actually said, with a flag pinned to it.
 
-import { answerSmalltalk, answerMath, answerVoid, answerMetadata } from '../answer/index.js';
+import { answerVoid } from '../answer/index.js';
 import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
 import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
@@ -99,39 +99,21 @@ const significanceOpts = async (ctx, anchor) => {
 
 export const stages = {
 
-  // Cheapest, model-free paths first. P0 retires the DOCUMENT mechanical short-
-  // circuits (confirm / relation / who): every document answer now goes through the
+  // No model-free mechanical short-circuits — every turn goes through grounding + the
   // talker, where the edge-grounding and diagonal guards adjudicate what it says.
-  // This kills the confirm token-overlap rubber-stamp (the "Yes." that fired on a
-  // shared-token disclaimer) and the who lookups at the route. Only the non-document
-  // smalltalk and math paths still short-circuit — routing arithmetic to a 135M
-  // talker is the riskier choice. The relation-typing edge-walk in answer/mechanical.js
-  // is kept (cold) for the P2 relational-referent resolver.
-  //   smalltalk → a greeting is never grounded against the document.
-  //   math      → arithmetic, with or without a doc.
-  //   else      → grounded (doc) or chat (no doc).
+  // P0 already retired the DOCUMENT mechanical paths (confirm / relation / who); the
+  // non-document smalltalk / math / metadata short-circuits are now retired too. They
+  // shipped confident, ungrounded answers that bypassed the veto/fact-check layer
+  // entirely — the load-bearing case being "when was this written?" answering the
+  // Project Gutenberg *release date* as if it were the work's composition date, tagged
+  // a green "answered from the document" with no flag. Routing arithmetic and greetings
+  // through the talker is slower, but it keeps one honest path: nothing is asserted that
+  // the downstream guards did not see. The answerers (answer/mechanical.js,
+  // answer/metadata.js) are kept for unit tests and the feed probe, just not wired here.
+  //   else → grounded (doc) or chat (no doc).
   async route(ctx) {
-    const short = (m) => ({
-      ...ctx, route: m.route, mechanical: m, terminate: true,
-      answer: m.text, sources: m.sources || [],
-    });
-
-    const sm = answerSmalltalk(ctx.question);
-    if (sm) return short(sm);
-
-    const math = answerMath(ctx.question);
-    if (math) return short(math);
-
-    // A front-matter question — "who wrote this?", "when was it written?" — is answered
-    // from doc.metadata as a distinct fact (§3), so title/author stay ANSWERABLE without
-    // riding the content prompt, where they would invite narration-from-memory. Only
-    // fires when the document actually carries the fact; otherwise it falls through.
-    const meta = answerMetadata(ctx.doc, ctx.question);
-    if (meta) return short(meta);
-
-    // Not a mechanical short-circuit → a real turn. Read the TASK register
-    // (intent.js): the prompt register (summary guard) and the token ceiling — the
-    // real length bound. The mechanical paths above need neither.
+    // Read the TASK register (intent.js): the prompt register (summary guard) and the
+    // token ceiling — the real length bound.
     //
     // The GROUNDING register (the UI's Grounded / Free form / Auto chip, ctx.grounding)
     // chooses the route here. 'grounded' forces the document register even with no doc
