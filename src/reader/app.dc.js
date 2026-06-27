@@ -26,7 +26,11 @@ class Component extends DCLogic {
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
       hoverCite:null, liveResearch:{on:false},
-      leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false };
+      leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
+      // Chat — first-class alongside sources. Each chat is a thread grounded in what
+      // has been read; answers are built from the read graph/sentences (no LLM; an
+      // LLM refines them only if window.claude is present). Chats live in the left panel.
+      chats:[], activeChat:null, chatInput:'', chatBusy:false };
   }
   // ── theme helpers ─────────────────────────────────────────────────────
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
@@ -205,6 +209,87 @@ class Component extends DCLogic {
     fr.onload=()=>{this.importText(String(fr.result||''),f.name.replace(/\.(txt|md|markdown|text)$/i,''));if(ev.target)ev.target.value='';};
     fr.onerror=()=>{this.feedLine('warn','Could not read that file.');};
     fr.readAsText(f);
+  }
+  // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
+  // Each chat is a thread that answers from the read sentences/graph. A chat can be
+  // scoped to one source (a fully-read book/page) or range over everything read. The
+  // answer quotes the most relevant read sentences and links the entities it found —
+  // every claim traces to a source. window.claude, if present, is not required.
+  chatId(){this._chatN=(this._chatN||0)+1;return 'c'+Date.now().toString(36)+this._chatN;}
+  activeChatObj(){return this.state.chats.find(c=>c.id===this.state.activeChat)||null;}
+  newChat(scopeUrl){
+    const id=this.chatId();
+    const title=scopeUrl?(((this.pageOf(scopeUrl)||{}).title)||this.short(scopeUrl)):'New chat';
+    const chat={id,title,scope:scopeUrl||null,messages:[],ts:Date.now()};
+    this.setState(s=>({chats:[chat,...s.chats],activeChat:id,viewUrl:null,selId:null,panelSel:null,chatInput:''}));
+    return id;
+  }
+  openChat(id){this.setState({activeChat:id,viewUrl:null,selId:null,panelSel:null,hoverEnt:null});}
+  closeChat(){this.setState({activeChat:null});}
+  onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
+  onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
+  sendChat(){
+    const q=this.norm(this.state.chatInput);if(!q)return;
+    const cur=this.activeChatObj();const scope=cur?cur.scope:null;
+    const ans=this.answerQuestion(q,scope);
+    this.setState(s=>{
+      let chats=s.chats.slice();let id=s.activeChat;let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),scope:null,messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:ans.text,refs:ans.refs,entities:ans.entities,sources:ans.sources}]};
+      return {chats,activeChat:id,chatInput:''};
+    });
+    requestAnimationFrame(()=>{const a=document.getElementById('eo-chat-scroll');if(a)a.scrollTop=a.scrollHeight;});
+  }
+  // The grounded answer: rank read sentences by question-term overlap, quote the best,
+  // and surface the entities the question names. Scope restricts to one source.
+  answerQuestion(q,scope){
+    if(!this.master||!this.master.sentences.length)
+      return {text:'I haven’t read anything yet. Read a URL or import a book — it has to be read fully — then ask.',refs:[],entities:[],sources:[]};
+    const qwords=q.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
+    if(!qwords.length) return {text:'Ask about a name, place, or idea from what you’ve read.',refs:[],entities:[],sources:[]};
+    const inScope=i=>!scope||this.master.sentenceSource[i]===scope;
+    const ents=[];
+    if(this.graph)for(const e of this.graph.entities.values()){if(!this.showable(e.id))continue;const lab=this.labelOf(e.id).toLowerCase();if(qwords.some(w=>lab===w||(lab.length>3&&lab.includes(w))||(w.length>3&&w.includes(lab))))ents.push(e.id);}
+    const scored=[];
+    for(let i=0;i<this.master.sentences.length;i++){if(!inScope(i))continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(!this._proseOk(low))continue;let v=0;for(const w of qwords)if(low.includes(w))v++;if(v>0)scored.push({i,v});}
+    scored.sort((a,b)=>b.v-a.v||a.i-b.i);
+    const top=scored.slice(0,3);
+    if(!top.length) return {text:'I didn’t find anything about that in what I’ve read.',refs:[],entities:ents.slice(0,6),sources:[]};
+    const text=top.map(o=>this.norm(this.master.sentences[o.i])).join(' ');
+    const sources=[...new Set(top.map(o=>this.master.sentenceSource[o.i]).filter(Boolean))];
+    return {text,refs:top.map(o=>o.i),entities:ents.slice(0,6),sources};
+  }
+  // View-model for the chat: the left-panel thread list + the active thread, ready
+  // for the template. Pure read of state.chats; no engine work here.
+  chatVals(base){
+    base.chats=(this.state.chats||[]).map(c=>{
+      const active=c.id===this.state.activeChat;
+      return {id:c.id,title:this.truncLabel(c.title||'New chat',32),
+        sub:(c.scope?(this.truncLabel(((this.pageOf(c.scope)||{}).title)||'a source',22)):'all sources')+' · '+Math.ceil(c.messages.length/2)+' Q',
+        active,onOpen:()=>this.openChat(c.id),
+        rowStyle:'display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;margin-bottom:3px;cursor:pointer;border:1px solid '+(active?'var(--accline)':'transparent')+';background:'+(active?'var(--accbg)':'transparent')+';'};
+    });
+    base.hasChats=base.chats.length>0;
+    const cur=this.activeChatObj();
+    if(!cur)return;
+    base.chatOn=true;
+    const msgs=cur.messages.map(m=>{
+      const isUser=m.role==='user';
+      const sources=(m.sources||[]).map(u=>({label:/^text:/i.test(u)?(this.truncLabel(((this.pageOf(u)||{}).title)||'text',20)):this.short(u),onOpen:()=>this.goWeb(u)}));
+      const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
+        style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
+      return {isUser,text:m.text,hasMeta:!isUser&&(sources.length>0||entities.length>0),
+        sources,hasSources:sources.length>0,entities,hasEntities:entities.length>0,
+        rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
+        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:var(--ink);border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;',
+        srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
+        srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
+    });
+    base.chat={title:this.truncLabel(cur.title||'New chat',40),
+      scopeLabel:cur.scope?(this.truncLabel(((this.pageOf(cur.scope)||{}).title)||this.short(cur.scope),36)):'everything read',
+      messages:msgs,empty:msgs.length===0,
+      placeholder:cur.scope?('Ask about “'+this.truncLabel(((this.pageOf(cur.scope)||{}).title)||'this source',26)+'”…'):'Ask about what you’ve read…'};
   }
   ingest(url,title,text,via,image,parent,wikiLinks){
     const doc=this.E.parseText(text,{coordSubjects:true});
@@ -1884,6 +1969,8 @@ class Component extends DCLogic {
       backStyle:this.navBtnStyle(this.canBack()),fwdStyle:this.navBtnStyle(this.canForward()),
       readBtnLabel:this.state.busy?'…':'Read',readBtnStyle:'font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:7px;padding:6px 13px;flex:0 0 auto;cursor:pointer;'+(this.state.busy?'opacity:.6;':''),
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
+      chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',
+      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onCloseChat:()=>this.closeChat(),
       sources:[],srcCount:0,srcEmpty:true,rightOpen:this.state.rightOpen,rightClosed:!this.state.rightOpen,onToggleRight:()=>this.toggleRight(),panelProfileOn:false,panelListOn:true,panelPageOn:false,pageOverview:null,listFromPage:false,onShowAllEntities:()=>this.showAllEntities(),onShowOverview:()=>this.showOverview(),panelProfile:null,previewOn:false,preview:null,
       pageLinked:this.state.linkMode,onTogglePlain:()=>this.toggleLinkMode(),
       plainLabel:this.state.linkMode?'Names linked':'Plain text',
@@ -1901,6 +1988,7 @@ class Component extends DCLogic {
       resizeHandleStyle:'position:fixed;top:54px;bottom:0;right:'+((this.state.panelW||380)-3)+'px;width:9px;z-index:40;cursor:col-resize;display:flex;align-items:center;justify-content:center;',
       closeSource:()=>this.closeSource(), linkChoiceOn:false, closeLinkChoice:()=>this.closeLinkChoice() };
     base.activity=this.activityVals();
+    this.chatVals(base);
 
     const vu=this.state.viewUrl;
     if(vu){
@@ -1917,7 +2005,7 @@ class Component extends DCLogic {
     base.onSortUpdated=()=>this.setState({sortMode:'updated'});base.onSortTop=()=>this.setState({sortMode:'mentions'});base.onSortAz=()=>this.setState({sortMode:'name'});
 
     if(!ready||!g||this.state.pages.length===0){
-      if(!vu){
+      if(!vu&&!base.chatOn){
         base.showPrompt=true;
         base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Read a URL to begin':'Loading the reading engine…');
         base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type any article or page URL in the address bar above. The page opens here, and — while detection is on — every entity in it is read into the graph on the right.';
@@ -1956,7 +2044,7 @@ class Component extends DCLogic {
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
     base.sources=orderedP.map(({p,depth})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=(bucket.get(p.url)||[]).length;
-      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),
+      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
         dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?8:9)+'px;font-weight:800;',
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
