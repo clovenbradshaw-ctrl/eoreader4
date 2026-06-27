@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#151518">
+  <title>eoreader4 · chat</title>
+  <link rel="stylesheet" href="src/ui/styles.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>eoreader4</h1>
+      <span id="status" class="status">booting…</span>
+      <span class="spacer"></span>
+      <!-- The reader (index.html) is the primary surface; this chat app is kept
+           reachable here. -->
+      <a href="index.html" class="reader-link" title="Open the EO Reader">⟵ Reader</a>
+      <!-- Allowlist: only the models that download reliably in practice. The other
+           backends (Pleias ONNX/GGUF, wllama SmolLM2-135M) stay registered in code
+           but are not exposed here — wllama in particular fails to fetch its GGUF
+           (Invalid typed array length). See README "Ethical, grounded talkers". -->
+      <select id="backend" title="Model backend">
+        <option value="echo">echo (instant, deterministic)</option>
+        <option value="structure">structure (embedder-free · this engine)</option>
+        <optgroup label="ONNX · transformers.js (WebGPU/CPU)">
+          <option value="smollm2-360m">SmolLM2-360M-Instruct · chat</option>
+        </optgroup>
+        <optgroup label="WebGPU · MLC">
+          <option value="webllm" selected>Llama-3.2-3B</option>
+        </optgroup>
+      </select>
+    </header>
+    <main>
+      <section id="doc-pane">
+        <h2>Document
+          <span class="hint">(optional — chat works without one)</span>
+          <span class="spacer"></span>
+          <span class="tabs" id="doc-tabs">
+            <button type="button" class="tab active" data-tab="text">Text</button>
+            <button type="button" class="tab" data-tab="graph">Graph</button>
+            <button type="button" class="tab" data-tab="log">Log</button>
+            <button type="button" class="tab" data-tab="feed">Feed</button>
+            <button type="button" class="tab" data-tab="predict">Predict</button>
+            <button type="button" class="tab" data-tab="idle">Rest</button>
+          </span>
+        </h2>
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="file-input" accept=".txt,.md,text/plain" multiple>
+          <p>Drop text files, or <label for="file-input">browse</label>. Add several — each becomes a chip you can select.</p>
+        </div>
+        <div id="doc-view"></div>
+        <div id="graph-view" hidden></div>
+        <div id="log-view" hidden></div>
+        <div id="feed-view" hidden></div>
+        <div id="predict-view" hidden></div>
+        <div id="idle-view" hidden></div>
+      </section>
+      <section id="chat-pane">
+        <h2>Chat</h2>
+        <div id="messages"></div>
+        <div id="doc-chips" class="doc-chips" hidden></div>
+        <form id="composer">
+          <textarea id="input" placeholder="Ask anything — I read the web to answer…" rows="2"></textarea>
+          <button type="submit" id="send">Send</button>
+        </form>
+      </section>
+      <section id="audit-pane">
+        <h2>Audit <button id="export-audit" class="small">Export JSONL</button></h2>
+        <div id="audit-view"></div>
+      </section>
+    </main>
+    <nav id="mobile-nav" aria-label="Panes">
+      <button type="button" class="mnav-btn" data-pane="doc">
+        <span class="mnav-ico" aria-hidden="true">▤</span><span class="mnav-lbl">Document</span>
+      </button>
+      <button type="button" class="mnav-btn active" data-pane="chat">
+        <span class="mnav-ico" aria-hidden="true">▣</span><span class="mnav-lbl">Chat</span>
+      </button>
+      <button type="button" class="mnav-btn" data-pane="audit">
+        <span class="mnav-ico" aria-hidden="true">≣</span><span class="mnav-lbl">Audit</span>
+      </button>
+    </nav>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
