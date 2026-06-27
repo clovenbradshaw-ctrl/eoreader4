@@ -24,7 +24,7 @@ import { buildGroundedMessages, buildChatMessages, orientationLine } from '../mo
 import { bindCitations, renderBound } from '../ground/index.js';
 import { runVetoes, isUnbound, classifyProvenance } from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
-import { projectGraph }     from '../core/index.js';
+import { projectGraph, VERDICTS } from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
@@ -600,7 +600,33 @@ export const stages = {
     const earned = (fc.citations || [])
       .map(c => parseInt(String(c).slice(1), 10)).filter(Number.isFinite);
     const sources = earned.length ? [...new Set([...(ctx.sources || []), ...earned])] : ctx.sources;
-    return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, sources };
+
+    // Feed an edge-corroboration back into the per-claim BIND. The lexical binder cites on
+    // surface overlap with a single span; a kinship claim ("Gregor's sister is Grete") whose
+    // witness sentence shares few words stays uncited there, so unbound-contact / low-coverage
+    // (ground/veto.js — both read `bound`, not the edge verdicts) fire on a correct, graph-
+    // witnessed answer. When the factcheck corroborated a claim against a document edge, attach
+    // that edge's citation to the matching bound claim, so the answer reads as grounded where
+    // the GRAPH grounds it — not only where lexical overlap did. Only fills an UNcited claim
+    // (a real lexical citation is never overwritten); when nothing matches, bound is untouched.
+    let bound = ctx.bound, answer = ctx.answer;
+    if (Array.isArray(ctx.bound) && ctx.bound.length) {
+      const corro = (fc.claims || []).filter(c => c.verdict === VERDICTS.CORROBORATED && c.citation && c.sentence);
+      if (corro.length) {
+        const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        let changed = false;
+        bound = ctx.bound.map(b => {
+          if (b.citation) return b;
+          const hit = corro.find(c => { const cs = norm(c.sentence), bs = norm(b.claim); return cs && bs && (bs.includes(cs) || cs.includes(bs)); });
+          if (!hit) return b;
+          changed = true;
+          return { ...b, citation: hit.citation, edgeGrounded: true };
+        });
+        if (changed) answer = renderBound(bound);
+        else bound = ctx.bound;
+      }
+    }
+    return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, sources, bound, answer };
   },
 
   // The regenerate pass — gate-then-rewrite (§5). Two triggers re-prompt the talker once

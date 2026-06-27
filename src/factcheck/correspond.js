@@ -22,7 +22,7 @@
 
 import { segmentSentences }       from '../perceiver/parse/index.js';
 import { parseRelations, headVerb } from '../perceiver/parse/index.js';
-import { checkRelationConflict, checkObjectFunctionalConflict } from '../core/index.js';
+import { checkRelationConflict, checkObjectFunctionalConflict, checkRelationAgree, typeOf } from '../core/index.js';
 import { coherence, terrainInfo }  from '../core/index.js';
 import { operatorsByDomain }       from '../core/index.js';
 
@@ -98,6 +98,51 @@ const looksRelational = (sentence) => {
 // existing node-grounding citation path. A relational sentence whose endpoints
 // do not both anchor is returned UNRESOLVED, so the verdict holds it rather than
 // silently dropping it.
+// The equative / possessive copula → a CON edge — the EOT-comparison gap. "Gregor's sister is
+// Grete", "Grete is Gregor's sister", "Grete is the sister of Gregor" are RELATIONAL claims
+// wearing a copula: parseRelations flattens them to a node-shaped DEF (relations.js copular
+// branch), so the edge-grounding check never sees them and a correct kinship answer reads as
+// unbound. Recover the edge HERE, on the TALKER-claim side only — the document parse is untouched
+// (its naming path already logs these kinship edges). When one side names an admitted referent
+// and the other is "OWNER's REL" / "the REL of OWNER" with OWNER admitted and REL a relation the
+// algebra types, emit OWNER --REL--> NAME: the same owner→named, via=relnoun shape the page logs,
+// so checkRelationAgree matches it against the document edge. Conservative by construction — both
+// endpoints must resolve to admitted ids and the relation must type, so it never manufactures an
+// edge from prose the document does not ground.
+const POSS = /^(?:the\s+)?(.+?)['’]s\s+([a-z]+)$/i;          // "Gregor's sister"
+const REL_OF = /^(?:the\s+)?([a-z]+)\s+of\s+(.+?)$/i;        // "the sister of Gregor"
+const COPULA_SPLIT = /^(.*?)\s+\b(?:is|was|are|were)\b\s+(.*)$/i;
+const cleanPhrase = (p) => String(p || '').trim().replace(/[.?!,;:]+$/, '').trim();
+
+const ownerEpithet = (phrase, admission) => {
+  const s = cleanPhrase(phrase);
+  let owner = null, rel = null;
+  let m = s.match(POSS);
+  if (m) { owner = cleanPhrase(m[1]); rel = m[2].toLowerCase(); }
+  else { m = s.match(REL_OF); if (m) { rel = m[1].toLowerCase(); owner = cleanPhrase(m[2]); } }
+  if (!owner || !rel || !typeOf(rel)) return null;            // only relations the algebra knows
+  const ownerId = admission.idOf?.(owner);
+  return ownerId ? { ownerId, rel } : null;
+};
+
+export const equativeKinEdges = (prose, admission) => {
+  if (!admission?.idOf) return [];
+  const out = [];
+  for (const sentence of segmentSentences(prose)) {
+    const m = sentence.match(COPULA_SPLIT);
+    if (!m) continue;
+    const left = cleanPhrase(m[1]), right = cleanPhrase(m[2]);
+    const nameId = (p) => admission.idOf?.(cleanPhrase(p)) || null;
+    // Try both arrangements: "OWNER's REL is NAME" and "NAME is OWNER's REL".
+    let owner = ownerEpithet(left, admission), name = nameId(right);
+    if (!(owner && name)) { owner = ownerEpithet(right, admission); name = nameId(left); }
+    if (owner && name && owner.ownerId !== name) {
+      out.push({ sentence, op: 'CON', src: owner.ownerId, tgt: name, via: owner.rel, resolved: true, equative: true });
+    }
+  }
+  return out;
+};
+
 export const claimedEdges = ({ prose, doc, cursor = Infinity, referents = false }) => {
   const admission = doc?.admission;
   if (!admission) return [];
@@ -123,6 +168,11 @@ export const claimedEdges = ({ prose, doc, cursor = Infinity, referents = false 
     if (edges.length === 0 && looksRelational(sentence)) {
       out.push({ sentence, op: null, src: null, tgt: null, via: null, resolved: false });
     }
+  }
+  // Equative kinship claims the copular branch flattened to a DEF never appear as a CON/SIG
+  // edge above — recover them so the edge-grounding check can run on them.
+  for (const e of equativeKinEdges(prose, admission)) {
+    if (!out.some(x => x.resolved && x.src === e.src && x.tgt === e.tgt && x.via === e.via)) out.push(e);
   }
   return out;
 };
@@ -202,6 +252,19 @@ export const checkClaim = async (claim, { doc, graph, classifier, adjacency, cha
       reason: cos.reason, citation: cos.citation || null, confidence: cos.confidence ?? null,
     });
   }
+
+  // The symbolic CORROBORATION axiom — embedder-free, the mirror of the disjoint/functional
+  // contradiction above. A same-pair (or symmetric-reverse) document edge of the SAME relation
+  // primitive WITNESSES the claim, so it corroborates and earns that edge's citation even under
+  // the hash organ. Runs AFTER the contradiction checks (a disjoint pair is a contradiction, not
+  // agreement) and BEFORE the classifier gate (so a typed kinship claim never degrades to
+  // indeterminate just because the meaning embedder is cold). Untyped relations return null and
+  // fall through to the geometric path unchanged.
+  const agree = checkRelationAgree(graph, claim);
+  if (agree) return result(agree.verdict, {
+    reason: agree.reason, citation: agree.citation || null,
+    sentIdx: agree.sentIdx ?? null, confidence: agree.confidence ?? null,
+  });
 
   if (!classifier)      return result(VERDICTS.INDETERMINATE, { reason: 'no-classifier' });
 

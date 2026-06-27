@@ -216,6 +216,38 @@ export const checkRelationConflict = (graph, claim) => {
   return null;
 };
 
+// The symbolic CORROBORATION axiom — the mirror of checkRelationConflict. Where that catches a
+// claimed relation the document DENIES (a disjoint or functional clash), this confirms one it
+// WITNESSES: the same ordered pair (or, for a symmetric primitive, the reverse pair) already
+// carries a relation that types to the SAME primitive and is not gender-disjoint. It is
+// embedder-free — the typing is symbolic — so a kinship claim ("Gregor's sister is Grete")
+// corroborates and EARNS the witnessing sentence's citation even under the hash organ, where the
+// geometric corroboration path (correspond.js) degrades to indeterminate. Returns null outside
+// the algebra so the geometric path runs unchanged; the caller runs the CONTRADICTION check
+// first, so a disjoint pair is a contradiction, never silently read as agreement.
+export const checkRelationAgree = (graph, claim) => {
+  const t = typeOf(claim?.via);
+  if (!t) return null;                             // outside the algebra → defer to geometry
+  const rep = graph?.representative || ((id) => id);
+  const src = rep(claim.src), tgt = rep(claim.tgt);
+  for (const e of (graph?.edges || [])) {
+    const f = rep(e.from), o = rep(e.to);
+    const direct  = f === src && o === tgt;
+    const reverse = t.symmetric && f === tgt && o === src;   // sibling/spouse: order-free
+    if (!direct && !reverse) continue;
+    const u = typeOf(e.via);
+    if (!u || u.type !== t.type) continue;         // a different primitive is not agreement
+    if (areDisjoint(claim.via, e.via)) continue;   // sister vs brother on one pair → the conflict path owns it
+    return Object.freeze({
+      verdict: VERDICTS.CORROBORATED, reason: 'relation-agrees',
+      claimRel: claim.via, docRel: e.via,
+      confidence: relationPrior(claim.via) * relationPrior(e.via),
+      citation: e.sentIdx != null ? `s${e.sentIdx}` : null, sentIdx: e.sentIdx ?? null,
+    });
+  }
+  return null;
+};
+
 // §4 — the OBJECT-functional clash, the mirror of checkRelationConflict's functional-axiom:
 // where that looks at edges OUT of the subject (one filler per subject slot), this looks at
 // edges INTO the object (one undergoer per resultant). A `becomes` claim — "the father
