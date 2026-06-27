@@ -263,7 +263,21 @@ export const headVerb = (text, { isCopula = defIsCopula, isModifier = defIsModif
     if (contr) { polarity = '−'; if (!DO_SUPPORT.has(contr[1])) setModality(contr[1]); stepOver(m); continue; }
     if (NEGATION.has(w)) { polarity = '−'; stepOver(m); continue; }
     if (MODALS.has(w))   { setModality(w);  stepOver(m); continue; }
-    if (isCopula(w)) return { verb: w, rest: rest.slice(m[0].length), copular: true, at, restStart, polarity, modality };
+    if (isCopula(w)) {
+      // PROGRESSIVE, not copula: a copula IMMEDIATELY followed by a present participle
+      // is the progressive auxiliary — "was developing a reboot" is the verb `developing`
+      // (an active CON edge), not "X is [a developing reboot]" (a DEF). Step over the
+      // copula and let the participle be the head verb. Gated tightly so it does not
+      // disturb the copula DEF path: the -ing must follow at once (a determiner between —
+      // "was a developing nation" — is an adjective, left as a DEF), and a PAST participle
+      // after a copula is PASSIVE ("was developed by …"), reached by the caller's passive
+      // scan, so only -ing is taken here. The length floor screens bare -ing nouns
+      // ("was king" → DEF, "thing"/"wing"/"ring").
+      const after = rest.slice(m[0].length).replace(/^[\s,]+/, '');
+      const part = after.match(/^([A-Za-z]+ing)\b/);
+      if (part && part[1].length > 4 && !isModifier(part[1].toLowerCase())) { stepOver(m); continue; }
+      return { verb: w, rest: rest.slice(m[0].length), copular: true, at, restStart, polarity, modality };
+    }
     if (isModifier(w)) { stepOver(m); continue; }
     if (NOT_HEAD.has(w)) return null;   // a preposition/relative pronoun is not a verb
     if (HEDGE_VERB.has(w)) modality = 'epistemic';      // "seemed", "appeared" → a hedge

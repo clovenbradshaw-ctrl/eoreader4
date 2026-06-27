@@ -148,6 +148,27 @@ test('a copular non-passive still defines, and a passive with no named agent sta
   assert.ok(!rels.some(r => r.op === 'CON' && r.via === 'transformed'), 'no edge to an unnamed agent');
 });
 
+// The PROGRESSIVE auxiliary (was/were + V-ing) is the verb, not a copula. The t2 audit
+// shape — "Ryan Coogler was developing a new reboot" — produced no Coogler edge at all,
+// because "was" read as a copula and the participle was never reached; the graph reached
+// the realizer Coogler-less and it answered "Carter" off the bare "per series creator
+// Chris Carter" attribution. The progressive now hands the participle through as the head.
+test('a progressive "was developing" yields the active verb edge, not a copula DEF', () => {
+  const doc = parseText('Ryan Coogler was developing a new reboot.', { docId: 'prog' });
+  const rels = [];
+  for (const sent of (doc.sentences || doc.units)) rels.push(...parseRelations(sent, doc.admission, {}, { referents: true }));
+  const edges = rels.filter(r => r.op === 'CON').map(r => `${r.src} -> ${r.tgt} : ${r.via}`);   // EOT LINK shape
+  assert.ok(edges.includes('ryan-coogler -> reboot : developing'), `expected the progressive edge, got ${JSON.stringify(edges)}`);
+
+  // The copula DEF path is untouched: a determiner after the copula is NOT a progressive
+  // ("is a violinist"), and a bare copula stays a DEF, never a CON verb.
+  const d = parseText('Grete is a violinist.', { docId: 'cop' });
+  const drels = [];
+  for (const sent of (d.sentences || d.units)) drels.push(...parseRelations(sent, d.admission, {}, { referents: true }));
+  assert.ok(drels.some(r => r.op === 'DEF'), 'the copula predicate is still a DEF');
+  assert.ok(!drels.some(r => r.op === 'CON' && r.via === 'is'), 'a copula does not become a CON verb');
+});
+
 // EOT serialization of the meaning graph (docs/eot-surface-syntax.md): relations render as
 // LINK triples (A -> B : rel) and predicates as IS-A (A : value) — the notes fed to the model.
 test('serializeEOT renders the graph as EOT triples (LINK + IS-A), negation preserved', () => {
