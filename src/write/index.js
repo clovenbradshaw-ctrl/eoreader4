@@ -64,7 +64,12 @@ export { inferGenders } from './genders.js';
 // fabrication-incapable); an LLM talker only rewords them fluently, behind a propositional
 // veto. phraserBrief packages the determined content; talkThenVerify realises it and strips
 // any proposition the talker added that the document does not witness.
-export { phraserBrief, realizationPrompt, talkThenVerify } from './brief.js';
+export { phraserBrief, realizationPrompt, talkThenVerify, speakTriples } from './brief.js';
+// The brief as RDF-star: the x→relation→y triple an LLM already knows, annotated with the EO
+// richness a flat triple loses — the operator, the site terrain, the resolution band (how
+// definitely it holds), the arrow of time, the provenance door. The triple is the fact; the
+// eo: annotations are how to say it. EO graph in a notation the model can consume.
+export { briefRDF, rdfRealizationPrompt } from './rdf.js';
 // Thinking is the phraser→talker arc turned INWARD: voice an impression to yourself, read
 // your own words back (READ_BACK-of-prior-self), let the hearing re-focus the graph, voice
 // again — inner speech as spreading activation, grounded, firewalled (every thought is mine

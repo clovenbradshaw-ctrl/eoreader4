@@ -16,7 +16,7 @@ import { registerBackend } from './interface.js';
 import { EXCERPTS_HEADER } from './prompt.js';
 import { emitSurface } from './stream.js';
 import { parseText } from '../perceiver/parse/index.js';
-import { speakConcept, inferGenders, think, worthSayingAloud } from '../write/index.js';
+import { phraserBrief, speakTriples, inferGenders, think, worthSayingAloud } from '../write/index.js';
 
 registerBackend('structure', () => {
   return {
@@ -58,9 +58,14 @@ const structuralTelling = (messages) => {
   // will not bind to a masculine antecedent — the reference line the retelling rides on.
   const doc = parseText(text, { docId: 'grounded-excerpts', genderCoref: true });
   const genders = inferGenders(doc);
-  const out = speakConcept(doc, { genders, max: 10 });
-  const retelling = out.text && out.text.trim()
-    ? out.text
+  // Speak FROM THE TRIPLES, not from the re-realised surface. phraserBrief gives the grounded
+  // x→relation→y edges; speakTriples says them as natural speech (compound predicates,
+  // pronouns, past tense) generated from the structure — so it can be no more wrong than the
+  // graph, and it never compounds a parse glitch into word salad the way the surface realiser
+  // did ("Grete aloned dared"). The content is the edges'; the clean form is the renderer's.
+  const brief = phraserBrief(doc, { genders, max: 10 });
+  const retelling = brief.propositions.length
+    ? speakTriples(brief.propositions, { genders })
     : 'I read the excerpts but their graph held no traversable relations to retell.';
 
   // Think before finishing: run the inner-speech wander over the same graph and surface the
