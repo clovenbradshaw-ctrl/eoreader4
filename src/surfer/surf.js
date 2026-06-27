@@ -36,7 +36,19 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   const empty = { anchor: 0, stops: [], peak: 0, focus: null, field: [], recCursors: [], recAxes: [], rode: 'bayesian-figure' };
   if (S === 0) return empty;
 
-  const { behind, ahead, maxStops } = { ...DEFAULT_REACH, ...opts };
+  // ADAPTIVE REACH (opt-in, opts.reach === 'adaptive'): let the surf get as much as it needs.
+  // The fixed window (behind/ahead) bounds the surf by an arbitrary distance — too narrow for
+  // a whole-arc question (the anchor's frame and the crisis it builds to can be 30 sentences
+  // apart). Adaptive reach reads the field over the WHOLE document and lets the NOISE NULL
+  // decide how much is structure: the boundary mode (deriveNull) is forced on, and the stop
+  // count is uncapped, so a cursor arrests iff its surprise beats what the document's own
+  // non-cohering bulk throws up by chance. "As much as it needs" is then bounded by signal,
+  // not by a window — the same self-terminating discipline the idle/think loops use. Default
+  // (no opts.reach) is byte-identical: the fixed window, the median rule, maxStops = 5.
+  const adaptive = opts.reach === 'adaptive';
+  const { behind, ahead, maxStops } = adaptive
+    ? { behind: S, ahead: S, maxStops: Infinity }
+    : { ...DEFAULT_REACH, ...opts };
   const a  = clampIdx(anchor, S);
   const lo = Math.max(0, a - behind);
   const hi = Math.min(S - 1, a + ahead);
@@ -120,13 +132,17 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   const scoreAt = (c) => (cond ? bayesAt(c) * cond(c) : bayesAt(c));
   const scoreSeries = cond ? field.map(scoreOf) : reachBayes;
 
-  const useBoundary = Number.isFinite(opts.alpha);
+  // Adaptive reach reads structure off the noise null (the principled "how much"), so the
+  // boundary mode is forced on there — with a default alpha if the caller named none. A fixed
+  // window keeps the median rule unless the caller opts into a boundary alpha (byte-identical).
+  const alpha = Number.isFinite(opts.alpha) ? opts.alpha : (adaptive ? 0.05 : null);
+  const useBoundary = Number.isFinite(alpha);
   const band = useBoundary ? null : medianOf(scoreSeries);
   let isPeak;
   if (useBoundary) {
     for (const f of field) {
       const sc = scoreOf(f);
-      const nul = deriveNull(scoreSeries, { scale: 'linear', alpha: opts.alpha, leaveOut: sc });
+      const nul = deriveNull(scoreSeries, { scale: 'linear', alpha, leaveOut: sc });
       f.verdict = sc > nul ? 'SYN' : 'NUL';   // beats the noise null → structure; else held
     }
     isPeak = (f) => f.verdict === 'SYN';

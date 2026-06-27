@@ -150,3 +150,34 @@ test('the audit records the surf path (anchor, peak, stops, focus, recs, rode)',
   assert.ok(Array.isArray(surf.stops) && surf.stops.includes(surf.anchor));
   assert.ok(Number.isInteger(surf.peak));
 });
+
+test('adaptive reach gets as much as it needs — spans the whole arc, the null sets the count', () => {
+  // A long arc: an early establishment and a late reversal far apart. The fixed window
+  // catches the early cluster; adaptive reach reads the WHOLE field and lets the noise null
+  // decide how many stops, so it reaches the distant turn the fixed window misses.
+  const filler = Array.from({ length: 22 }, (_, i) =>
+    ['A picture hung.', 'A clock ticked.', 'A door stood.', 'A chair waited.', 'A lamp glowed.',
+     'A window opened.', 'A floor creaked.', 'A wall loomed.'][i % 8]).join(' ');
+  const arc =
+    'Grete fed Gregor. Grete tended Gregor. Grete cleaned the room. ' +
+    filler +
+    ' Grete refused Gregor. Grete renounced Gregor.';
+  const doc = parseText(arc, { docId: 'arc' });
+  const S = doc.sentences.length;
+  const fixed = surfFold(doc, 0);                          // default window, anchored at the start
+  const adapt = surfFold(doc, 0, { reach: 'adaptive' });   // as much as it needs
+
+  assert.equal(adapt.rode, 'bayesian-void', 'adaptive rides the noise-null boundary, not the median');
+  assert.ok(Math.max(...adapt.stops) > Math.max(...fixed.stops),
+    'adaptive reaches further into the document than the fixed window');
+  // the late reversal (the last sentences) is reachable by adaptive, beyond the fixed ahead=16
+  assert.ok(adapt.stops.some(i => i >= S - 2), 'the distant turn is among the stops');
+});
+
+test('adaptive reach leaves the default surf byte-identical (opt-in only)', () => {
+  const doc = parseText(STORY, { docId: 'parity' });
+  const a = surfFold(doc, 3);
+  const b = surfFold(doc, 3);   // same call twice — adaptive is off, nothing changed
+  assert.deepEqual(a.stops, b.stops);
+  assert.equal(a.rode, 'bayesian-figure', 'default still rides the figure/median rule');
+});
