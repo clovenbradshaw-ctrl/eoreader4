@@ -153,12 +153,20 @@ across turns. Observe-only: **no reading change**, audited in `settle.horizon`
 (turns · departure · turnSurprise · ∫surprise). A turn with no Horizon threaded is
 byte-identical.
 
+**(e) Own the Horizon in the app's session state — DONE.** `ui/app.js` now holds a
+single `STATE.horizon`, created once per session from the embedder-free
+`structuralGround()` σ and threaded into every `runTurn`. So a real conversation in the
+running product accumulates one across turns (and across documents — the structural
+ground is doc-independent). Still observe-only: the `settle` fold changes no answer, the
+turn is byte-identical, and the accumulation is audited in `settle.horizon`. Construction
+is guarded — a failure leaves `horizon: null` and the turn behaves exactly as before.
+
 **Still open.** (c) close the loop — let the measured stance *move* ρ at the commit
 (`stance.js applyMeasuredStance`; needs the stance→family map surfaced). (d) read
 the next turn *against* the accumulated Horizon (surf reads `horizon.rho` as a prior
-— the conditioning step). (e) own the Horizon in the app's session state (`ui/app.js`)
-so a real conversation accumulates one. (a)+(b) are the foundation; (c)–(e) are the
-measured follow-ons.
+— the conditioning step). (a)+(b)+(e) are the foundation — the Horizon now lives and
+accumulates on the live path; (c)+(d) are the measured follow-ons that let it *condition*
+the reading rather than only observe it.
 
 ### 5. Unify the REC sources
 
@@ -193,9 +201,10 @@ surf can be told apart from the local one.
 
 Moves **1, 2, 3 (stance), 6** are landed — the embedder-free column, the surfer's
 guard as a veto, the document-scale spine, and the bench target that measures it.
-Move **4 (a)+(b)** is landed — the Horizon generalised to a structural ground and
-threaded observe-only through the turn; its follow-ons (c)–(e) are the measured
-steps that condition the reading and own the Horizon in the app. Move **5** shrank
+Move **4 (a)+(b)+(e)** is landed — the Horizon generalised to a structural ground,
+threaded observe-only through the turn, and now owned in the app's session state so a
+real conversation accumulates one; its follow-ons (c)+(d) are the measured steps that let
+the accumulated Horizon *condition* the reading rather than only observe it. Move **5** shrank
 after PR #127 wired `reanalyze` into the log — it is now "surface the log-resident
 RECs in the surf," not "build the detectors."
 

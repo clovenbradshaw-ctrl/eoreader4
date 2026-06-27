@@ -18,6 +18,7 @@ import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
 import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
+import { createHorizon, structuralGround } from '../surfer/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
          renderWebProposal, renderWebResult, setThinkingNote, buildPropositions } from './chat.js';
@@ -43,6 +44,14 @@ const STATE = {
   graph:     null,       // graph-view controller for the current doc
   activeTab: 'text',
   history:   [],         // the running transcript, fed back each turn (the session fold)
+  // The session's persistent Horizon (surfer/horizon.js, surfing-next.md §4e): the moved
+  // density operator that accumulates the conversation's interpretive state across turns.
+  // Owned here in session state and threaded into runTurn so the `settle` stage folds each
+  // turn's reading in — OBSERVE-ONLY (no reading change, no answer change), audited in
+  // settle.horizon. Cold-starts at the embedder-free structural ground σ (operator basis),
+  // so it accumulates with no meaning model. Created lazily on the first turn below.
+  horizon:   null,
+
   grounding: 'auto',     // how answers use the document: 'auto' | 'grounded' | 'free' (the chip)
   inquire:   false,      // self-directed inquiry — read another pass on the engine's own open question (the chip)
   webSearch: 'auto',     // web search: 'off' | 'confirm' | 'auto' — default AUTO: every turn searches on its
@@ -482,9 +491,19 @@ const runQuery = async (question) => {
       .catch(() => null);
   }
 
+  // The session Horizon, created once and reused for the life of the conversation
+  // (surfing-next.md §4e). The structural ground is doc-independent (the fixed operator
+  // basis), so one Horizon spans the whole session and accumulates across documents.
+  if (!STATE.horizon) {
+    try { STATE.horizon = createHorizon({ ground: structuralGround() }); } catch { STATE.horizon = null; }
+  }
+
   const t0 = performance.now();
   const turnArgs = {
     question,
+    // The persistent session Horizon — the `settle` stage folds this turn's reading into it
+    // (observe-only; the answer is byte-identical). Null only if construction failed.
+    horizon:  STATE.horizon,
     shapeLibrary: STATE.shapeLibrary,   // the form predictor, once built (null until MiniLM warms)
     docs:     selectedDocs,     // the selected set — folded into one composite to ground against
     // In WEAVE mode the recalled lines are offered to the model as labelled background;
