@@ -153,17 +153,19 @@ export const detectTensions = ({ assertions = [], values = [] } = {}) => {
   return tensions;
 };
 
-// substrateToArrows — the round-trip measurement (P1). Render the firm graph back to
-// the flat arrow lines today's serializeNotes emits, band and nodes stripped, so the
-// substrate is provably a SUPERSET of the current notes. Mirrors serializeNotes'
-// dedup (by src|±rel|tgt, by ref) and the shared 8-line cap, so the output is
-// byte-equal to serializeNotes(structure) on the same structure.
-export const substrateToArrows = (substrate, { max = 8 } = {}) =>
+// substrateToEOT — the round-trip measurement (P1). Render the firm graph back to the
+// EOT lines serializeNotes emits, band and nodes stripped, so the substrate is provably a
+// SUPERSET of the current notes. Mirrors serializeNotes' dedup (by src|±rel|tgt, by ref)
+// and the shared 8-line cap, so the output is byte-equal to serializeNotes(structure) on
+// the same structure.
+export const substrateToEOT = (substrate, { max = 8 } = {}) =>
   renderLines(substrate, { max, includeHeld: true });
 
-// renderLines — the shared arrow/value renderer. includeHeld=false drops the facts a
-// tension has claimed (the membrane's settled group); includeHeld=true keeps them
-// (the round-trip superset).
+// renderLines — the shared EOT LINK / IS-A renderer (docs/eot-surface-syntax.md). A bond
+// is `A -> B : rel`, a value `A : value` — the flat `A --rel--> B` arrow was retired (a
+// model reads it as causal even on mere adjacency; §2). includeHeld=false drops the facts
+// a tension has claimed (the membrane's settled group); includeHeld=true keeps them (the
+// round-trip superset).
 export const renderLines = (substrate, { max = 8, includeHeld = true } = {}) => {
   const lines = [];
   const seen = new Set();
@@ -173,7 +175,7 @@ export const renderLines = (substrate, { max = 8, includeHeld = true } = {}) => 
     const key = `${a.s.id}|${neg}${a.p.plain}|${a.o.id}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    lines.push(`${a.s.label} --${neg}${a.p.plain}--> ${a.o.label}`);
+    lines.push(`${a.s.label} -> ${a.o.label} : ${neg}${a.p.plain}`);   // EOT LINK → CON
     if (lines.length >= max) return lines;
   }
   for (const v of (substrate?.values || [])) {
@@ -181,7 +183,7 @@ export const renderLines = (substrate, { max = 8, includeHeld = true } = {}) => 
     const key = `def|${v.ref}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    lines.push(`${v.label}: ${v.value}`);
+    lines.push(`${v.label} : ${v.value}`);                             // EOT IS-A → DEF
     if (lines.length >= max) return lines;
   }
   return lines;

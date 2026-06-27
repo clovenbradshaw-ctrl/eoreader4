@@ -201,19 +201,19 @@ const holonTree = (holons, { units = [], filename, sentences } = {}) => {
     for (const b of h.bonds) {
       const row = document.createElement('div');
       row.className = 'holon-bond';
-      // Polarity rides on the arrow (¬ before the relation — a negated bond is never
-      // shown as the bare positive); modality trails as its mood, the rich-note
-      // channel the flat arrow used to drop.
+      // EOT surface (docs/eot-surface-syntax.md): a bond is a LINK `-> object : relation`;
+      // speech stays the ⟨attribution⟩ form. Polarity rides on the relation (¬rel — a
+      // negated bond is never shown as the bare positive); modality trails as its mood.
       const not = b.polarity === '−' ? '¬' : '';
-      const arrow = b.op === 'SIG'
-        ? `⟨${not}${escapeHtml(b.via)}⟩`
-        : `--${not}${escapeHtml(b.via)}--&gt;`;
+      const isSig = b.op === 'SIG';
+      const arrow = isSig ? `⟨${not}${escapeHtml(b.via)}⟩` : '-&gt;';
+      const relTail = isSig ? '' : ` <span class="holon-rel">: ${not}${escapeHtml(b.via)}</span>`;
       const mood = (b.modality && b.modality !== 'realis')
         ? ` <span class="holon-mood">⟨${escapeHtml(b.modality)}⟩</span>` : '';
       row.innerHTML =
         `<span class="op ${b.op}">${b.op}</span>` +
         `<span class="holon-arrow">${arrow}</span> ` +
-        `<span class="holon-label">${escapeHtml(b.to?.label ?? b.to?.id ?? '?')}</span>${mood}` +
+        `<span class="holon-label">${escapeHtml(b.to?.label ?? b.to?.id ?? '?')}</span>${relTail}${mood}` +
         cite(b.idx);
       const line = units[b.idx];
       if (line != null) {

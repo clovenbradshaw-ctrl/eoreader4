@@ -24,7 +24,7 @@ test('orientation is filename · type · length — never a title or author', ()
 // ---------------------------------------------------------------------------
 // The notes register — plain-language arrows over the folded graph (§3).
 
-test('serializeNotes renders plain-language arrows, never codes or indices', () => {
+test('serializeNotes renders EOT LINK/IS-A triples, never codes or indices', () => {
   const structure = {
     relations: [
       { src: { id: 'sister', label: 'sister' }, tgt: { id: 'gregor', label: 'Gregor' }, via: 'tends', idx: 330 },
@@ -33,15 +33,15 @@ test('serializeNotes renders plain-language arrows, never codes or indices', () 
     defs: [{ id: 'gregor', label: 'Gregor', value: 'a travelling salesman', idx: 1 }],
   };
   assert.deepEqual(serializeNotes(structure), [
-    'sister --tends--> Gregor',
-    'fire --originated-in--> room4',   // multi-word relation hyphenated into one label
-    'Gregor: a travelling salesman',
+    'sister -> Gregor : tends',
+    'fire -> room4 : originated-in',   // multi-word relation hyphenated into one label
+    'Gregor : a travelling salesman',
   ]);
 });
 
 test('serializeNotes keeps negation as a conscience token (not- prefix), basic otherwise', () => {
-  // The model feed stays basic — arrows — but a negated bond must reach even a tiny
-  // talker as a negation, never the bare positive. Modality stays in the rich layer.
+  // The model feed is EOT — a negated bond must reach even a tiny talker as a negation,
+  // never the bare positive. Modality stays in the rich layer.
   const structure = {
     relations: [
       { src: { id: 'g', label: 'Gregor' }, tgt: { id: 'w', label: 'words' },  via: 'understand', polarity: '−', modality: 'epistemic', idx: 0 },
@@ -49,8 +49,8 @@ test('serializeNotes keeps negation as a conscience token (not- prefix), basic o
     ],
   };
   assert.deepEqual(serializeNotes(structure), [
-    'Gregor --not-understand--> words',   // negation survives; no modality in the basic feed
-    'Gregor --told--> Grete',
+    'Gregor -> words : not-understand',   // negation survives; no modality in the basic feed
+    'Gregor -> Grete : told',
   ]);
 });
 
