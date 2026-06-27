@@ -9,9 +9,11 @@
 // The user sees what the model actually said, with a flag pinned to it.
 
 import { answerSmalltalk, answerMath, answerVoid, answerMetadata } from '../answer/index.js';
-import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc } from '../retrieve/index.js';
+import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
+import { parseText } from '../perceiver/parse/index.js';
+import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold, centroidBasis, projectUnits, structuralActivations } from '../surfer/index.js';
+import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerrainAt } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
@@ -199,6 +201,36 @@ export const stages = {
       return { ...ctx, spans: [], route: 'chat', retrievalQuery: query };
     }
     return { ...ctx, spans, retrievalQuery: query };
+  },
+
+  // Self-directed inquiry (write/think.js). Before the talker speaks, read what has been
+  // retrieved, THINK over it, and if a figure stays open — one the spans keep mentioning but
+  // that never acts — read another pass ON THAT OWN QUESTION and fold the results in as
+  // citable spans. The engine chooses what to read next by what it found unresolved, rather
+  // than answering only the user's literal query (idle.js's voids-are-the-fuel, run forward).
+  //   Gated by ctx.inquire (default off → byte-identical: the stage returns the context
+  //   untouched). Scoped to the pointed `answer` task — a summary's connective gaps are not
+  //   voids to chase. Embedder-free (retrieveLexical), and every added span carries a real
+  //   document index, so the inquiry's reading is bound and cited exactly like the first pass.
+  async inquire(ctx) {
+    if (!ctx.inquire || !ctx.doc || !ctx.spans?.length || (ctx.task && ctx.task !== 'answer')) return ctx;
+    const seen = new Set(ctx.spans.map((s) => s.idx));
+    const added = [];
+    const asked = [];
+    const MAX_STEPS = 2;                                       // a couple of follow-up reads, never a spin
+    for (let step = 0; step < MAX_STEPS; step++) {
+      const spans = [...ctx.spans, ...added];
+      const reading = parseText(spans.map((s) => s.text).join(' '), { docId: 'inquiry', genderCoref: true });
+      const thought = think(reading, { genders: inferGenders(reading) });
+      const ask = worthSayingAloud(thought, { limit: 1 })[0];
+      if (!ask) break;                                        // nothing stays open → done
+      const more = retrieveLexical(ctx.doc, ask.question, 4).filter((s) => !seen.has(s.idx));
+      if (!more.length) { asked.push({ q: ask.question, read: 0 }); break; }   // source silent → stop
+      for (const s of more) { seen.add(s.idx); added.push({ ...s, via: 'inquire' }); }
+      asked.push({ q: ask.question, read: more.length });
+    }
+    if (!added.length) return ctx;                            // no fresh reading → byte-identical
+    return { ...ctx, spans: [...ctx.spans, ...added], inquiry: { asked } };
   },
 
   // Fold the spans into a single note the model can read — the reading. With a doc
@@ -628,13 +660,22 @@ const correctiveFor = (ctx) =>
   (gateCondition(ctx) && !confabulating(ctx)) ? GROUNDING_CORRECTIVE : CONFAB_CORRECTIVE;
 
 // The Site-face terrain the reading typed at the answer locus, for the diagonal guard.
-// A measured void is a Void; a locus the document DEF'd as a site (boilerplate /
-// furniture, read/site.js) is ambient Ground (Atmosphere); otherwise the locus carries
-// a figure (Entity), where a specific claim sits on the diagonal and the guard passes.
+// The guard itself is general over all nine terrains (factcheck/correspond.js: terrainInfo →
+// domain+grain, grain the discriminator); it was only ever FED a corner of the face. Now it
+// gets the real terrain, typed off the locus's operators (surfer/terrain.js) — a bonded locus
+// is a Link, a bare figure an Entity, an interpretive locus a Lens — so the off-diagonal
+// verdict records the true Site, and a grain-mismatched claim is caught against whichever of
+// the nine the locus actually is, not a hardcoded Entity. The two authorities the engine has
+// already MEASURED still win: a measured void is Void (the confabulation guard's Void signal),
+// and a DEF'd site (boilerplate / furniture, read/site.js) is ambient Atmosphere. A
+// contentless locus that was NOT measured void is not downgraded to Void here (the measured
+// void is the only Void authority) — it falls back to Entity, exactly as before.
 const terrainAtLocus = (ctx, cursor) => {
   if (ctx.voidMeasure) return 'Void';
   if (cursor != null && Number.isFinite(cursor) && ctx.doc && siteIndices(ctx.doc).has(cursor)) return 'Atmosphere';
-  return 'Entity';
+  if (cursor == null || !Number.isFinite(cursor) || !ctx.doc) return 'Entity';
+  const t = siteTerrainAt(ctx.doc, cursor);
+  return (t === 'Void' || t === 'Field') ? 'Entity' : t;   // only a MEASURED void is Void
 };
 
 // The orientation line: the talker is handed the FILENAME, type, and length, read off

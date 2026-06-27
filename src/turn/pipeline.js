@@ -14,6 +14,7 @@
 
 import { stages } from './stages.js';
 import { createCompositeDoc } from '../organs/in/index.js';
+import { siteTerrainAt } from '../surfer/index.js';
 
 // The documents a turn's citations actually drew on. For a composite (several selected
 // documents folded into one), map each cited sentence index back through the provenance
@@ -23,6 +24,36 @@ const sourceDocsOf = (doc, sources) => {
   if (doc.isComposite && typeof doc.origin === 'function')
     return [...new Set((sources || []).map(i => doc.origin(i)?.docId).filter(Boolean))];
   return doc.docId ? [doc.docId] : [];
+};
+
+const round3 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 1000) / 1000 : null);
+
+// The MECHANICAL reading, assembled for the audit: every piece that came through between the
+// question and the phrase. The spans the surfer/retrieval delivered (idx + text + how it was
+// found + score), the surfer's own per-cursor field (the surprise/warmth trace, its peak and
+// frame-break stops — what the surfer "gets back mechanically"), and the fold's assembled note
+// (the reading the phraser was handed). Sizes capped so one turn cannot bloat the JSONL.
+const buildReading = (ctx) => {
+  if (!ctx.spans?.length && !ctx.surf && !ctx.note) return null;
+  return {
+    spans: (ctx.spans || []).slice(0, 40).map(s => ({
+      idx: s.idx, via: s.via || s.kind || null, score: round3(s.score),
+      // the cube SITE this locus IS — read off its operators (Link if it carries a bond,
+      // Entity if a bare figure, Void if thin). The Structure row is now typed, not collapsed.
+      terrain: (ctx.doc && Number.isFinite(s.idx)) ? siteTerrainAt(ctx.doc, s.idx) : null,
+      text: String(s.text || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+    })),
+    note: ctx.note?.text ? String(ctx.note.text).slice(0, 2000) : null,
+    surf: ctx.surf ? {
+      anchor: ctx.surf.anchor, peak: ctx.surf.peak,
+      stops: ctx.surf.stops, recCursors: ctx.surf.recCursors,
+      rode: ctx.surf.rode,
+      field: (ctx.surf.field || []).slice(0, 80).map(f => ({
+        idx: f.idx, focus: f.focus, bayes: round3(f.bayes), surprisalBits: round3(f.surprisalBits),
+      })),
+    } : null,
+    inquiry: ctx.inquiry?.asked?.length ? ctx.inquiry.asked : null,
+  };
 };
 
 // route → converse → retrieve → fold → answerable → prompt → llm → bind → factcheck → revise → veto → settle.
@@ -35,14 +66,18 @@ const sourceDocsOf = (doc, sources) => {
 // `revise` sits between `factcheck` and `veto`: when the diagonal guard caught the
 // confabulation proper (a specific claim at a measured void), it re-prompts the talker
 // once; a surviving confabulation ships, tagged by the veto (rewrite-then-tag).
+// `inquire` sits between `retrieve` and `fold`: gated by ctx.inquire (default off →
+// byte-identical), it reads another pass on the engine's OWN open question — a figure the
+// retrieved spans keep mentioning but that never acts — and folds the results in as citable
+// spans before the fold builds the reading (turn/stages.js, write/think.js).
 const PIPELINE = [
-  'route', 'converse', 'retrieve', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
+  'route', 'converse', 'retrieve', 'inquire', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
 ];
 
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, horizon = null, reread = false }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, inquire = false, horizon = null, reread = false }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -71,6 +106,9 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // background. Null on every default turn, so the prompt — and the golden parses — are
   // byte-identical unless the user opts in. The mind stays epistemically separate: these
   // are offered as background, never folded into the document's citable spans.
+  // `inquire` arms the self-directed inquiry stage (turn/stages.js `inquire`, write/think.js):
+  // when on, a grounded answer turn reads another pass on the engine's OWN open question
+  // before answering. Off by default → byte-identical.
   // `horizon` is the SESSION's persistent Horizon (surfer/horizon.js) — the moved density
   // operator that accumulates across turns (surfing-next.md §4). When the caller threads one
   // (created once per session), the `settle` stage folds this turn's reading into it, so the
@@ -80,7 +118,7 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // when the surf could not settle on a figure (stance-reserve) on a pointed turn, the fold
   // reads more of the document on the circled figure and folds again. Off by default — the
   // present single-pass fold is byte-identical when `reread` is false.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, horizon, reread };
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, inquire, horizon, reread };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -129,6 +167,7 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
     turn.finish({
       route:     ctx.route || 'grounded',
       grounding,                                  // the register the user selected (audit trail)
+      reading:   buildReading(ctx),               // the full mechanical reading: spans · surf field · note
       prompt:    ctx.promptText || null,
       rawOutput: ctx.rawOutput  || null,
       bound:     ctx.bound      || null,
@@ -188,6 +227,10 @@ const summarize = (name, ctx, ms) => {
                               ...(ctx.retrieval ? { mode: ctx.retrieval } : {}),
                               // the conversation-resolved query, shown only when it differs from the raw question
                               ...(ctx.retrievalQuery && ctx.retrievalQuery !== ctx.question ? { q: ctx.retrievalQuery } : {}) };
+    case 'inquire':  return { ...base,
+                              // the engine's own follow-up questions and how much each read
+                              asked: (ctx.inquiry?.asked || []).map(a => a.q),
+                              added: (ctx.spans || []).filter(s => s.via === 'inquire').length };
     case 'fold':     return { ...base, noteLen: ctx.note?.text?.length || 0,
                               referential: ctx.referential || null,
                               // the active-inference re-read (§3): present only when the surf

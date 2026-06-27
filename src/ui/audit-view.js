@@ -69,6 +69,42 @@ const renderRow = (turn) => {
       `<span class="ms">+${s.t}ms</span>` +
       `<span class="data">${escapeHtml(stringify(s.data))}</span>`;
     body.appendChild(line);
+    // Self-directed inquiry: surface the engine's OWN follow-up questions legibly, not just
+    // in the step JSON — these are the open figures it chose to go read more about.
+    const asked = s.name === 'inquire' ? (s.data?.asked || []) : [];
+    for (const q of asked) {
+      body.insertAdjacentHTML('beforeend',
+        `<div class="step inquiry-q"><span class="name">↳ asked</span><span class="data">${escapeHtml(q)}</span></div>`);
+    }
+  }
+  // The mechanical reading — every piece that came through between the question and the
+  // phrase: the spans the surfer/retrieval delivered (with their text), the surfer's own
+  // per-cursor field (the surprise trace, its peak ★ and frame-break stops ⟳), and the note.
+  if (turn.reading) {
+    const r = turn.reading;
+    body.insertAdjacentHTML('beforeend', `<div class="label">reading — spans delivered to the phraser</div>`);
+    for (const s of (r.spans || [])) {
+      body.insertAdjacentHTML('beforeend',
+        `<div class="step span"><span class="name">[s${s.idx}]${s.via ? ' ' + escapeHtml(s.via) : ''}${s.terrain ? ' · ' + escapeHtml(s.terrain) : ''}</span>` +
+        `<span class="ms">${s.score ?? ''}</span>` +
+        `<span class="data">${escapeHtml(s.text)}</span></div>`);
+    }
+    if (r.surf) {
+      const peak = r.surf.peak, stops = new Set(r.surf.stops || []), recs = new Set(r.surf.recCursors || []);
+      body.insertAdjacentHTML('beforeend',
+        `<div class="label">surfer field — bayes/surprise per cursor (★ peak · ⟳ frame-break · • stop)${r.surf.rode ? ' · rode ' + escapeHtml(r.surf.rode) : ''}</div>`);
+      for (const f of (r.surf.field || [])) {
+        const mark = (f.idx === peak ? '★' : '') + (recs.has(f.idx) ? '⟳' : '') + (stops.has(f.idx) ? '•' : '');
+        body.insertAdjacentHTML('beforeend',
+          `<div class="step field"><span class="name">${mark || '·'} c${f.idx}${f.focus ? ' ' + escapeHtml(String(f.focus)) : ''}</span>` +
+          `<span class="ms">b=${f.bayes ?? '–'}</span>` +
+          `<span class="data">surprise ${f.surprisalBits ?? '–'} bits</span></div>`);
+      }
+    }
+    if (r.note) {
+      body.insertAdjacentHTML('beforeend',
+        `<div class="label">note — the reading handed to the phraser</div><div class="raw">${escapeHtml(r.note)}</div>`);
+    }
   }
   if (turn.prompt) {
     body.insertAdjacentHTML('beforeend',

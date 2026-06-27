@@ -25,6 +25,7 @@ import { deriveNull, buildDensity, eigenLenses, vonNeumann, commutator, projecto
 import { createEnactedLoop, calibrateReader } from '../enact/index.js';
 import { atmosphereFromActivations, corpusSigma, centroidBasis } from './atmosphere.js';
 import { updateStance } from './stance.js';
+import { bornSalience, figureSalience, linkSalience, linksBySentence } from './salience.js';
 
 // The reach: a little behind the anchor (to read the frame it sits inside), mostly
 // ahead (a surf rides forward, and the arrow of time orders the frame axis).
@@ -36,7 +37,19 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   const empty = { anchor: 0, stops: [], peak: 0, focus: null, field: [], recCursors: [], recAxes: [], rode: 'bayesian-figure' };
   if (S === 0) return empty;
 
-  const { behind, ahead, maxStops } = { ...DEFAULT_REACH, ...opts };
+  // ADAPTIVE REACH (opt-in, opts.reach === 'adaptive'): let the surf get as much as it needs.
+  // The fixed window (behind/ahead) bounds the surf by an arbitrary distance — too narrow for
+  // a whole-arc question (the anchor's frame and the crisis it builds to can be 30 sentences
+  // apart). Adaptive reach reads the field over the WHOLE document and lets the NOISE NULL
+  // decide how much is structure: the boundary mode (deriveNull) is forced on, and the stop
+  // count is uncapped, so a cursor arrests iff its surprise beats what the document's own
+  // non-cohering bulk throws up by chance. "As much as it needs" is then bounded by signal,
+  // not by a window — the same self-terminating discipline the idle/think loops use. Default
+  // (no opts.reach) is byte-identical: the fixed window, the median rule, maxStops = 5.
+  const adaptive = opts.reach === 'adaptive';
+  const { behind, ahead, maxStops } = adaptive
+    ? { behind: S, ahead: S, maxStops: Infinity }
+    : { ...DEFAULT_REACH, ...opts };
   const a  = clampIdx(anchor, S);
   const lo = Math.max(0, a - behind);
   const hi = Math.min(S - 1, a + ahead);
@@ -115,18 +128,51 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   // byte-identical to today — the parity gate.
   const activations = Array.isArray(opts.activations) ? opts.activations : null;
   const lensVec = (opts.lens && activations) ? opts.lens : null;
-  const cond    = lensVec ? (c) => bornWeight(lensVec, activations[c]) : null;
+  const lensCond = lensVec ? (c) => bornWeight(lensVec, activations[c]) : null;
+  // THREAD CONDITIONING (salience.js): condition the score by the Born weight of each cursor
+  // against the activated conversation thread (opts.thread, a sparse term basis). This is the
+  // SAME |⟨·|·⟩|² as the eigen-lens, but the basis is the live thread (prompt + recent turns +
+  // cast) over the discrete term space — embedder-free. So a cursor's score becomes structure
+  // (bayes) × salience-to-the-thread, and the null below then decides where the surfer's
+  // return stops being salient. Absent opts.thread it is null → byte-identical to today.
+  // opts.thread is { terms, figures } (threadBasis) or a bare term Map (terms only). A cursor
+  // is salient to the thread by EITHER channel: it uses the thread's words (term overlap) OR it
+  // is about the thread's figures (figure overlap over the coref-resolved field — "the
+  // creature" counts as Gregor). max, not product: lexical silence about a figure the sentence
+  // is plainly concerning must not zero it out (that was the lexical-only miss of the reversal).
+  const threadTerms = opts.thread ? (opts.thread.terms || opts.thread) : null;
+  const threadFigs  = opts.thread && opts.thread.figures ? opts.thread.figures : null;
+  const hasThread   = (threadTerms && threadTerms.size) || (threadFigs && threadFigs.size);
+  // the LINK channel: the salient unit is the edge, not the node. A span's link salience is
+  // the strongest link it carries — a link BETWEEN thread figures scores above one merely
+  // incident on one, so the relation outranks the mention. Built once (reads the log).
+  const threadLinks = (threadFigs && threadFigs.size) ? linksBySentence(doc) : null;
+  const threadCond = hasThread
+    ? (c) => Math.max(
+        threadTerms ? bornSalience(threadTerms, doc.tokensBySentence?.[c]) : 0,         // lexical
+        threadFigs ? figureSalience(threadFigs, readings[c]?.predicted?.figures || []) : 0,  // coref figures
+        threadLinks ? Math.max(0, ...(threadLinks.get(c) || []).map((l) => linkSalience(threadFigs, l))) : 0,  // the link
+      )
+    : null;
+  // Compose the conditioners multiplicatively — a cursor must be both on the chosen reading
+  // (lens) and on the thread (salience) to score. Either alone is the single-condition case.
+  const cond = (lensCond && threadCond) ? (c) => lensCond(c) * threadCond(c)
+    : (lensCond || threadCond || null);
   const scoreOf = (f) => (cond ? f.bayes * cond(f.idx) : f.bayes);
   const scoreAt = (c) => (cond ? bayesAt(c) * cond(c) : bayesAt(c));
   const scoreSeries = cond ? field.map(scoreOf) : reachBayes;
 
-  const useBoundary = Number.isFinite(opts.alpha);
+  // Adaptive reach reads structure off the noise null (the principled "how much"), so the
+  // boundary mode is forced on there — with a default alpha if the caller named none. A fixed
+  // window keeps the median rule unless the caller opts into a boundary alpha (byte-identical).
+  const alpha = Number.isFinite(opts.alpha) ? opts.alpha : (adaptive ? 0.05 : null);
+  const useBoundary = Number.isFinite(alpha);
   const band = useBoundary ? null : medianOf(scoreSeries);
   let isPeak;
   if (useBoundary) {
     for (const f of field) {
       const sc = scoreOf(f);
-      const nul = deriveNull(scoreSeries, { scale: 'linear', alpha: opts.alpha, leaveOut: sc });
+      const nul = deriveNull(scoreSeries, { scale: 'linear', alpha, leaveOut: sc });
       f.verdict = sc > nul ? 'SYN' : 'NUL';   // beats the noise null → structure; else held
     }
     isPeak = (f) => f.verdict === 'SYN';

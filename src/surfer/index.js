@@ -16,6 +16,20 @@
 // does (the field is VOID) is the surfer's own negative result.
 
 export { surfFold } from './surf.js';
+// Salience by the Born rule against the activated conversation thread: the thread as a sparse
+// term state, a span's |⟨T|s⟩|² its salience, the same noise null deciding where the surfer's
+// return stops being salient. Embedder-free — the term space, not a learned embedding.
+export { threadBasis, bornSalience, figureSalience, linkSalience, linksBySentence, salienceField } from './salience.js';
+// Trajectory — the arc of one identity's relations across a sequence, segmented at the surf's
+// frame-breaks, with the change read off as an end-to-end delta. The omnimodal "what changed":
+// it reads only operator events (identity · relation · order · turn), never words, so the same
+// synthesis summarises a story, a video track, an audio motif, or a sensor regime.
+export { trajectory, speakTrajectory } from './trajectory.js';
+// Site typing — which of the 9 cube terrains a locus IS, read off the operators that landed
+// there and the grain, never words. Closes the gap where the Structure row (Field/Link/
+// Network) was never created: a CON bond is a Link, a regularity of links a Network, ambient
+// connectivity a Field. Modality-blind — the same typing for text, video, audio, or sensors.
+export { siteTerrain, siteTerrainAt, bondTerrain, arcTerrain } from './terrain.js';
 // The Significance column's Ground terrain (cube.md #5): the Atmosphere pass and the
 // shared significance-basis projection every pass reads off. Pure on vectors past the
 // projection — omnimodal for free. The corpus prior is INJECTED, never imported, so the

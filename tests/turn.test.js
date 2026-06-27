@@ -287,3 +287,43 @@ test('audit exports JSONL one record per turn', async () => {
     assert.equal(obj.schema, 'eo-audit/1');
   }
 });
+
+test('self-directed inquiry (opt-in): the engine reads another pass on its OWN open question', async () => {
+  // The first reading (the spans handed in) has Klamm sought and feared but never acting —
+  // an open figure. The full document DOES say what Klamm does, on lines the first pass
+  // missed. With inquiry on, the stage asks "What of Klamm?" and folds those lines in as
+  // citable spans (real indices). Driven at the stage directly so the first-pass spans are
+  // controlled, not subject to hybrid-retrieval noise.
+  const doc = setup('Gregor sought Klamm. Gregor feared Klamm. Klamm ruled the village. Klamm summoned the council.');
+  const firstPass = [
+    { idx: 0, text: 'Gregor sought Klamm.', score: 1, kind: 'lex' },
+    { idx: 1, text: 'Gregor feared Klamm.', score: 1, kind: 'lex' },
+  ];
+  const out = await stages.inquire({ doc, spans: firstPass, task: 'answer', inquire: true });
+  assert.ok((out.inquiry?.asked || []).some(a => /Klamm/i.test(a.q)), 'it asked its own open question');
+  const added = (out.spans || []).filter(s => s.via === 'inquire');
+  assert.ok(added.length > 0, 'it folded the answering lines in');
+  assert.ok(added.every(s => Number.isFinite(s.idx)), 'each added span carries a real document index — it is citable');
+  assert.ok(added.some(s => /Klamm (ruled|summoned)/.test(s.text)), 'and they are the lines where Klamm acts');
+});
+
+test('inquiry stops honestly when the source is silent on its question — no spin', async () => {
+  const doc = setup('Gregor sought Klamm. Gregor feared Klamm.');   // Klamm never acts anywhere
+  const firstPass = [
+    { idx: 0, text: 'Gregor sought Klamm.', score: 1, kind: 'lex' },
+    { idx: 1, text: 'Gregor feared Klamm.', score: 1, kind: 'lex' },
+  ];
+  const out = await stages.inquire({ doc, spans: firstPass, task: 'answer', inquire: true });
+  assert.equal((out.spans || []).filter(s => s.via === 'inquire').length, 0, 'nothing fresh to add');
+});
+
+test('inquiry is off by default — the turn is byte-identical without the flag', async () => {
+  const doc = setup('Gregor sought Klamm. Gregor feared Klamm. Klamm summoned Gregor.');
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({ question: 'Klamm', doc, model, embedder: createHashEmbedder(), auditLog: audit });
+  const step = result.turn.steps.find(s => s.name === 'inquire');
+  // the stage is in the pipeline but returns the context untouched → no asked questions, no added spans
+  assert.ok(!step || ((step.data.asked || []).length === 0 && (step.data.added || 0) === 0), 'no inquiry without the flag');
+});

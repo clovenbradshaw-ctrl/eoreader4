@@ -29,6 +29,10 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
       route: null,
       grounding: null,   // the register the user selected: 'auto' | 'grounded' | 'free'
       steps: [],
+      reading: null,     // the MECHANICAL reading the surfer/retrieval delivered to the phraser:
+                         // the spans (idx + text + via + score), the surfer's per-cursor field
+                         // (bayes/surprise, peak, stops), and the fold's assembled note. The full
+                         // "what came through" so the audit shows every piece, not just counts.
       prompt: null,
       rawOutput: null,
       bound: null,
@@ -78,6 +82,7 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
         route:      t.route,
         grounding:  t.grounding ?? null,
         steps:      t.steps,
+        reading:    t.reading ?? null,
         prompt:     t.prompt,
         rawOutput:  t.rawOutput,
         bound:      t.bound,
