@@ -9,5 +9,5 @@ export { scoreProbe } from './score.js';
 export { aggregateTarget, aggregateBattery } from './aggregate.js';
 export { TARGETS, CORPUS_PATH } from './battery.js';
 export {
-  runBattery, sweepForce, chargeValenceRegression, surpriseDepthCheck,
+  runBattery, sweepForce, chargeValenceRegression, surpriseDepthCheck, rereadRegression,
 } from './harness.js';

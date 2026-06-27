@@ -96,6 +96,42 @@ export const chargeValenceRegression = async () => {
   };
 };
 
+// The RE-READ regression (surfing-next.md §3) — measured on a CRAFTED ambiguous-reference
+// fixture, the re-read's negative-control sibling to the charge/valence sentinel. The main
+// Metamorphosis battery cannot host it: its readings SETTLE (the coref posterior is
+// concentrated at every peak), so the diffuse-coref trigger never fires and the battery A/B
+// is flat by construction. Two rivals, pronoun-heavy, so the posterior at the peak stays
+// diffuse; with the re-read on, the fold reads more of the document on the figure it focused
+// on and widens the window — the active-inference loop firing where the reading could not
+// settle WHO. A question that does NOT name the figure, so the widening surfaces lines the
+// first retrieval missed (when it names the figure, retrieval already has them).
+// Long enough that the k=8 retrieval + surf cannot cover it — the re-read only pays when the
+// initial window is a FRACTION of the document. Pronoun-heavy throughout (the posterior stays
+// diffuse), with the named "Anna ..." actions scattered in the back half, beyond a generic
+// front-loaded query's reach — so reading-more-on-the-focus surfaces lines the window missed.
+const REREAD_FIXTURE =
+  'Anna met Bella at the gate one grey morning. She was furious. She had not slept at all. ' +
+  'She accused the other of lying outright. She denied every word of it. She raised her voice. ' +
+  'She turned away coldly. She paced the length of the yard. She muttered under her breath. ' +
+  'She kicked at the loose stones. She stared at the shuttered windows. She waited a long while. ' +
+  'She followed after a moment. She hesitated at the door. She knocked once and stopped. ' +
+  'Anna offered an apology in the kitchen. Anna admitted she had been wrong. Anna asked for patience. ' +
+  'Anna explained the long quarrel. Anna recalled their childhood together. Anna promised to do better. ' +
+  'Anna wrote a letter that night. Anna sealed it carefully. Anna posted the apology at dawn.';
+
+export const rereadRegression = async ({ embedder = null, query = 'what happened with the apology' } = {}) => {
+  const doc = await ingestText(REREAD_FIXTURE, {});
+  const off = await surfaceNote(doc, query, { embedder, forces: { reread: false } });
+  const on  = await surfaceNote(doc, query, { embedder, forces: { reread: true } });
+  const added = on.spans.filter((i) => !off.spans.includes(i));
+  return {
+    query,
+    focus: off.focus,                      // the figure the reading circled but could not settle
+    offSpans: off.spans, onSpans: on.spans, added,
+    widened: added.length > 0,             // did reading-more-on-the-focus surface fresh spans?
+  };
+};
+
 // Surprise depth — read on WHICH targets can be filled at all (§6). The
 // significance frame-turn should reach full recall only when the richer surprise is
 // live. Under the hash organ the meaning reader falls back to the cheap γ-mass
