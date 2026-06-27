@@ -62,18 +62,26 @@ const eotSalience = (doc, thread) => {
       if (!stops.size) stops = new Set(live.map((s) => s.idx)); // null permissive/killed → keep the touching set
     }
   }
-  // focus: the thread figure most often the SUBJECT of a salient link (whom the arc is about).
+  // focus: the thread figure that is a salient subject AND most activated by the CURRENT thread.
+  // threadBasis γ-weights the query over history, so a figure named in this turn outweighs one
+  // carried from an earlier turn — the focus tracks where the conversation just moved, not
+  // wherever the most edges happen to be. Recency (the figure's term weight) is primary; the
+  // count of its salient edges only breaks ties.
   const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
   const label = new Map();
   for (const e of events) if (e.op === 'INS' && e.id != null && !label.has(e.id)) label.set(e.id, e.label);
-  const votes = new Map();
+  const figWeight = (lab) => Math.max(0, ...String(lab).toLowerCase().split(/\s+/).map((t) => thread.terms.get(t) || 0));
+  const count = new Map();
   for (const e of events) {
     if (!((e.op === 'CON' || e.op === 'SIG') && e.src != null && stops.has(e.sentIdx))) continue;
     const lab = String(label.get(e.src) ?? e.src).toLowerCase();
-    if (thread.figures.has(lab)) votes.set(label.get(e.src), (votes.get(label.get(e.src)) || 0) + 1);
+    if (thread.figures.has(lab)) count.set(label.get(e.src), (count.get(label.get(e.src)) || 0) + 1);
   }
-  let focus = null; let best = 0;
-  for (const [f, v] of votes) if (v > best) { best = v; focus = f; }
+  let focus = null; let bestW = -1; let bestN = 0;
+  for (const [f, n] of count) {
+    const w = figWeight(f);
+    if (w > bestW || (w === bestW && n > bestN)) { bestW = w; bestN = n; focus = f; }
+  }
   return { stops, focus };
 };
 

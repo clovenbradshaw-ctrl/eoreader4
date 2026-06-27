@@ -170,3 +170,56 @@ test('an EOT doc with no thread keeps the whole graph (nothing to narrow by)', (
   const b = assembleBrief(doc, {});   // no question
   assert.ok(b.propositions.length >= 2, 'with no thread, the whole graph rides');
 });
+
+test('all nine operators lower into a native log the engine reads', () => {
+  const doc = eotDoc([
+    'Alice : Person', 'Alice.age = 30', 'Alice.email = nil',
+    'Alice -> Bob : knows', 'Alice : VIP',
+    '!eva Alice.tier : Bronze -> Gold', 'Region <- [TN, KY, AL]',
+    'Cases | status', '!rec vocabulary:status {active} => {enrolled,waitlisted}',
+  ].join('\n'));
+  assert.equal(doc.diagnostics.length, 0, 'all nine shapes parse');
+  const ops = new Set(doc.log.snapshot().map(e => e.op));
+  for (const op of ['INS', 'SIG', 'DEF', 'NUL', 'CON', 'EVA', 'SYN', 'SEG', 'REC']) {
+    assert.ok(ops.has(op), `${op} present in the native log`);
+  }
+});
+
+test('a == chain resolves every alias to one immutable id', () => {
+  const doc = eotDoc('Alice : Person\nAlice == Ali\nAli == Lici\nLici -> Bob : knows');
+  const id = doc.signs.get('Alice');
+  assert.equal(doc.signs.get('Ali'), id, 'Ali → Alice');
+  assert.equal(doc.signs.get('Lici'), id, 'Lici → Alice (chained)');
+  const con = doc.log.snapshot().find(e => e.op === 'CON');
+  assert.equal(con.src, id, 'a mention through the far end of the chain still carries the one id');
+});
+
+test('a demonstrative follow-up resolves via the conversation thread (history)', () => {
+  const doc = eotDoc('Grete -> Gregor : fed\nGrete -> Gregor : renounced\nfather -> Gregor : struck');
+  // "and then?" names no figure; the thread (a prior turn about Grete) supplies the focus.
+  const b = assembleBrief(doc, { question: 'and then?', history: [{ role: 'user', content: 'Tell me about Grete' }] });
+  assert.equal(b.surf.focus, 'Grete', 'the focus comes from the activated thread, not the literal question');
+  const vias = b.propositions.map(p => p.verb);
+  assert.ok(vias.includes('fed') && vias.includes('renounced'), 'Grete\'s relations are selected');
+  assert.ok(!vias.includes('struck'), 'the off-thread father edge is not');
+});
+
+test('different questions narrow the same EOT graph to different foci', () => {
+  const doc = eotDoc('Anna -> Ben : trusts\nAnna -> Ben : marries\nCarol -> Dan : hires\nDan -> Eve : fires');
+  assert.equal(assembleBrief(doc, { question: 'What about Anna?' }).surf.focus, 'Anna');
+  assert.equal(assembleBrief(doc, { question: 'What does Dan do?' }).surf.focus, 'Dan');
+});
+
+test('across rounds the focus follows the conversation, not the edge count (recency)', () => {
+  const doc = eotDoc([
+    'Grete -> Gregor : fed', 'Grete -> Gregor : tended', 'Grete -> Gregor : renounced',
+    'father -> Gregor : struck', 'Klamm -> Gregor : summoned',
+  ].join('\n'));
+  const history = [];
+  const ask = (q) => { const b = assembleBrief(doc, { question: q, history }); history.push({ role: 'user', content: q }); return b.surf.focus; };
+  assert.equal(ask('How does Grete treat Gregor?'), 'Grete', 'opens on Grete');
+  // father has ONE edge, Grete has three — but the current question names the father, so focus
+  // moves there: recency over raw edge count.
+  assert.equal(ask('And the father?'), 'father', 'shifts to the father the question names');
+  assert.equal(ask('What about Klamm?'), 'Klamm', 'and to Klamm next');
+});
