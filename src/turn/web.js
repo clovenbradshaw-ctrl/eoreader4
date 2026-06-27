@@ -55,20 +55,31 @@ export const verifyAgainstWeb = (answer, corpus, { question = '', floor = 0.5 } 
 export const formulateSearchQuery = async ({ model, question, history = [], fallback = '' } = {}) => {
   const base = String(question || fallback || '').trim();
   if (!model?.phrase || !base) return base;
-  // The recent thread, compacted — enough to resolve "it / the new one / that show".
+  // The thread is the USER's turns only — never the talker's prior answers. The subject of a
+  // search is what the USER keeps asking about; a small talker's earlier reply may be a guess or
+  // a hallucination, and folding it in here makes the query chase that guess. (The audit's "who is
+  // behind the new X-Files reboot?" → the model's invented "Chris Carter, Frank Darabont" became
+  // the literal next search, dropping "X-Files" entirely and fetching pages about Godzilla / The
+  // Monkey.) Same discipline as groundedConversation (stages.js): the user's thread grounds coref.
   const thread = (history || [])
+    .filter(m => m && m.role === 'user' && m.content)
     .slice(-6)
-    .map(m => `${m.role === 'assistant' ? 'A' : 'U'}: ${String(m.content || '').replace(/\s+/g, ' ').slice(0, 240)}`)
+    .map(m => `U: ${String(m.content).replace(/\s+/g, ' ').slice(0, 240)}`)
     .join('\n');
   const messages = [
     { role: 'system', content:
       'You turn a chat turn into ONE web search query. Resolve every pronoun and back-reference ' +
-      'from the conversation so the query stands alone (name the actual subject). Keep it short — ' +
-      'the keywords a search engine needs, no filler, no question words, no quotes. Output ONLY the query.' },
-    { role: 'user', content: `${thread ? `Conversation so far:\n${thread}\n\n` : ''}Latest turn: ${base}\n\nSearch query:` },
+      "from the user's earlier turns so the query stands alone, and KEEP THE SUBJECT they have been " +
+      'asking about — never drop that topic for a name you are unsure of. Keep it short — the ' +
+      'keywords a search engine needs, no filler, no question words, no quotes. Output ONLY the query.' },
+    { role: 'user', content: `${thread ? `User's earlier turns:\n${thread}\n\n` : ''}Latest turn: ${base}\n\nSearch query:` },
   ];
   try {
-    const out = await model.phrase(messages, { maxTokens: 32, temperature: 0 });
+    // maxTokens 32 with minPredict 0: a query is a few words. The reasoning-floor backends
+    // (pleias / onnx) otherwise pad every call up to their 384–768 token floor, turning this tiny
+    // utility call into a second full-length decode (~80s on CPU/WASM) for no reason — a large
+    // share of the "chat is slow" in auto mode, where this runs before every answer.
+    const out = await model.phrase(messages, { maxTokens: 32, temperature: 0, minPredict: 0 });
     const q = String(out || '')
       .split('\n').map(s => s.trim()).find(Boolean) || '';     // first non-empty line
     const cleaned = q.replace(/^(search query|query)\s*:\s*/i, '').replace(/^["'`]+|["'`]+$/g, '').trim();

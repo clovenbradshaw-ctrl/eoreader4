@@ -125,9 +125,10 @@ const makeOnnx = ({ id, modelId, format, minPredict = 0 }) =>
         if (!pipe) throw new Error(`${id}: not loaded`);
         // Pleias spends tokens on its reasoning scaffold before the answer, so give
         // the grounded format a floor under the task's max_tokens (as pleias.js does).
+        // A short utility call passes opts.minPredict: 0 to opt out and stay fast.
         const temperature = opts.temperature ?? (format === 'pleias' ? 0.3 : 0.7);
         const gen = {
-          max_new_tokens: Math.max(opts.maxTokens ?? 256, minPredict),
+          max_new_tokens: Math.max(opts.maxTokens ?? 256, opts.minPredict ?? minPredict),
           repetition_penalty: 1.1,   // a gentle guard against the small-model loop
           return_full_text: false,   // string inputs: keep only the continuation
         };

@@ -437,8 +437,17 @@ export const stages = {
     // on (ctx.note.levels.structure), NOT a dump of every unit. Reading the whole document folds
     // in nav chrome and off-topic sentences ("Main -> Random : page"); the surf is what selects
     // the significant few. EOT-serialized (docs/eot-surface-syntax.md) and scrubbed at the membrane.
+    //   The graph is only as trustworthy as the referent the fold LANDED ON. When the reading
+    //   diffused — no dominant figure at the cursor (referential.concentrated === false) — the
+    //   surf rode to the document's loudest figure, not the one the question is about, so the
+    //   relations it read off are ABOUT THE WRONG THING (the audit's "who is behind the X-Files
+    //   reboot?" folded a graph centred on Rotten Tomatoes / Godzilla and fed it to the talker).
+    //   A confident-looking graph built on a wandering focus is worse than none: withhold it and
+    //   fall back to the plain excerpt frame. Only a MEASURED diffusion (=== false) withholds; an
+    //   unmeasured referent (null, no corefField — most tests) feeds the graph as before.
+    const landedOnReferent = ctx.referential?.concentrated !== false;
     let fedGraph = '';
-    if (grounded && ctx.groundGraph && ctx.note?.levels?.structure) {
+    if (grounded && ctx.groundGraph && landedOnReferent && ctx.note?.levels?.structure) {
       try {
         const lines = serializeEOT(ctx.note.levels.structure, { max: 24 });
         fedGraph = scrubGraphLines(lines).join('\n');

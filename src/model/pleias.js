@@ -189,8 +189,11 @@ const makePleias = ({ id, modelUrl, buildPrompt, minPredict }) =>
         const prompt = buildPrompt(extractGroundedInput(messages));
         // The reasoning pipeline spends tokens before the answer, so give Pleias
         // a floor under the task's max_tokens — otherwise the budget can run out
-        // mid-reasoning and never reach <|answer_start|>.
-        const nPredict = Math.max(opts.maxTokens ?? 384, minPredict);
+        // mid-reasoning and never reach <|answer_start|>. A caller doing a SHORT
+        // utility generation (a search query, a one-line prediction) passes
+        // opts.minPredict: 0 to opt out of the floor and stay fast — otherwise every
+        // such call pads to 384 tokens of CPU/WASM decode (~80s) for a few words.
+        const nPredict = Math.max(opts.maxTokens ?? 384, opts.minPredict ?? minPredict);
         const out = await inst.createCompletion(prompt, {
           nPredict,
           sampling: { temp: opts.temperature ?? 0.3 },
