@@ -292,7 +292,15 @@ export const stages = {
     // that NAMES the figure, which the word "name" never reaches by similarity. Flag
     // off: the anchor is the top retrieval hit and the focus is the named referents of
     // the question, exactly as before — byte-identical, the read path is dark.
-    const refTarget = RULES_REV ? referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans) : null;
+    const refTarget0 = RULES_REV ? referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans) : null;
+    // CAST CYCLE — EVA (cast.js, docs/source-activation.md). When a session cast is threaded,
+    // let it evaluate which referent THIS turn concerns: the live read wins when it resolves;
+    // only a NULL live read carries forward a referent the conversation has SETTLED and is still
+    // holding — so a thin follow-up stays on the thing being discussed instead of the anchor
+    // degrading to the loudest retrieval hit. Null cast → refTarget0 unchanged (byte-identical).
+    const refTarget = ctx.cast
+      ? ctx.cast.evaluate({ doc: ctx.doc, history: ctx.history, question: ctx.question, refTarget: refTarget0 })
+      : refTarget0;
     const anchor = (refTarget?.locale ?? ctx.spans[0]?.idx) ?? 0;
     // THE SIGNIFICANCE COLUMN (significance-column spec). When a meaning-measuring
     // embedder AND a centroid prior are present, the surf rides the full column: it
@@ -343,7 +351,14 @@ export const stages = {
     const referential = ctx.doc?.corefField
       ? referentialConfidence(ctx.doc.corefField.fieldGrounded(cursor))
       : null;
-    return { ...ctx, spans, note, surf, focus, referential, refTarget };
+    // CAST CYCLE — REC (cast.js). Commit this turn's target as SETTLED only when the fold
+    // CONCENTRATED (referential.concentrated), so the carried state holds only referents a
+    // reading actually landed on; a diffuse, wandering fold commits nothing.
+    const cast = ctx.cast
+      ? ctx.cast.reconcile({ id: refTarget?.id ?? null, label: refTarget?.label ?? null,
+                             locale: refTarget?.locale ?? null, concentrated: referential?.concentrated === true })
+      : null;
+    return { ...ctx, spans, note, surf, focus, referential, refTarget, castStep: cast };
   },
 
   // The PREDICTION — the engine's own grounded generation, before the talker speaks

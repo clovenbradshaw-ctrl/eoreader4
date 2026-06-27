@@ -77,20 +77,26 @@ vocabulary:
   inference move (read where expected information gain is highest) applied to sources. (Stage
   3 — couples to the web-search proposer in `docs/web-search.md`.)
 
-- **Landing on the referent (the cast cycle).** Orthogonal but adjacent: the fold should run a
-  DEF→EVA→REC cycle over the *conversation cast* — define the referents under discussion,
-  evaluate which one a turn concerns, re-cognize and commit on a concentrated fold — so a thin
-  follow-up stays on the thing being discussed instead of riding to the loudest figure
-  (`src/converse/reference.js` is today a single-shot "warmest figure" read). See the
-  operator algebra, Interpretation column (`docs/operators.md`).
+- **Landing on the referent (the cast cycle).** *(Built — `src/converse/cast.js`.)* The fold
+  runs a DEF→EVA→REC cycle over the *conversation cast*: **DEF** the referents under discussion
+  as a persisted set, **EVA** which one a turn concerns (the live read wins; only a NULL read
+  carries forward a settled referent the conversation is still holding, instead of degrading to
+  the loudest span), **REC** commit a referent as settled only when the fold *concentrated* on
+  it, so a wandering read never poisons the carried state. Threaded through the session like the
+  Horizon (`runTurn`'s `cast`, `STATE.cast`); null → byte-identical. The fold audit step reports
+  the cast ("the things we're talking about"). Conservative by design — it never overrides a
+  resolved live read — and the seam for richer EVA later. See the operator algebra, Interpretation
+  column (`docs/operators.md`).
 
-- **Checking the answer in EOT (the edge-grounding gap).** The factcheck translates the
-  talker's prose to EOT edges and compares them against the document graph
-  (`src/factcheck/correspond.js`) — but an *equative copula* ("Gregor's sister is Grete")
-  flattens to a node-shaped DEF and never becomes an edge, so a correct, graph-supported
-  kinship answer reads as unbound. Closing it: extract the equative as a `CON` edge on the
-  talker-claim side and add a symbolic kinship-*corroboration* axiom (today the algebra fires
-  only for contradictions) so it holds even under the hash organ. (Stage adjacent.)
+- **Checking the answer in EOT (the edge-grounding gap).** *(Built — `src/factcheck/correspond.js`,
+  `src/core/relation-types.js`.)* The factcheck translates the talker's prose to EOT edges and
+  compares them against the document graph — but an *equative copula* ("Gregor's sister is Grete")
+  flattened to a node-shaped DEF and never became an edge, so a correct, graph-supported kinship
+  answer read as unbound. Closed in three parts: `equativeKinEdges` recovers the equative as a
+  `CON` edge on the talker-claim side (document parse untouched); `checkRelationAgree` is a
+  symbolic kinship-*corroboration* axiom (the algebra fired only for contradictions before) that
+  holds under the hash organ; and the earned citation is fed back into the lexical `bind` so
+  `unbound-contact` / `low-coverage` actually clear on a witnessed answer.
 
 ## Already shipped alongside this
 
