@@ -48,6 +48,44 @@ const abbreviates = (buf, isAbbreviation) => {
   return /^[A-Z]$/.test(w) || isAbbreviation(w);
 };
 
+// ── The HEADING boundary — a line break that ends a heading/label, not a wrapped line ──
+//
+// Web prose (and any extracted-from-HTML text) carries section headings and list labels
+// on their own line with NO terminal punctuation: "Planned reboot", "External links",
+// "Ryan Coogler reboot", "Places". The paragraph loop below collapses a single `\n` to a
+// space, so such a line WELDS onto the sentence beneath it — "Ryan Coogler reboot" + "In
+// March 2023, …Chris Carter" became one sentence, and the relation reader, finding two
+// admitted names with the heading word "reboot" between them, minted the phantom edge
+// "Ryan Coogler --reboot--> Chris Carter" that produced the wrong "Carter" answer. The
+// heading is its own unit; the `\n` after it is a boundary.
+//
+// The discriminator from a hard-wrapped PROSE line (Project Gutenberg wraps mid-sentence
+// at ~70 chars) is conjunctive and conservative — a real wrapped line fails it on length
+// alone (it carries ten-plus words): the line is SHORT, ends in no sentence mark, does not
+// trail off on a continuation word (a clause that wraps ends on "the"/"to"/"and"/a verb-
+// like aux), and the next line opens a fresh capitalised sentence. Miss toward NOT cutting
+// — a welded heading is a known, bounded harm; a shattered prose sentence is worse.
+const HEADING_MAX_WORDS = 4;
+// A line ending in one of these is a clause that wrapped, never a heading — the tail the
+// next line completes ("…lay on his" / "…slide off" / "…size of the"). Kept small and
+// closed-class: articles, coordinators, common prepositions, the copula/aux/modal run.
+const CONTINUATION_TAIL = new Set([
+  'the', 'a', 'an', 'and', 'or', 'but', 'nor', 'so', 'of', 'to', 'in', 'on', 'at', 'by',
+  'for', 'with', 'from', 'as', 'than', 'that', 'which', 'who', 'whose', 'into', 'onto',
+  'his', 'her', 'their', 'its', 'this', 'these', 'those', 'my', 'your', 'our',
+  'is', 'was', 'were', 'are', 'be', 'been', 'being', 'will', 'would', 'could', 'should',
+  'can', 'may', 'might', 'must', 'not', 'no', 'up', 'off', 'over', 'out',
+]);
+const isHeadingLine = (line, nextChar) => {
+  const s = String(line).trim();
+  if (!s) return false;
+  if (/[.!?]$/.test(s)) return false;                       // a completed sentence is not a heading
+  const words = s.split(/\s+/).filter(Boolean);
+  if (words.length === 0 || words.length > HEADING_MAX_WORDS) return false;
+  if (CONTINUATION_TAIL.has(words[words.length - 1].toLowerCase())) return false;  // a wrapped clause
+  return nextChar === '' || /[A-Z0-9"'“(]/.test(nextChar);  // next line opens a fresh unit
+};
+
 // `extraBoundaries` is a set of marks the reading has LEARNED to treat as sentence
 // ends for this document — beyond the `.!?` floor. It is empty by default (modern
 // prose), and promoted by the boundary-induction loop (parse/boundaries.js) when a
@@ -60,12 +98,30 @@ export const segmentSentences = (
   if (!t.trim()) return [];
   const out = [];
   for (const para of t.split(/\n{2,}/)) {
-    const p = para.replace(/\s+/g, ' ').trim();
+    // Collapse spaces/tabs but KEEP single newlines as candidate heading boundaries;
+    // trim the spaces hugging each newline so a line's last/first word reads clean.
+    const p = para.replace(/[^\S\n]+/g, ' ').replace(/ *\n */g, '\n').replace(/^\n+|\n+$/g, '');
     if (!p) continue;
     let buf = '';
+    let lineStart = 0;                                  // start of the current physical line in `p`
     for (let i = 0; i < p.length; i++) {
-      buf += p[i];
       const ch = p[i];
+      if (ch === '\n') {
+        // A line break ends a physical line. If that line was a heading/label, the break
+        // is a boundary; otherwise it is a soft wrap and reads as a space.
+        const line = p.slice(lineStart, i);
+        const nextChar = (p.slice(i + 1).match(/\S/) || [''])[0];
+        lineStart = i + 1;
+        if (isHeadingLine(line, nextChar)) {
+          const s = buf.trim();
+          if (s) out.push(s);
+          buf = '';
+        } else {
+          buf += ' ';
+        }
+        continue;
+      }
+      buf += ch;
       const next = p[i + 1] || '';
       const isFloor = ch === '.' || ch === '!' || ch === '?';
       if ((isFloor || extraBoundaries.has(ch)) && (next === '' || /\s/.test(next))) {
