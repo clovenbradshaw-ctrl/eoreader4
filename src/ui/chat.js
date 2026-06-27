@@ -385,9 +385,10 @@ export const renderWebResult = (el, fetched) => {
     head.textContent = `No web results for “${fetched.query}”.`;
   } else if (fetched.trigger === 'verify') {
     box.classList.add(fetched.supported ? 'ok' : 'unconfirmed');
+    const backing = fetched.supportingCount ?? (fetched.supported ? fetched.results : 0);
     head.textContent = fetched.supported
-      ? `✓ The web backs this up (${fetched.results} source${fetched.results > 1 ? 's' : ''} checked).`
-      : `⚠ Couldn't confirm this against the web (${fetched.results} source${fetched.results > 1 ? 's' : ''} checked).`;
+      ? `✓ ${backing} of ${fetched.results} source${fetched.results > 1 ? 's' : ''} back this up.`
+      : `⚠ Couldn't confirm this — ${fetched.results} source${fetched.results > 1 ? 's' : ''} checked, none corroborated.`;
   } else {
     box.classList.add('ok');
     head.textContent = `🔍 Searched the web — pulled ${fetched.results} source${fetched.results > 1 ? 's' : ''} into this answer.`;
@@ -399,7 +400,23 @@ export const renderWebResult = (el, fetched) => {
     const item = document.createElement(s.url ? 'a' : 'div');
     item.className = 'wr-source';
     if (s.url) { item.href = s.url; item.target = '_blank'; item.rel = 'noopener'; item.title = s.url; }
-    item.textContent = s.title || s.url || s.docId || 'source';
+
+    // Per-source verdict tag — only on a verify turn, where each source was checked on its own.
+    // A gap/witness turn pulled the sources INTO the answer, so there is no per-source verdict
+    // to show; those render as a plain linked chip, as before.
+    if (fetched.trigger === 'verify' && typeof s.supported === 'boolean') {
+      const tag = document.createElement('span');
+      const pct = Math.round((s.overlap || 0) * 100);
+      tag.className = `wr-tag ${s.supported ? 'backs' : 'nomatch'}`;
+      tag.textContent = s.supported ? `✓ backs · ${pct}%` : `– no match · ${pct}%`;
+      if (!s.supported && s.missing?.length) tag.title = `not found here: ${s.missing.join(', ')}`;
+      item.appendChild(tag);
+    }
+
+    const label = document.createElement('span');
+    label.className = 'wr-source-label';
+    label.textContent = s.title || s.url || s.docId || 'source';
+    item.appendChild(label);
     box.appendChild(item);
   }
 

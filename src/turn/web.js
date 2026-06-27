@@ -66,16 +66,32 @@ export const runWebFollowup = async (args, first, {
   // VERIFY — keep the model's answer (general knowledge is fine), check it against the web, and
   // attach a flag. The answer is NOT replaced: the engine's job here is to flag what's wrong or
   // unconfirmed, not to restrict the answer.
+  //
+  // Check each source INDEPENDENTLY, not against one merged corpus, and tag each with its own
+  // verdict (the partitioned-retrieval discipline — collapsing sources into one field hides
+  // whether the support is one page or many, and lets a single SEO-captured dump read as
+  // consensus). Each source carries `supported` / `overlap` / `missing`; the answer stands
+  // on whichever sources back it, and the UI tags each source distinctly.
   if (proposal.trigger === 'verify') {
-    const corpus = webDocs.map(d => String(d.text || '')).join('\n');
-    const v = verifyAgainstWeb(first.answer, corpus, { question: q });
-    const flag = v.supported
-      ? { id: 'web-supported', refuses: false, message: `The web results back this up (${Math.round(v.overlap * 100)}% of the answer's terms appear).` }
-      : { id: 'web-unconfirmed', refuses: false, message: `Couldn't confirm this against the web${v.missing?.length ? ` — not found: ${v.missing.slice(0, 5).join(', ')}` : ''}.` };
+    const perSource = webDocs.map(d => {
+      const v = verifyAgainstWeb(first.answer, String(d.text || ''), { question: q });
+      return {
+        docId: d.docId, title: d.web?.title || d.title || '', url: d.web?.url || d.web?.final_url || '',
+        supported: v.supported, overlap: v.overlap, missing: (v.missing || []).slice(0, 5),
+      };
+    });
+    const backing = perSource.filter(s => s.supported);
+    const supported = backing.length > 0;            // independent corroboration: any source backs it
+    const overlap = perSource.reduce((m, s) => Math.max(m, s.overlap), 0);   // the best single source
+    const flag = supported
+      ? { id: 'web-supported', refuses: false,
+          message: `${backing.length} of ${perSource.length} web source${perSource.length > 1 ? 's' : ''} back this up.` }
+      : { id: 'web-unconfirmed', refuses: false,
+          message: `Couldn't confirm this against the web (${perSource.length} source${perSource.length > 1 ? 's' : ''} checked, none corroborated).` };
     return { ...first, flags: [...(first.flags || []), flag],
       webProposal: proposal,
-      webFetched: { query: q, trigger: 'verify', results: webDocs.length, supported: v.supported, overlap: v.overlap,
-                    sources: webDocs.map(d => ({ docId: d.docId, title: d.web?.title || d.title || '', url: d.web?.url || d.web?.final_url || '' })) } };
+      webFetched: { query: q, trigger: 'verify', results: webDocs.length,
+                    supported, supportingCount: backing.length, overlap, sources: perSource } };
   }
 
   // GAP / WITNESS — re-run with the web sources added to the answer scope, so the second answer

@@ -321,10 +321,20 @@ section h2 .hint {
 .msg.assistant .webresult.unconfirmed .wr-head { color: #fbbf24; }
 .msg.assistant .webresult.empty .wr-head       { color: #a1a1aa; }
 .msg.assistant .wr-source {
-  display: block; margin-top: .3rem; font-size: .72rem;
+  display: flex; align-items: baseline; gap: .4rem; margin-top: .3rem; font-size: .72rem;
   color: #93c5fd; text-decoration: none; word-break: break-word;
 }
-a.wr-source:hover { text-decoration: underline; }
+.msg.assistant .wr-source-label { flex: 1 1 auto; min-width: 0; }
+a.wr-source:hover .wr-source-label { text-decoration: underline; }
+
+/* Per-source verdict tag (verify turns) — each source carries its own ✓ backs / – no match
+   badge, so different sources read as different evidence, not one merged corpus. */
+.msg.assistant .wr-tag {
+  flex: 0 0 auto; font-size: .65rem; font-weight: 600; padding: .05rem .35rem;
+  border-radius: .5rem; white-space: nowrap; letter-spacing: .01em;
+}
+.msg.assistant .wr-tag.backs   { color: #6ee7b7; background: #07241c; border: 1px solid #065f46; }
+.msg.assistant .wr-tag.nomatch { color: #a1a1aa; background: #1f1f23; border: 1px solid #3f3f46; }
 
 /* Document chips — the loaded documents, tagged for grounding. They sit above the
    composer and persist across turns; a selected (tagged) chip is grounded against. */

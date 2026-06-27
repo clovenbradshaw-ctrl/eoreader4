@@ -168,6 +168,30 @@ test('verify trigger: the answer is kept and a flag is attached (not replaced)',
   assert.ok(out.flags.some(f => f.id === 'web-unconfirmed'), 'a flag tells the user it could not be confirmed');
 });
 
+test('verify trigger: each source is tagged independently, the answer is kept', async () => {
+  const impl = async () => ({ answer: 'The capital of France is Paris.',
+    webProposal: { query: 'capital of france', trigger: 'verify', rationale: 'general knowledge', cost: COST_NOTICE }, flags: [] });
+  // Two sources: one backs "Paris", one is off-topic (no novel term).
+  const webSearch = async () => [
+    { doc: { ...groundedDoc('Paris is the capital of France.'), docId: 's-paris', web: { title: 'Paris', url: 'https://a.example/paris' } } },
+    { doc: { ...groundedDoc('The Loire is a river in France.'), docId: 's-loire', web: { title: 'Loire', url: 'https://b.example/loire' } } },
+  ];
+  const out = await runTurnWithWeb({ question: 'what is the capital of france?', docs: [] },
+    { mode: 'auto', webSearch, runTurnImpl: impl });
+
+  assert.equal(out.answer, 'The capital of France is Paris.', 'the answer is not replaced');
+  assert.equal(out.webFetched.sources.length, 2);
+  const paris = out.webFetched.sources.find(s => s.docId === 's-paris');
+  const loire = out.webFetched.sources.find(s => s.docId === 's-loire');
+  assert.equal(paris.supported, true, 'the Paris source backs the answer');
+  assert.equal(loire.supported, false, 'the off-topic source does not');
+  assert.equal(paris.title, 'Paris');
+  assert.equal(paris.url, 'https://a.example/paris');
+  assert.equal(out.webFetched.supportingCount, 1);
+  assert.equal(out.webFetched.supported, true, 'one independent source corroborating is enough');
+  assert.ok(out.flags.some(f => f.id === 'web-supported'));
+});
+
 test('runWebFollowup honours a query override (the confirmation card lets the user sharpen it)', async () => {
   const calls = [];
   const impl = async (args) => { calls.push(args); return { answer: 'Gregor dies.', flags: [], sources: [0] }; };
