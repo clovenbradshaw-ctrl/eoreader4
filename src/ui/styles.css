@@ -140,6 +140,8 @@ section h2 {
   color: #60a5fa; cursor: pointer; text-decoration: underline;
   font-family: ui-monospace, monospace; font-size: .8rem;
 }
+/* A web-sourced citation — links out to the page it cites (per-claim attribution). */
+.cite-web { color: #6ee7b7; }
 
 section h2 .hint {
   text-transform: none;

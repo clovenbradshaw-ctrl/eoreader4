@@ -32,9 +32,32 @@ const firstTag = (block, name) => {
 // Strip an HTML page to readable text: drop script/style, turn block ends into newlines, remove
 // the rest of the tags, decode entities, collapse whitespace. Pragmatic, dependency-free — the
 // readability the proxy does not do server-side (the proxy is feed-oriented, returns raw body).
-export const htmlToText = (html) => decodeEntities(String(html || '')
-  .replace(/<(script|style|noscript|template)\b[\s\S]*?<\/\1>/gi, ' ')
-  .replace(/<\/(p|div|li|h[1-6]|tr|section|article|header|footer|blockquote)>/gi, '\n')
+// Selectors for page CHROME — removed before reading (the article is none of these). Borrowed
+// from the EO_Reader DOM reader: strip the furniture, keep the prose.
+const CHROME_SELECTOR = [
+  'script', 'style', 'noscript', 'template', 'nav', 'header', 'footer', 'aside', 'form',
+  'button', 'svg', 'select', 'figure', 'iframe', 'dialog',
+  '[role=navigation]', '[role=banner]', '[role=contentinfo]', '[role=search]',
+  '#mw-navigation', '#mw-panel', '#mw-head', '#footer', '.mw-editsection', '.navbox',
+  '.vector-header', '.vector-page-toolbar', '.toc', '#toc', '.sidebar', '.reflist',
+].join(',');
+// Where the article actually lives — first match wins; falls back to <body>.
+const MAIN_SELECTOR = 'article, main, [role=main], #mw-content-text, .mw-parser-output';
+
+// DOM reader (browser only): parse the page, drop the chrome, read the main content's text. Far
+// more capable than tag-regex — it understands document structure the way EO_Reader does.
+const domToText = (html) => {
+  const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+  doc.querySelectorAll(CHROME_SELECTOR).forEach((n) => n.remove());
+  const main = doc.querySelector(MAIN_SELECTOR) || doc.body || doc.documentElement;
+  return String((main && main.textContent) || '')
+    .replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').replace(/[ \t]*\n[ \t]*/g, '\n').trim();
+};
+
+// Tag-regex reader (Node / no-DOM fallback): strip chrome elements whole, then tags.
+const regexToText = (html) => decodeEntities(String(html || '')
+  .replace(/<(script|style|noscript|template|nav|header|footer|aside|form|button|svg|select|figure)\b[\s\S]*?<\/\1>/gi, ' ')
+  .replace(/<\/(p|div|li|h[1-6]|tr|section|article|blockquote)>/gi, '\n')
   .replace(/<br\s*\/?>/gi, '\n')
   .replace(/<[^>]+>/g, ' '))
   .replace(/[ \t]+/g, ' ')
@@ -42,6 +65,30 @@ export const htmlToText = (html) => decodeEntities(String(html || '')
   .replace(/\n{3,}/g, '\n\n')
   .replace(/[ \t]*\n[ \t]*/g, '\n')
   .trim();
+
+// HTML → readable prose. Use the DOM reader in the browser (the real app), the regex reader
+// in Node (tests, headless). A DOM failure falls back to regex rather than throwing.
+export const htmlToText = (html) => {
+  if (typeof DOMParser !== 'undefined') {
+    try { const t = domToText(html); if (t) return t; } catch { /* fall back to regex */ }
+  }
+  return regexToText(html);
+};
+
+// Wikipedia, clean: fetch the plain-text article EXTRACT through the API rather than scraping the
+// rendered page (whose nav/sidebar/footer chrome otherwise dominates — the EOT graph came back as
+// "Main -> Random : page", menu items, not article facts). Returns prose, or '' on any failure.
+export const wikiExtract = async (client, title) => {
+  if (!title) return '';
+  const url = 'https://en.wikipedia.org/w/api.php?format=json&action=query&prop=extracts' +
+    '&explaintext=1&exsectionformat=plain&redirects=1&titles=' + encodeURIComponent(title);
+  try {
+    const j = JSON.parse((await client.fetchUrl(url)).text);
+    const pages = j?.query?.pages || {};
+    const first = Object.values(pages)[0];
+    return String(first?.extract || '').trim();
+  } catch { return ''; }
+};
 
 // parseFeed(xml) → items [{ title, link, summary, published }] for RSS (<item>) and Atom
 // (<entry>). Pure and regex-based (no DOM in Node), defensive: a malformed block yields a
@@ -150,7 +197,13 @@ export const searchAndAdmit = async (query, { client, store = null, k = 5, kind 
   for (const it of items) {
     let text = it.text || it.title || '';
     if (fetchPages && it.url) {
-      try { text = htmlToText((await c.fetchUrl(it.url)).text) || text; } catch { /* keep the snippet */ }
+      try {
+        // Wikipedia → the clean plain-text extract via the API (no nav/sidebar/footer chrome);
+        // anything else → fetch the page and reduce its HTML, with the chrome stripped.
+        text = ((it.source === 'wikipedia' || it.kind === 'wikipedia')
+          ? await wikiExtract(c, it.title)
+          : htmlToText((await c.fetchUrl(it.url)).text)) || text;
+      } catch { /* keep the snippet */ }
     }
     const payload = { url: it.url || c.proxied(query), title: it.title, text,
                       excerpt: it.text, retrieval_query: query, engine: `web:${it.source || it.kind || kind}`, fetched_at };

@@ -28,6 +28,20 @@ const sourceDocsOf = (doc, sources) => {
   return doc.docId ? [doc.docId] : [];
 };
 
+// Per-CLAIM attribution: each cited sentence index → the source document it came from. Where
+// sourceDocsOf collapses to the set, this keeps the index→source map so the UI can attribute every
+// [sN] in the answer to its specific origin (the EO_Reader sentenceSource model). { idx: docId }.
+const citeOriginsOf = (doc, sources) => {
+  const out = {};
+  if (!doc) return out;
+  const composite = doc.isComposite && typeof doc.origin === 'function';
+  for (const i of (sources || [])) {
+    const id = composite ? doc.origin(i)?.docId : doc.docId;
+    if (id != null) out[i] = id;
+  }
+  return out;
+};
+
 const round3 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 1000) / 1000 : null);
 
 // The MECHANICAL reading, assembled for the audit: every piece that came through between the
@@ -221,6 +235,7 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
       sourceDocs: sourceDocsOf(groundingDoc, ctx.sources),
       referential: ctx.referential || null, flags, unbound, webProposal,
       fedGraph: ctx.fedGraph || null,   // the meaning graph fed to the talker (web path); null otherwise
+      citeOrigins: citeOriginsOf(groundingDoc, ctx.sources),   // per-claim attribution: [sN] idx → source docId
       route: ctx.route || 'grounded', grounding, turn,
     };
   } catch (err) {
