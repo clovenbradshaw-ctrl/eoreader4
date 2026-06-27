@@ -69,7 +69,7 @@ export { bridgeSurprise, BRIDGE_DINF } from './bridge.js';
 // not in any one faculty (its only dependency is VERDICTS, imported down).
 export {
   PRIMITIVES, DISJOINT_PRIMITIVES, typeOf, isFunctional, isSymmetric,
-  relationPrior, areDisjoint, functionalClash, checkRelationConflict,
+  relationPrior, areDisjoint, functionalClash, checkRelationConflict, checkRelationAgree,
   isObjectFunctional, objectFunctionalClash, checkObjectFunctionalConflict,
   attributesConflict,
 } from './relation-types.js';

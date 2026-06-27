@@ -19,6 +19,7 @@ import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/
 import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { createHorizon, structuralGround } from '../surfer/index.js';
+import { createCast } from '../converse/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
          renderWebProposal, renderWebResult, setThinkingNote, buildPropositions } from './chat.js';
@@ -51,6 +52,9 @@ const STATE = {
   // settle.horizon. Cold-starts at the embedder-free structural ground σ (operator basis),
   // so it accumulates with no meaning model. Created lazily on the first turn below.
   horizon:   null,
+  // The session Cast (converse/cast.js) — DEF→EVA→REC memory of the referents under discussion,
+  // carried across turns. Created lazily on the first turn below.
+  cast:      null,
 
   grounding: 'auto',     // FIXED — no register chip. 'auto' grounds on whatever was gathered (web + docs).
   inquire:   false,      // self-directed inquiry — off (experimental; no chip)
@@ -488,6 +492,12 @@ const runQuery = async (question) => {
   if (!STATE.horizon) {
     try { STATE.horizon = createHorizon({ ground: structuralGround() }); } catch { STATE.horizon = null; }
   }
+  // The session Cast (cast.js) — the DEF→EVA→REC memory of the referents under discussion,
+  // created once and carried across turns so a thin follow-up stays on the thing being
+  // discussed. One cast spans the conversation, like the Horizon.
+  if (!STATE.cast) {
+    try { STATE.cast = createCast(); } catch { STATE.cast = null; }
+  }
 
   const t0 = performance.now();
   const turnArgs = {
@@ -495,6 +505,9 @@ const runQuery = async (question) => {
     // The persistent session Horizon — the `settle` stage folds this turn's reading into it
     // (observe-only; the answer is byte-identical). Null only if construction failed.
     horizon:  STATE.horizon,
+    // The persistent session Cast — the fold's EVA/REC read off it (carry-forward on a null
+    // live read; settle on a concentrated fold). Null only if construction failed.
+    cast:     STATE.cast,
     shapeLibrary: STATE.shapeLibrary,   // the form predictor, once built (null until MiniLM warms)
     docs:     selectedDocs,     // the selected set — folded into one composite to ground against
     // In WEAVE mode the recalled lines are offered to the model as labelled background;

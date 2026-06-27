@@ -28,3 +28,8 @@ export { needsContext, conversationalFocus, resolveRetrievalQuery, contentWords 
 // the tail of the reading line (the cast), not by classifying its surface form. The
 // RULES_REV path that retires focus.js (docs/reference-by-reading.md).
 export { referenceTarget, conversationCast, localeOf } from './reference.js';
+
+// The conversation cast as a DEF→EVA→REC cycle — persistent memory of the referents under
+// discussion, carried across turns so a thin follow-up stays on the thing being discussed
+// instead of wandering to the loudest figure. (cast.js, docs/source-activation.md)
+export { createCast } from './cast.js';

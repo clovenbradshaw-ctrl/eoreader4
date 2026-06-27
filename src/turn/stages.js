@@ -9,7 +9,7 @@
 // The user sees what the model actually said, with a flag pinned to it.
 
 import { answerVoid } from '../answer/index.js';
-import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
+import { retrieveHybrid, reserveBySource, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
 import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
@@ -24,7 +24,7 @@ import { buildGroundedMessages, buildChatMessages, orientationLine } from '../mo
 import { bindCitations, renderBound } from '../ground/index.js';
 import { runVetoes, isUnbound, classifyProvenance } from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
-import { projectGraph }     from '../core/index.js';
+import { projectGraph, VERDICTS } from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
@@ -198,7 +198,19 @@ export const stages = {
       const structural = retrieveStructural(ctx.doc, 12);
       if (structural.length) return { ...ctx, spans: structural, retrievalQuery: query, retrieval: 'structural' };
     }
-    const spans = await retrieveHybrid(ctx.doc, query, re, 6);
+    // Source activation (docs/source-activation.md): retrieve a wider pool, then — when the
+    // scope is a composite that holds a freshly-fetched WEB source beside the loaded document —
+    // reserve a slot for each activated web source's best span, so the findings the search
+    // brought back actually reach the talker instead of being buried under a long local doc.
+    // Gated to web-bearing composites; a single doc (or a doc-only composite) takes the plain
+    // top-6, byte-identical to before.
+    const pool = await retrieveHybrid(ctx.doc, query, re, 18);
+    const isWebSource = (d) => !!(d && (d.web || d.sourceKind === 'web-source'));
+    const hasWebSource = ctx.doc?.isComposite && typeof ctx.doc.origin === 'function' &&
+      pool.some(s => isWebSource(ctx.doc.origin(s.idx)?.doc));
+    const spans = hasWebSource
+      ? reserveBySource(pool, ctx.doc.origin, isWebSource, { k: 6 })
+      : pool.slice(0, 6);
     if (spans.length === 0) {
       // Strict grounded mode never falls through to free generation: it stays on the
       // grounded route and answers the absence ("the document doesn't cover this")
@@ -280,7 +292,15 @@ export const stages = {
     // that NAMES the figure, which the word "name" never reaches by similarity. Flag
     // off: the anchor is the top retrieval hit and the focus is the named referents of
     // the question, exactly as before — byte-identical, the read path is dark.
-    const refTarget = RULES_REV ? referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans) : null;
+    const refTarget0 = RULES_REV ? referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans) : null;
+    // CAST CYCLE — EVA (cast.js, docs/source-activation.md). When a session cast is threaded,
+    // let it evaluate which referent THIS turn concerns: the live read wins when it resolves;
+    // only a NULL live read carries forward a referent the conversation has SETTLED and is still
+    // holding — so a thin follow-up stays on the thing being discussed instead of the anchor
+    // degrading to the loudest retrieval hit. Null cast → refTarget0 unchanged (byte-identical).
+    const refTarget = ctx.cast
+      ? ctx.cast.evaluate({ doc: ctx.doc, history: ctx.history, question: ctx.question, refTarget: refTarget0 })
+      : refTarget0;
     const anchor = (refTarget?.locale ?? ctx.spans[0]?.idx) ?? 0;
     // THE SIGNIFICANCE COLUMN (significance-column spec). When a meaning-measuring
     // embedder AND a centroid prior are present, the surf rides the full column: it
@@ -331,7 +351,14 @@ export const stages = {
     const referential = ctx.doc?.corefField
       ? referentialConfidence(ctx.doc.corefField.fieldGrounded(cursor))
       : null;
-    return { ...ctx, spans, note, surf, focus, referential, refTarget };
+    // CAST CYCLE — REC (cast.js). Commit this turn's target as SETTLED only when the fold
+    // CONCENTRATED (referential.concentrated), so the carried state holds only referents a
+    // reading actually landed on; a diffuse, wandering fold commits nothing.
+    const cast = ctx.cast
+      ? ctx.cast.reconcile({ id: refTarget?.id ?? null, label: refTarget?.label ?? null,
+                             locale: refTarget?.locale ?? null, concentrated: referential?.concentrated === true })
+      : null;
+    return { ...ctx, spans, note, surf, focus, referential, refTarget, castStep: cast };
   },
 
   // The PREDICTION — the engine's own grounded generation, before the talker speaks
@@ -437,8 +464,17 @@ export const stages = {
     // on (ctx.note.levels.structure), NOT a dump of every unit. Reading the whole document folds
     // in nav chrome and off-topic sentences ("Main -> Random : page"); the surf is what selects
     // the significant few. EOT-serialized (docs/eot-surface-syntax.md) and scrubbed at the membrane.
+    //   The graph is only as trustworthy as the referent the fold LANDED ON. When the reading
+    //   diffused — no dominant figure at the cursor (referential.concentrated === false) — the
+    //   surf rode to the document's loudest figure, not the one the question is about, so the
+    //   relations it read off are ABOUT THE WRONG THING (the audit's "who is behind the X-Files
+    //   reboot?" folded a graph centred on Rotten Tomatoes / Godzilla and fed it to the talker).
+    //   A confident-looking graph built on a wandering focus is worse than none: withhold it and
+    //   fall back to the plain excerpt frame. Only a MEASURED diffusion (=== false) withholds; an
+    //   unmeasured referent (null, no corefField — most tests) feeds the graph as before.
+    const landedOnReferent = ctx.referential?.concentrated !== false;
     let fedGraph = '';
-    if (grounded && ctx.groundGraph && ctx.note?.levels?.structure) {
+    if (grounded && ctx.groundGraph && landedOnReferent && ctx.note?.levels?.structure) {
       try {
         const lines = serializeEOT(ctx.note.levels.structure, { max: 24 });
         fedGraph = scrubGraphLines(lines).join('\n');
@@ -579,7 +615,33 @@ export const stages = {
     const earned = (fc.citations || [])
       .map(c => parseInt(String(c).slice(1), 10)).filter(Number.isFinite);
     const sources = earned.length ? [...new Set([...(ctx.sources || []), ...earned])] : ctx.sources;
-    return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, sources };
+
+    // Feed an edge-corroboration back into the per-claim BIND. The lexical binder cites on
+    // surface overlap with a single span; a kinship claim ("Gregor's sister is Grete") whose
+    // witness sentence shares few words stays uncited there, so unbound-contact / low-coverage
+    // (ground/veto.js — both read `bound`, not the edge verdicts) fire on a correct, graph-
+    // witnessed answer. When the factcheck corroborated a claim against a document edge, attach
+    // that edge's citation to the matching bound claim, so the answer reads as grounded where
+    // the GRAPH grounds it — not only where lexical overlap did. Only fills an UNcited claim
+    // (a real lexical citation is never overwritten); when nothing matches, bound is untouched.
+    let bound = ctx.bound, answer = ctx.answer;
+    if (Array.isArray(ctx.bound) && ctx.bound.length) {
+      const corro = (fc.claims || []).filter(c => c.verdict === VERDICTS.CORROBORATED && c.citation && c.sentence);
+      if (corro.length) {
+        const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        let changed = false;
+        bound = ctx.bound.map(b => {
+          if (b.citation) return b;
+          const hit = corro.find(c => { const cs = norm(c.sentence), bs = norm(b.claim); return cs && bs && (bs.includes(cs) || cs.includes(bs)); });
+          if (!hit) return b;
+          changed = true;
+          return { ...b, citation: hit.citation, edgeGrounded: true };
+        });
+        if (changed) answer = renderBound(bound);
+        else bound = ctx.bound;
+      }
+    }
+    return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, sources, bound, answer };
   },
 
   // The regenerate pass — gate-then-rewrite (§5). Two triggers re-prompt the talker once
