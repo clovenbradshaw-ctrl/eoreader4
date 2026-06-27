@@ -71,13 +71,75 @@ const openEntry = (rid, head, band, reason) =>
 
 export const isOpen = (entry) => entry && (entry.band === 'void' || entry.band === 'hedged');
 
+// learningProgress — the DERIVATIVE OF COMPETENCE for one void, read off its
+// chronological REC observations (oldest → newest; each the accommodation that
+// re-surfing the void produced on that idle pass — idle.js `trail`). Curiosity is
+// not the level of confusion; it is the rate at which confusion SHRINKS when you
+// poke it. So this is the recent REDUCTION in that REC:
+//   > 0  the void is being learned — re-surfing it pays a little less each time;
+//        this is the FRONTIER, the edge where the model is improving fastest.
+//   ≈ 0  poking changes nothing. Either EXHAUSTED (REC already ~0 — the too-easy,
+//        bores) or a WALL whose REC stays high forever (the noisy-TV / garbled-OCR
+//        trap — maximally surprising, never gets less so). Both are uninteresting,
+//        and a naive curiosity that chased raw surprise would lick the wall forever.
+//   < 0  re-surfing makes it WORSE (REC rising) — the too-hard region; repel.
+// Recency (`window`): only the last few pokes count, so a void that fell early and
+// then flatlined reads as exhausted NOW, not as still-paying. Returns null when
+// there are too few observations to show a trend — the caller supplies the prior.
+export const learningProgress = (series, { window = 4 } = {}) => {
+  const xs = (series || []).filter(Number.isFinite);
+  if (xs.length < 2) return null;                          // unmeasured — no trend yet
+  const recent = xs.slice(-window);
+  const mid = Math.floor(recent.length / 2) || 1;
+  const earlier = recent.slice(0, mid);
+  const later = recent.slice(mid);
+  const mean = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+  return mean(earlier) - mean(later);                      // positive ⇒ REC falling ⇒ progress
+};
+
+// voidScore — the attention value of a void: its learning progress, or, when it has
+// not been poked enough to show one, an OPTIMISTIC prior (`priorLP`). Optimism under
+// uncertainty is what makes it explore the genuinely unknown — "the edge of its own
+// knowing" — before it can possibly know whether that edge is a frontier or a wall.
+// Tune `priorLP` down to let a hot, already-found frontier compete with the unpoked.
+export const voidScore = (rid, history, { priorLP = 1, window = 4 } = {}) => {
+  const series = history && history.get ? history.get(rid) : null;
+  const lp = learningProgress(series, { window });
+  return lp == null ? priorLP : lp;
+};
+
+// rankByLearningProgress — the open ledger ordered by the derivative of competence,
+// highest first: drawn to the frontier, repelled by the wall. Deterministic and
+// stable (ties keep ledger order), so it is the testable keystone the idle walk and
+// the day-scheduler both read. `history` is a Map rid → number[] of REC pokes.
+export const rankByLearningProgress = (ledger, history, opts = {}) =>
+  (ledger || [])
+    .filter(isOpen)
+    .map((e, i) => ({ e, i, s: voidScore(e.rid, history, opts) }))
+    .sort((a, b) => (b.s - a.s) || (a.i - b.i))
+    .map((x) => x.e);
+
 // pickVoid — choose WHICH open void to attend next. Seeded randomness plays only the
 // humble correct role (§15, I5): it varies which void gets attention so attention
 // does not lock — it never manufactures content. `rng` is a function → [0,1); a
 // deterministic seed makes the walk reproducible. Returns null on an empty ledger
 // (nothing open → nothing to think about).
-export const pickVoid = (ledger, rng = Math.random) => {
+//
+// With no `history` the walk is seeded-UNIFORM — byte-identical to the original I5
+// attention (the default path; existing callers and goldens are unchanged). Given a
+// poke-history it becomes FRONTIER-BIASED: attention is weighted by learning progress
+// so the walk is drawn to where competence grows fastest and away from the wall —
+// yet every open void keeps a probability floor, so attention biases but never LOCKS
+// (I5 holds: noise still steers WHICH, the bias never silences a void entirely).
+export const pickVoid = (ledger, rng = Math.random, { history = null, ...opts } = {}) => {
   const open = (ledger || []).filter(isOpen);
   if (!open.length) return null;
-  return open[Math.floor(rng() * open.length) % open.length];
+  if (!history) return open[Math.floor(rng() * open.length) % open.length];
+
+  const FLOOR = 1e-3;                                      // I5 — no void is ever silenced
+  const weights = open.map((e) => Math.max(0, voidScore(e.rid, history, opts)) + FLOOR);
+  const total = weights.reduce((s, w) => s + w, 0);
+  let r = rng() * total;                                   // one draw per step — rng stream advances as before
+  for (let k = 0; k < open.length; k++) { r -= weights[k]; if (r <= 0) return open[k]; }
+  return open[open.length - 1];
 };

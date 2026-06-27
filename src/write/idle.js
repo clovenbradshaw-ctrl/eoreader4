@@ -89,12 +89,29 @@ export const createIdleLoop = ({
     return cand;
   };
 
+  // recHistory — the per-void REC poke-record off the trail, chronological. It is the
+  // fold the curiosity drive reads: which void's surprise is SHRINKING when poked
+  // (the frontier) versus staying high forever (the wall). Drives pickVoid's bias.
+  const recHistory = () => {
+    const h = new Map();
+    for (const e of trail) {
+      if (!e || e.rid == null || !Number.isFinite(e.rec)) continue;
+      if (!h.has(e.rid)) h.set(e.rid, []);
+      h.get(e.rid).push(e.rec);
+    }
+    return h;
+  };
+
   // one governed pass (I1 anchored, I5 seeded). Returns { void, rec, candidate, quiesce }.
   const step = () => {
     // the open set the loop walks is the SAME the UX shows (§16): pass the resolution
     // map so HEDGED voids (firm-but-low-p) are fuel too, not just void-band ones (§15).
     const ledger = openLedger(fold, { resolution });
-    const v = pickVoid(ledger, rng);                          // I5 — varies WHICH, never content
+    // I5 — varies WHICH, never content — but now DRAWN to the frontier: attention is
+    // weighted by learning progress (the derivative of competence read off the trail),
+    // so the walk seeks where surprise is shrinking and is repelled by the wall whose
+    // surprise never does. The probability floor keeps I5 intact — biased, never locked.
+    const v = pickVoid(ledger, rng, { history: recHistory() });
     if (!v) return { void: null, rec: 0, candidate: null, quiesce: true };   // nothing open → rest
     const field = surf({ void: v, docs: recent.slice() }) || { rec: 0 };     // I1 — fed by exafference
     let candidate = null;
