@@ -40,7 +40,14 @@ export const proposeWebSearch = (ctx) => {
   if (isUnbound(ctx.bound || [], ctx.rawOutput || '')) reasons.push('the answer ties to nothing in the document');
   if (ctx.referential && ctx.referential.id != null && ctx.referential.concentrated === false)
     reasons.push('the passage does not settle who it is about');
-  if (flags.has('low-coverage')) reasons.push('few of the claims are grounded in the document');
+  // LOW-COVERAGE is a gap only when the document did NOT actually ground the answer. When a
+  // document is loaded and the answer earned a citation into it, a low-coverage flag is
+  // incidental — a few tangential spans (e.g. cross-turn fragments) dragging the ratio down —
+  // not a reason to spend a web search while the answer is sitting in the loaded document. A
+  // genuinely from-nowhere answer is still caught by the `unbound` trigger above; this only
+  // suppresses the redundant fetch over a document-grounded answer.
+  const docGrounded = !!ctx.doc && ((ctx.sources || []).length > 0 || (ctx.bound || []).some(b => b.citation));
+  if (flags.has('low-coverage') && !docGrounded) reasons.push('few of the claims are grounded in the document');
 
   // WITNESS trigger — the answer is grounded but only on the engine's OWN reading (reafference,
   // e.g. an EOT/notes source); reach out to CONFIRM it against the world. A gap, if present,

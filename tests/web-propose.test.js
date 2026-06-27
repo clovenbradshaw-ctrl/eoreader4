@@ -82,6 +82,18 @@ test('low-coverage alone proposes (few claims grounded)', () => {
   assert.ok(p && /few of the claims/.test(p.rationale));
 });
 
+test('low-coverage does NOT propose when a loaded document already grounded the answer (no redundant fetch)', () => {
+  // The contradiction-trap wrinkle: the answer was grounded and cited to the loaded document
+  // (teal, not crimson), but a few bled-in cross-turn fragments dragged coverage down and
+  // fired `low-coverage`. With the document already grounding the answer, that flag must not
+  // pull a web search — the answer is sitting in the loaded file.
+  const p = proposeWebSearch({ route: 'grounded', task: 'answer', question: 'isn’t the colour code crimson?',
+    doc: { docId: 'zylbrook.txt' }, sources: [2],
+    bound: [{ claim: 'The code is teal.', citation: 's2' }, { claim: 'and more.', citation: null }],
+    rawOutput: 'No, the document says teal, not crimson.', vetoes: [{ id: 'low-coverage' }] });
+  assert.equal(p, null, 'a doc-grounded answer with an incidental low-coverage flag does not reach for the web');
+});
+
 // ── The orchestration: confirm / auto / proposer-only, with injected runTurn ──
 
 const groundedDoc = (text) => admitWebSource({ url: 'https://w/x', text }).doc;
