@@ -37,7 +37,7 @@ const bandOf = (e) => {
 // annotated with its EO richness (operator · site terrain · resolution band · order · door).
 // The OWL line types the figures and relations so the ontology travels too. Entity-valued
 // objects are ex: resources; literal objects (a noun the graph did not admit) are strings.
-export const briefRDF = (doc, { max = 12 } = {}) => {
+export const briefRDF = (doc, { max = 12, only = null } = {}) => {
   const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
   const label = new Map();
   for (const e of events) if (e.op === 'INS' && e.id != null && !label.has(e.id)) label.set(e.id, e.label);
@@ -50,6 +50,7 @@ export const briefRDF = (doc, { max = 12 } = {}) => {
   let n = 0;
   for (const e of events) {
     if (!((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null)) continue;
+    if (only && e.sentIdx != null && !only.has(e.sentIdx)) continue;   // restrict to the salient stops
     if (n >= max) break;
     n += 1;
     const s = ent(L(e.src));
@@ -77,7 +78,7 @@ export const briefRDF = (doc, { max = 12 } = {}) => {
 // READ the annotations as delivery cues. The triple is the fact; the eo: annotations are how
 // to say it (band → certainty, order → sequence, site → one-off vs recurring). The veto
 // (talkThenVerify) still strips any edge it invents — grounding enforced after, not nagged.
-export const rdfRealizationPrompt = (doc, { max = 12 } = {}) => Object.freeze({
+export const rdfRealizationPrompt = (doc, { max = 12, only = null } = {}) => Object.freeze({
   system: 'You are the voice that turns a reading into words. You are given a small RDF graph '
     + 'of relations from a text (Turtle, with RDF-star annotations). Each `s p o` triple is a '
     + 'fact; the `<< s p o >> eo:…` annotation is HOW to say it: eo:band "firm" → assert it, '
@@ -85,5 +86,5 @@ export const rdfRealizationPrompt = (doc, { max = 12 } = {}) => Object.freeze({
     + 'sequence to narrate in; eo:site "Network" is a recurring pattern, "Link" a single '
     + 'relation. Say it as fluent, natural speech, honouring those cues. Keep to the graph — '
     + 'add no relation it does not contain.',
-  user: `${briefRDF(doc, { max })}\n\nNow say this graph as natural speech:`,
+  user: `${briefRDF(doc, { max, only })}\n\nNow say this graph as natural speech:`,
 });

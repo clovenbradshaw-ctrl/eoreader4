@@ -105,6 +105,15 @@ const renderRow = (turn) => {
       body.insertAdjacentHTML('beforeend',
         `<div class="label">note — the reading handed to the phraser</div><div class="raw">${escapeHtml(r.note)}</div>`);
     }
+    // WHAT THE LLM WOULD BE TOLD — the assembled talker payload (EO-enriched RDF-star edges +
+    // the realization prompt), so the whole pipeline's output is visible, not just inferred.
+    if (r.llm) {
+      body.insertAdjacentHTML('beforeend',
+        `<div class="label">what the LLM would be told${r.llm.focus ? ' · focus ' + escapeHtml(String(r.llm.focus)) : ''}</div>`
+        + `<div class="raw">${escapeHtml(r.llm.system)}\n\n${escapeHtml(r.llm.user)}</div>`);
+      if (r.llm.draft) body.insertAdjacentHTML('beforeend',
+        `<div class="label">no-LLM render (speakTriples)</div><div class="raw">${escapeHtml(r.llm.draft)}</div>`);
+    }
   }
   if (turn.prompt) {
     body.insertAdjacentHTML('beforeend',

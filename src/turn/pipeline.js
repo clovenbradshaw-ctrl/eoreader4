@@ -15,6 +15,7 @@
 import { stages } from './stages.js';
 import { createCompositeDoc } from '../organs/in/index.js';
 import { siteTerrainAt } from '../surfer/index.js';
+import { assembleBrief } from '../write/index.js';
 
 // The documents a turn's citations actually drew on. For a composite (several selected
 // documents folded into one), map each cited sentence index back through the provenance
@@ -53,7 +54,21 @@ const buildReading = (ctx) => {
       })),
     } : null,
     inquiry: ctx.inquiry?.asked?.length ? ctx.inquiry.asked : null,
+    // WHAT THE LLM WOULD BE TOLD — the whole pipeline assembled into the talker's payload:
+    // thread salience → adaptive surf → salient edges → EO-enriched RDF-star → the realization
+    // prompt. Recorded so the audit shows not just what was read but exactly what a talker
+    // would be handed (system + user), and the structure behind the selection.
+    llm: ctx.doc ? llmBrief(ctx) : null,
   };
+};
+
+// the LLM-facing brief for the audit — assembled from the doc and the activated thread, with
+// any fault degrading to null rather than sinking the turn record.
+const llmBrief = (ctx) => {
+  try {
+    const b = assembleBrief(ctx.doc, { question: ctx.question, history: ctx.history });
+    return { system: b.prompt.system, user: b.prompt.user, focus: b.surf.focus, thread: b.thread, draft: b.draft };
+  } catch { return null; }
 };
 
 // route → converse → retrieve → fold → answerable → prompt → llm → bind → factcheck → revise → veto → settle.

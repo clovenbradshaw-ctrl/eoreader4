@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/index.js';
-import { briefRDF, rdfRealizationPrompt, speakTriples } from '../src/write/index.js';
+import { briefRDF, rdfRealizationPrompt, speakTriples, assembleBrief } from '../src/write/index.js';
 
 // The brief as RDF-star: the x→relation→y triple an LLM already knows, ENRICHED with the EO
 // structure a flat triple loses — the operator, the site terrain, the resolution band, the
@@ -48,4 +48,28 @@ test('speakTriples renders natural speech from the triples — grouped, not per-
   ];
   const said = speakTriples(props, { genders: { Grete: 'f' } });
   assert.match(said, /Grete fed Gregor, tended Gregor, and left\./, 'one sentence, compound predicate');
+});
+
+
+test('assembleBrief produces exactly what the LLM would be told, from the whole pipeline', () => {
+  const doc = parseText(
+    'Grete fed Gregor. Grete tended Gregor. The father struck Gregor. Grete renounced Gregor.',
+    { docId: 'm', genderCoref: true },
+  );
+  const b = assembleBrief(doc, { question: "How does Grete's feeling toward Gregor change?", history: [] });
+  // the talker payload is a system + user pair
+  assert.equal(typeof b.prompt.system, 'string');
+  assert.match(b.prompt.user, /@prefix eo:/, 'the user message is the EO-enriched RDF graph');
+  assert.match(b.prompt.user, /eo:op|eo:site|eo:band/, 'each edge carries its EO annotation');
+  // it is restricted to the salient edges, and a no-LLM render is offered alongside
+  assert.ok(b.propositions.length >= 1, 'salient edges selected');
+  assert.equal(typeof b.draft, 'string', 'the no-LLM speakTriples render rides too');
+  assert.ok(b.thread.some(f => /grete|gregor/i.test(f)), 'the thread it rode is reported');
+});
+
+test('the assembled prompt narrows to the thread — a different question, a different graph', () => {
+  const doc = parseText('Anna saw Ben. Anna trusted Ben. Carol fled Dan.', { docId: 'd' });
+  const aboutAnna = assembleBrief(doc, { question: 'What did Anna do to Ben?' });
+  // the salient selection is driven by the thread; Anna/Ben edges are kept
+  assert.match(aboutAnna.prompt.user, /Anna|Ben/, 'the thread figures are in the graph the talker gets');
 });

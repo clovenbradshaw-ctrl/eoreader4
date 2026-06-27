@@ -70,6 +70,10 @@ export { phraserBrief, realizationPrompt, talkThenVerify, speakTriples } from '.
 // definitely it holds), the arrow of time, the provenance door. The triple is the fact; the
 // eo: annotations are how to say it. EO graph in a notation the model can consume.
 export { briefRDF, rdfRealizationPrompt } from './rdf.js';
+// Assemble what the LLM would be told: the whole pipeline — thread salience → adaptive surf →
+// salient edges → EO-enriched RDF-star → the realization prompt — in one call. Returns exactly
+// the system+user the talker would receive, plus the structure behind the selection.
+export { assembleBrief } from './assemble.js';
 // Thinking is the phraser→talker arc turned INWARD: voice an impression to yourself, read
 // your own words back (READ_BACK-of-prior-self), let the hearing re-focus the graph, voice
 // again — inner speech as spreading activation, grounded, firewalled (every thought is mine
