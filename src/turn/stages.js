@@ -14,7 +14,7 @@ import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerrainAt } from '../surfer/index.js';
-import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
+import { namedReferents, referentialConfidence, siteIndices, serializeNotes, structureSurface } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
@@ -33,6 +33,19 @@ import { streamPhrase }     from '../model/index.js';
 // the user has the Mind chip in weave mode (ctx.mindSpans present). The memory is
 // offered for context and explicitly marked as NOT the document: grounded claims are
 // still cited to the document's spans, never to these. Appended to the final (user)
+// Scrub the meaning-graph lines at the membrane (the surface discipline: no codes or ids ever
+// reach the talker). A COMPOSITE doc namespaces its entity ids (`web-<hash>␟label`); when the
+// label map misses, structureSurface falls back to that raw id, leaking it into an arrow. Strip
+// the `id␟` namespacing to the human label, drop the unit-separator, and drop any line that
+// still carries an opaque `kind-<hex>` id with no readable label behind it.
+const SEP = '␟';   // the composite unit separator
+export const scrubGraphLines = (lines = []) => lines
+  .map(l => String(l)
+    .replace(new RegExp(`[a-z]+-[0-9a-f]{6,}${SEP}`, 'gi'), '')  // drop the composite id prefix before the label
+    .replace(new RegExp(SEP, 'g'), ' ')
+    .replace(/\s+/g, ' ').trim())
+  .filter(l => l && !/[a-z]+-[0-9a-f]{6,}/i.test(l));            // any opaque id left → no clean label, drop the line
+
 // message so it rides inside the window without disturbing the grounded/chat assembly.
 // Guarded entirely by mindSpans — every default turn skips it, byte-identical.
 const weaveMemory = (messages, mindSpans) => {
@@ -412,6 +425,22 @@ export const stages = {
     // "did we get spans". A strict-grounded turn with no spans still builds a
     // grounded (strict-refusal) message; a free-form turn always builds chat.
     const grounded = ctx.route === 'grounded';
+    // THE MEANING GRAPH, opt-in (the web path): the typed relations the fold read off what it
+    // just read — so the talker reasons over the MEANING, not just the raw lines. Empty unless
+    // ctx.groundGraph is set, so the default reading stays the subjective frame (§2). Stashed on
+    // the returned ctx (fedGraph) so the caller can surface exactly what graph it answered from.
+    //   Built over the WHOLE fetched content (every unit), not just the retrieved window — for
+    //   web we want the full meaning the parser extracted, not only the spans nearest the
+    //   question. Its richness is bounded by relation extraction on prose (entities + their
+    //   definitions always; typed relations where the parser recognized the verb).
+    let fedGraph = '';
+    if (grounded && ctx.groundGraph && ctx.doc) {
+      const allIdxs = (ctx.doc.units || ctx.doc.sentences || []).map((_, i) => i);
+      try {
+        const lines = serializeNotes(structureSurface(ctx.doc, allIdxs), { max: 24 });
+        fedGraph = scrubGraphLines(lines).join('\n');
+      } catch { fedGraph = ''; }
+    }
     const messages = grounded
       ? buildGroundedMessages({
           question:     ctx.question,
@@ -424,12 +453,15 @@ export const stages = {
           // — so the first draft is laid out right, not only corrected after. Empty by default.
           exemplar:     ctx.shapeTarget?.promptMatch?.best_response || '',
           strict:       ctx.grounding === 'grounded',   // "only what you read" — abstention is the honest fallback
+          now:          ctx.now || null,  // hand the talker the real clock — date/time answered directly
+          graph:        fedGraph,         // the meaning graph (web path); empty → §2 subjective frame
         })
       : buildChatMessages({
           question: ctx.question,
           history:  ctx.recentMessages || [],   // a chat model wants turns as turns
           notes:    ctx.conversation?.notes || '',
           free:     ctx.grounding === 'free',   // general-knowledge register, explicitly ungrounded
+          now:      ctx.now || null,            // the running app knows the moment; the weights don't (null in tests → byte-identical)
         });
     // Weave in the read corpus (the mind) when the user opted into weave mode. Null
     // otherwise — the present prompt is untouched, golden parses byte-identical.
@@ -437,6 +469,7 @@ export const stages = {
     return {
       ...ctx,
       messages: woven,
+      fedGraph,   // the meaning graph handed to the talker this turn (empty unless groundGraph)
       promptText: woven.map(m => `${m.role}: ${m.content}`).join('\n\n'),
     };
   },

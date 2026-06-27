@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  buildGroundedMessages, orientationLine, EXCERPTS_HEADER, orderSpansForFrame,
+  buildGroundedMessages, buildChatMessages, orientationLine, EXCERPTS_HEADER,
+  orderSpansForFrame, currentMomentLine,
 } from '../src/model/prompt.js';
 import { serializeNotes } from '../src/perceiver/index.js';
 import { parseText } from '../src/perceiver/parse/index.js';
@@ -207,4 +208,48 @@ test('a grounded turn is the subjective frame: the lines you read, no arrows, no
   const userTurn = t.prompt.slice(t.prompt.indexOf('\n\nuser: ') + 8);
   assert.doesNotMatch(userTurn, /\[s\d+\]/, 'the talker never sees a sentence index in the material');
   assert.ok(result.sources.length > 0, 'the grounder still cites mechanically off the spans');
+});
+
+// ── The current-moment line (the running app's clock) ────────────────────────
+test('currentMomentLine is empty without a clock and formatted with one (byte-identical default)', () => {
+  assert.equal(currentMomentLine(), '');
+  assert.equal(currentMomentLine(null), '');
+  assert.equal(currentMomentLine('not a date'), '');
+  const d = new Date(2026, 5, 27, 14, 5);   // local: Sat 27 June 2026, 14:05
+  const line = currentMomentLine(d);
+  assert.match(line, /Saturday, 27 June 2026, 14:05/);
+  assert.match(line, /do not say you lack a clock/);
+});
+
+test('buildChatMessages: now folds the moment into the system message; absent → unchanged', () => {
+  const plain = buildChatMessages({ question: 'what is today’s date?' });
+  assert.doesNotMatch(plain[0].content, /current date and time/);
+
+  const dated = buildChatMessages({ question: 'what is today’s date?', now: new Date(2026, 5, 27, 9, 30) });
+  assert.match(dated[0].content, /current date and time .* is Friday|Saturday, 27 June 2026, 09:30/);
+  assert.match(dated[0].content, /27 June 2026/);
+  assert.equal(dated[dated.length - 1].content, 'what is today’s date?');   // the question still rides last
+});
+
+test('buildGroundedMessages: now folds the moment in without disturbing the subjective frame', () => {
+  const dated = buildGroundedMessages({ question: 'what day is it?', spans: [{ text: 'a line' }], now: new Date(2026, 5, 27, 9, 30) });
+  assert.match(dated[0].content, /You just finished reading/);   // the frame is intact
+  assert.match(dated[0].content, /27 June 2026/);                // the moment is appended
+});
+
+// ── The meaning graph in the prompt (the web path feeds the fold's relations) ──
+test('buildGroundedMessages: a graph block feeds the typed relations; absent → no block', () => {
+  const spans = [{ idx: 0, text: 'Ryan Coogler is developing the revival.' }];
+  const plain = buildGroundedMessages({ question: 'who is making it?', spans });
+  assert.doesNotMatch(plain[1].content, /What it means/, 'no graph block by default (subjective frame holds)');
+
+  const graph = 'revival --developed-by--> Ryan Coogler\nseries --produced-for--> 20th Television';
+  const withGraph = buildGroundedMessages({ question: 'who is making it?', spans, graph });
+  assert.match(withGraph[1].content, /What it means — the relations you read/, 'the graph block is present');
+  assert.match(withGraph[1].content, /revival --developed-by--> Ryan Coogler/, 'the relations are fed verbatim');
+  assert.match(withGraph[1].content, /Reason over THESE/, 'the talker is told to reason over the graph');
+  // The verbatim lines still ride as grounding beneath the graph.
+  assert.match(withGraph[1].content, new RegExp(EXCERPTS_HEADER));
+  assert.ok(withGraph[1].content.indexOf('What it means') < withGraph[1].content.indexOf(EXCERPTS_HEADER),
+    'the graph leads; the lines follow as its grounding');
 });

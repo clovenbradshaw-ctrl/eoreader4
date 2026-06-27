@@ -500,6 +500,7 @@ const runQuery = async (question) => {
     classifier: STATE.geometric?.installer?.getState?.().classifier || null,
     auditLog: STATE.audit,
     history:  STATE.history,    // the prior transcript — the session fold reads it
+    now:      new Date(),       // the real clock — so a date/time question is answered directly, no web hop
     grounding: STATE.grounding, // the Auto / Chat with document / Free form register (the chip)
     inquire:  STATE.inquire,    // self-directed inquiry — read another pass on the open question (the chip)
     onStep:   (name, ctx, data) => {

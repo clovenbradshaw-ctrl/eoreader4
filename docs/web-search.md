@@ -141,12 +141,26 @@ gone (`SYSTEM_GROUND_STRICT` permits general-knowledge fallback, the chat prompt
 itself to the conversation), and the §5 refuse-gate that regenerated an ungrounded answer toward
 "I did not find it" is **off** — an ungrounded answer rides with its flag.
 
-So a no-document question ("what is the capital of France?") gets a `verify` proposal: search the
-web on the question, and **flag whether the result supports the answer** (`web-supported` /
-`web-unconfirmed`) — the answer itself is kept, never replaced. The check keys on the answer's
-*distinctive* term (Paris vs Lyon), not the question's shared words, so a wrong answer whose novel
-term is absent from the web is flagged. (True contradiction detection still wants the meaning
-classifier; this flags unconfirmed absence honestly.)
+So a no-document question ("who is making the new X-Files series as of 2026?") gets a `verify`
+proposal — but verify now **AUGMENTS**, it does not just flag. The model's own answer is kept; the
+engine ALSO pulls the real result pages and answers the question FROM them, presenting that as a
+"From the web" addendum with its sources (`webFetched.augmented = { answer, sources }`). The good
+web-grounded answer is the deliverable; the model's parametric answer rides above it untouched
+(per "don't replace"). Two preconditions made this useful:
+
+- **Query formulation** (`formulateSearchQuery`, web.js). The proposer hands over the raw chat
+  turn; before fetching, `runWebFollowup` reformulates it against the recent conversation into a
+  standalone keyword query (the thread's "the new series" → "X-Files 2025 revival producer").
+  Without this the engine matched chat filler to nonsense — songs containing "no there's", random
+  2026 TV series. Fully guarded: no model / bad rewrite / throw → the original query stands. A
+  user-sharpened query (the confirmation card) still wins outright.
+- **Real pages, not Wikipedia.** Verify and gap both fetch with `kind:'auto', fetchPages:true`
+  now; only a `witness` confirm still uses Wikipedia. The augmented answer is a grounded re-run
+  over the fetched docs with the UI/audit callbacks stripped, so it never streams over the live
+  bubble or double-logs the turn.
+
+(`verifyAgainstWeb` — the distinctive-term lexical check, Paris vs Lyon — is still exported for
+callers that want a support flag rather than an augmented answer; the chat path no longer uses it.)
 
 ## Witness-seeking (built)
 

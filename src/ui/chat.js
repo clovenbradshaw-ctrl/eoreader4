@@ -384,22 +384,53 @@ export const renderWebResult = (el, fetched) => {
     box.classList.add('empty');
     head.textContent = `No web results for “${fetched.query}”.`;
   } else if (fetched.trigger === 'verify') {
-    box.classList.add(fetched.supported ? 'ok' : 'unconfirmed');
-    head.textContent = fetched.supported
-      ? `✓ The web backs this up (${fetched.results} source${fetched.results > 1 ? 's' : ''} checked).`
-      : `⚠ Couldn't confirm this against the web (${fetched.results} source${fetched.results > 1 ? 's' : ''} checked).`;
+    // AUGMENT: a "From the web" answer built from the real pages, shown beside the model's own.
+    box.classList.add('ok');
+    head.textContent = fetched.augmented
+      ? `🌐 From the web — answered from ${fetched.results} source${fetched.results > 1 ? 's' : ''}:`
+      : `🔍 Searched the web (${fetched.results} source${fetched.results > 1 ? 's' : ''}).`;
   } else {
     box.classList.add('ok');
     head.textContent = `🔍 Searched the web — pulled ${fetched.results} source${fetched.results > 1 ? 's' : ''} into this answer.`;
   }
   box.appendChild(head);
 
-  for (const s of (fetched.sources || [])) {
+  // The web-grounded answer itself (verify/augment) — the good answer, kept separate from the
+  // model's own above it. Plain text; the sources it drew on follow as chips.
+  if (fetched.augmented?.answer) {
+    const ans = document.createElement('div');
+    ans.className = 'wr-answer';
+    // Strip the bound [sN] markers: they index the web re-run's own scope, not this turn's
+    // sources, so linkifying would mis-reference. The sources ride as chips just below.
+    ans.textContent = String(fetched.augmented.answer).replace(/\s*\[s\d+\]/g, '').trim();
+    box.appendChild(ans);
+
+    // The MEANING GRAPH the talker actually reasoned over — the typed relations the fold read
+    // off the web content (not the raw text). Collapsed by default; this is what "fed the meant
+    // graph, not just web data" looks like in the open.
+    if (fetched.augmented.graph) {
+      const det = document.createElement('details');
+      det.className = 'wr-graph';
+      const sum = document.createElement('summary');
+      sum.textContent = 'meaning graph fed to the model';
+      det.appendChild(sum);
+      const pre = document.createElement('pre');
+      pre.textContent = fetched.augmented.graph;
+      det.appendChild(pre);
+      box.appendChild(det);
+    }
+  }
+
+  const sources = fetched.augmented?.sources || fetched.sources || [];
+  for (const s of sources) {
     if (!s) continue;
     const item = document.createElement(s.url ? 'a' : 'div');
     item.className = 'wr-source';
     if (s.url) { item.href = s.url; item.target = '_blank'; item.rel = 'noopener'; item.title = s.url; }
-    item.textContent = s.title || s.url || s.docId || 'source';
+    const label = document.createElement('span');
+    label.className = 'wr-source-label';
+    label.textContent = s.title || s.url || s.docId || 'source';
+    item.appendChild(label);
     box.appendChild(item);
   }
 

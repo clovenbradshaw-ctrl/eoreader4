@@ -83,6 +83,28 @@ export const SYSTEM_FREE = `You are a helpful, knowledgeable assistant. Answer t
 
 (This reply is free-form — it is not grounded in any document the user may have loaded.)`;
 
+// The current-moment line. A small talker, asked "what is today's date?", confabulates the
+// "I have no real-time clock" boilerplate — true of its weights, false of the running app,
+// which knows the moment exactly. This hands it that one fact so a date/time question is
+// answered directly, no web hop needed (the browser clock is the ground truth here). Off by
+// default (`now` null → '' → byte-identical prompts and golden tests); the live turn passes
+// `new Date()`. Formatted from LOCAL components — the user's wall clock, the date they mean —
+// with named day/month arrays so the wording is locale-independent and deterministic to test.
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+  'September', 'October', 'November', 'December'];
+const pad2 = (n) => String(n).padStart(2, '0');
+export const currentMomentLine = (now = null) => {
+  if (now == null) return '';
+  let d;
+  try { d = now instanceof Date ? now : new Date(now); } catch { return ''; }
+  if (!d || Number.isNaN(d.getTime())) return '';
+  const date = `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return `For reference, the current date and time (the user's local clock) is ${date}, ${time}. ` +
+    `Use this to answer any question about the date, day, year, or time directly — do not say you lack a clock.`;
+};
+
 // The orientation line: filename, type, length — and NOTHING that lets the talker
 // narrate a famous text from memory (§3). No title, no author, no genre: the epistemic
 // position of a reader who just set a file down. The front matter stays ANSWERABLE — a
@@ -172,11 +194,23 @@ export const buildGroundedMessages = ({
   corrective = '',
   exemplar = '',
   strict = false,
+  now = null,
+  graph = '',
 } = {}) => {
   const blocks = [];
 
   // What it was — filename · type · length, no recognition (§3).
   if (orientation) blocks.push(`What it was: ${orientation}.`);
+
+  // THE MEANING GRAPH — what the lines MEAN, folded into typed relations (subject —relation→
+  // object; a `not-` prefix is negation). This deliberately REINSTATES the fold's arrows that
+  // §2 strips from the default reading: a caller opts in (the web path) when it wants the talker
+  // to reason over the extracted MEANING of what was read, not just restate the raw lines. The
+  // graph leads, the verbatim lines follow as its grounding — so the answer is built from the
+  // structure and cited to the text.
+  if (graph)
+    blocks.push(`What it means — the relations you read, as a graph (subject —relation→ object; ` +
+      `“not-” = negation). Reason over THESE; the lines below are their grounding, not a list to recite:\n${graph}`);
 
   // What you read — the verbatim lines, ordered for the frame (§3). The ONE channel.
   if (spans.length)
@@ -231,8 +265,10 @@ export const buildGroundedMessages = ({
     : 'Answer them now, in your own words. If the lines don\'t cover it, answer from general ' +
       'knowledge and say it is not from the document.');
 
+  const sysBase = strict ? SYSTEM_GROUND_STRICT : SYSTEM_GROUND;
+  const moment = currentMomentLine(now);
   return [
-    { role: 'system', content: strict ? SYSTEM_GROUND_STRICT : SYSTEM_GROUND },
+    { role: 'system', content: moment ? `${sysBase}\n\n${moment}` : sysBase },
     { role: 'user',   content: blocks.join('\n\n') },
   ];
 };
@@ -317,11 +353,13 @@ export const buildCursorMessages = ({
 // The chat (no-doc) path: a chat model wants turns as turns, so the recent verbatim
 // window rides as real {role,content} message history and the surfed recap folds into
 // the system message (docs/session-fold.md).
-export const buildChatMessages = ({ question, history = [], notes = '', free = false } = {}) => {
+export const buildChatMessages = ({ question, history = [], notes = '', free = false, now = null } = {}) => {
   const base   = free ? SYSTEM_FREE : SYSTEM_CHAT;
+  const moment = currentMomentLine(now);
+  const withMoment = moment ? `${base}\n\n${moment}` : base;
   const system = notes
-    ? `${base}\n\nNotes about our conversation before this:\n${notes}`
-    : base;
+    ? `${withMoment}\n\nNotes about our conversation before this:\n${notes}`
+    : withMoment;
   return [
     { role: 'system', content: system },
     ...history,
