@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  parseFeed, htmlToText, createWebClient, searchAndAdmit, fetchAndAdmit, DEFAULT_FEED_PROXY,
+  parseFeed, htmlToText, createWebClient, searchAndAdmit, fetchAndAdmit, routeKind, SEARCH_SOURCES, DEFAULT_FEED_PROXY,
 } from '../src/ingest/webfetch.js';
 
 // The live half over the CORS feed proxy (docs/web-search.md): GET <proxy>?url=<URL> → raw body.
@@ -24,7 +24,7 @@ const ATOM = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
 
 // A fake fetch: route the proxied URL by the inner ?url= target to canned bodies.
 const fakeFetch = (routes) => async (proxiedUrl) => {
-  const inner = decodeURIComponent(new URL(proxiedUrl).searchParams.get('url') || '');
+  const inner = new URL(proxiedUrl).searchParams.get('url') || '';   // searchParams already decodes once
   const body = routes[inner];
   return { ok: body != null, status: body != null ? 200 : 404, text: async () => body ?? '' };
 };
@@ -58,18 +58,53 @@ test('the client builds the proxy URL as ?url=<encoded> and returns the body', a
   assert.equal(r.text, 'BODY');
 });
 
-test('search → admit: feed results become provenance-tagged sources in scope', async () => {
+const WIKI = JSON.stringify({ query: { search: [
+  { title: 'Paris', snippet: '<span class="searchmatch">Paris</span> is the capital of France.' },
+  { title: 'List of capitals of France', snippet: 'The capital of France has been Paris since 1944.' },
+] } });
+
+test('routeKind picks the source: facts → wikipedia, current → news, a URL → feed', () => {
+  assert.equal(routeKind('what is the capital of france'), 'wikipedia');
+  assert.equal(routeKind('latest news on the strike'), 'news');
+  assert.equal(routeKind('https://example.org/feed.xml'), 'feed');
+  assert.deepEqual(Object.keys(SEARCH_SOURCES).sort(), ['feed', 'news', 'wikipedia']);  // campaign finance dropped
+});
+
+test('wikipedia search → admit: JSON results become provenance-tagged sources, traced to the page', async () => {
+  const wikiUrl = 'https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=capital%20of%20france&format=json&srlimit=2';
+  const client = createWebClient({ proxy: 'https://p.example/feed', fetchImpl: fakeFetch({ [wikiUrl]: WIKI }) });
+  const admitted = await searchAndAdmit('capital of france', { client, kind: 'wikipedia', k: 2 });
+  assert.equal(admitted.length, 2);
+  assert.equal(admitted[0].doc.sourceKind, 'web-source');
+  assert.equal(admitted[0].doc.web.url, 'https://en.wikipedia.org/wiki/Paris');
+  assert.match(admitted[0].doc.text, /Paris is the capital of France/);
+  assert.match(admitted[0].record.engine, /wikipedia/);
+});
+
+test('news search → admit (kind: news): feed results become provenance-tagged sources', async () => {
   const searchUrl = (q) => `https://news.example/rss?q=${encodeURIComponent(q)}`;
   const client = createWebClient({
     proxy: 'https://p.example/feed', searchUrl,
     fetchImpl: fakeFetch({ [searchUrl('grete')]: RSS }),
   });
-  const admitted = await searchAndAdmit('grete', { client, k: 2 });
+  const admitted = await searchAndAdmit('grete', { client, kind: 'news', k: 2 });
   assert.equal(admitted.length, 2);
-  assert.equal(admitted[0].doc.sourceKind, 'web-source');
   assert.equal(admitted[0].doc.web.url, 'https://example.org/a');
   assert.equal(admitted[0].record.retrieval_query, 'grete');
-  assert.ok((admitted[0].doc.units || admitted[0].doc.sentences).length >= 1, 'the result admitted as a parsed doc');
+});
+
+test('fetchPages pulls the actual website for each result (find random sites as needed)', async () => {
+  const searchUrl = (q) => `https://news.example/rss?q=${encodeURIComponent(q)}`;
+  const client = createWebClient({
+    proxy: 'https://p.example/feed', searchUrl,
+    fetchImpl: fakeFetch({
+      [searchUrl('grete')]: RSS,
+      'https://example.org/a': '<h1>Grete</h1><p>The full article body about Grete Samsa.</p>',
+      'https://example.org/b': '<p>Another full page.</p>',
+    }),
+  });
+  const admitted = await searchAndAdmit('grete', { client, kind: 'news', k: 2, fetchPages: true });
+  assert.match(admitted[0].doc.text, /full article body about Grete Samsa/, 'the actual page text was admitted, not the snippet');
 });
 
 test('fetchAndAdmit pulls a page through the proxy and admits its text', async () => {
@@ -84,10 +119,12 @@ test('fetchAndAdmit pulls a page through the proxy and admits its text', async (
 
 // Live contract check against the real proxy — opt-in (the default run stays offline/green):
 //   EO_LIVE_PROXY=1 node --test tests/webfetch.test.js
-test('LIVE: the real feed proxy fetches a URL and search-by-feed returns items', { skip: !process.env.EO_LIVE_PROXY }, async () => {
+test('LIVE: the real proxy fetches a page, and Wikipedia + News searches both return items', { skip: !process.env.EO_LIVE_PROXY }, async () => {
   const c = createWebClient({ proxy: DEFAULT_FEED_PROXY });
   const page = await c.fetchUrl('https://example.com/');
   assert.match(page.text, /Example Domain/);
-  const items = await c.search('kafka metamorphosis', { k: 5 });
-  assert.ok(items.length > 0 && items[0].title, 'the feed proxy returned search items');
+  const wiki = await c.search('capital of france', { kind: 'wikipedia', k: 3 });
+  assert.ok(wiki.length > 0 && /paris/i.test(wiki.map(i => `${i.title} ${i.text}`).join(' ')), 'wikipedia found Paris');
+  const news = await c.search('kafka', { kind: 'news', k: 3 });
+  assert.ok(news.length > 0 && news[0].title, 'news returned items');
 });

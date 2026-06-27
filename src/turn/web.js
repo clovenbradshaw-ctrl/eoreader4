@@ -51,8 +51,13 @@ export const runTurnWithWeb = async (args, {
   const approved = mode === 'auto' ? true : (confirm ? await confirm(proposal) : false);
   if (!approved) return first;     // proposer-only: no go-ahead, nothing fetched
 
+  // Pick the source per trigger: verify/witness want FACTS (Wikipedia); a gap wants to FIND the
+  // answer in the wild, so auto-route and pull the actual result pages (random websites).
+  const opts = (proposal.trigger === 'verify' || proposal.trigger === 'witness')
+    ? { k, kind: 'wikipedia' }
+    : { k, kind: 'auto', fetchPages: true };
   let admitted = [];
-  try { admitted = await webSearch(proposal.query, { k }); } catch { admitted = []; }
+  try { admitted = await webSearch(proposal.query, opts); } catch { admitted = []; }
   const webDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
   if (!webDocs.length) return { ...first, webFetched: { query: proposal.query, trigger: proposal.trigger, results: 0 } };
 

@@ -78,6 +78,21 @@ Adding the admitted doc to `runTurn`'s `docs[]` is the *whole* integration — t
 it in, so a web source **enters retrieval ranking and its cited spans trace to it with no
 pipeline change** (verified in `tests/websource.test.js`, embedder-free).
 
+## The search kinds (built)
+
+Every text-grounding source the html has, each fetched through the same CORS proxy
+(`src/ingest/webfetch.js` `SEARCH_SOURCES`):
+
+- **`wikipedia`** — `action=query&list=search` (titles + snippets), results traced to the page
+  URL. The reliable source for facts/entities, so VERIFY and WITNESS use it.
+- **`news`** — Google News RSS (current events).
+- **`feed`** — fetch an arbitrary RSS/Atom feed or page the query names by URL.
+
+`routeKind(query)` auto-routes when the caller asks for `'auto'`: current-events phrasing →
+news, a URL/"rss" → feed, everything else → wikipedia. And **`fetchPages`** pulls each result's
+*actual page* through the proxy (not just the snippet) — the engine reaching arbitrary websites
+"as needed". (Campaign-finance / image kinds exist on the proxy but are out of scope here.)
+
 ## The live half — fetch & search over a CORS feed proxy (built)
 
 `src/ingest/webfetch.js`. The proxy is a **CORS fetch proxy**: `GET <proxy>?url=<http(s) URL>`
