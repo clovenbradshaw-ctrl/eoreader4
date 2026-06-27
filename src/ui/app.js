@@ -13,6 +13,7 @@
 import { ingestText }       from '../organs/in/index.js';
 import { runTurn, runWebFollowup, loadShapeLibrary } from '../turn/index.js';
 import { createWebClient, searchAndAdmit } from '../ingest/index.js';
+import { createSpeculativeWeb } from './prefetch.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
 import { bootGeometricReader } from '../boot/index.js';
@@ -578,7 +579,11 @@ const runQuery = async (question) => {
     let updated;
     try {
       updated = await runWebFollowup(turnArgs, result, {
-        webSearch: (q, opts) => searchAndAdmit(q, { client: (STATE.webClient ||= createWebClient()), ...opts }),
+        // Consult the speculative quarantine first: if the user's typing already warmed this
+        // exact query, take() returns it instantly and marks it PRESERVED (it proved useful).
+        // A miss falls through to a live fetch — the normal proposer-only path.
+        webSearch: async (q, opts) => (await prefetcherOf().take(q)) ||
+          searchAndAdmit(q, { client: webClientOf(), ...opts }),
         query,
       });
     } catch { updated = result; }
@@ -600,11 +605,33 @@ const runQuery = async (question) => {
   els.send.disabled = false;
 };
 
+// The session web instrument and its speculative quarantine, both lazily built on first
+// use and shared across turns. The prefetcher fetches+admits exactly as a real turn would
+// (kind:'auto', fetchPages) so a taken entry is byte-identical to one fetched live.
+const webClientOf = () => (STATE.webClient ||= createWebClient());
+const prefetcherOf = () => (STATE.prefetcher ||= createSpeculativeWeb({
+  search: (q, opts) => searchAndAdmit(q, { client: webClientOf(), kind: 'auto', fetchPages: true, ...opts }),
+}));
+
+// Speculative prefetch — fire the search WHILE the user types, behind web mode `auto` only
+// (standing authorization). Debounced so a fetch fires on a typing pause, not per keystroke;
+// the result lands in the quarantine and is kept only if a turn later take()s it. Off in
+// off/confirm mode, and the quarantine is cleared when the user drops back to off.
+let prefetchTimer = null;
+const PREFETCH_IDLE_MS = 600;
+const maybePrefetch = () => {
+  if (STATE.webSearch !== 'auto') return;
+  clearTimeout(prefetchTimer);
+  const text = els.input.value;
+  prefetchTimer = setTimeout(() => { try { prefetcherOf().prime(text); } catch { /* speculative — never surface */ } }, PREFETCH_IDLE_MS);
+};
+
 // The composer's submit path: read the box, clear it, run.
 const send = () => {
   const question = els.input.value.trim();
   if (!question) return;
   els.input.value = '';
+  clearTimeout(prefetchTimer);
   runQuery(question);
 };
 
@@ -640,6 +667,9 @@ els.input.addEventListener('keydown', (e) => {
     send();
   }
 });
+// Proactive search as you type — speculatively warm the web for the in-progress query
+// (auto mode only). The result is quarantined and preserved only if the turn consumes it.
+els.input.addEventListener('input', maybePrefetch);
 
 // Backend switch — auto-load the new model immediately.
 els.backend.addEventListener('change', () => {
@@ -691,6 +721,9 @@ applyWeb();
 els.webChip.addEventListener('click', () => {
   STATE.webSearch = WEB_MODES[(WEB_MODES.indexOf(STATE.webSearch) + 1) % WEB_MODES.length];
   try { localStorage.setItem('eoreader.webSearch', STATE.webSearch); } catch { /* ignore */ }
+  // Leaving auto withdraws the standing authorization — drop any warmed-but-untaken queries
+  // so nothing speculative lingers once proactive search is off.
+  if (STATE.webSearch !== 'auto' && STATE.prefetcher) STATE.prefetcher.clear();
   applyWeb();
 });
 

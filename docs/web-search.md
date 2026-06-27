@@ -158,8 +158,32 @@ source → confirm it against the world). A gap dominates when both hold (fill b
 `veto` witness-seek confirms the reading against it and the `interpretation` flag can clear —
 the web upgrading an interpretation to a witnessed claim, not just filling a hole.
 
+## Speculative prefetch — search while typing, keep only if useful (built)
+
+`auto` mode adds a second discipline on top of proposer-only: the engine warms the web *while
+the user is still typing*, before Enter. A debounced `input` listener (app.js, 600 ms idle)
+hands the in-progress query to `createSpeculativeWeb` (`src/ui/prefetch.js`), which fetches+admits
+it exactly as a real turn would (`kind:'auto'`, `fetchPages`) into a **quarantine cache** — never
+the answer scope.
+
+This is the provenance gate applied to retrieval. A speculative fetch is a *provisional bond*
+(low activation energy): it touched the network on a query the user had not committed to, so it
+authors nothing. It hardens into a real source only when a turn **takes** it — i.e. the turn
+measured a gap, emitted a `webProposal`, and `runWebFollowup`'s `webSearch` consumed this exact
+(normalized) query. Everything not taken is **swept** (TTL 5 min, LRU cap 8): warmed, useful to
+no one, discarded. So "preserve only if useful" is literal — usefulness is a turn consuming the
+entry, not a heuristic on the result.
+
+Gating: only behind web mode `auto`, where the user has granted standing authorization to fetch.
+In `off`/`confirm` it stays dormant — sending typed text to a search engine before a go-ahead
+would break proposer-only everywhere else — and dropping back out of `auto` `clear()`s the
+quarantine. A taken entry is byte-identical to a live fetch, so the bind/verify/veto stages
+downstream are unchanged; the only difference the user sees is that the result is already warm.
+
 ## What is next
 
 - **Source-aware UI** — globe-glyph source chips with provenance + a retract control; the
   `propose-web` / fetch steps rendered inline in the trace.
 - **Cross-source promotion** — the deep part above (the web completes the local graph).
+- **Speculative-hop audit** — surface the prefetch network hops in the trace too, so a
+  warmed-but-discarded fetch is visible, not just the taken one.
