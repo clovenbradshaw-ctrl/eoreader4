@@ -25,6 +25,7 @@ import { deriveNull, buildDensity, eigenLenses, vonNeumann, commutator, projecto
 import { createEnactedLoop, calibrateReader } from '../enact/index.js';
 import { atmosphereFromActivations, corpusSigma, centroidBasis } from './atmosphere.js';
 import { updateStance } from './stance.js';
+import { bornSalience, figureSalience } from './salience.js';
 
 // The reach: a little behind the anchor (to read the frame it sits inside), mostly
 // ahead (a surf rides forward, and the arrow of time orders the frame axis).
@@ -127,7 +128,31 @@ export const surfFold = (doc, anchor = 0, opts = {}) => {
   // byte-identical to today — the parity gate.
   const activations = Array.isArray(opts.activations) ? opts.activations : null;
   const lensVec = (opts.lens && activations) ? opts.lens : null;
-  const cond    = lensVec ? (c) => bornWeight(lensVec, activations[c]) : null;
+  const lensCond = lensVec ? (c) => bornWeight(lensVec, activations[c]) : null;
+  // THREAD CONDITIONING (salience.js): condition the score by the Born weight of each cursor
+  // against the activated conversation thread (opts.thread, a sparse term basis). This is the
+  // SAME |⟨·|·⟩|² as the eigen-lens, but the basis is the live thread (prompt + recent turns +
+  // cast) over the discrete term space — embedder-free. So a cursor's score becomes structure
+  // (bayes) × salience-to-the-thread, and the null below then decides where the surfer's
+  // return stops being salient. Absent opts.thread it is null → byte-identical to today.
+  // opts.thread is { terms, figures } (threadBasis) or a bare term Map (terms only). A cursor
+  // is salient to the thread by EITHER channel: it uses the thread's words (term overlap) OR it
+  // is about the thread's figures (figure overlap over the coref-resolved field — "the
+  // creature" counts as Gregor). max, not product: lexical silence about a figure the sentence
+  // is plainly concerning must not zero it out (that was the lexical-only miss of the reversal).
+  const threadTerms = opts.thread ? (opts.thread.terms || opts.thread) : null;
+  const threadFigs  = opts.thread && opts.thread.figures ? opts.thread.figures : null;
+  const hasThread   = (threadTerms && threadTerms.size) || (threadFigs && threadFigs.size);
+  const threadCond = hasThread
+    ? (c) => Math.max(
+        threadTerms ? bornSalience(threadTerms, doc.tokensBySentence?.[c]) : 0,
+        threadFigs ? figureSalience(threadFigs, readings[c]?.predicted?.figures || []) : 0,
+      )
+    : null;
+  // Compose the conditioners multiplicatively — a cursor must be both on the chosen reading
+  // (lens) and on the thread (salience) to score. Either alone is the single-condition case.
+  const cond = (lensCond && threadCond) ? (c) => lensCond(c) * threadCond(c)
+    : (lensCond || threadCond || null);
   const scoreOf = (f) => (cond ? f.bayes * cond(f.idx) : f.bayes);
   const scoreAt = (c) => (cond ? bayesAt(c) * cond(c) : bayesAt(c));
   const scoreSeries = cond ? field.map(scoreOf) : reachBayes;

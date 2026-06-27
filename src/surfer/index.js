@@ -16,6 +16,10 @@
 // does (the field is VOID) is the surfer's own negative result.
 
 export { surfFold } from './surf.js';
+// Salience by the Born rule against the activated conversation thread: the thread as a sparse
+// term state, a span's |⟨T|s⟩|² its salience, the same noise null deciding where the surfer's
+// return stops being salient. Embedder-free — the term space, not a learned embedding.
+export { threadBasis, bornSalience, figureSalience, salienceField } from './salience.js';
 // The Significance column's Ground terrain (cube.md #5): the Atmosphere pass and the
 // shared significance-basis projection every pass reads off. Pure on vectors past the
 // projection — omnimodal for free. The corpus prior is INJECTED, never imported, so the
