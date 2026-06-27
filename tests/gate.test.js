@@ -6,21 +6,13 @@ import { runTurn } from '../src/turn/pipeline.js';
 import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 
-// THE GATE SENTINEL (§5, docs/subjective-frame.md).
+// FLAG, NEVER GATE (the answer-restriction is lifted).
 //
-// Most of flag-and-tell stands: a thin, contested, or unwitnessed grounding is annotated
-// beside the model's answer, never traded for it (low-coverage, edge-unsupported, the weak
-// contradiction, unbound-contact). What §5 changed: under the subjective frame abstention
-// is free and coherent, so a REFUSING edge-grounded veto on a pointed question's
-// load-bearing claim — a from-nowhere `unbound` answer, or a confident `edge-contradicted`
-// — no longer rides. It engages the GATE: the talker is regenerated against the same lines,
-// and the turn is recorded `gated`.
-//
-// The deep invariant the gate must NEVER break: it regenerates, it does not SUBSTITUTE. No
-// canned decline, no raw span swapped in — the model's own word still surfaces (with a real
-// model the regenerate pulls it toward an honest "I did not find it"; a fixed test model
-// cannot improve, so the flagged word rides, now with `gated` recorded). This sentinel
-// guards both: the gate engages on the load-bearing case, and it never gags the talker.
+// The §5 refuse-gate is OFF: a pointed question's answer is no longer restricted to the
+// document, so a from-nowhere / ungrounded draft is no longer regenerated toward "I did not
+// find it". It RIDES, with its flag. The deep invariant is unchanged and stronger: the model's
+// own word always surfaces — never a canned decline, never a regenerate forced by a grounding
+// gate. Telling the user (the unbound flag) is the whole job; the answer is the model's.
 
 const setup = (text) => {
   const doc = parseText(text, { docId: 'g' });
@@ -33,21 +25,18 @@ const model = (text) => ({ id: 'm', kind: 'test', isLoaded: () => true, async lo
 const run   = (m, audit = createAuditLog()) =>
   runTurn({ question: 'apples', doc: setup(DOC), model: m, embedder: createHashEmbedder(), auditLog: audit });
 
-// 1 — THE GATE. A from-nowhere answer over a pointed question ENGAGES the gate (§5): the
-// turn is `gated` and the talker is regenerated. But the gate regenerates, it does not
-// substitute — the model's own word still surfaces, never a canned decline.
-test('a load-bearing unbound draft gates and regenerates — but the model word still rides, never a canned decline', async () => {
+// 1 — A from-nowhere answer RIDES, flagged — it is not gated, not regenerated.
+test('a from-nowhere unbound draft rides with its flag — no gate, no regenerate', async () => {
   const r = await run(model('Zebras orbit cosmic nonsense beyond comprehension.'));
   assert.ok(r.flags.some(f => f.id === 'unbound' && f.refuses), 'unbound is a serious-pill flag');
-  assert.equal(r.turn.gated, true, '§5: a from-nowhere answer on a pointed question engages the gate');
-  assert.equal(r.turn.steps.find(s => s.name === 'revise').data.attempts, 1, 'and the talker is regenerated once');
-  assert.match(r.answer, /zebras/i, 'the model text still surfaces — the gate regenerates, it does not substitute');
-  assert.doesNotMatch(r.answer, /can'?t ground|do(?:n'?t| not) have/i, 'no canned decline is shipped in its place');
+  assert.equal(r.turn.gated, false, 'the refuse-gate is off — an ungrounded answer is not gated');
+  assert.equal(r.turn.steps.find(s => s.name === 'revise').data.attempts, 0, 'and the talker is not regenerated');
+  assert.match(r.answer, /zebras/i, 'the model text is the answer, untouched');
+  assert.doesNotMatch(r.answer, /can'?t ground|do(?:n'?t| not) have/i, 'no canned decline');
   assert.equal(r.sources.length, 0, 'it cites nothing — honestly, the flag says so');
 });
 
-// 2 — THE GROUNDED CASE. A clearly-grounded answer rides too, and earns its citation. The
-// flag-and-tell rule must not cost a real answer its grounding.
+// 2 — A clearly-grounded answer rides too, and earns its citation.
 test('a well-grounded answer rides and cites its span', async () => {
   const r = await run(model('Alice loves apples.'));
   assert.equal(r.turn.gated, false);
@@ -56,48 +45,28 @@ test('a well-grounded answer rides and cites its span', async () => {
   assert.ok(r.sources.length > 0, 'and it cites its span');
 });
 
-// 3 — FLUENCY IS IRRELEVANT, EITHER WAY. The gate reads `bound` / `edgeVerdicts`, never the
-// prose, so a terse from-nowhere draft and an eloquent one engage the gate identically — and
-// the model's word surfaces in both, never swapped for a decline.
-test('fluency changes nothing: terse and eloquent ungrounded prose both gate, both surface', async () => {
+// 3 — Fluency is irrelevant: a terse and an eloquent ungrounded draft both ride, both flagged.
+test('fluency changes nothing: terse and eloquent ungrounded prose both ride, both flagged', async () => {
   const terse  = await run(model('Zebras nonsense.'));
   const florid = await run(model(
     'In a luminous and profoundly orchestrated meditation, the ineffable cosmos unfurls ' +
     'its transcendent mystery across the boundless and shimmering dark of pure being.'));
-  assert.equal(terse.turn.gated,  true, 'terse from-nowhere → the gate engages');
-  assert.equal(florid.turn.gated, true, 'eloquent from-nowhere → the gate engages all the same');
+  assert.equal(terse.turn.gated,  false);
+  assert.equal(florid.turn.gated, false);
   assert.ok(terse.flags.some(f => f.id === 'unbound'),  'terse is flagged unbound');
   assert.ok(florid.flags.some(f => f.id === 'unbound'), 'florid is flagged unbound');
-  assert.match(terse.answer,  /zebras/i,  'the terse model word still surfaces');
-  assert.match(florid.answer, /luminous/i, 'the florid model word still surfaces');
+  assert.match(terse.answer,  /zebras/i,  'the terse model word rides');
+  assert.match(florid.answer, /luminous/i, 'the florid model word rides');
 });
 
-// 4 — THE RECORD. The surfaced answer is STILL the model's draft (the gate regenerated, it
-// did not swap), the gate is recorded, and the flag rides beside it — the user can see what
-// was said, that the gate engaged, and what we could and couldn't ground.
-test('the gated turn still surfaces the model draft, with the gate and the flag recorded beside it', async () => {
+// 4 — The record: the surfaced answer is the model's draft, ungated, with the flag beside it.
+test('the ungrounded turn surfaces the model draft, ungated, with the flag recorded beside it', async () => {
   const audit = createAuditLog();
   const r = await run(model('Zebras orbit cosmic nonsense.'), audit);
   const t = audit.turns[0];
-  assert.equal(t.gated, true, 'the gate is recorded in the audit');
+  assert.equal(t.gated, false, 'no gate is recorded');
   assert.match(t.rawOutput, /zebras/i, 'the verbatim draft is captured');
-  assert.match(t.answer, /zebras/i, 'and it IS the surfaced answer — regenerated, not replaced by a decline');
+  assert.match(t.answer, /zebras/i, 'and it IS the surfaced answer — never replaced by a decline');
   assert.ok(t.flags.some(f => f.id === 'unbound' && f.refuses),
     'the flag rides in the record, telling the user the grounding is absent');
-});
-
-// 5 — THE GATE CLEARS. With a model that CAN answer differently on the regenerate (a real
-// model handed the §5 corrective), the gate resolves: the redo grounds (or honestly
-// abstains), and the unbound flag is gone. This is the gate doing its job — regenerate
-// toward the lines, not ride a from-nowhere draft.
-test('the gate clears when the regenerate grounds — the from-nowhere flag is gone', async () => {
-  let call = 0;
-  // First draft is from-nowhere; the regenerate grounds in a real span.
-  const twoShot = { id: 'm', kind: 'test', isLoaded: () => true, async load() {},
-    async phrase() { return call++ === 0 ? 'Zebras orbit cosmic nonsense.' : 'Alice loves apples.'; } };
-  const r = await run(twoShot);
-  assert.equal(r.turn.gated, true, 'the gate engaged on the first from-nowhere draft');
-  assert.ok(!r.flags.some(f => f.id === 'unbound'), 'the regenerate grounded — unbound is gone');
-  assert.match(r.answer, /alice loves apples/i, 'the grounded regenerate is the surfaced answer');
-  assert.ok(r.sources.length > 0, 'and it cites its span');
 });

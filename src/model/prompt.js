@@ -65,18 +65,16 @@ export const SYSTEM_GROUND = `You just finished reading some lines — the ones 
 
 Speak as the one who read them. Answer the user in your own words — say what you found, don't quote the lines back or tell them to go look. Write natural prose; don't write citations or tags, those are added for you.`;
 
-export const SYSTEM_CHAT = `You are a brief, accurate assistant. Answer using only what has been said in this conversation.`;
+export const SYSTEM_CHAT = `You are a helpful, knowledgeable assistant. Answer the user's question directly and accurately, drawing on the conversation and your general knowledge. Be clear and concise.`;
 
 // The STRICT grounded register — "only what you read" (the Grounded chip). The same
 // subjective frame, with one thing added: do not reach past the lines into outside
 // knowledge. The frame already makes "I did not find that" coherent; strict only forbids
 // filling the gap from elsewhere. A faithful "it wasn't in what I read" is the right
 // answer here, never a failure.
-export const SYSTEM_GROUND_STRICT = `You just finished reading some lines — the ones below. They are all you read; you have not seen the rest of it.
+export const SYSTEM_GROUND_STRICT = `You just finished reading some lines — the ones below. Answer from them first.
 
-Speak as the one who read them, and answer ONLY from what you read — every part of your answer has to come from those lines. If they ask about something that was not in them, say so plainly — "I didn't find that in what I read." — and stop there. Don't fill the gap from outside or general knowledge, and don't guess.
-
-Write natural prose; don't write citations or tags, those are added for you.`;
+Speak as the one who read them. If the lines cover the question, answer from them. If they don't, you may answer from your general knowledge — just make clear that part isn't from the document (the grounding is marked for you, so don't claim the lines said something they didn't). Write natural prose; don't write citations or tags, those are added for you.`;
 
 // The FREE register — general-knowledge chat that ignores the document (the Free form
 // chip). Distinct from SYSTEM_CHAT, which is the conversation-only fallback: this one
@@ -220,20 +218,18 @@ export const buildGroundedMessages = ({
   // absence so the talker says it plainly rather than reaching past the frame for outside
   // knowledge (the strict system message already forbids that; this is the in-register cue).
   if (strict && !spans.length)
-    blocks.push('You read no lines bearing on their question — there were none to read. Tell them plainly you did not find it; do not answer from outside knowledge.');
+    blocks.push('You read no lines bearing on their question. Say the document does not cover it, then, if you can, answer from general knowledge — just make clear that part is not from the document.');
 
-  // The ABSENCE CLAUSE, last (§1) — the keystone of the frame, where a small model
-  // attends hardest. Not a refusal instruction: if those lines are all the reader read,
-  // "I did not find that" is just the honest report of an absence. This is what retires
-  // VOID-as-coercion — the frame makes abstention coherent, no gag required.
-  //   When a prior thread rode above, the clause names the live question outright so the
-  //   talker answers THAT one and not the earlier turns it just saw (the t5 leak). With
-  //   no thread there is nothing to confuse, so the clause stays byte-identical.
+  // The ANSWER CLAUSE, last (§1) — where a small model attends hardest. The restriction is
+  // lifted: the talker answers, from the lines when they cover it and from general knowledge
+  // when they don't (saying which). Not from document is FLAGGED downstream, not forbidden here.
+  //   When a prior thread rode above, the clause names the live question outright so the talker
+  //   answers THAT one and not the earlier turns it just saw.
   blocks.push(conversation.notes
-    ? `Answer their latest question now — “${question}” — in your own words. If they asked about ` +
-      'something that was not in what you read, tell them you did not find it — that is an honest answer, not a failure.'
-    : 'Answer them now, in your own words. If they asked about something that was not in ' +
-      'what you read, tell them you did not find it — that is an honest answer, not a failure.');
+    ? `Answer their latest question now — “${question}” — in your own words. If the lines don't ` +
+      'cover it, answer from general knowledge and say it is not from the document.'
+    : 'Answer them now, in your own words. If the lines don\'t cover it, answer from general ' +
+      'knowledge and say it is not from the document.');
 
   return [
     { role: 'system', content: strict ? SYSTEM_GROUND_STRICT : SYSTEM_GROUND },
