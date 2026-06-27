@@ -438,6 +438,9 @@ export const stages = {
           task:         ctx.task,               // the summary guard rides on a summary task
           budget:       ctx.budget,             // none by default; a caller may impose one
           conversation: groundedConversation(ctx),  // the USER's thread only — never the talker's prior answers
+          // the nearest sample answer's SHAPE, when the form library matched one (turn/shape.js)
+          // — so the first draft is laid out right, not only corrected after. Empty by default.
+          exemplar:     ctx.shapeTarget?.promptMatch?.best_response || '',
           strict:       ctx.grounding === 'grounded',   // "only what you read" — abstention is the honest fallback
         })
       : buildChatMessages({
@@ -603,13 +606,27 @@ export const stages = {
       return pe ? [...ce, pe] : ce;
     };
     const gatingOf = (c) => errsOf(c).filter((e) => e.gates);
+    // FORM DRIVES REVISION (turn/shape.js): the sample-answer library scores the draft's shape
+    // against what this kind of question wants. Embedder-gated; where it can measure, an
+    // off-basin draft is a gating trigger here (a reshape), with the matched sample as the
+    // target — flag-only in veto, but a reason to answer again here. Async (it embeds the
+    // draft), inert without a threaded library / warm meaning embedder.
+    const meaning = (() => { const e = pickRetrievalEmbedder(ctx); return (e?.measuresMeaning && e.isWarm?.()) ? e : null; })();
+    const formErrOf = async (c) => {
+      if (!ctx.shapeLibrary || !ctx.shapeQueryVec || !meaning || !c.rawOutput) return null;
+      try {
+        const e = answerFormError(ctx.shapeLibrary, ctx.shapeQueryVec, await meaning.embed(c.rawOutput));
+        return e ? { ...e, gates: true, sample: ctx.shapeTarget?.promptMatch?.best_response || '' } : null;
+      } catch { return null; }
+    };
+    let curForm = await formErrOf(ctx);
     const regenNeeded = (c) => needsRegen(c) || gatingOf(c).length > 0;
-    if (!regenNeeded(ctx)) return ctx;
+    if (!regenNeeded(ctx) && !curForm) return ctx;
     // The §5 gate engaged at entry — recorded for the audit even if the regenerate clears.
     const gated = gateCondition(ctx);
     let cur = ctx, attempts = 0;
     const revisions = [];
-    while (attempts < REWRITE_ATTEMPTS && regenNeeded(cur)) {
+    while (attempts < REWRITE_ATTEMPTS && (regenNeeded(cur) || curForm)) {
       attempts++;
       // Record the superseded draft BESIDE its successor — never erase it. The reason it was
       // made to answer again travels with it (the off-diagonal verdicts that condemned it,
@@ -619,11 +636,16 @@ export const stages = {
       // unwritten — and the user can WATCH it catch itself and begin again.
       const supersededDraft    = cur.rawOutput;
       const supersededVerdicts = (cur.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
-      const shapeErr = gatingOf(cur)[0];      // the first unmet constraint, if any
+      // The trigger, content/constraint before form: the first unmet gating constraint, else
+      // the off-shape form miss.
+      const shapeErr = gatingOf(cur)[0] || curForm;
       const why = shapeErr ? shapeErr.reason
         : (gateCondition(cur) && !confabulating(cur))
           ? 'a load-bearing claim was not grounded in the lines'
           : 'a specific claim was asserted where the lines mark an absence';
+      const corrective = !shapeErr ? correctiveFor(cur)
+        : shapeErr.dim === 'form' ? reshapeCorrective(shapeErr)   // answer like this sample
+        : constraintCorrective(shapeErr);                          // name them / shorten / reverse
       const messages = buildGroundedMessages({
         question:    ctx.question,
         spans:       selectExcerpts(ctx.spans),   // same trimmed lines the first pass saw
@@ -631,15 +653,14 @@ export const stages = {
         task:        ctx.task,
         budget:      ctx.budget,
         conversation: {},                     // history still withheld on the grounded path
-        // a missed constraint steers the redo (name them / shorten / reverse); else confab →
-        // drop the link; gate → keep to the lines.
-        corrective:  shapeErr ? constraintCorrective(shapeErr) : correctiveFor(cur),
+        corrective,
       });
       const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
       cur = await stages.factcheck(await stages.bind({ ...cur, rawOutput: raw, messages }));
+      curForm = await formErrOf(cur);
       revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw, why }));
     }
-    return { ...cur, revised: { attempts, resolved: !regenNeeded(cur), errors: errsOf(cur).map(e => e.id) }, revisions,
+    return { ...cur, revised: { attempts, resolved: !(regenNeeded(cur) || curForm), errors: errsOf(cur).map(e => e.id) }, revisions,
              ...(gated ? { gated: true } : {}) };
   },
 
@@ -789,6 +810,18 @@ const constraintCorrective = (err) => {
       : 'They asked for it in order — tell it from the beginning through to the end.';
   return CONFAB_CORRECTIVE;
 };
+
+// The reshape corrective — handed when the FORM predictor (turn/shape.js) found the draft
+// off-shape for this kind of question. It hands over the matched sample answer as a SHAPE
+// target (its facts are about a different text), so the redo copies the register and length,
+// not the content.
+const reshapeCorrective = (err) =>
+  err.sample
+    ? `Your last answer did not read like the kind of answer this question wants. Here is the ` +
+      `right SHAPE (it is about a different text — copy its register and length, NOT its facts):\n` +
+      `“${err.sample}”\nAnswer again in that shape, grounded in the lines you read.`
+    : 'Your last answer did not read like the kind of answer this question wants. Answer again in a ' +
+      'fitting register and length, grounded in the lines you read.';
 
 // Did the diagonal guard catch the confabulation proper — a specific claim asserted at
 // a measured Void (the figure-at-a-void shape)? The hard case the rewrite targets.

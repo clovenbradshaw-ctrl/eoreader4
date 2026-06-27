@@ -5,6 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseExemplars, buildShapeLibrary, answerFormError, cosine, centroid } from '../src/turn/shape.js';
+import { stages } from '../src/turn/stages.js';
+import { expectAnswer } from '../src/turn/expect.js';
+import { parseText } from '../src/perceiver/parse/index.js';
 
 // The FORM predictor: what a good answer LOOKS LIKE, learned from sample answers
 // (data/exemplars.jsonl) and scored by discriminative cosine. The prediction is the nearest
@@ -67,6 +70,34 @@ test('the ported sample-answer library loads — 430 records across many intents
   const intents = new Set(records.map((r) => r.intent));
   assert.ok(intents.has('lookup') && intents.has('synthesis'), 'the intent vocabulary is present');
   assert.ok(records.every((r) => typeof r.response === 'string' && r.response.length), 'every record carries a response');
+});
+
+test('form drives revision: an off-shape draft is reshaped toward the matched sample answer', async () => {
+  const lib = await buildShapeLibrary(SAMPLES, fakeEmbed);
+  const qVec = await fakeEmbed('who wrote this');
+  const meaning = { measuresMeaning: true, isWarm: () => true, embed: fakeEmbed };
+  const doc = parseText('Father Goriot was written by Balzac.', { docId: 'a' });
+  const spans = [{ idx: 0, text: 'Father Goriot was written by Balzac.', score: 1, via: 'lex' }];
+
+  const ctx = {
+    question: 'who wrote this',
+    expectation: expectAnswer('who wrote this'),          // OPEN — so ONLY form can drive this
+    shapeLibrary: lib, shapeQueryVec: qVec,
+    shapeTarget: lib.selectForQuestion(qVec),             // intent lookup, sample "Balzac."
+    geometricEmbedder: meaning, embedder: meaning,
+    doc, spans, task: 'answer', history: [],
+    // an off-shape first draft: long, rambling — a synthesis shape for a lookup question
+    rawOutput: 'Well now, that is a long and intricate matter of many entangled fortunes and themes.',
+    bound: [], edgeVerdicts: [],
+    model: { phrase: async () => 'Balzac.' },             // the reshape lands a crisp lookup
+  };
+
+  const out = await stages.revise(ctx);
+  assert.equal(out.revised.attempts, 1, 'it caught the off-shape draft and answered again');
+  assert.ok(out.revised.resolved, 'the reshape is in-basin');
+  assert.equal(out.revisions.length, 1);
+  assert.match(out.revisions[0].why, /does not read like/i, 'the trail records it reshaped');
+  assert.match(out.revisions[0].replacedBy, /Balzac/);
 });
 
 test('parseExemplars is defensive — blank lines, comments, and bad JSON are skipped', () => {

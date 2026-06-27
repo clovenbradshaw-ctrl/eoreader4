@@ -11,7 +11,7 @@
 //      thinking is visible while the turn is in flight.
 
 import { ingestText }       from '../organs/in/index.js';
-import { runTurn }          from '../turn/index.js';
+import { runTurn, loadShapeLibrary } from '../turn/index.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
 import { bootGeometricReader } from '../boot/index.js';
@@ -463,9 +463,21 @@ const runQuery = async (question) => {
     try { mindSpans = await STATE.mind.retrieve(question, 5); } catch { mindSpans = null; }
   }
 
+  // Build the sample-answer library ONCE, when the meaning embedder is warm (it embeds 430
+  // responses, so it is deferred and cached on STATE; the first turn after warm-up runs
+  // without it, every turn after with it). Inert until MiniLM warms — the form predictor
+  // (turn/shape.js) stays dark, exactly like the significance column, until then.
+  if (!STATE.shapeLibrary && !STATE.shapeLibraryBuilding
+      && STATE.geometricEmbedder?.measuresMeaning && STATE.geometricEmbedder.isWarm?.()) {
+    STATE.shapeLibraryBuilding = loadShapeLibrary((t) => STATE.geometricEmbedder.embed(t))
+      .then((lib) => { STATE.shapeLibrary = lib; return lib; })
+      .catch(() => null);
+  }
+
   const t0 = performance.now();
   const result = await runTurn({
     question,
+    shapeLibrary: STATE.shapeLibrary,   // the form predictor, once built (null until MiniLM warms)
     docs:     selectedDocs,     // the selected set — folded into one composite to ground against
     // In WEAVE mode the recalled lines are offered to the model as labelled background;
     // in recall mode they are display-only (not passed here). Epistemically separate either way.

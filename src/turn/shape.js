@@ -16,6 +16,21 @@
 // column. Form is a SMOKE ALARM (eoreader3 §): it flags how unlike the kind of answer the
 // draft is; it never gates a restart on its own (taste is not refusable).
 
+// The bundled sample-answer library — a same-origin asset, fetched like the phasepost cells.
+const EXEMPLARS_URL = new URL('../../data/exemplars.jsonl', import.meta.url).href;
+
+// loadShapeLibrary(embed, { url }) → build the resident library from the bundled exemplars.
+// `embed` is (text) → Promise<vec> (the caller's warm meaning embedder). Null on any failure
+// — the form path degrades to inert, never throws, exactly like the cells loader.
+export const loadShapeLibrary = async (embed, { url = EXEMPLARS_URL } = {}) => {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const records = parseExemplars(await res.text());
+    return records.length ? await buildShapeLibrary(records, embed) : null;
+  } catch { return null; }
+};
+
 const dot = (a, b) => {
   if (!a || !b) return 0;
   const n = Math.min(a.length, b.length);

@@ -172,6 +172,7 @@ export const buildGroundedMessages = ({
   budget = DEFAULT_BUDGET,
   conversation = {},
   corrective = '',
+  exemplar = '',
   strict = false,
 } = {}) => {
   const blocks = [];
@@ -192,6 +193,14 @@ export const buildGroundedMessages = ({
     blocks.push(`Earlier in this reading:\n${conversation.notes}\n(Those came before — for context only; answer just their latest question below.)`);
   if (conversation.pastTurns?.length)
     blocks.push(`They had asked you:\n${conversation.pastTurns.join('\n')}`);
+
+  // A SHAPE exemplar — the nearest sample answer the form library matched (turn/shape.js),
+  // offered so the FIRST draft is laid out in the right register and length. It is a FORM
+  // model only: it is about a different text, so the talker must copy its shape, never its
+  // facts. Empty (→ no block) on every turn with no library threaded — byte-identical.
+  if (exemplar)
+    blocks.push(`For the SHAPE only — here is the kind of answer this question wants (it is ` +
+      `about a different text; copy its register and length, NOT its facts):\n“${exemplar}”`);
 
   // The live question — last of the material, just before the closing clause.
   blocks.push(`They asked you: ${question}`);

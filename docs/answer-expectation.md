@@ -124,6 +124,20 @@ question, `veto` scores the answer against it. (A second eoreader3 library,
 `form-genres.jsonl` — genre prototypes for output forms — is ported too, for the same
 machinery over output genres rather than conversational intents.)
 
+The library is wired **live** three ways (each embedder-gated, inert until the meaning
+embedder warms):
+
+1. **Startup build.** `src/ui/app.js` lazily builds the library the first turn after MiniLM
+   warms (via `loadShapeLibrary`, which fetches `data/exemplars.jsonl`) and caches it on
+   `STATE`, then threads it into `runTurn`. Deferred because it embeds 430 responses once.
+2. **Nearest sample as a content hint.** `prompt` hands the matched sample answer to the
+   FIRST draft as a SHAPE exemplar (framed "about a different text — copy its register and
+   length, not its facts"), so the first attempt is already well-shaped, not only corrected
+   after.
+3. **Form drives revision.** In `revise`, an off-basin draft is a gating trigger (a reshape),
+   with the matched sample answer handed over as the target. Flag-only in `veto`, but a
+   reason to answer again here — the same start/stop/begin-again loop, now on form.
+
 ## Next: the engine's own generation as the prediction
 
 The constraint checkers above are hand-written predicates. The deeper move — the engine
