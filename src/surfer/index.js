@@ -20,6 +20,11 @@ export { surfFold } from './surf.js';
 // term state, a span's |⟨T|s⟩|² its salience, the same noise null deciding where the surfer's
 // return stops being salient. Embedder-free — the term space, not a learned embedding.
 export { threadBasis, bornSalience, figureSalience, salienceField } from './salience.js';
+// Trajectory — the arc of one identity's relations across a sequence, segmented at the surf's
+// frame-breaks, with the change read off as an end-to-end delta. The omnimodal "what changed":
+// it reads only operator events (identity · relation · order · turn), never words, so the same
+// synthesis summarises a story, a video track, an audio motif, or a sensor regime.
+export { trajectory, speakTrajectory } from './trajectory.js';
 // The Significance column's Ground terrain (cube.md #5): the Atmosphere pass and the
 // shared significance-basis projection every pass reads off. Pure on vectors past the
 // projection — omnimodal for free. The corpus prior is INJECTED, never imported, so the
