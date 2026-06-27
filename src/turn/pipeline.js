@@ -86,7 +86,7 @@ const llmBrief = (ctx) => {
 // retrieved spans keep mentioning but that never acts — and folds the results in as citable
 // spans before the fold builds the reading (turn/stages.js, write/think.js).
 const PIPELINE = [
-  'route', 'expect', 'converse', 'retrieve', 'inquire', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
+  'route', 'expect', 'converse', 'retrieve', 'inquire', 'fold', 'predict', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
 ];
 
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
@@ -241,6 +241,14 @@ const summarize = (name, ctx, ms) => {
     case 'expect':   return { ...base,
                               constraints: (ctx.expectation?.constraints || []).map(c => c.id),
                               gates: ctx.expectation?.gates || false };
+    // The engine's own grounded generation (src/write), kept beside the talker's answer so
+    // the audit shows the prediction the fluent reply was checked against — what it is
+    // ABOUT (primary · entities) and the clumsy draft verbatim.
+    case 'predict':  return ctx.prediction ? { ...base,
+                              primary:  ctx.prediction.primaryName || null,
+                              entities: ctx.prediction.entities || [],
+                              confident: ctx.prediction.confident || false,
+                              draft: String(ctx.prediction.draft || '').slice(0, 400) } : base;
     case 'converse': return { ...base, recent: ctx.convStats?.recent || 0,
                               folded: ctx.convStats?.folded || 0, notesLen: ctx.convStats?.notesLen || 0 };
     case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0,

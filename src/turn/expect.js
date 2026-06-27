@@ -155,6 +155,28 @@ const checkConstraint = (c, text, { doc, referent, bound }) => {
   }
 };
 
+// answerPredictionError(prediction, answerText) → the divergence between the engine's OWN
+// grounded generation (the mechanical writer's draft, src/write) and the talker's answer.
+// The mechanical draft is the prior / efference copy: it says, from the graph alone, what
+// the answer is about — for "what is her name?" it carries the focus figure's name. When the
+// grounded reading confidently centers on a NAMED figure that the fluent answer never names
+// (and is not an honest abstention), that omission is a prediction error — the under-answer
+// mirror of a confabulation. This is the general predictor: no question template, just "the
+// answer dropped what the grounded reading was about." Gates only when the reading was
+// CONCENTRATED (the coref field settled on one figure); otherwise it rides as a flag.
+export const answerPredictionError = (prediction, answerText) => {
+  const name = prediction?.primaryName;
+  if (!name || !isProperName(name)) return null;
+  const text = norm(answerText);
+  if (!text || isAbstention(text)) return null;
+  const head = name.split(/\s+/)[0];
+  if (new RegExp(`\\b${escapeRe(head)}\\b`, 'i').test(text)) return null;
+  return {
+    id: 'coverage', dim: 'coverage', gates: !!prediction.confident, expectedName: name,
+    reason: `the grounded reading centers on “${name}”, but the answer never names them`,
+  };
+};
+
 // answerConstraintErrors(expectation, answerText, { doc, referent, bound }) → the prediction
 // errors: the constraints the answer did not satisfy, each tagged with whether it gates. An
 // honest abstention ("I did not find it") satisfies every GATING constraint — reporting the

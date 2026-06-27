@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { expectAnswer, answerConstraintErrors, isProperName, SLOT } from '../src/turn/expect.js';
+import { expectAnswer, answerConstraintErrors, answerPredictionError, isProperName, SLOT } from '../src/turn/expect.js';
 import { runVetoes } from '../src/ground/veto.js';
 import { stages } from '../src/turn/stages.js';
 import { parseText } from '../src/perceiver/parse/index.js';
@@ -87,6 +87,27 @@ test('an order miss fires when the cited source order runs the wrong way', () =>
   assert.deepEqual(answerConstraintErrors(expect, 'told backwards', { bound: backwards }), []);
   // too few cited claims to judge → don't gate
   assert.deepEqual(answerConstraintErrors(expect, 'x', { bound: [{ citation: 's2' }] }), []);
+});
+
+// ── The predictor: the engine's own grounded draft as the prior ──────────────
+
+test('the mechanical-draft divergence fires when the answer drops the figure it centers on', () => {
+  // The grounded reading centers on Grete and settled (concentrated) → the answer should
+  // name her. An answer that never does is an under-answer; gating because the reading is
+  // confident. We read CONTENT (the primary name), not the clumsy mechanical surface.
+  const prediction = { draft: 'Grete brought milk', entities: ['Grete'], primaryName: 'Grete', confident: true };
+  const miss = answerPredictionError(prediction, 'She is gentle and patient.');
+  assert.ok(miss && miss.dim === 'coverage' && miss.gates, 'a dropped focus figure is a gating miss');
+  assert.equal(miss.expectedName, 'Grete');
+  // naming her clears it; an honest abstention fills it
+  assert.equal(answerPredictionError(prediction, 'Her name is Grete.'), null);
+  assert.equal(answerPredictionError(prediction, 'I did not find that in what I read.'), null);
+});
+
+test('the predictor only flags (never gates) when the reading did not settle', () => {
+  const loose = { draft: '…', entities: ['Gregor'], primaryName: 'Gregor', confident: false };
+  const e = answerPredictionError(loose, 'a character endures a long ordeal');
+  assert.ok(e && !e.gates, 'an unconcentrated reading flags, does not force a restart');
 });
 
 // ── The residual flag: an unmet constraint is told, not hidden ───────────────

@@ -17,7 +17,7 @@ import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerra
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
-import { expectAnswer, answerConstraintErrors, needsReferent } from './expect.js';
+import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
 import { rereadOnUnsettled } from './reread.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
@@ -338,6 +338,32 @@ export const stages = {
     return { ...ctx, spans, note, surf, focus, referential, refTarget };
   },
 
+  // The PREDICTION — the engine's own grounded generation, before the talker speaks
+  // (docs/answer-expectation.md). The mechanical writer (src/write `think`) says, from the
+  // graph alone, what it would answer; that draft is the prior the fluent answer is checked
+  // against. We read only its CONTENT — the named figures the grounded reading centers on —
+  // not its surface: the mechanical SURFACE is corpus-dependent (learned conventions, often
+  // telegraphic), but WHICH figures it is about is read straight off the log, so it is a
+  // reliable content prediction even when the prose is clumsy. A confident grounded reading
+  // that centers on a named figure the talker then drops is an under-answer (the mirror of a
+  // confabulation). Fully guarded: a clumsy predictor must never break the answer.
+  async predict(ctx) {
+    if (!ctx.doc || !ctx.spans?.length) return ctx;
+    try {
+      const cursor = ctx.surf?.peak ?? ctx.spans[0]?.idx ?? 0;
+      const t = think(ctx.doc, { cursor, genders: ctx.genders || {} });
+      const draft = String(t?.voiced || '');
+      const labelOf = (id) => ctx.doc.admission?.labelOf?.(id) || id;
+      const entities = [...new Set(namedReferents(ctx.doc, draft).map(labelOf))];
+      // the figure the grounded reading centers on: the fold's focus when it resolved one,
+      // else the strongest figure the mechanical draft named.
+      const focusId = ctx.focus?.[0] ?? null;
+      const primaryName = focusId != null ? labelOf(focusId) : (entities[0] || null);
+      const confident = !!ctx.referential?.concentrated;
+      return { ...ctx, prediction: { draft, entities, primaryName, confident } };
+    } catch { return ctx; }
+  },
+
   // The answerability gate — is there an answer to give, or is the field VOID?
   // (docs/answerability.md) Before the talker is warmed, measure whether the field
   // where the question landed holds any structure. When it does not — no referent
@@ -553,7 +579,11 @@ export const stages = {
     // misses a GATING constraint the prompt predicted — a name not given, a length overrun, a
     // backwards retelling told forwards. The miss is the prediction error; restarting is the
     // error-correction. Soft (non-gating) misses are left to the veto flag, not retried.
-    const errsOf  = (c) => answerConstraintErrors(c.expectation, c.rawOutput, { doc: c.doc, referent, bound: c.bound });
+    const errsOf  = (c) => {
+      const ce = answerConstraintErrors(c.expectation, c.rawOutput, { doc: c.doc, referent, bound: c.bound });
+      const pe = answerPredictionError(c.prediction, c.rawOutput);   // the mechanical-draft divergence
+      return pe ? [...ce, pe] : ce;
+    };
     const gatingOf = (c) => errsOf(c).filter((e) => e.gates);
     const regenNeeded = (c) => needsRegen(c) || gatingOf(c).length > 0;
     if (!regenNeeded(ctx)) return ctx;
@@ -641,6 +671,8 @@ export const stages = {
       : null;
     const constraintErrors = answerConstraintErrors(ctx.expectation, ctx.rawOutput,
       { doc: ctx.doc, referent: shapeReferent, bound: ctx.bound });
+    const predErr = answerPredictionError(ctx.prediction, ctx.rawOutput);
+    if (predErr) constraintErrors.push(predErr);
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
       referential: ctx.referential, task: ctx.task, provenance, constraintErrors,
@@ -708,6 +740,9 @@ const GROUNDING_CORRECTIVE =
 // own words. For a name the reading already resolved, hand it over outright — the engine knows
 // it; the first draft simply failed to say it.
 const constraintCorrective = (err) => {
+  if (err.dim === 'coverage')
+    return `Your answer is about the right passage but never names ${err.expectedName}, who the ` +
+      'reading centers on. Answer again and name them where they belong.';
   if (err.dim === 'name')
     return err.expectedName
       ? `They asked for a name. The reading resolves it as “${err.expectedName}”. Answer with that ` +
