@@ -11,7 +11,8 @@
 //      thinking is visible while the turn is in flight.
 
 import { ingestText }       from '../organs/in/index.js';
-import { runTurn, loadShapeLibrary } from '../turn/index.js';
+import { runTurn, runTurnWithWeb, loadShapeLibrary } from '../turn/index.js';
+import { createWebClient, searchAndAdmit } from '../ingest/index.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
 import { bootGeometricReader } from '../boot/index.js';
@@ -475,7 +476,7 @@ const runQuery = async (question) => {
   }
 
   const t0 = performance.now();
-  const result = await runTurn({
+  const turnArgs = {
     question,
     shapeLibrary: STATE.shapeLibrary,   // the form predictor, once built (null until MiniLM warms)
     docs:     selectedDocs,     // the selected set — folded into one composite to ground against
@@ -513,7 +514,21 @@ const runQuery = async (question) => {
     // preview; finalizeThinking then replaces the raw stream with the bound, cited
     // answer. No `stream:true` — that arms the grounded beat-loop, not the default.
     onToken:  (piece) => streamThinking(thinking, piece),
-  });
+  };
+  // Web search (docs/web-search.md): OFF by default. When the user enables it (STATE.webSearch
+  // = 'confirm' | 'auto'), a turn that PROPOSES a search (a gap the document can't close) gets a
+  // go-ahead — a cost-noticed browser confirm, or auto — then fetch+admit via the proxy and
+  // re-run with the web sources in scope. Proposer-only: the pipeline never fetches; this does.
+  const webMode = STATE.webSearch || 'off';
+  const result = (webMode === 'off')
+    ? await runTurn(turnArgs)
+    : await runTurnWithWeb(turnArgs, {
+        mode: webMode,
+        webSearch: (q, opts) => searchAndAdmit(q, { client: (STATE.webClient ||= createWebClient()), ...opts }),
+        confirm: (p) => (typeof window !== 'undefined' && window.confirm)
+          ? window.confirm(`${p.cost}\n\nSearch the web for:\n“${p.query}”\n\n(${p.rationale})`)
+          : false,
+      });
   const ms = Math.round(performance.now() - t0);
   const route = result.route || result.turn.route;
 

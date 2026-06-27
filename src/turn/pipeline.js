@@ -13,6 +13,7 @@
 // vetoes ride alongside as `flags`.
 
 import { stages } from './stages.js';
+import { proposeWebSearch } from './propose.js';
 import { createCompositeDoc } from '../organs/in/index.js';
 import { siteTerrainAt } from '../surfer/index.js';
 import { assembleBrief } from '../write/index.js';
@@ -210,10 +211,15 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
     // an unbound assistant turn) so a claim that could not be grounded cannot become the
     // premise of a follow-up — the propagation the audit shows turn over turn.
     const unbound = flags.some(f => f.id === 'unbound' || f.id === 'unbound-contact');
+    // The web-search PROPOSAL (turn/propose.js): a query the turn would put to the world when
+    // the document could not close the gap. Proposer-only — it is returned for a confirmed user
+    // action (or auto mode) to run; the pipeline itself never fetches. Null on a sound turn.
+    const webProposal = proposeWebSearch(ctx);
+    if (webProposal) turn.step('propose-web', { query: webProposal.query, rationale: webProposal.rationale });
     return {
       answer: ctx.answer, sources: ctx.sources || [],
       sourceDocs: sourceDocsOf(groundingDoc, ctx.sources),
-      referential: ctx.referential || null, flags, unbound,
+      referential: ctx.referential || null, flags, unbound, webProposal,
       route: ctx.route || 'grounded', grounding, turn,
     };
   } catch (err) {
