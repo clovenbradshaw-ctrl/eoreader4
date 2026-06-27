@@ -424,12 +424,14 @@ export const stages = {
           // — so the first draft is laid out right, not only corrected after. Empty by default.
           exemplar:     ctx.shapeTarget?.promptMatch?.best_response || '',
           strict:       ctx.grounding === 'grounded',   // "only what you read" — abstention is the honest fallback
+          now:          ctx.now || null,  // hand the talker the real clock — date/time answered directly
         })
       : buildChatMessages({
           question: ctx.question,
           history:  ctx.recentMessages || [],   // a chat model wants turns as turns
           notes:    ctx.conversation?.notes || '',
           free:     ctx.grounding === 'free',   // general-knowledge register, explicitly ungrounded
+          now:      ctx.now || null,            // the running app knows the moment; the weights don't (null in tests → byte-identical)
         });
     // Weave in the read corpus (the mind) when the user opted into weave mode. Null
     // otherwise — the present prompt is untouched, golden parses byte-identical.
