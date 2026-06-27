@@ -614,18 +614,12 @@ const prefetcherOf = () => (STATE.prefetcher ||= createSpeculativeWeb({
   search: (q, opts) => searchAndAdmit(q, { client: webClientOf(), kind: 'auto', fetchPages: true, ...opts }),
 }));
 
-// Speculative prefetch — fire the search WHILE the user types, behind web mode `auto` only
-// (standing authorization). Debounced so a fetch fires on a typing pause, not per keystroke;
-// the result lands in the quarantine and is kept only if a turn later take()s it. Off in
-// off/confirm mode, and the quarantine is cleared when the user drops back to off.
+// Speculative prefetch — DISABLED on the typing path. It fetched + parsed full web pages on
+// every typing pause (auto mode); parseText is synchronous main-thread work, so it FROZE the
+// tab while the user typed. The send-time fetch (capped in websource.js) covers the real need.
+// Re-enable only behind off-main-thread parsing (a worker) or snippet-only warming.
 let prefetchTimer = null;
-const PREFETCH_IDLE_MS = 600;
-const maybePrefetch = () => {
-  if (STATE.webSearch !== 'auto') return;
-  clearTimeout(prefetchTimer);
-  const text = els.input.value;
-  prefetchTimer = setTimeout(() => { try { prefetcherOf().prime(text); } catch { /* speculative — never surface */ } }, PREFETCH_IDLE_MS);
-};
+const maybePrefetch = () => { /* disabled: see note above — was freezing the tab on type */ };
 
 // The composer's submit path: read the box, clear it, run.
 const send = () => {
