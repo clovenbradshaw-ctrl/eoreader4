@@ -61,10 +61,12 @@
         <h2>Chat</h2>
         <div id="messages"></div>
         <div id="doc-chips" class="doc-chips" hidden></div>
+        <!-- No per-message options. This is an internet-native tool: the web is its
+             memory — the noumenon it reads — so web search is always on and there is
+             nothing to toggle at send time. The only setting the user modifies is the
+             model backend, in the header. -->
         <form id="composer">
-          <textarea id="input" placeholder="Ask anything — a doc makes answers grounded…" rows="2"></textarea>
-          <button type="button" id="grounding-chip" class="chip" data-mode="auto" title="Click to cycle: how answers use the document">Auto</button>
-          <button type="button" id="web-chip" class="chip" data-mode="off" title="Web search — when a turn can't ground an answer, search the web through the proxy. Click to cycle: off → confirm (asks first) → auto">Web: off</button>
+          <textarea id="input" placeholder="Ask anything — I read the web to answer…" rows="2"></textarea>
           <button type="submit" id="send">Send</button>
         </form>
       </section>
