@@ -73,3 +73,37 @@ export const proposeWebSearch = (ctx) => {
 
   return { query: query || q, rationale: reasons.join('; '), trigger, cost: COST_NOTICE };
 };
+
+// searchAnnouncement(proposal) → a first-person, pre-search line for the chat bubble, or null.
+//
+// The proposer already decided WHETHER to search and WHAT for (the sharpened, disambiguated
+// `query`) and WHY (`trigger` + `rationale`). This only PROMOTES that decision into conversational
+// voice, said the moment the search fires — "let me look that up because…" — rather than leaving it
+// as a diagnostic string in the audit panel after the fact. Pure string-mapping over the existing
+// proposal: no new logic, no model call, so showing it costs nothing and reads as progress, not
+// another wait. Accepts a bare { query } too (the auto path, where the search runs before any turn
+// has produced a proposal) and falls back to a neutral "let me look that up".
+export const searchAnnouncement = (proposal) => {
+  if (!proposal) return null;
+  const q = String(proposal.query || '').trim();
+  if (!q) return null;
+  return `${announceLead(proposal)} Searching the web for “${q}”…`;
+};
+
+// The "why", in the first person — keyed off the trigger, and for a gap off the measured reason
+// (the same rationale phrases proposeWebSearch built above) so the promise to the user matches what
+// the engine actually found: "I answered from memory, let me verify" is a genuinely different
+// promise from "the document doesn't cover this", and the user can redirect on either.
+const announceLead = (proposal) => {
+  const r = String(proposal.rationale || '').toLowerCase();
+  if (proposal.trigger === 'verify')
+    return 'I answered from what I already know — let me check that against the web.';
+  if (proposal.trigger === 'witness')
+    return 'That rests on my own reading of the document, not on anything witnessed — let me confirm it against the web.';
+  // gap (or an unlabelled/auto proposal): name the specific gap when the rationale carries it.
+  if (r.includes('does not cover')) return "I don't think the document covers this — let me look it up.";
+  if (r.includes('ties to nothing')) return "I couldn't tie that to anything in the document — let me look it up.";
+  if (r.includes('does not settle')) return "The passage doesn't settle who this is about — let me look it up.";
+  if (r.includes('few of the claims')) return 'Little of that is grounded in the document — let me look it up.';
+  return 'Let me look that up.';
+};

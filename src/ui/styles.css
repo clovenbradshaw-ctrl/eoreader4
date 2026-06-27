@@ -315,6 +315,16 @@ a.prop-source:hover { text-decoration: underline; }
 /* Web-search confirmation card — the in-app replacement for the native confirm popup
    (docs/web-search.md). Sits beneath a finalized answer; the query is editable so the user
    can sharpen it before anything leaves the machine. */
+/* The "let me look that up" beat — a live, first-person line shown while a search runs. */
+.msg.assistant .searchnote {
+  display: flex; align-items: center; gap: .45rem;
+  margin-top: .6rem; padding: .45rem .6rem;
+  border: 1px solid #1e3a8a; border-radius: 8px; background: #0d1830;
+  color: #93c5fd; font-size: .8rem; font-style: italic; line-height: 1.4;
+}
+/* Keep the pulse on the searchnote's own dot even on a finalized (non-thinking) bubble. */
+.msg.assistant .searchnote .dots { display: inline-block; flex: 0 0 auto; }
+
 .msg.assistant .webproposal {
   margin-top: .6rem; padding: .55rem .65rem;
   border: 1px solid #1e3a8a; border-radius: 8px;

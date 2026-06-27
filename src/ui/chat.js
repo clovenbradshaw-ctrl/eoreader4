@@ -178,7 +178,7 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   // Idempotent: a web follow-up re-renders this same bubble with the updated answer, so drop the
   // blocks a prior finalize appended (kept as siblings of .body) before re-appending them — else
   // coverage / flags / meta / trace stack up. The web proposal/result cards are preserved.
-  el.querySelectorAll(':scope > .coverage, :scope > .docsources, :scope > .flags, :scope > .meta, :scope > .retry, :scope > .trail-toggle, :scope > .transparency-toggle, :scope > .transparency')
+  el.querySelectorAll(':scope > .coverage, :scope > .docsources, :scope > .flags, :scope > .meta, :scope > .retry, :scope > .trail-toggle, :scope > .transparency-toggle, :scope > .transparency, :scope > .searchnote')
     .forEach(n => n.remove());
   el.classList.remove('thinking');
   el.classList.remove('streaming');     // the live stream is replaced by the cited answer
@@ -341,6 +341,24 @@ export const renderMindBlock = (el, spans, opts = {}) => {
 // "what happens at the end?" needs the user's hand to become "Metamorphosis Kafka ending", so
 // the box is theirs to sharpen before anything leaves the machine. `onSearch(query)` runs the
 // fetch; `onDismiss()` drops the card. Proposer-only: nothing is sent until a button is pressed.
+// The conversational "let me look that up" beat — said the MOMENT a search fires, before the
+// (slow) fetch + re-answer, so the wait reads as purposeful activity rather than a blank pause
+// (docs/web-search.md). First-person and explicit about the query, built from the proposer's own
+// decision (turn/propose.js `searchAnnouncement`) — no extra model call. Replaces any prior note
+// in this bubble; finalizeThinking clears it when the grounded answer comes back. Returns the line.
+export const renderSearchNote = (el, text) => {
+  if (!el || !text) return null;
+  el.querySelector(':scope > .searchnote')?.remove();   // one in-flight note per message
+  const note = document.createElement('div');
+  note.className = 'searchnote';
+  note.innerHTML = `<span class="dots"></span><span class="searchnote-text"></span>`;
+  note.querySelector('.searchnote-text').textContent = text;
+  el.appendChild(note);
+  const root = el.parentElement;
+  if (root) root.scrollTop = root.scrollHeight;
+  return note;
+};
+
 export const renderWebProposal = (el, proposal, { onSearch, onDismiss } = {}) => {
   if (!el || !proposal) return;
   el.querySelector('.webproposal')?.remove();   // one card per message

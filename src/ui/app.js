@@ -11,7 +11,7 @@
 //      thinking is visible while the turn is in flight.
 
 import { ingestText }       from '../organs/in/index.js';
-import { runTurn, runWebFollowup, formulateSearchQuery, loadShapeLibrary } from '../turn/index.js';
+import { runTurn, runWebFollowup, formulateSearchQuery, searchAnnouncement, loadShapeLibrary } from '../turn/index.js';
 import { createWebClient, searchAndAdmit, createRawStore } from '../ingest/index.js';
 import { createSpeculativeWeb } from './prefetch.js';
 import { createAuditLog }   from '../audit/index.js';
@@ -22,7 +22,7 @@ import { createHorizon, structuralGround } from '../surfer/index.js';
 import { createCast } from '../converse/index.js';
 import { renderUserMessage, createThinkingMessage,
          updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
-         renderWebProposal, renderWebResult, setThinkingNote, buildPropositions } from './chat.js';
+         renderWebProposal, renderWebResult, renderSearchNote, setThinkingNote, buildPropositions } from './chat.js';
 import { createMind } from '../mind/index.js';
 import { foldImpression } from '../write/index.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
@@ -573,6 +573,10 @@ const runQuery = async (question) => {
     setThinkingNote(thinking, '🌐 searching the web…');
     try {
       const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history });
+      // Say WHAT is being looked up before the (slow) fetch, so the pre-answer wait reads as
+      // purposeful activity (docs/web-search.md). Auto searches up front, before any proposal
+      // exists, so the announcement is the neutral "let me look that up" over the formulated query.
+      if (q) setThinkingNote(thinking, `🔎 Looking this up: “${q}”…`);
       const admitted = await searchAndAdmit(q, { client: webClientOf(), rawStore: rawStoreOf(), kind: 'auto', fetchPages: true, k: 4 });
       const webDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
       if (webDocs.length) {
@@ -677,6 +681,11 @@ const runQuery = async (question) => {
   // The search itself — fetch+admit the proposed query and verify/re-run, then re-render the
   // answer and show what the search found. Driven by the in-app confirmation card (or auto).
   const runFollowup = async (query) => {
+    // The conversational "let me look that up" beat — said the moment the search fires, before the
+    // (slow) fetch + re-answer, in the proposer's own first-person voice. The user-edited query (the
+    // confirmation card's field) is what we announce, falling back to the proposal's own query.
+    const announce = searchAnnouncement({ ...(result.webProposal || {}), query: query || result.webProposal?.query });
+    if (announce) renderSearchNote(thinking, announce);
     let updated;
     try {
       updated = await runWebFollowup(turnArgs, result, {
