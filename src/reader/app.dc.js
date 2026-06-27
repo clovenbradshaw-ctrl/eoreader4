@@ -34,7 +34,9 @@ class Component extends DCLogic {
       // Project Gutenberg — "a source of sources". A non-URL query searches the catalog;
       // a chosen book is fetched and READ FULLY before it joins the sources (and so can
       // be chatted with). gutenReading holds the id while a book is being read.
-      gutenResults:null, gutenLoading:false, gutenQuery:'', gutenReading:null };
+      gutenResults:null, gutenLoading:false, gutenQuery:'', gutenReading:null,
+      // Panel layout: swap the left (sources/chats) and right (entities) sides.
+      swapped:(()=>{try{return localStorage.getItem('eo_swap')==='1';}catch(e){return false;}})() };
   }
   // ── theme helpers ─────────────────────────────────────────────────────
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
@@ -1398,6 +1400,7 @@ class Component extends DCLogic {
     const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';if(cur!==startW)this.setState({panelW:cur});};
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);document.body.style.cursor='col-resize';document.body.style.userSelect='none';}
   onResizeReset(){this.setState({panelW:380});}
+  toggleSwap(){const v=!this.state.swapped;try{localStorage.setItem('eo_swap',v?'1':'0');}catch(e){}this.setState({swapped:v});}
   // ── memory log: every source read into memory, with totals ────────────────────
   memoryLog(){
     if(!this.master)return {rows:[],hasRows:false,statLine:'',empty:true};
@@ -2036,9 +2039,16 @@ class Component extends DCLogic {
       direction:this.state.direction,onDirInput:e=>this.onDirInput(e),mode:this.state.mode,
       leftOpen:this.state.leftOpen,toggleLeft:()=>this.setState(s=>({leftOpen:!s.leftOpen})),
       leftIcon:this.state.leftOpen?'‹':'☰',leftTitle:this.state.leftOpen?'Hide entities panel':'Show entities panel',
-      gridCols:(this.state.leftOpen?'264px ':'')+'minmax(0,1fr)'+(this.state.rightOpen?(' '+(this.state.panelW||380)+'px'):''),
+      // Layout columns. The sources/chats side is 264px, the entity panel is panelW;
+      // when swapped, the panel sits on the left and the columns/orders mirror.
+      gridCols:(this.state.swapped
+        ? (this.state.rightOpen?((this.state.panelW||380)+'px '):'')+'minmax(0,1fr)'+(this.state.leftOpen?' 264px':'')
+        : (this.state.leftOpen?'264px ':'')+'minmax(0,1fr)'+(this.state.rightOpen?(' '+(this.state.panelW||380)+'px'):'')),
+      leftOrder:this.state.swapped?3:1,mainOrder:2,rightOrder:this.state.swapped?1:3,
+      onSwap:()=>this.toggleSwap(),swapTitle:this.state.swapped?'Swap panels back (sources left)':'Swap panels (sources right)',
+      swapBtnStyle:'width:30px;height:30px;flex:0 0 auto;border:1px solid '+(this.state.swapped?'var(--accline)':'var(--line2)')+';background:'+(this.state.swapped?'var(--accbg)':'var(--app)')+';border-radius:8px;color:'+(this.state.swapped?'var(--acc)':'var(--ink2)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;',
       panelW:this.state.panelW||380,onResizeDown:e=>this.onResizeDown(e),onResizeReset:()=>this.onResizeReset(),
-      resizeHandleStyle:'position:fixed;top:54px;bottom:0;right:'+((this.state.panelW||380)-3)+'px;width:9px;z-index:40;cursor:col-resize;display:flex;align-items:center;justify-content:center;',
+      resizeHandleStyle:'position:fixed;top:54px;bottom:0;right:'+((this.state.panelW||380)-3)+'px;width:9px;z-index:40;cursor:col-resize;display:'+(this.state.swapped?'none':'flex')+';align-items:center;justify-content:center;',
       closeSource:()=>this.closeSource(), linkChoiceOn:false, closeLinkChoice:()=>this.closeLinkChoice() };
     base.activity=this.activityVals();
     this.chatVals(base);
