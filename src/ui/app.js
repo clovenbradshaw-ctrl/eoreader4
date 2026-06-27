@@ -52,11 +52,10 @@ const STATE = {
   // so it accumulates with no meaning model. Created lazily on the first turn below.
   horizon:   null,
 
-  grounding: 'auto',     // how answers use the document: 'auto' | 'grounded' | 'free' (the chip)
-  inquire:   false,      // self-directed inquiry — read another pass on the engine's own open question (the chip)
-  webSearch: 'auto',     // web search: 'off' | 'confirm' | 'auto' — default AUTO: every turn searches on its
-                         //   own up front and answers grounded in what it gathered (no manual search). The
-                         //   chip can drop it to 'confirm' (offer first) or 'off'. localStorage overrides below.
+  grounding: 'auto',     // FIXED — no register chip. 'auto' grounds on whatever was gathered (web + docs).
+  inquire:   false,      // self-directed inquiry — off (experimental; no chip)
+  webSearch: 'auto',     // FIXED to AUTO — the web is the tool's memory, so every turn searches up front and
+                         //   answers grounded in what it gathered. Not a per-message option (no web chip).
   transparency: true,    // the per-claim source view: every proposition traced to its source (or marked
                          //   unsupported). Default ON; the toggle beneath each answer persists the choice.
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
@@ -72,16 +71,10 @@ const STATE = {
 // The corpus the mind reads — the ~3,400-book English Project Gutenberg parquet.
 const CORPUS_URL = 'https://storage.googleapis.com/intelechia-content/eo-mind/gutenberg_en_3400.parquet';
 
-// The grounding register the chip cycles through. One value (STATE.grounding) that the
-// turn pipeline fans out to the route, the retrieval fallback, and the system prompt.
-const GROUNDING_MODES  = ['auto', 'grounded', 'free'];
-const GROUNDING_LABEL  = { auto: 'Auto', grounded: 'Chat with document', free: 'Free form' };
-const GROUNDING_TITLE  = {
-  auto:     'Auto — use the document when it covers the question, otherwise answer from general knowledge.',
-  grounded: 'Chat with document — answer from the loaded document and tag it as a source; if it doesn’t cover the question, say so.',
-  free:     'Free form — answer from general knowledge, ignoring the document.',
-};
-
+// The grounding register is fixed to 'auto' — there is no user-facing register chip any
+// more (internet-native: the web is always the ground, a loaded document joins it when
+// present). 'auto' is exactly that behaviour: the turn grounds on whatever it gathered
+// (web + any docs) and falls to general knowledge only when nothing covers the question.
 const els = {
   status:    document.getElementById('status'),
   dropzone:  document.getElementById('dropzone'),
@@ -100,8 +93,6 @@ const els = {
   auditView: document.getElementById('audit-view'),
   exportBtn: document.getElementById('export-audit'),
   backend:   document.getElementById('backend'),
-  groundingChip: document.getElementById('grounding-chip'),
-  webChip:   document.getElementById('web-chip'),
   docChips:  document.getElementById('doc-chips'),
 };
 
@@ -758,57 +749,22 @@ els.backend.addEventListener('change', () => {
   ensureModel().catch(() => { /* status already reflects failure */ });
 });
 
-// Grounding chip — one click cycles Auto → Grounded → Free form → Auto. The choice
-// is persisted so it survives a reload, and reflected on the chip's label + colour.
-const applyGrounding = () => {
-  const m = STATE.grounding;
-  els.groundingChip.textContent  = GROUNDING_LABEL[m] || 'Auto';
-  els.groundingChip.title        = GROUNDING_TITLE[m] || '';
-  els.groundingChip.dataset.mode = m;
-};
-try {
-  const saved = localStorage.getItem('eoreader.grounding');
-  if (saved && GROUNDING_MODES.includes(saved)) STATE.grounding = saved;
-} catch { /* localStorage may be unavailable (private mode) — default stands */ }
-applyGrounding();
-els.groundingChip.addEventListener('click', () => {
-  const i = GROUNDING_MODES.indexOf(STATE.grounding);
-  STATE.grounding = GROUNDING_MODES[(i + 1) % GROUNDING_MODES.length];
-  try { localStorage.setItem('eoreader.grounding', STATE.grounding); } catch { /* ignore */ }
-  applyGrounding();
-});
+// No grounding chip and no web chip any more (internet-native, minimal settings). The
+// grounding register is fixed to 'auto' and web search is fixed to 'auto': the web is the
+// tool's memory, so it is ALWAYS the ground — never a per-message option the user manages.
+// Both were previously persisted and cycled; now they are constants, set once at STATE init.
+STATE.grounding = 'auto';
+STATE.webSearch = 'auto';
 
-// Self-directed inquiry (the inquire stage, turn/stages.js) stays OFF — it was an experimental
-// power-user toggle whose chip confused more than it helped, so it's no longer surfaced in the
-// composer. STATE.inquire defaults false; the pipeline behaves exactly as "off". (Restore a
-// chip here if it's ever worth exposing again.)
+// Self-directed inquiry (the inquire stage, turn/stages.js) stays OFF — an experimental
+// power-user toggle; STATE.inquire defaults false and the pipeline behaves exactly as "off".
 
-// Web chip — cycles web search off → confirm → auto (docs/web-search.md). When a turn can't
-// ground an answer (a no-doc chat question, or a measured gap), it PROPOSES a query; `confirm`
-// asks first (a cost notice), `auto` fetches on its own. Off by default — nothing reaches the
-// network until you turn it on, and every hop is in the audit.
-const WEB_MODES = ['off', 'confirm', 'auto'];
-const applyWeb = () => {
-  els.webChip.textContent  = `Web: ${STATE.webSearch}`;
-  els.webChip.dataset.mode = STATE.webSearch;
-};
-try {
-  const w = localStorage.getItem('eoreader.webSearch');
-  if (WEB_MODES.includes(w)) STATE.webSearch = w;
-} catch { /* default auto stands */ }
+// The per-claim source view (transparency) is a per-ANSWER view preference, not a send-time
+// option — it stays, persisted, toggled beneath each answer. The only thing the user modifies.
 try {
   const t = localStorage.getItem('eoreader.transparency');
   if (t === '0' || t === '1') STATE.transparency = t === '1';
 } catch { /* default on stands */ }
-applyWeb();
-els.webChip.addEventListener('click', () => {
-  STATE.webSearch = WEB_MODES[(WEB_MODES.indexOf(STATE.webSearch) + 1) % WEB_MODES.length];
-  try { localStorage.setItem('eoreader.webSearch', STATE.webSearch); } catch { /* ignore */ }
-  // Leaving auto withdraws the standing authorization — drop any warmed-but-untaken queries
-  // so nothing speculative lingers once proactive search is off.
-  if (STATE.webSearch !== 'auto' && STATE.prefetcher) STATE.prefetcher.clear();
-  applyWeb();
-});
 
 // The Mind chip — pinned and always present. Restore the consult preference, show
 // the chip immediately, then probe OPFS after boot so a returning user whose memory

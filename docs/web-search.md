@@ -4,6 +4,12 @@
 > measured gaps, paid for by precision, and brought back under the same grounding discipline as
 > everything it reads.
 
+> **Stance update (internet-native).** Web search is no longer an off-by-default, opt-in move:
+> the web is the tool's *memory* — see `docs/internet-native.md`. It is fixed to `auto`, so every
+> turn searches up front and answers from the gathered readings. The gap-driven proposer path
+> below still describes the mechanism (the unresolved span *is* the query); it now runs as the
+> default ground rather than a toggle the user arms.
+
 This is the sourcing counterpart to the answer-expectation loop (`docs/answer-expectation.md`).
 That loop predicts an answer and corrects it against the **document**. Web search is the move it
 could not make: when the prediction is sound but the document *does not witness it*, the gap
