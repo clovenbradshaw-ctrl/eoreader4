@@ -2,6 +2,19 @@
 // bubble that updates per stage, and surface veto flags as pills.
 // Citations [sN] are linkified — clicking one scrolls and highlights
 // the source in the doc pane.
+//
+// CHATBOT SURFACE. The chat is deliberately spare — a user bubble, a
+// thinking indicator, the streamed answer (with its citations still
+// clickable), and a retry on error. Nothing else. All the machinery the
+// engine produces per turn — the per-stage trace, the verbatim prompt and
+// raw model output, the retrieved spans, the coverage verdict, the
+// per-claim transparency list, the veto flags, the route/timing meta, the
+// recalled-memory and web-source blocks — is NOT shown here. It lives, in
+// full and verbatim, in the Audit pane (renderAuditTurn, fed independently
+// off STATE.audit) and the Log tab. "Hide it in the chat, keep it in the
+// log." Each renderer below still accepts `opts.verbose` as an escape
+// hatch: pass it to bring a block back inline for debugging, but the
+// default — and the shipped experience — is the bare chatbot.
 
 export const renderUserMessage = (root, text) => {
   const el = document.createElement('div');
@@ -107,10 +120,17 @@ const clearImpression = (el) => {
   if (el && el.classList) el.classList.remove('impressing');
 };
 
-export const updateThinking = (el, stageName, data, ctx) => {
+export const updateThinking = (el, stageName, data, ctx, opts = {}) => {
   if (!el) return;
+  // The one chatbot-visible signal of progress: a short, friendly status on
+  // the thinking bubble ("Reading…", "Writing…"). The per-stage trace, the
+  // verbatim prompt / raw output, and the retrieved spans are NOT built into
+  // the bubble — they are recorded in the Audit pane instead. Pass
+  // opts.verbose to restore the inline trail for debugging.
   const label = el.querySelector('.body .label');
   if (label) label.textContent = stageLabel(stageName, data);
+
+  if (!opts.verbose) return;
   const trail = el.querySelector('.trail');
   if (!trail) return;
 
@@ -166,6 +186,34 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   const trail = el.querySelector('.trail');
   if (body) body.innerHTML = linkifyCitations(text || '', opts.citationSources);
 
+  // CHATBOT SURFACE (default): the answer is the whole message. The coverage
+  // verdict, doc-source chips, per-claim transparency list, veto pills, the
+  // route/timing meta line, and the per-stage trace are all suppressed here —
+  // they live in the Audit pane and the Log, where the full record is kept.
+  // The error-retry below stays (it's an action, not info). Pass opts.verbose
+  // to bring every block back inline.
+  if (opts.verbose) finalizeVerbose(el, text, sources, opts, body, trail);
+
+  // Retry affordance — re-runs the same query. Shown on errored turns so a
+  // transient backend fault isn't a dead end.
+  if (typeof opts.onRetry === 'function' && opts.route === 'error') {
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'retry small';
+    retry.textContent = '↻ Retry';
+    retry.addEventListener('click', () => { retry.disabled = true; opts.onRetry(); });
+    el.appendChild(retry);
+  }
+
+  const root = el.parentElement;
+  if (root) root.scrollTop = root.scrollHeight;
+};
+
+// The full, verbose render of a finished turn — every block the engine can
+// surface inline. Kept intact behind finalizeThinking's `opts.verbose` gate so
+// the machinery is one flag away for debugging, while the default chat stays a
+// bare chatbot. (The same information is always available in the Audit pane.)
+const finalizeVerbose = (el, text, sources, opts, body, trail) => {
   // The plain-language coverage verdict — the headline read of how grounded the
   // answer is, above the terse audit pills. (The pills stay for the trail.)
   const cov = coverageSummary(opts.route, opts.flags, sources, text);
@@ -225,17 +273,6 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
     meta.className = 'meta';
     meta.textContent = parts.join('  ·  ');
     el.appendChild(meta);
-  }
-
-  // Retry affordance — re-runs the same query. Shown on errored turns so a
-  // transient backend fault isn't a dead end.
-  if (typeof opts.onRetry === 'function' && opts.route === 'error') {
-    const retry = document.createElement('button');
-    retry.type = 'button';
-    retry.className = 'retry small';
-    retry.textContent = '↻ Retry';
-    retry.addEventListener('click', () => { retry.disabled = true; opts.onRetry(); });
-    el.appendChild(retry);
   }
 
   // The per-stage trail collapses to a toggle once we have an answer.
@@ -511,19 +548,21 @@ const coverageSummary = (route, flags, sources, text) => {
   return { text: 'Answered from the document.', level: 'good' };
 };
 
-const stageLabel = (name, data) => {
+// The single line shown on the thinking bubble. Friendly, plain-language
+// phases — not the engine's stage names or counts. The precise per-stage
+// record (route, span counts, char lengths, veto flags) lives in the Audit
+// pane; here the user just sees that something is happening.
+const stageLabel = (name) => {
   switch (name) {
-    case 'route':    return `route → ${data?.route || '?'}`;
-    case 'retrieve': return `retrieve · ${data?.n || 0} spans`;
-    case 'fold':     return `fold · ${data?.noteLen || 0} chars`;
-    case 'prompt':   return `prompt · ${data?.promptLen || 0} chars`;
-    case 'llm':      return `model · generating…`;
-    case 'bind':     return `bind · ${data?.cited || 0}/${data?.claims || 0} cited`;
-    case 'veto':     return data?.fired?.length
-                       ? `veto · flags: ${data.fired.join(', ')}`
-                       : `veto · clean`;
-    case 'settle':   return 'settle';
-    default:         return name;
+    case 'route':    return 'thinking…';
+    case 'retrieve': return 'reading…';
+    case 'fold':     return 'reading…';
+    case 'prompt':   return 'thinking…';
+    case 'llm':      return 'writing…';
+    case 'bind':     return 'writing…';
+    case 'veto':     return 'checking…';
+    case 'settle':   return 'finishing…';
+    default:         return 'thinking…';
   }
 };
 
