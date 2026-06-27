@@ -96,6 +96,34 @@ iff some constraint is mechanically checkable. The loop arms only where the miss
 measured — the same discipline the reading side runs, acting where the signal can be
 gated against chance and abstaining where it cannot.
 
+## Form, learned from sample answers (the embedder path)
+
+Content prediction comes from the graph; **form** prediction — what a *good answer of this
+kind* looks like (a crisp lookup vs a hedged synthesis vs a warm reorient) — is a learned
+convention, not derivable from the document. The only honest source is examples.
+`data/exemplars.jsonl` is **430 authored `{user_turn → response}` sample answers** (ported
+from eoreader3), tagged by `intent` and `shape_tags`. Embedded, each intent's responses
+form a **centroid — the learned shape of that form** — and a draft is scored by
+**discriminative cosine** (`src/turn/shape.js`): is it unambiguously in the target basin
+(closer to the target shape than to any competitor), against an **adaptive threshold** that
+widens where competing shapes sit close?
+
+The prediction is the **nearest sample answer(s) to the question** — no template — so it
+generalizes to any prompt the library covers ("we can predict anything"): the question's
+embedding votes a shape, and the single nearest sample answer is itself a content+form
+prediction of the reply. It is **embedder-gated** (a cosine is meaning only under a
+meaning-measuring embedder) and inert without a threaded library, exactly like the
+significance column. Form is a **smoke alarm**: a miss rides as a soft flag
+(`answer-shape-weak`), never a gating restart — taste is not refusable. Where taste is the
+*only* judge ("write a *good* poem"), the library simply has no strong basin, so it stays
+quiet.
+
+`runTurn` takes an optional `shapeLibrary` (built once per session via
+`buildShapeLibrary(parseExemplars(text), embed)`); `predict` reads the wanted shape off the
+question, `veto` scores the answer against it. (A second eoreader3 library,
+`form-genres.jsonl` — genre prototypes for output forms — is ported too, for the same
+machinery over output genres rather than conversational intents.)
+
 ## Next: the engine's own generation as the prediction
 
 The constraint checkers above are hand-written predicates. The deeper move — the engine

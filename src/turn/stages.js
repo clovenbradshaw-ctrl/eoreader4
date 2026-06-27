@@ -18,6 +18,7 @@ import { namedReferents, referentialConfidence, siteIndices } from '../perceiver
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
+import { answerFormError } from './shape.js';
 import { rereadOnUnsettled } from './reread.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
@@ -360,7 +361,24 @@ export const stages = {
       const focusId = ctx.focus?.[0] ?? null;
       const primaryName = focusId != null ? labelOf(focusId) : (entities[0] || null);
       const confident = !!ctx.referential?.concentrated;
-      return { ...ctx, prediction: { draft, entities, primaryName, confident } };
+      const prediction = { draft, entities, primaryName, confident };
+
+      // The FORM prediction, from the sample-answer library (turn/shape.js): read the wanted
+      // shape off the question's nearest sample answers. Embedder-gated — a cosine is meaning
+      // only under a meaning-measuring embedder — and inert without a threaded library, so the
+      // default turn is byte-identical. The question's embedding rides to `veto`, where the
+      // talker's answer is scored against this shape.
+      let shapeTarget = null, shapeQueryVec = null;
+      if (ctx.shapeLibrary) {
+        const emb = pickRetrievalEmbedder(ctx);
+        if (emb?.measuresMeaning && emb.isWarm?.()) {
+          try {
+            shapeQueryVec = await emb.embed(ctx.question);
+            shapeTarget = ctx.shapeLibrary.selectForQuestion(shapeQueryVec);
+          } catch { /* a clumsy predictor must never break the answer */ }
+        }
+      }
+      return { ...ctx, prediction, shapeTarget, shapeQueryVec };
     } catch { return ctx; }
   },
 
@@ -673,6 +691,19 @@ export const stages = {
       { doc: ctx.doc, referent: shapeReferent, bound: ctx.bound });
     const predErr = answerPredictionError(ctx.prediction, ctx.rawOutput);
     if (predErr) constraintErrors.push(predErr);
+    // The FORM check (turn/shape.js): embed the answer and score it against the shape the
+    // question's sample answers predicted. A soft (non-gating) miss rides as a flag — taste is
+    // not refusable. Embedder-gated and inert without a threaded library → byte-identical.
+    if (ctx.shapeLibrary && ctx.shapeTarget && ctx.shapeQueryVec && ctx.rawOutput) {
+      const emb = pickRetrievalEmbedder(ctx);
+      if (emb?.measuresMeaning && emb.isWarm?.()) {
+        try {
+          const draftVec = await emb.embed(ctx.rawOutput);
+          const formErr = answerFormError(ctx.shapeLibrary, ctx.shapeQueryVec, draftVec);
+          if (formErr) constraintErrors.push(formErr);
+        } catch { /* the form check never breaks the answer */ }
+      }
+    }
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
       referential: ctx.referential, task: ctx.task, provenance, constraintErrors,
