@@ -17,6 +17,7 @@ import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerra
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
+import { expectAnswer, answerSlotError } from './expect.js';
 import { rereadOnUnsettled } from './reread.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
@@ -142,6 +143,16 @@ export const stages = {
     if (grounding === 'grounded') return { ...ctx, route: 'grounded', ...reg };
     if (ctx.doc) return { ...ctx, route: 'grounded', ...reg };
     return { ...ctx, route: 'chat', ...reg };
+  },
+
+  // The expectation — the question read as a PREDICTION of its own answer (turn/expect.js).
+  // The shape the answer must take to count, and with what precision: what the revise loop
+  // error-corrects toward and the veto battery flags when uncorrected. Pure, needs only the
+  // question; OPEN (precision 0, no gate) on every question that does not type its answer
+  // sharply, so the default turn is byte-identical. Skipped after a mechanical short-circuit
+  // (those terminate at `route` and never reach here).
+  async expect(ctx) {
+    return { ...ctx, expectation: expectAnswer(ctx.question) };
   },
 
   // The session fold — the conversation's own two registers, mirroring the document
@@ -528,20 +539,41 @@ export const stages = {
     // (band:'void' at the cursor) and any drift rode forward into the next beat — the
     // correction is already in the trail, so there is nothing to rewrite here.
     if (ctx.streamed) return ctx;
-    if (!ctx.doc || !ctx.spans?.length || !ctx.model || !needsRegen(ctx)) return ctx;
+    if (!ctx.doc || !ctx.spans?.length || !ctx.model) return ctx;
+    // The referent the question asks about — resolved ONCE, used to judge a NAME answer
+    // (turn/expect.js) and to steer the corrective. Best-effort and read-only: it calls the
+    // reference reader directly (even with RULES_REV off) so the adequacy check can use the
+    // name the engine CAN resolve — the knowledge the answer path used to discard — without
+    // changing what retrieval/fold already did. Computed only for a gating expectation (a
+    // name question), so every other turn is byte-identical, referent stays null.
+    const referent = ctx.expectation?.gates
+      ? (ctx.refTarget || referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans))
+      : null;
+    // A regenerate is owed on the grounding triggers (confab / §5 gate) OR when the answer
+    // does not fill the question's predicted SHAPE — "what is her name?" answered with no
+    // name. The shape miss is the prediction error; restarting is the error-correction.
+    const shapeOf = (c) => answerSlotError(c.expectation, c.rawOutput, { doc: c.doc, referent });
+    const regenNeeded = (c) => needsRegen(c) || !!shapeOf(c);
+    if (!regenNeeded(ctx)) return ctx;
     // The §5 gate engaged at entry — recorded for the audit even if the regenerate clears.
     const gated = gateCondition(ctx);
     let cur = ctx, attempts = 0;
     const revisions = [];
-    while (attempts < REWRITE_ATTEMPTS && needsRegen(cur)) {
+    while (attempts < REWRITE_ATTEMPTS && regenNeeded(cur)) {
       attempts++;
-      // Record the superseded draft BESIDE its successor — never erase it. The
-      // off-diagonal verdicts that condemned it travel with it, so the trail shows
-      // verbatim what the machine said and why it was made to answer again. This is the
-      // log's own SEG/retract law (core/log.js) applied to the conversational record:
-      // a truer word may be appended, the false one is not unwritten.
-      const supersededDraft   = cur.rawOutput;
+      // Record the superseded draft BESIDE its successor — never erase it. The reason it was
+      // made to answer again travels with it (the off-diagonal verdicts that condemned it,
+      // and a plain `why`), so the trail shows verbatim what the machine said, why it stopped,
+      // and what it said instead. This is the log's own SEG/retract law (core/log.js) applied
+      // to the conversational record: a truer word may be appended, the false one is not
+      // unwritten — and the user can WATCH it catch itself and begin again.
+      const supersededDraft    = cur.rawOutput;
       const supersededVerdicts = (cur.edgeVerdicts || []).filter(v => v.verdict === 'off_diagonal' && v.void);
+      const shapeErr = shapeOf(cur);
+      const why = shapeErr ? shapeErr.reason
+        : (gateCondition(cur) && !confabulating(cur))
+          ? 'a load-bearing claim was not grounded in the lines'
+          : 'a specific claim was asserted where the lines mark an absence';
       const messages = buildGroundedMessages({
         question:    ctx.question,
         spans:       selectExcerpts(ctx.spans),   // same trimmed lines the first pass saw
@@ -549,13 +581,15 @@ export const stages = {
         task:        ctx.task,
         budget:      ctx.budget,
         conversation: {},                     // history still withheld on the grounded path
-        corrective:  correctiveFor(cur),      // confab → drop the link; gate → keep to the lines
+        // shape miss → name them (with the resolved name when we have it); else confab →
+        // drop the link; gate → keep to the lines.
+        corrective:  shapeErr ? shapeCorrective(shapeErr) : correctiveFor(cur),
       });
       const raw = await ctx.model.phrase(messages, { maxTokens: ctx.maxTokens || TASK_MAX_TOKENS.answer });
       cur = await stages.factcheck(await stages.bind({ ...cur, rawOutput: raw, messages }));
-      revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw }));
+      revisions.push(Object.freeze({ draft: supersededDraft, offDiagonal: supersededVerdicts, replacedBy: raw, why }));
     }
-    return { ...cur, revised: { attempts, resolved: !needsRegen(cur) }, revisions,
+    return { ...cur, revised: { attempts, resolved: !regenNeeded(cur) }, revisions,
              ...(gated ? { gated: true } : {}) };
   },
 
@@ -594,9 +628,19 @@ export const stages = {
         witnessSought = { figures: figs, read: spans.length, confirmed: !provenance.onlyInterpretation };
       }
     }
+    // The residual SHAPE error: did the final answer fill the slot the question predicted
+    // (turn/expect.js)? Computed only for a gating expectation (a name question), so every
+    // other turn passes `shapeError: null` and the battery is byte-identical. When the
+    // revise loop already corrected the miss this is null; when it could not (or no model
+    // ran), the unmet slot ships as a flag — the prediction error the engine could not
+    // discharge, told to the user rather than hidden.
+    const shapeReferent = ctx.expectation?.gates
+      ? (ctx.refTarget || referenceTarget(ctx.doc, ctx.history, ctx.question, ctx.spans))
+      : null;
+    const shapeError = answerSlotError(ctx.expectation, ctx.rawOutput, { doc: ctx.doc, referent: shapeReferent });
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
-      referential: ctx.referential, task: ctx.task, provenance,
+      referential: ctx.referential, task: ctx.task, provenance, shapeError,
       // The surfer's measured commit stance — its own confabulation guard (stance-reserve):
       // a Ground-grain reserve at the peak means the reading did not settle on a figure.
       // Computed on every turn now the structural significance column is the default (§2).
@@ -655,6 +699,18 @@ const GROUNDING_CORRECTIVE =
   'Read the lines again. Part of what you just said is not in them — either it is not ' +
   'there at all, or it conflicts with what they show. Answer again, keeping strictly to ' +
   'what the lines say. If the answer is not in them, tell them plainly you did not find it.';
+
+// The shape corrective — handed when the answer did not FILL the question's predicted slot
+// (turn/expect.js). The question asked for a name and the reply described instead of naming.
+// When the reading already resolved the name, hand it to the talker outright — the engine
+// knows it; the first draft simply failed to say it. Otherwise steer it to name or, honestly,
+// to report the gap — never to substitute a description for a name.
+const shapeCorrective = (err) =>
+  err.expectedName
+    ? `They asked for a name. The reading resolves it as “${err.expectedName}”. Answer with that ` +
+      'name plainly — do not describe the person in place of naming them.'
+    : 'They asked for a name — a specific person’s name. Give the name if the lines provide one; ' +
+      'if they do not, say plainly you did not find it. Do not answer with a description in place of a name.';
 
 // Did the diagonal guard catch the confabulation proper — a specific claim asserted at
 // a measured Void (the figure-at-a-void shape)? The hard case the rewrite targets.

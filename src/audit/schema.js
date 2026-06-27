@@ -14,10 +14,13 @@
 //   vetoes:    [{ id, message, refuses }, ...] | null,
 //   answer:    string,
 //   sources:   number[],
-//   revisions: [{ draft, offDiagonal:[...], replacedBy }, ...] | null,
-//              // superseded confabulation drafts, preserved BESIDE the answer that
-//              // replaced them — the conversational record's SEG/retract. A rewrite
-//              // appends a truer word; the false one is never unwritten.
+//   revisions: [{ draft, offDiagonal:[...], replacedBy, why }, ...] | null,
+//              // superseded drafts, preserved BESIDE the answer that replaced them — the
+//              // conversational record's SEG/retract. A rewrite appends a truer word; the
+//              // false one is never unwritten. `why` is the plain reason it was made to
+//              // answer again (a confab at a void, an ungrounded claim, or a shape miss —
+//              // a "what is her name?" answered with no name), so the trail shows the engine
+//              // catching itself: start, stop when off, begin again.
 // }
 
 export const SCHEMA_VERSION = 'eo-audit/1';

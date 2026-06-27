@@ -86,7 +86,7 @@ const llmBrief = (ctx) => {
 // retrieved spans keep mentioning but that never acts — and folds the results in as citable
 // spans before the fold builds the reading (turn/stages.js, write/think.js).
 const PIPELINE = [
-  'route', 'converse', 'retrieve', 'inquire', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
+  'route', 'expect', 'converse', 'retrieve', 'inquire', 'fold', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
 ];
 
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
@@ -238,6 +238,8 @@ const summarize = (name, ctx, ms) => {
   const base = { ms: Math.round(ms) };
   switch (name) {
     case 'route':    return { ...base, route: ctx.route, task: ctx.task, grounding: ctx.grounding };
+    case 'expect':   return { ...base, slot: ctx.expectation?.slot,
+                              precision: ctx.expectation?.precision, gates: ctx.expectation?.gates };
     case 'converse': return { ...base, recent: ctx.convStats?.recent || 0,
                               folded: ctx.convStats?.folded || 0, notesLen: ctx.convStats?.notesLen || 0 };
     case 'retrieve': return { ...base, n: ctx.spans?.length || 0, top: ctx.spans?.[0]?.score || 0,
@@ -312,8 +314,11 @@ const summarize = (name, ctx, ms) => {
     case 'revise':   return { ...base,
                               attempts: ctx.revised?.attempts || 0,
                               resolved: ctx.revised?.resolved ?? null,
-                              // the superseded draft(s) ride in the step trail too, verbatim
-                              superseded: (ctx.revisions || []).map(r => r.draft) };
+                              // the superseded draft(s) ride in the step trail too, verbatim,
+                              // each beside the reason it was made to answer again — so the
+                              // audit shows the engine catching itself and beginning again
+                              superseded: (ctx.revisions || []).map(r => r.draft),
+                              reasons:    (ctx.revisions || []).map(r => r.why).filter(Boolean) };
     case 'veto':     return { ...base,
                               fired:   ctx.vetoes?.map(v => v.id) || [],
                               // the active witness-seek, when it ran: which figures it read the

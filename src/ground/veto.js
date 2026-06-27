@@ -195,6 +195,21 @@ export const VETOES = [
     message: 'This rests on the engine’s own reading (interpretation), not on anything the source witnesses.',
   },
   {
+    // The answer did not fill the SHAPE the question predicted (turn/expect.js): a
+    // high-precision slot — "what is her name?" — answered with no name, a description in
+    // place of the proper noun. The grounding vetoes ask whether the claims are WITNESSED;
+    // this asks whether the answer is RESPONSIVE — the adequacy check the battery lacked.
+    // Serious (shown loud), never a gate: the restart in turn/stages.js `revise` is the
+    // correction; this is the residue when the correction could not land (or no model ran),
+    // told to the user rather than hidden. `shapeError` is precomputed in the turn (null on
+    // every non-gating question), so this is byte-identical wherever a question is not
+    // sharply typed.
+    id: 'answer-shape',
+    test: ({ shapeError }) => !!shapeError,
+    refuses: true,
+    message: 'The question asked for a specific kind of answer (a name) that the reply does not give.',
+  },
+  {
     id: 'low-coverage',
     test: ({ bound, task, draft }) => {
       const total = bound.length;
