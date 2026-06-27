@@ -22,13 +22,15 @@
     "text-generate": "node scripts/text-generate.mjs",
     "layered-generate": "node scripts/layered-generate.mjs",
     "layered-stack": "node scripts/layered-stack-demo.mjs",
-    "structural-significance": "node scripts/structural-significance.mjs"
+    "structural-significance": "node scripts/structural-significance.mjs",
+    "mechanics": "node eoreader4-eval/mechanics/run.mjs ABCD"
   },
   "engines": {
     "node": ">=20"
   },
-  "//devDependencies": "Only the offline preparse (scripts/preparse-corpus.mjs) needs these. The browser build loads hyparquet from a CDN — the app itself has no dependencies.",
+  "//devDependencies": "Dev-only tooling. The offline preparse (scripts/preparse-corpus.mjs) needs hyparquet; the Mechanics Test Battery (eoreader4-eval/mechanics/) needs @huggingface/transformers to run the CPU talker + MiniLM organ in Node. The browser build loads everything from a CDN — the app itself has no runtime dependencies.",
   "devDependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "hyparquet": "^1.26.1",
     "hyparquet-compressors": "^1.1.1"
   },
