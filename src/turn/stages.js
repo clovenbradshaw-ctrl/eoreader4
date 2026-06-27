@@ -16,7 +16,7 @@ import { foldNote }         from '../fold/index.js';
 import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerrainAt } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices, serializeEOT } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
-import { taskOf, TASK_MAX_TOKENS } from './intent.js';
+import { taskOf, TASK_MAX_TOKENS, isMetaConversational } from './intent.js';
 import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
 import { answerFormError } from './shape.js';
 import { rereadOnUnsettled } from './reread.js';
@@ -134,11 +134,16 @@ export const stages = {
     // ignoring the document entirely; 'auto' (the default) keeps the original behaviour —
     // a document grounds the turn, its absence falls to chat.
     const reg = taskOf(ctx.question);
+    // The META-CONVERSATIONAL register (intent.js): a question ABOUT the conversation.
+    // Orthogonal to the route and task — it rides alongside, opening the assistant side of
+    // the session fold to the grounded prompt (the `prompt` stage reads it). A chat turn
+    // already carries the full both-role history, so this only changes the grounded path.
+    const meta = isMetaConversational(ctx.question);
     const grounding = ctx.grounding || 'auto';
-    if (grounding === 'free')     return { ...ctx, route: 'chat',     ...reg };
-    if (grounding === 'grounded') return { ...ctx, route: 'grounded', ...reg };
-    if (ctx.doc) return { ...ctx, route: 'grounded', ...reg };
-    return { ...ctx, route: 'chat', ...reg };
+    if (grounding === 'free')     return { ...ctx, route: 'chat',     ...reg, meta };
+    if (grounding === 'grounded') return { ...ctx, route: 'grounded', ...reg, meta };
+    if (ctx.doc) return { ...ctx, route: 'grounded', ...reg, meta };
+    return { ...ctx, route: 'chat', ...reg, meta };
   },
 
   // The expectation — the question read as a PREDICTION of its own answer (turn/expect.js).
@@ -422,7 +427,11 @@ export const stages = {
   // never come back "the document does not say." Those reach the talker; the unbound
   // and edge-grounding vetoes catch an invented claim on the way back.
   async answerable(ctx) {
-    if (!ctx.doc || (ctx.task && ctx.task !== 'answer')) return ctx;
+    // A META-CONVERSATIONAL turn is exempt like a whole-document task: its answer draws on
+    // the conversation as well as the page, so weak document retrieval is not evidence of a
+    // void — "of the topics we discussed, which is in France?" must not come back "the
+    // document does not say."
+    if (!ctx.doc || ctx.meta || (ctx.task && ctx.task !== 'answer')) return ctx;
     const v = answerVoid(ctx.doc, ctx.question, ctx.spans || [], { embedder: ctx.embedder });
     if (!v) return ctx;
     // P0.2: the void no longer auto-answers and terminates. The talker speaks for
@@ -480,6 +489,12 @@ export const stages = {
         fedGraph = scrubGraphLines(lines).join('\n');
       } catch { fedGraph = ''; }
     }
+    // META-CONVERSATIONAL: the question is ABOUT the conversation (intent.js). Open the
+    // FULL session fold to the grounded prompt — the talker's prior answers included —
+    // because here the prior topics are the question's SUBJECT, not a premise it might
+    // anchor a wrong fact to (the asymmetry the history-poisoning firewall misses). Every
+    // other grounded turn keeps the user-only thread, withholding the poisoning channel.
+    const metaTurn = grounded && !!ctx.meta;
     const messages = grounded
       ? buildGroundedMessages({
           question:     ctx.question,
@@ -487,7 +502,8 @@ export const stages = {
           orientation:  orientationOf(ctx.doc),       // filename · type · length — no recognition (§3)
           task:         ctx.task,               // the summary guard rides on a summary task
           budget:       ctx.budget,             // none by default; a caller may impose one
-          conversation: groundedConversation(ctx),  // the USER's thread only — never the talker's prior answers
+          conversation: metaTurn ? metaConversation(ctx) : groundedConversation(ctx),
+          meta:         metaTurn,               // frame the conversation as the SUBJECT, not context-to-skip
           // the nearest sample answer's SHAPE, when the form library matched one (turn/shape.js)
           // — so the first draft is laid out right, not only corrected after. Empty by default.
           exemplar:     ctx.shapeTarget?.promptMatch?.best_response || '',
@@ -983,4 +999,18 @@ const groundedConversation = (ctx) => {
   // The recent turns are what continuity ("now?", "prove it") actually needs; the
   // tail only widens the leak surface.
   return { notes: thread.slice(-3).map(q => `You asked: ${q}`).join('\n') };
+};
+
+// The conversation a META-CONVERSATIONAL grounded turn carries: the FULL thread — BOTH the
+// user's questions and the talker's prior answers — because the question is about the
+// conversation, so its prior topics (which live on both sides — a topic named in a question,
+// a fact given in an answer) are the SUBJECT. The session fold already built exactly this
+// (the `converse` stage): the surfed both-role recap of older movers (#i You: / #i Me:) and
+// the recent verbatim window (You: / Me:). Nothing extra is computed — groundedConversation
+// was simply discarding the assistant side. Empty (→ no slot) before anything was said.
+const metaConversation = (ctx) => {
+  const notes     = String(ctx.conversation?.notes || '').trim();
+  const pastTurns = (ctx.conversation?.pastTurns || []).filter(Boolean);
+  if (!notes && !pastTurns.length) return {};
+  return { notes, pastTurns };
 };

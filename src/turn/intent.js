@@ -61,6 +61,44 @@ const COVERAGE = new RegExp(
 const LIST    = /\b(list|enumerate|bullet(?:s|ed)?|name\s+(?:every|all|each)|what\s+are\s+the)\b/i;
 const EXPLAIN = /\b(explain|elaborate|walk\s+me\s+through|in\s+detail|why|how)\b/i;
 
+// META-CONVERSATIONAL detection — a question that is ABOUT the conversation itself, not
+// (only) about the document. "which topic we've discussed is in France?", "what did you
+// say earlier?", "of the things we covered, which…". These route grounded (the answer
+// still needs the page — "in France" wants the Eiffel-Tower spans) but ALSO need the
+// prior turns as their SUBJECT, which the default grounded register withholds (it feeds
+// the user's thread "for context only, answer just the latest" — the opposite of what a
+// meta question wants). The flag is orthogonal to the task register: it widens what
+// conversation the prompt carries and how it is framed, it does not change the task.
+//
+// The history-poisoning firewall the grounded register guards (a wrong prior ANSWER
+// becoming a premise) is asymmetric: here the prior turns are the question's subject, not
+// a premise it anchors a fact to, so opening the assistant side is the point, not a leak.
+//
+// Kept narrow: a subject (we / you / I, with contractions) bound to a PAST/progressive
+// conversing verb ("we've discussed", "you said", "I asked"); or an explicit conversation
+// noun ("this conversation", "our chat"); or a topic/thing/question noun tied back to
+// we/you/I ("the topics we explored"). Present-tense bare forms that double as polite
+// document phrasings ("what would you say is the theme") are deliberately NOT verbs here.
+const META_SUBJ = "(?:we|you|i)(?:['’](?:ve|d|ll|m|re))?";
+const META_AUX  = "(?:\\s+(?:have|had|has|been|already|just|also|recently|earlier|previously|both|now))*";
+const META_VERB = "(?:discuss(?:ed|ing)|talk(?:ed|ing)|cover(?:ed|ing)|mention(?:ed|ing)|" +
+  "said|saying|spoke|told|asked|brought\\s+up|went\\s+over|gone\\s+over|chat(?:ted|ting)|" +
+  "establish(?:ed)?|noted|review(?:ed)?|gone\\s+through|been\\s+over)";
+const META_CONV = new RegExp(
+  `\\b${META_SUBJ}\\b${META_AUX}\\s+${META_VERB}\\b` +                              // "we've discussed", "you said"
+  `|\\b(?:did|do|does)\\s+${META_SUBJ}\\s+(?:say|said|tell|mention|ask|asked|put|word|claim|cover|discuss|mean)\\b` +  // "did you say earlier?"
+  '|\\b(?:this|our|that)\\s+(?:conversation|chat|thread|discussion|exchange|dialogue|session)\\b' +  // "this conversation"
+  `|\\b(?:topics?|things?|subjects?|questions?|points?)\\b(?:\\s+\\w+){0,3}\\s+\\b${META_SUBJ}\\b` +  // "the topics we explored"
+  '|\\b(?:my|your|the)\\s+(?:first|second|third|last|previous|earlier|original|initial|prior|other)' + // "my first question", "your earlier answer"
+    '\\s+(?:questions?|answers?|points?|repl(?:y|ies)|messages?|responses?|asks?)\\b',
+  'i',
+);
+
+// Does the question invoke the conversation itself? Pure, regex-only — the same cheap
+// register read as the task pass. Used by the route stage to open the assistant side of
+// the session fold to the grounded prompt (turn/stages.js).
+export const isMetaConversational = (question) => META_CONV.test(String(question || ''));
+
 export const readTask = (question) => {
   const q = String(question || '');
   if (SUMMARY.test(q))  return 'summary';

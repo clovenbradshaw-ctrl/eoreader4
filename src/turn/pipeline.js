@@ -265,7 +265,10 @@ const nowMs = () =>
 const summarize = (name, ctx, ms) => {
   const base = { ms: Math.round(ms) };
   switch (name) {
-    case 'route':    return { ...base, route: ctx.route, task: ctx.task, grounding: ctx.grounding };
+    case 'route':    return { ...base, route: ctx.route, task: ctx.task, grounding: ctx.grounding,
+                              // the meta-conversational register (intent.js): the question is ABOUT
+                              // the conversation, so the grounded prompt opens the full both-role thread
+                              ...(ctx.meta ? { meta: true } : {}) };
     case 'expect':   return { ...base,
                               constraints: (ctx.expectation?.constraints || []).map(c => c.id),
                               gates: ctx.expectation?.gates || false };

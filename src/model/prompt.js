@@ -187,6 +187,12 @@ export const orderSpansForFrame = (spans = [], { max = 8 } = {}) => {
 // filename · type · length, never a title or author. The conversation rides in the same
 // reader's register (this reading so far), the USER's thread only — the talker's prior
 // answers stay withheld (the poisoning channel), and an unbound one never folds in (§7).
+//
+// THE META-CONVERSATIONAL EXCEPTION (`meta:true`, turn/intent.js). When the question is
+// ABOUT the conversation ("which topic we discussed is in France?"), the prior turns are
+// its SUBJECT, not a premise it might anchor a wrong fact to — so the full both-role thread
+// is fed and framed to be reasoned over, not skipped. The asymmetry is the point: the
+// firewall guards a prior ANSWER becoming a premise; here a prior topic is the question.
 export const buildGroundedMessages = ({
   question,
   spans = [],
@@ -194,6 +200,7 @@ export const buildGroundedMessages = ({
   task = 'answer',
   budget = DEFAULT_BUDGET,
   conversation = {},
+  meta = false,
   corrective = '',
   exemplar = '',
   strict = false,
@@ -201,6 +208,10 @@ export const buildGroundedMessages = ({
   graph = '',
 } = {}) => {
   const blocks = [];
+  // A META-CONVERSATIONAL turn (the question is ABOUT the conversation) carries the full
+  // both-role thread as its SUBJECT, framed to be drawn on, not skipped. Every other
+  // grounded turn keeps the prior turns as context-to-skip (the firewall below).
+  const metaConv = meta && !!(conversation.notes || conversation.pastTurns?.length);
 
   // What it was — filename · type · length, no recognition (§3).
   if (orientation) blocks.push(`What it was: ${orientation}.`);
@@ -221,14 +232,25 @@ export const buildGroundedMessages = ({
     blocks.push(`${EXCERPTS_HEADER}\n${orderSpansForFrame(spans).map(s => s.text).join('\n')}`);
 
   // The conversation so far, in the reader's register — never document content (§1, §6).
-  // The prior turns ride as CONTEXT, not as a checklist: a small talker fed bare
-  // "You asked: …" lines answers every one of them (the audit's t5 regurgitated the
-  // whole thread as bullets), so the block names them as already-handled and points the
-  // talker at the single live question below.
-  if (conversation.notes)
-    blocks.push(`Earlier in this reading:\n${conversation.notes}\n(Those came before — for context only; answer just their latest question below.)`);
-  if (conversation.pastTurns?.length)
-    blocks.push(`They had asked you:\n${conversation.pastTurns.join('\n')}`);
+  if (metaConv) {
+    // META-CONVERSATIONAL: the question is ABOUT this conversation, so the prior turns are
+    // the SUBJECT, not a checklist to skip. Feed both sides (the surfed recap of older
+    // movers and the recent verbatim window), framed to be reasoned over — the opposite of
+    // the "answer just their latest" cue below, which would discard the very topics asked about.
+    const thread = [conversation.notes, ...(conversation.pastTurns || [])].filter(Boolean).join('\n');
+    blocks.push(`The conversation so far — what you and the user have already talked about ` +
+      `(their question below is ABOUT this conversation, so treat these prior topics as its ` +
+      `subject, not as background to skip):\n${thread}`);
+  } else {
+    // The prior turns ride as CONTEXT, not as a checklist: a small talker fed bare
+    // "You asked: …" lines answers every one of them (the audit's t5 regurgitated the
+    // whole thread as bullets), so the block names them as already-handled and points the
+    // talker at the single live question below.
+    if (conversation.notes)
+      blocks.push(`Earlier in this reading:\n${conversation.notes}\n(Those came before — for context only; answer just their latest question below.)`);
+    if (conversation.pastTurns?.length)
+      blocks.push(`They had asked you:\n${conversation.pastTurns.join('\n')}`);
+  }
 
   // A SHAPE exemplar — the nearest sample answer the form library matched (turn/shape.js),
   // offered so the FIRST draft is laid out in the right register and length. It is a FORM
@@ -263,7 +285,11 @@ export const buildGroundedMessages = ({
   // when they don't (saying which). Not from document is FLAGGED downstream, not forbidden here.
   //   When a prior thread rode above, the clause names the live question outright so the talker
   //   answers THAT one and not the earlier turns it just saw.
-  blocks.push(conversation.notes
+  blocks.push(metaConv
+    ? `Answer their question now — “${question}” — about the conversation above. Draw on those ` +
+      'prior topics as its subject, grounded in what came to mind from the reading where it bears ' +
+      'on the answer; say which part is from the reading and which from general knowledge.'
+    : conversation.notes
     ? `Answer their latest question now — “${question}” — in your own words. If what came to mind ` +
       'doesn\'t cover it, answer from general knowledge and say that part isn\'t from the reading.'
     : 'Answer them now, in your own words. If what came to mind doesn\'t cover it, answer from ' +

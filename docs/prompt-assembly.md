@@ -159,10 +159,27 @@ the audit is the projection of the fold pointed at the human.
   would be a new place to invent.
 - **The document note rides; the conversation history is held back (the P0.3 split).**
   The session fold (`converse` stage) now populates the conversation slots, but the
-  GROUNDED prompt stage deliberately passes `conversation: {}`: feeding a small model its
+  GROUNDED prompt stage holds back the talker's prior ANSWERS: feeding a small model its
   own prior turns let a wrong answer anchor the follow-ups (the history-poisoning
   channel). The document note is different in kind — it is a reading of *this page*, pure
   grounding the talker is also held to on the way back — so it is fed. The CHAT path (no
   document, nothing to be held to) does feed the conversation notes, since there a wrong
   prior turn is the only context there is. So: document arrows always on; conversation
   history on for chat, off for grounded.
+
+  Two refinements have since landed on the grounded path (see `turn/stages.js`):
+  1. **The user's own thread rides** (`groundedConversation`) — the recent questions the
+     user asked, framed "for context only, answer just their latest." This restores
+     follow-up continuity ("now?", "answer my first question") while still withholding the
+     poisoning channel (the talker's prior *answers*).
+  2. **The meta-conversational exception** (`isMetaConversational`, `turn/intent.js`). When
+     the question is *about the conversation itself* — "which topic we've discussed is in
+     France?", "what did you say earlier?" — the prior turns are the question's SUBJECT, not
+     a premise it might anchor a wrong fact to. So the GROUNDED prompt opens the FULL
+     both-role thread (the talker's prior answers included) and frames it to be reasoned
+     over rather than skipped, while still grounding the answer on the page. The
+     history-poisoning firewall is asymmetric — it guards a prior *answer* becoming a
+     *premise*; here a prior *topic* is the *question* — so opening the assistant side is
+     the point, not a leak. The turn is also exempt from the answerability void gate (like a
+     whole-document task: its answer draws on the conversation, so weak document retrieval
+     is not an absence). Every other grounded turn is byte-identical to refinement 1.
