@@ -78,3 +78,35 @@ test('a boundary REC is in the append-only log, replayable like the rest', () =>
   assert.ok(recs.length >= 1, 'the syntactic restructuring is a logged convention');
   assert.ok(projectGraph(doc.log).entities.size > 0, 're-folding under the revised segmentation is no special case');
 });
+
+// ── The heading boundary (#0 segmentation) ───────────────────────────────────
+// A heading/label on its own line has no terminal punctuation; the single-newline
+// collapse used to weld it onto the sentence beneath, which is what minted the phantom
+// "Ryan Coogler --reboot--> Chris Carter" relation behind the wrong "Carter" answer.
+
+test('a heading line welded to the next sentence is split at the line break', () => {
+  const ss = segmentSentences(
+    'The film was released in 2008.\nPlanned reboot\nIn March 2023, Ryan Coogler was developing a reboot per Chris Carter.');
+  assert.ok(ss.includes('Planned reboot'), 'the heading is its own unit');
+  assert.ok(ss.some((s) => s.startsWith('In March 2023')), 'the body sentence stands alone');
+  assert.ok(!ss.some((s) => /Planned reboot In March/.test(s)), 'heading and body are not welded');
+});
+
+test('a multi-word title line ("Ryan Coogler reboot") does not bleed into the body sentence', () => {
+  const ss = segmentSentences('Ryan Coogler reboot\nIn March 2023, it was reported per Chris Carter.');
+  assert.ok(ss.includes('Ryan Coogler reboot'));
+  assert.ok(!ss.some((s) => /Coogler reboot In March/.test(s)));
+});
+
+test('hard-wrapped prose (Gutenberg ~70-char lines) is NOT shattered at its soft wraps', () => {
+  const para =
+    'One morning, when Gregor Samsa woke from troubled dreams, he found\n' +
+    'himself transformed in his bed into a horrible vermin. He lay on his\n' +
+    'armour-like back, and he could see his brown belly.';
+  const ss = segmentSentences(para);
+  // Two real sentences, neither split at a wrap (a wrapped line carries >4 words and/or
+  // trails on a continuation word like "his").
+  assert.equal(ss.length, 2);
+  assert.ok(ss[0].includes('he found himself transformed'), 'the first wrap stayed a soft space');
+  assert.ok(ss[1].includes('He lay on his armour-like back'), 'the second wrap stayed a soft space');
+});

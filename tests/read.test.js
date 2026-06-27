@@ -74,12 +74,12 @@ test('consciousness turns the structured reading onto a named referent (focus), 
     'with no named referent the reading is the window — Bob included');
 });
 
-test('the consciousness folds three levels into the arrows, indices held off the talker', () => {
+test('the consciousness folds three levels into the EOT lines, indices held off the talker', () => {
   const doc = parseText('Alice met Bob. Alice met Bob. Alice trusted Bob.', { docId: 'c' });
   const spans = [0, 1, 2].map(idx => ({ idx, text: doc.sentences[idx], score: 1 }));
   const c = consciousness(doc, spans, 1);
   assert.ok(c.text.length > 0);
-  assert.match(c.text, /Alice --\S+--> Bob/, 'the structured reading is plain-language arrows');
+  assert.match(c.text, /Alice -> Bob : \S+/, 'the structured reading is EOT LINK triples');
   assert.doesNotMatch(c.text, /\[s\d\]/, 'the talker never sees a sentence index (§3)');
   assert.doesNotMatch(c.text, /\bCON\b|\bSIG\b|centers on/, 'no operator codes, no count headline');
   assert.deepEqual(c.sources, [0, 1, 2], 'indices live on sources, the binder’s channel');

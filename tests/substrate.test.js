@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { parseText } from '../src/perceiver/parse/index.js';
 import { structureSurface, serializeNotes, composeGroupedNote, NOTE_GROUPS } from '../src/perceiver/index.js';
 import {
-  buildSubstrate, substrateToArrows, substrateToJSONLD,
+  buildSubstrate, substrateToEOT, substrateToJSONLD,
   projectNotes, projectGroupedNote, assertNotesNoLeak, foldNote,
 } from '../src/fold/index.js';
 
@@ -30,18 +30,18 @@ const STRUCT = {
 
 test('composeGroupedNote heads the three groups and omits the empty ones', () => {
   const text = composeGroupedNote({
-    settled: ['Gregor --worries-about--> his job'],
+    settled: ['Gregor -> his job : worries-about'],
     heldOpen: ['Gregor: the document gives both A and B and settles neither.'],
     turns: [],
   });
-  assert.match(text, /^What the document settles:\nGregor --worries-about--> his job/);
+  assert.match(text, /^What the document settles:\nGregor -> his job : worries-about/);
   assert.match(text, /What the document holds open \(do not settle these\):/);
   assert.doesNotMatch(text, /Where the reading turns:/, 'an empty group is omitted');
 });
 
-test('composeGroupedNote with only the settled group is today\'s flat arrows under one header', () => {
-  const text = composeGroupedNote({ settled: ['a --binds--> b'] });
-  assert.equal(text, `${NOTE_GROUPS.settled}\na --binds--> b`);
+test('composeGroupedNote with only the settled group is the EOT lines under one header', () => {
+  const text = composeGroupedNote({ settled: ['a -> b : binds'] });
+  assert.equal(text, `${NOTE_GROUPS.settled}\na -> b : binds`);
 });
 
 // ── P1 — the substrate as a fold, and the round-trip measurement ─────────────
@@ -53,7 +53,7 @@ test('the substrate round-trips to today\'s arrows (a superset of the current no
   const idxs = (doc.units || doc.sentences).map((_, i) => i);
   const structure = structureSurface(doc, idxs);
   const substrate = buildSubstrate({ structure });
-  assert.deepEqual(substrateToArrows(substrate), serializeNotes(structure),
+  assert.deepEqual(substrateToEOT(substrate), serializeNotes(structure),
     'stripping the band and the nodes reproduces serializeNotes exactly');
 });
 
@@ -109,7 +109,7 @@ test('a single fill, no clash, is corroboration — no tension', () => {
 
 test('projectNotes routes held facts to held-open and keeps the rest settled', () => {
   const groups = projectNotes(buildSubstrate({ structure: STRUCT }));
-  assert.deepEqual(groups.settled, ['Gregor --worries-about--> his job'],
+  assert.deepEqual(groups.settled, ['Gregor -> his job : worries-about'],
     'only the un-held firm fact stays settled');
   assert.equal(groups.heldOpen.length, 2, 'both tensions are voiced as held-open lines');
   assert.ok(groups.heldOpen.some(l => /affirms and denies/.test(l)));

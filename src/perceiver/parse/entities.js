@@ -208,9 +208,20 @@ const sightingGravity = (sentence, start, end, C, label = null) => {
   return 0.0;                                                         // no referential gravity
 };
 
+// A bare article / coordinator can never be the LAST word of a referent. When sentence
+// segmentation welds a heading or fragment onto the next clause ("Characters" + "The
+// X-Files…", "…in general" + "The X-Files…"), the capitalised-name scan grabs the join
+// as a two-word name ("Characters The", "General The"), which — being multi-word —
+// admits free on first sighting. Trimming the trailing connector collapses it to the
+// single token, which must then earn referential gravity on its own (and a heading word
+// at a segment start, with no argument context, does not). Mirrors the leading-starter
+// strip above at the other end of the span.
+const TRAILING_CONNECTOR = new Set(['the', 'a', 'an', 'of', 'and', 'or', '&']);
+
 const cleanLabel = (raw, C = DEFAULT_CONVENTIONS) => {
   let words = raw.trim().split(/\s+/);
   while (words.length > 0 && C.isStarter(words[0])) words.shift();
+  while (words.length > 0 && TRAILING_CONNECTOR.has(words[words.length - 1].toLowerCase())) words.pop();
   if (words.length === 0) return null;
   // Normalise a leading title: drop the trailing period, keep it joined.
   const head = words[0].replace(/\.$/, '');

@@ -188,32 +188,14 @@ export const consciousness = (doc, spans, cursor = null, focus = []) => {
 // This is the document-notes slot of the prompt, AND the same register the
 // edge-grounding veto checks the talker's sentences against — one object, two
 // directions.
-export const serializeNotes = (structure, { max = 8 } = {}) => {
-  const lines = [];
-  const seen = new Set();
-  for (const r of (structure?.relations || [])) {
-    const rel = plainRel(r.via);
-    // Polarity is a CONSCIENCE token (the spec's §11.2): a negated bond must reach
-    // even a tiny talker as a negation, never the bare positive — dropping the "not"
-    // is the latent hallucination. Carried as a literal "not-" prefix so the arrow
-    // stays basic and the sign cannot be smoothed away. (Modality stays in the rich
-    // log layer; the model feed is kept basic.)
-    const neg = r.polarity === '−' ? 'not-' : '';
-    const key = `${r.src.id}|${neg}${rel}|${r.tgt.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    lines.push(`${r.src.label} --${neg}${rel}--> ${r.tgt.label}`);
-    if (lines.length >= max) return lines;
-  }
-  for (const d of (structure?.defs || [])) {
-    const key = `def|${d.id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    lines.push(`${d.label}: ${d.value}`);            // a property line, A: fact
-    if (lines.length >= max) return lines;
-  }
-  return lines;
-};
+// The notes are EOT now (docs/eot-surface-syntax.md), not flat arrows: a relation is a
+// LINK (A -> B : rel), a property an IS-A (A : value). `A --rel--> B` was retired here
+// because a model reads the arrow as a CAUSAL claim even when the edge is mere adjacency
+// (the post-hoc fallacy, docs/subjective-frame.md §2); the EOT triple carries the same
+// relation without that pull. Polarity stays a CONSCIENCE token — a negated bond reaches
+// even a tiny talker as `not-rel`, never the bare positive. Delegates to serializeEOT so
+// the note surface and the model-fed graph are byte-for-byte one renderer.
+export const serializeNotes = (structure, { max = 8 } = {}) => serializeEOT(structure, { max });
 
 // The EOT register — the same folded graph, serialized in EOT surface syntax
 // (docs/eot-surface-syntax.md) instead of plain arrows. The model already emits these three

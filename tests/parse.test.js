@@ -57,6 +57,40 @@ test('a capitalised sentence-opener (determiner, interjection) is not admitted a
   assert.ok(a.isAdmitted('Gregor Samsa'), 'a real name still admits');
 });
 
+test('a framing/sequencing adverb at a sentence head is not admitted as a figure', () => {
+  // The audit's recurring phantoms: "Originally the show followed…", "Roughly one third…",
+  // "Initially the network…", "After graduating…" — each a capitalised opener the gravity
+  // floor admitted off its segment-initial subject slot, then minted a junk predicate from
+  // ("Originally followed Mulder", "Roughly speculatived fiction"). They are conventions
+  // `starter`s now — stripped before admission — while a real name in the same window admits.
+  const a = createEntityAdmission();
+  a.observe('Originally the show followed Mulder.', 0);
+  a.observe('Initially the network hesitated.', 1);
+  a.observe('Roughly one third of the episodes aired.', 2);
+  a.observe('After graduating, Coogler returned.', 3);
+  assert.ok(!a.isAdmitted('Originally'), 'a framing adverb is not a referent');
+  assert.ok(!a.isAdmitted('Initially'),  'a framing adverb is not a referent');
+  assert.ok(!a.isAdmitted('Roughly'),    'a hedging adverb is not a referent');
+  assert.ok(!a.isAdmitted('After'),      'a subordinator is not a referent');
+});
+
+test('a name never ends in a bare article: a welded heading fragment collapses, a real place name survives', () => {
+  // Sentence segmentation can weld a heading onto the next clause ("Characters" + "The
+  // X-Files stars…"), which the capitalised scan grabs as a two-word name "Characters The"
+  // — and a multi-word name admits free. Trimming the trailing article collapses it to the
+  // single heading token, which earns no gravity at a segment start. A genuine multi-word
+  // name whose words are real ("New York") is untouched.
+  const a = createEntityAdmission();
+  a.observe('Characters The X-Files stars Duchovny.', 0);
+  assert.ok(!a.isAdmitted('Characters The'), 'a name does not end in a bare article');
+  assert.ok(!a.isAdmitted('Characters'),     'a bare heading word at a segment start is not a referent');
+
+  const b = createEntityAdmission();
+  b.observe('New York is a city.', 0);
+  b.observe('They later met in New York.', 1);
+  assert.ok(b.isAdmitted('New York'), 'a real multi-word place name still admits');
+});
+
 test('parseText emits INS from the first sighting when the name has gravity', () => {
   const doc = parseText('Cainan begat Mahalaleel.', { docId: 'd1' });
   const ids = doc.log.filter(e => e.op === 'INS').map(e => e.id);
