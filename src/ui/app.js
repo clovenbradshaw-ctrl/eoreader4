@@ -539,7 +539,7 @@ const runQuery = async (question) => {
   if (webMode === 'auto') {
     setThinkingNote(thinking, '🌐 searching the web…');
     try {
-      const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history });
+      const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history, subject: subjectOf(selectedDocs) });
       const admitted = await searchAndAdmit(q, { client: webClientOf(), rawStore: rawStoreOf(), kind: 'auto', fetchPages: true, k: 4 });
       const webDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
       if (webDocs.length) {
@@ -670,6 +670,21 @@ const runQuery = async (question) => {
 // The session web instrument and its speculative quarantine, both lazily built on first
 // use and shared across turns. The prefetcher fetches+admits exactly as a real turn would
 // (kind:'auto', fetchPages) so a taken entry is byte-identical to one fetched live.
+// The loaded document's SUBJECT, for anchoring the web query (turn/web.js formulateSearchQuery):
+// its own front matter — title, with author when present — so "the book / it / this" resolves to
+// what is open, not to a stale conversation topic. Empty when nothing is loaded or no title was
+// harvested (a bare filename is no anchor), in which case the formulation falls back to the thread.
+const subjectOf = (docs = []) => {
+  for (const d of docs) {
+    const title = d?.metadata?.title;
+    if (title && String(title).trim()) {
+      const author = d?.metadata?.author;
+      return author ? `${String(title).trim()} by ${String(author).trim()}` : String(title).trim();
+    }
+  }
+  return '';
+};
+
 const webClientOf = () => (STATE.webClient ||= createWebClient());
 // The session's OPFS raw store — every fetched page kept in full, as binary, re-readable without a
 // refetch. Built once, shared across every search/admit so the content accumulates (the user's

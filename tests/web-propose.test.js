@@ -237,6 +237,23 @@ test('formulateSearchQuery strips quotes and a leading "query:" label', async ()
   assert.equal(await formulateSearchQuery({ model, question: 'q' }), 'X-Files new series 2026');
 });
 
+test('formulateSearchQuery anchors a back-reference on the loaded subject, not a stale topic', async () => {
+  // "how wrote the book?" with The Metamorphosis open used to search the previous turn's topic
+  // ("Ryan Coogler"); the loaded subject is handed to the model so "the book" resolves to it.
+  let seen = null;
+  const model = { phrase: async (messages) => { seen = messages; return 'The Metamorphosis Franz Kafka author'; } };
+  const history = [
+    { role: 'user', content: 'is ryan coogler making a new x-files series?' },
+    { role: 'assistant', content: 'Ryan Coogler is developing an X-Files reboot...' },
+  ];
+  const q = await formulateSearchQuery({
+    model, question: 'how wrote the book?', history, subject: 'The Metamorphosis by Franz Kafka',
+  });
+  assert.equal(q, 'The Metamorphosis Franz Kafka author');
+  const userMsg = seen.find(m => m.role === 'user').content;
+  assert.match(userMsg, /Loaded subject.*The Metamorphosis by Franz Kafka/s, 'the subject is handed to the model');
+});
+
 test('runWebFollowup reformulates the raw query before searching (conversation in scope)', async () => {
   let searched = null;
   const model = { phrase: async () => 'X-Files new series 2026 producer' };

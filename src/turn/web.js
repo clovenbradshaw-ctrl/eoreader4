@@ -52,9 +52,16 @@ export const verifyAgainstWeb = (answer, corpus, { question = '', floor = 0.5 } 
 // references resolved (the thread's "new series" → "X-Files (2025 revival)"). Model-assisted
 // and fully guarded: no model, a thin/odd rewrite, or any throw → the original query stands,
 // so behaviour only ever improves, never regresses. Returns a plain string.
-export const formulateSearchQuery = async ({ model, question, history = [], fallback = '' } = {}) => {
+//
+// `subject` anchors the resolution on what is LOADED (a document's title/author). Without it the
+// model resolved a back-reference against whatever dominated the recent thread — so "how wrote
+// the book?" with The Metamorphosis open became a search for "Ryan Coogler" (the previous turn's
+// topic), not the book in hand. The loaded subject is what "the book / it / this" points at, so
+// it leads the resolution and a stale topic no longer hijacks the query.
+export const formulateSearchQuery = async ({ model, question, history = [], fallback = '', subject = '' } = {}) => {
   const base = String(question || fallback || '').trim();
   if (!model?.phrase || !base) return base;
+  const subj = String(subject || '').replace(/\s+/g, ' ').trim().slice(0, 120);
   // The recent thread, compacted — enough to resolve "it / the new one / that show".
   const thread = (history || [])
     .slice(-6)
@@ -62,10 +69,15 @@ export const formulateSearchQuery = async ({ model, question, history = [], fall
     .join('\n');
   const messages = [
     { role: 'system', content:
-      'You turn a chat turn into ONE web search query. Resolve every pronoun and back-reference ' +
-      'from the conversation so the query stands alone (name the actual subject). Keep it short — ' +
-      'the keywords a search engine needs, no filler, no question words, no quotes. Output ONLY the query.' },
-    { role: 'user', content: `${thread ? `Conversation so far:\n${thread}\n\n` : ''}Latest turn: ${base}\n\nSearch query:` },
+      'You turn the LATEST chat turn into ONE web search query about what it actually asks. ' +
+      'Resolve a pronoun or back-reference ("it", "the book", "that show") to the thing it points ' +
+      'at — prefer the loaded SUBJECT when one is given, then the most recent matching turn; do NOT ' +
+      'drag in an earlier, unrelated topic. If the latest turn already names its subject, keep it. ' +
+      'Keep it short — the keywords a search engine needs, no filler, no question words, no quotes. ' +
+      'Output ONLY the query.' },
+    { role: 'user', content:
+      `${subj ? `Loaded subject (what "this" / "the book" / "it" refers to): ${subj}\n\n` : ''}` +
+      `${thread ? `Conversation so far:\n${thread}\n\n` : ''}Latest turn: ${base}\n\nSearch query:` },
   ];
   try {
     const out = await model.phrase(messages, { maxTokens: 32, temperature: 0 });
