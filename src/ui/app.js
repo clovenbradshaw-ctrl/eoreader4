@@ -12,7 +12,7 @@
 
 import { ingestText }       from '../organs/in/index.js';
 import { runTurn, runWebFollowup, formulateSearchQuery, loadShapeLibrary } from '../turn/index.js';
-import { createWebClient, searchAndAdmit } from '../ingest/index.js';
+import { createWebClient, searchAndAdmit, createRawStore } from '../ingest/index.js';
 import { createSpeculativeWeb } from './prefetch.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
@@ -540,7 +540,7 @@ const runQuery = async (question) => {
     setThinkingNote(thinking, '🌐 searching the web…');
     try {
       const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history });
-      const admitted = await searchAndAdmit(q, { client: webClientOf(), kind: 'auto', fetchPages: true, k: 4 });
+      const admitted = await searchAndAdmit(q, { client: webClientOf(), rawStore: rawStoreOf(), kind: 'auto', fetchPages: true, k: 4 });
       const webDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
       if (webDocs.length) {
         turnArgs.docs = [...selectedDocs, ...webDocs];   // web joins the grounding scope, beside any loaded docs
@@ -647,7 +647,7 @@ const runQuery = async (question) => {
         // exact query, take() returns it instantly and marks it PRESERVED (it proved useful).
         // A miss falls through to a live fetch — the normal proposer-only path.
         webSearch: async (q, opts) => (await prefetcherOf().take(q)) ||
-          searchAndAdmit(q, { client: webClientOf(), ...opts }),
+          searchAndAdmit(q, { client: webClientOf(), rawStore: rawStoreOf(), ...opts }),
         query,
       });
     } catch { updated = result; }
@@ -671,8 +671,12 @@ const runQuery = async (question) => {
 // use and shared across turns. The prefetcher fetches+admits exactly as a real turn would
 // (kind:'auto', fetchPages) so a taken entry is byte-identical to one fetched live.
 const webClientOf = () => (STATE.webClient ||= createWebClient());
+// The session's OPFS raw store — every fetched page kept in full, as binary, re-readable without a
+// refetch. Built once, shared across every search/admit so the content accumulates (the user's
+// "save it all into opfs"). Degrades to in-memory where OPFS is unavailable.
+const rawStoreOf  = () => (STATE.rawStore ||= createRawStore());
 const prefetcherOf = () => (STATE.prefetcher ||= createSpeculativeWeb({
-  search: (q, opts) => searchAndAdmit(q, { client: webClientOf(), kind: 'auto', fetchPages: true, ...opts }),
+  search: (q, opts) => searchAndAdmit(q, { client: webClientOf(), rawStore: rawStoreOf(), kind: 'auto', fetchPages: true, ...opts }),
 }));
 
 // Speculative prefetch — DISABLED on the typing path. It fetched + parsed full web pages on

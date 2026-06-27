@@ -11,3 +11,8 @@ export { admitWebSource, createWebStore, webRecord, webContentHash,
 // The live fetch/search client over a CORS feed proxy (search-by-feed → admit into scope).
 export { createWebClient, searchAndAdmit, fetchAndAdmit, parseFeed, htmlToText,
          SEARCH_SOURCES, routeKind, DEFAULT_FEED_PROXY } from './webfetch.js';
+// The raw web-content store: keep every fetched page in full, as binary, in OPFS (re-readable
+// without a refetch); degrades to in-memory where OPFS is absent.
+export { createRawStore, opfsAvailable } from './opfs-store.js';
+// Also surface stripWebBoilerplate for callers that reduce a page before admission.
+export { stripWebBoilerplate } from './websource.js';

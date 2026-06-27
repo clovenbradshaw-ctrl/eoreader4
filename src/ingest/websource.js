@@ -102,19 +102,21 @@ export const stripWebBoilerplate = (text) => {
 // pipeline path treats it identically — eoreader3 reconciliation #1) whose WEB identity rides as
 // additive metadata, and whose docId is unique + colon-free so its cited spans trace back through
 // the composite's origin().
-// Cap the prose handed to parseText. A real web page reduces to tens of thousands of chars
-// (thousands of sentences); parseText is synchronous O(n) work on the main thread, so an
-// uncapped page FREEZES the tab — the observed jank when search runs. We cap AFTER stripping the
-// chrome (so the budget is spent on prose, not furniture) and the cap is generous enough that a
-// long article's later sections — where an answer like "Ryan Coogler reboot" lives — survive
-// rather than being truncated out (the 8k cap cut the very section the question asked about).
-// (~24k chars ≈ 300–400 sentences; bounded, so the tab stays responsive at send time.)
-const MAX_WEB_CHARS = 24000;
+//
+// ABSORB AS MUCH AS POSSIBLE (the user's directive). The page is READ in full on ingestion —
+// chrome stripped, then parsed entire — so the surfer can ride any section, not just the head
+// (the old caps truncated the very section a question asked about, e.g. "Ryan Coogler reboot",
+// and the answer came back "I couldn't find it"). The FULL original is retained as binary in
+// OPFS by the fetch layer (ingest/opfs-store.js); this is the reading half of "save it all, and
+// read it on ingestion". parseText is synchronous, so a single, very high HANG_GUARD remains —
+// not a content limit but a backstop against a pathological multi-megabyte page locking the tab.
+// Real articles fall far below it, so in practice nothing is dropped.
+const HANG_GUARD = 2_000_000;
 
 export const admitWebSource = (payload = {}) => {
   const record = webRecord(payload);
   const docId  = engineDocId(record.id);
-  const doc    = parseText(stripWebBoilerplate(String(payload.text || '')).slice(0, MAX_WEB_CHARS), { docId });
+  const doc    = parseText(stripWebBoilerplate(String(payload.text || '')).slice(0, HANG_GUARD), { docId });
   doc.sourceKind = 'web-source';
   doc.web = {
     url: record.url, final_url: record.final_url, title: record.title,

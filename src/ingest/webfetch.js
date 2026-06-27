@@ -177,20 +177,32 @@ export const createWebClient = ({
 
 const nowIso = () => { try { return new Date().toISOString(); } catch { return null; } };
 
+// Persist the full fetched text as binary to the OPFS raw store (ingest/opfs-store.js), keyed by
+// the admitted record's content hash — "save it all". Best-effort and awaited only enough to keep
+// the cache warm; a store fault never blocks admission. No-op when no rawStore is threaded.
+const keepRaw = async (rawStore, admitted, text) => {
+  const hash = admitted?.record?.content_hash;
+  if (rawStore && hash) { try { await rawStore.put(hash, text); } catch { /* never block admission */ } }
+  return admitted;
+};
+
 // Fetch one page through the proxy and ADMIT it as a web source (websource.js). The page's HTML
-// is reduced to text before admission so the parse sees prose, not tags.
-export const fetchAndAdmit = async (url, { client, store = null, fetched_at = nowIso() } = {}) => {
+// is reduced to text before admission so the parse sees prose, not tags. The full reduced text is
+// retained as binary in `rawStore` (OPFS) when one is threaded.
+export const fetchAndAdmit = async (url, { client, store = null, rawStore = null, fetched_at = nowIso() } = {}) => {
   const c = client || createWebClient();
   const { text } = await c.fetchUrl(url);
-  const payload = { url, text: htmlToText(text), fetched_at, engine: 'feed-proxy' };
-  return store ? store.admit(payload) : admitWebSource(payload);
+  const reduced = htmlToText(text);
+  const payload = { url, text: reduced, fetched_at, engine: 'feed-proxy' };
+  const admitted = store ? store.admit(payload) : admitWebSource(payload);
+  return keepRaw(rawStore, admitted, reduced);
 };
 
 // searchAndAdmit(query, { kind, fetchPages }) → search a source (or auto-route), then admit the
 // top results. By default the result's snippet/summary is admitted as a light source; with
 // `fetchPages` each result's full page is fetched THROUGH the proxy — the engine pulling the
 // actual website ("find random websites as needed"). Returns [{ item, doc, record, … }].
-export const searchAndAdmit = async (query, { client, store = null, k = 5, kind = 'auto', fetchPages = false, fetched_at = nowIso() } = {}) => {
+export const searchAndAdmit = async (query, { client, store = null, rawStore = null, k = 5, kind = 'auto', fetchPages = false, fetched_at = nowIso() } = {}) => {
   const c = client || createWebClient();
   const items = await c.search(query, { kind, k });
   const out = [];
@@ -208,6 +220,7 @@ export const searchAndAdmit = async (query, { client, store = null, k = 5, kind 
     const payload = { url: it.url || c.proxied(query), title: it.title, text,
                       excerpt: it.text, retrieval_query: query, engine: `web:${it.source || it.kind || kind}`, fetched_at };
     const admitted = store ? store.admit(payload) : admitWebSource(payload);
+    await keepRaw(rawStore, admitted, text);   // retain the full page bytes (OPFS) when threaded
     out.push({ item: it, ...admitted });
   }
   return out;
