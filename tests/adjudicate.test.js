@@ -37,13 +37,11 @@ test('the factcheck stage runs in a grounded turn', async () => {
     'factcheck sits in the live pipeline, after bind and before veto');
 });
 
-test('a confident contradiction GATES and regenerates (§5) — the model word still surfaces, with its flag', async () => {
-  // A confident edge-contradiction (Grete as Gregor's MOTHER, sister ⟂ mother, prior ~0.85)
-  // is libel-grade and, under the subjective frame, no longer rides: §5 engages the gate and
-  // regenerates against the lines (the contradiction is NOT among the flag-only cases the
-  // spec keeps — low-coverage, the weak contradiction, the unwitnessed). The gate regenerates,
-  // it does not gag: the model's word still surfaces (a fixed test model cannot improve, so
-  // the flagged draft rides, now with `gated` recorded; a real model would drop the false link).
+test('a confident contradiction is FLAGGED (libel-grade), and the model word rides — the gate is off', async () => {
+  // A confident edge-contradiction (Grete as Gregor's MOTHER, sister ⟂ mother, prior ~0.85) is
+  // libel-grade and is FLAGGED loudly (edge-contradicted) — but with the answer-restriction
+  // lifted it is no longer gated/regenerated. Flag the wrong thing; don't gag or refuse it. The
+  // model's word rides, the contradiction is measured and told.
   const doc = parseText(STORY, { docId: 'adj' });
   const audit = createAuditLog();
   const result = await runTurn({
@@ -54,19 +52,17 @@ test('a confident contradiction GATES and regenerates (§5) — the model word s
   const ids = result.flags.map(f => f.id);
   assert.ok(ids.includes('edge-contradicted'),
     `expected an edge-contradicted flag, got: ${ids.join(',') || '(none)'}`);
-  assert.equal(result.turn.gated, true, '§5: a confident contradiction engages the gate and regenerates');
-  assert.match(result.answer, /mother/i, 'the model text still surfaces — regenerated, not gagged');
+  assert.equal(result.turn.gated, false, 'the refuse-gate is off — the contradiction is flagged, not gated');
+  assert.match(result.answer, /mother/i, 'the model text rides — flagged, never gagged');
   const fc = result.turn.steps.find(s => s.name === 'factcheck');
   assert.equal(fc.data.contradicted, 1);
 });
 
-test('a contradicting paraphrase: the contradiction gates, the faint unbound-contact stays a flag', async () => {
+test('a contradicting paraphrase: both the contradiction and the faint unbound-contact stay flags (no gate)', async () => {
   // The denied relation in a draft that CITES nothing but makes lexical CONTACT (it restates
-  // "Grete waited" with extra material). Two readings split by §5: the confident
-  // `edge-contradicted` engages the gate (it regenerates); the faint `unbound-contact` — a
-  // paraphrase the binder cannot tie to one sentence — STAYS flag-only, exactly as the spec
-  // keeps it (enacting a faint amplitude as certainty is the over-refusal hazard). The model
-  // word still surfaces in both cases; the gate regenerates, it never substitutes.
+  // "Grete waited" with extra material). Both readings are FLAG-only now: the confident
+  // `edge-contradicted` and the faint `unbound-contact` both ride beside the answer — the gate
+  // is off, so neither regenerates. The model word surfaces; the flags tell the user.
   const doc = parseText(STORY, { docId: 'adj' });
   const audit = createAuditLog();
   const result = await runTurn({
@@ -75,11 +71,11 @@ test('a contradicting paraphrase: the contradiction gates, the faint unbound-con
     embedder: createHashEmbedder(), auditLog: audit,
   });
   const ids = result.flags.map(f => f.id);
-  assert.equal(result.turn.gated, true, 'the confident contradiction engages the gate');
-  assert.ok(ids.includes('unbound-contact'), 'the faint contact-but-uncitable reading stays a flag, not a gate trigger');
-  assert.ok(!ids.includes('unbound'), 'the from-nowhere gate stays silent — the prose made contact');
+  assert.equal(result.turn.gated, false, 'the refuse-gate is off — nothing is gated');
+  assert.ok(ids.includes('unbound-contact'), 'the faint contact-but-uncitable reading stays a flag');
+  assert.ok(!ids.includes('unbound'), 'the from-nowhere flag stays silent — the prose made contact');
   assert.ok(ids.includes('edge-contradicted'), 'and the contradiction is flagged on its own organ');
-  assert.match(result.answer, /mother/i, 'the model text still surfaces — regenerated, not gagged');
+  assert.match(result.answer, /mother/i, 'the model text rides — flagged, never gagged');
   const fc = result.turn.steps.find(s => s.name === 'factcheck');
   assert.equal(fc.data.contradicted, 1, 'the contradiction is still measured and recorded');
 });

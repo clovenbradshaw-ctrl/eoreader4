@@ -76,9 +76,11 @@ test('the grounded prompt is the subjective frame: the lines you read, no arrows
   assert.doesNotMatch(user.content, /Notes from the document/);
   // The forbidden register words are kept out of the frame (§1).
   assert.doesNotMatch(user.content, /\b(excerpts?|passages?|sources?)\b/i);
-  // The live question, and the absence clause last where a small model attends (§1).
+  // The live question, and the answer clause last where a small model attends (§1). The
+  // "only from the document" restriction is lifted: if the lines don't cover it, the talker may
+  // answer from general knowledge and say so (ungrounded is flagged downstream, not forbidden).
   assert.match(user.content, /They asked you: what happened\?/);
-  assert.match(user.content, /did not find it/);
+  assert.match(user.content, /answer from general knowledge and say it is not from the document/);
   // Orientation is filename · type · length — no recognition (§3).
   assert.match(user.content, /What it was: pg5200\.txt · text · 757 sentences/);
   // NO length prescription by default — max_tokens is the real bound (the task register)

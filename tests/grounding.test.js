@@ -25,17 +25,20 @@ const coldEmbedder = { isWarm: () => false, embed: async () => new Float32Array(
 // ---------------------------------------------------------------------------
 // The grounding register, in the prompt builders (the chip's three modes).
 
-test('Chat-with-document (strict) uses the strict register and forbids outside knowledge', () => {
+test('Chat-with-document (strict) uses the strict register — answers from the lines first, but the outside-knowledge restriction is lifted', () => {
   const [system] = buildGroundedMessages({ question: 'q', spans: [{ idx: 0, text: 'x' }], strict: true });
   assert.equal(system.content, SYSTEM_GROUND_STRICT);
-  assert.match(system.content, /ONLY from what you read/i);
-  assert.match(system.content, /don'?t fill the gap from outside/is);
+  assert.match(system.content, /Answer from them first/i);
+  // the "only from the document / don't use general knowledge" restriction was removed
+  assert.doesNotMatch(system.content, /ONLY from what you read/i);
+  assert.match(system.content, /you may answer from your general knowledge/i);
 });
 
-test('strict mode with nothing retrieved names the absence so the talker refuses cleanly', () => {
+test('strict mode with nothing retrieved names the absence, then invites a general-knowledge answer (not a refusal)', () => {
   const [, user] = buildGroundedMessages({ question: 'q', spans: [], strict: true });
-  assert.match(user.content, /You read no lines bearing on their question/i);
-  assert.match(user.content, /do not answer from outside knowledge/i);
+  assert.match(user.content, /document does not cover it/i);
+  assert.match(user.content, /answer from general knowledge/i);
+  assert.doesNotMatch(user.content, /do not answer from outside knowledge/i);
 });
 
 test('the default (Auto) grounded register is unchanged — not strict', () => {

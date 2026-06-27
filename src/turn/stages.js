@@ -839,8 +839,12 @@ const refusingEdge       = (ctx) => !!ctx.factcheck?.refuse;
 const loadBearingUnbound = (ctx) => isUnbound(ctx.bound || [], ctx.rawOutput);
 const gateCondition      = (ctx) => ctx.task === 'answer' && (refusingEdge(ctx) || loadBearingUnbound(ctx));
 
-// A regenerate is owed when the off-diagonal confab guard fired OR the §5 gate holds.
-const needsRegen = (ctx) => confabulating(ctx) || gateCondition(ctx);
+// A regenerate is owed when the off-diagonal confab guard fired — a SPECIFIC claim asserted at
+// a measured Void (a figure-at-a-void hallucination). The §5 grounding gate that forced an
+// ungrounded/unsupported answer to rewrite toward "I did not find it" is OFF: the answer is no
+// longer restricted to the document, so an ungrounded answer RIDES with a flag rather than being
+// gated into an abstention. (gateCondition is kept for the audit `gated` marker only.)
+const needsRegen = (ctx) => confabulating(ctx);
 
 // The corrective for the regenerate, by failure: a pure §5 gate (no confab) steers back
 // onto the lines; otherwise the confab refine drops the unsupported link.

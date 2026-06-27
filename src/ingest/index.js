@@ -10,4 +10,4 @@ export { admitWebSource, createWebStore, webRecord, webContentHash,
          toWebCitation, verifyCitation, engineDocId, recordIdForDoc, recordIdOf } from './websource.js';
 // The live fetch/search client over a CORS feed proxy (search-by-feed → admit into scope).
 export { createWebClient, searchAndAdmit, fetchAndAdmit, parseFeed, htmlToText,
-         DEFAULT_FEED_PROXY } from './webfetch.js';
+         SEARCH_SOURCES, routeKind, DEFAULT_FEED_PROXY } from './webfetch.js';

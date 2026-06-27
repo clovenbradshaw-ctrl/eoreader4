@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { proposeWebSearch, COST_NOTICE } from '../src/turn/propose.js';
-import { runTurnWithWeb } from '../src/turn/web.js';
+import { runTurnWithWeb, verifyAgainstWeb } from '../src/turn/web.js';
 import { admitWebSource } from '../src/ingest/websource.js';
 
 // "Search the internet to respond" actually firing (docs/web-search.md): the turn PROPOSES a
@@ -30,12 +30,24 @@ test('an answer bound to nothing proposes, sharpened with the figure the reading
   assert.match(p.query, /what is her name\? Grete/);
 });
 
+test('a chat turn (no document) proposes a VERIFY — check the general-knowledge answer, do not replace it', () => {
+  const p = proposeWebSearch({ route: 'chat', question: 'what is the capital of france?' });
+  assert.ok(p);
+  assert.equal(p.trigger, 'verify');
+  assert.equal(p.query, 'what is the capital of france?');
+  assert.match(p.rationale, /general knowledge/);
+});
+
+test('a mechanical route (math / metadata / smalltalk) never proposes', () => {
+  assert.equal(proposeWebSearch({ route: 'math', question: '2/3' }), null);
+  assert.equal(proposeWebSearch({ route: 'metadata', question: 'who wrote this?' }), null);
+});
+
 test('a well-grounded turn proposes nothing; a whole-doc task never proposes', () => {
   assert.equal(proposeWebSearch({ route: 'grounded', task: 'answer', question: 'q',
     bound: [{ claim: 'a', citation: 's0' }], rawOutput: 'a', vetoes: [] }), null);
   assert.equal(proposeWebSearch({ route: 'grounded', task: 'summary', question: 'summarize',
     voidMeasure: true, bound: [], vetoes: [] }), null);          // summary gaps are not lookups
-  assert.equal(proposeWebSearch({ route: 'chat', task: 'answer', question: 'hi', bound: [], vetoes: [] }), null);
 });
 
 test('an interpretation-only turn proposes a WITNESS-seek, not a gap-fill', () => {
@@ -121,6 +133,29 @@ test('a witness-trigger proposal feeds the fetched source in as the witnessSourc
   assert.equal(out.webFetched.trigger, 'witness');
   assert.ok(calls[1].witnessSource, 'the re-run received the web source as witnessSource');
   assert.ok(calls[1].docs.length === 1, 'and it also joined the scope');
+});
+
+test('verifyAgainstWeb: the answer’s DISTINCTIVE term decides — Paris confirmed, Lyon not', () => {
+  const corpus = 'Paris is the capital and most populous city of France.';
+  const q = 'what is the capital of france?';
+  assert.ok(verifyAgainstWeb('The capital of France is Paris.', corpus, { question: q }).supported);
+  const bad = verifyAgainstWeb('The capital of France is Lyon.', corpus, { question: q });
+  assert.ok(!bad.supported, 'a wrong answer shares the question terms but its novel term is absent');
+  assert.ok(bad.missing.includes('lyon'));
+});
+
+test('verify trigger: the answer is kept and a flag is attached (not replaced)', async () => {
+  const calls = [];
+  const impl = async (args) => { calls.push(args); return { answer: 'The capital of France is Lyon.',
+    webProposal: { query: 'capital of france', trigger: 'verify', rationale: 'general knowledge', cost: COST_NOTICE }, flags: [] }; };
+  const webSearch = async () => [{ doc: groundedDoc('Paris is the capital of France.') }];
+  const out = await runTurnWithWeb({ question: 'what is the capital of france?', docs: [] },
+    { mode: 'auto', webSearch, runTurnImpl: impl });
+  assert.equal(out.answer, 'The capital of France is Lyon.', 'the model answer is kept, not replaced');
+  assert.equal(calls.length, 1, 'verify does NOT re-run the turn');
+  assert.equal(out.webFetched.trigger, 'verify');
+  assert.equal(out.webFetched.supported, false);
+  assert.ok(out.flags.some(f => f.id === 'web-unconfirmed'), 'a flag tells the user it could not be confirmed');
 });
 
 test('off mode (and a no-proposal turn) never reach for the net', async () => {

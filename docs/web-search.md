@@ -78,6 +78,21 @@ Adding the admitted doc to `runTurn`'s `docs[]` is the *whole* integration — t
 it in, so a web source **enters retrieval ranking and its cited spans trace to it with no
 pipeline change** (verified in `tests/websource.test.js`, embedder-free).
 
+## The search kinds (built)
+
+Every text-grounding source the html has, each fetched through the same CORS proxy
+(`src/ingest/webfetch.js` `SEARCH_SOURCES`):
+
+- **`wikipedia`** — `action=query&list=search` (titles + snippets), results traced to the page
+  URL. The reliable source for facts/entities, so VERIFY and WITNESS use it.
+- **`news`** — Google News RSS (current events).
+- **`feed`** — fetch an arbitrary RSS/Atom feed or page the query names by URL.
+
+`routeKind(query)` auto-routes when the caller asks for `'auto'`: current-events phrasing →
+news, a URL/"rss" → feed, everything else → wikipedia. And **`fetchPages`** pulls each result's
+*actual page* through the proxy (not just the snippet) — the engine reaching arbitrary websites
+"as needed". (Campaign-finance / image kinds exist on the proxy but are out of scope here.)
+
 ## The live half — fetch & search over a CORS feed proxy (built)
 
 `src/ingest/webfetch.js`. The proxy is a **CORS fetch proxy**: `GET <proxy>?url=<http(s) URL>`
@@ -117,6 +132,21 @@ Wired into the app **off by default** (`STATE.webSearch` = `'off' | 'confirm' | 
 `confirm` mode shows a cost-noticed browser confirm with the query and rationale before any hop;
 `auto` fires on a measured gap. The privacy thesis holds — nothing leaves without a go-ahead (or
 an explicit auto opt-in), and every hop is in the glass box.
+
+## Verify, not restrict (the answer-restriction is lifted)
+
+The model may answer freely — from the document *or* from general knowledge — and the engine's
+job is to **flag**, never to restrict or refuse. The "only answer from what you read" register is
+gone (`SYSTEM_GROUND_STRICT` permits general-knowledge fallback, the chat prompt no longer limits
+itself to the conversation), and the §5 refuse-gate that regenerated an ungrounded answer toward
+"I did not find it" is **off** — an ungrounded answer rides with its flag.
+
+So a no-document question ("what is the capital of France?") gets a `verify` proposal: search the
+web on the question, and **flag whether the result supports the answer** (`web-supported` /
+`web-unconfirmed`) — the answer itself is kept, never replaced. The check keys on the answer's
+*distinctive* term (Paris vs Lyon), not the question's shared words, so a wrong answer whose novel
+term is absent from the web is flagged. (True contradiction detection still wants the meaning
+classifier; this flags unconfirmed absence honestly.)
 
 ## Witness-seeking (built)
 

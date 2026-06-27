@@ -43,6 +43,7 @@ const STATE = {
   history:   [],         // the running transcript, fed back each turn (the session fold)
   grounding: 'auto',     // how answers use the document: 'auto' | 'grounded' | 'free' (the chip)
   inquire:   false,      // self-directed inquiry — read another pass on the engine's own open question (the chip)
+  webSearch: 'off',      // web search: 'off' | 'confirm' | 'auto' — when a turn can't ground, search the web (the chip)
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
   // chip distinct from the document chips: when on, every turn consults the corpus and
   // surfaces its provenance-tagged spans beneath the answer. Lazily constructed; the
@@ -86,6 +87,7 @@ const els = {
   backend:   document.getElementById('backend'),
   groundingChip: document.getElementById('grounding-chip'),
   inquireChip: document.getElementById('inquire-chip'),
+  webChip:   document.getElementById('web-chip'),
   docChips:  document.getElementById('doc-chips'),
 };
 
@@ -657,6 +659,26 @@ els.inquireChip.addEventListener('click', () => {
   STATE.inquire = !STATE.inquire;
   try { localStorage.setItem('eoreader.inquire', STATE.inquire ? 'on' : 'off'); } catch { /* ignore */ }
   applyInquire();
+});
+
+// Web chip — cycles web search off → confirm → auto (docs/web-search.md). When a turn can't
+// ground an answer (a no-doc chat question, or a measured gap), it PROPOSES a query; `confirm`
+// asks first (a cost notice), `auto` fetches on its own. Off by default — nothing reaches the
+// network until you turn it on, and every hop is in the audit.
+const WEB_MODES = ['off', 'confirm', 'auto'];
+const applyWeb = () => {
+  els.webChip.textContent  = `Web: ${STATE.webSearch}`;
+  els.webChip.dataset.mode = STATE.webSearch;
+};
+try {
+  const w = localStorage.getItem('eoreader.webSearch');
+  if (WEB_MODES.includes(w)) STATE.webSearch = w;
+} catch { /* default off stands */ }
+applyWeb();
+els.webChip.addEventListener('click', () => {
+  STATE.webSearch = WEB_MODES[(WEB_MODES.indexOf(STATE.webSearch) + 1) % WEB_MODES.length];
+  try { localStorage.setItem('eoreader.webSearch', STATE.webSearch); } catch { /* ignore */ }
+  applyWeb();
 });
 
 // The Mind chip — pinned and always present. Restore the consult preference, show

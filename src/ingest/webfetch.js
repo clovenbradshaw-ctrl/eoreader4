@@ -65,23 +65,67 @@ export const parseFeed = (xml) => {
   return out;
 };
 
+// ── The search KINDS — every source the html has, each through the same proxy ────────────────
+// A kind is (ctx, query, k) → items[{ title, text, url, source }]. ctx gives `fetchUrl` (a page
+// via the feed proxy's ?url=) and `fetchRaw` (a sibling webhook directly, for ECF), plus
+// `proxyBase` and `searchUrl`. Each parses its own shape (Wikipedia/ECF are JSON; News/Feed RSS).
+const wikiPageUrl = (title) => `https://en.wikipedia.org/wiki/${encodeURIComponent(String(title).replace(/ /g, '_'))}`;
+
+export const SEARCH_SOURCES = {
+  // WIKIPEDIA — the encyclopedic source (facts, entities). The reliable one for VERIFY.
+  wikipedia: async (ctx, query, k) => {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&srlimit=${k}`;
+    const j = JSON.parse((await ctx.fetchUrl(url)).text);
+    return (j?.query?.search || []).map((h) => ({
+      title: h.title, text: htmlToText(h.snippet || '') || h.title, url: wikiPageUrl(h.title), source: 'wikipedia',
+    }));
+  },
+  // NEWS — current events (Google News RSS).
+  news: async (ctx, query, k) =>
+    parseFeed((await ctx.fetchUrl(ctx.searchUrl(query))).text).slice(0, k)
+      .map((it) => ({ title: it.title, text: it.summary || it.title, url: it.link, source: 'news' })),
+  // FEED — fetch an arbitrary RSS/Atom feed or page the query names by URL (any website).
+  feed: async (ctx, query, k) => {
+    if (!/^https?:\/\//.test(query)) return [];
+    return parseFeed((await ctx.fetchUrl(query)).text).slice(0, k)
+      .map((it) => ({ title: it.title, text: it.summary || it.title, url: it.link, source: 'feed' }));
+  },
+};
+
+// routeKind(query) → which source, when the caller asks for 'auto'. Current-events phrasing →
+// news; a URL / "rss"/"feed" → feed; everything else → Wikipedia (facts/entities).
+export const routeKind = (query) => {
+  const q = String(query || '').toLowerCase();
+  if (/\b(latest|news|today|recent|recently|breaking|this week|right now|currently)\b/.test(q)) return 'news';
+  if (/^https?:\/\//.test(query) || /\b(rss|feed|atom)\b/.test(q)) return 'feed';
+  return 'wikipedia';
+};
+
 // createWebClient({ proxy, fetchImpl, searchUrl }) → the fetch/search instrument. `fetchImpl` is
-// injectable (the real fetch in app/Node; a fake in tests). `fetchUrl` is the one primitive;
-// `search` rides it over a feed-search URL.
+// injectable (the real fetch in app/Node; a fake in tests). `fetchUrl` fetches a page THROUGH the
+// feed proxy (?url=); `fetchRaw` hits a URL directly (for sibling webhooks like /ecf); `search`
+// dispatches to a KIND (or auto-routes).
 export const createWebClient = ({
   proxy = DEFAULT_FEED_PROXY,
   fetchImpl = (typeof fetch !== 'undefined' ? fetch : null),
   searchUrl = NEWS_RSS,
 } = {}) => {
+  const proxyBase = proxy.replace(/\/feed\/?$/, '');     // .../webhook — the sibling-webhook root
   const proxied = (url) => `${proxy}?url=${encodeURIComponent(url)}`;
-  const fetchUrl = async (url) => {
+  const fetchRaw = async (url) => {
     if (!fetchImpl) throw new Error('webfetch: no fetch implementation available');
-    const res = await fetchImpl(proxied(url));
-    const text = await res.text();
-    return { url, text, ok: res.ok !== false, status: res.status ?? 200 };
+    const res = await fetchImpl(url);
+    return { url, text: await res.text(), ok: res.ok !== false, status: res.status ?? 200 };
   };
-  const search = async (query, { k = 8 } = {}) => parseFeed((await fetchUrl(searchUrl(query))).text).slice(0, k);
-  return { proxy, proxied, fetchUrl, search };
+  const fetchUrl = (url) => fetchRaw(proxied(url));       // a page, through the feed proxy
+  const ctx = { proxyBase, proxied, fetchRaw, fetchUrl, searchUrl };
+  const search = async (query, { kind = 'auto', k = 8 } = {}) => {
+    const resolved = kind === 'auto' ? routeKind(query) : kind;
+    const fn = SEARCH_SOURCES[resolved] || SEARCH_SOURCES.wikipedia;
+    try { return (await fn(ctx, query, k)).map((it) => ({ ...it, kind: resolved })); }
+    catch { return []; }
+  };
+  return { proxy, proxyBase, proxied, fetchRaw, fetchUrl, search };
 };
 
 const nowIso = () => { try { return new Date().toISOString(); } catch { return null; } };
@@ -95,20 +139,21 @@ export const fetchAndAdmit = async (url, { client, store = null, fetched_at = no
   return store ? store.admit(payload) : admitWebSource(payload);
 };
 
-// searchAndAdmit(query) → search by feed, then admit the top results. By default the feed item
-// (title + summary) is admitted as a light source; with `fetchPages` each result's full page is
-// fetched through the proxy and admitted instead. Returns [{ item, doc, record, … }].
-export const searchAndAdmit = async (query, { client, store = null, k = 5, fetchPages = false, fetched_at = nowIso() } = {}) => {
+// searchAndAdmit(query, { kind, fetchPages }) → search a source (or auto-route), then admit the
+// top results. By default the result's snippet/summary is admitted as a light source; with
+// `fetchPages` each result's full page is fetched THROUGH the proxy — the engine pulling the
+// actual website ("find random websites as needed"). Returns [{ item, doc, record, … }].
+export const searchAndAdmit = async (query, { client, store = null, k = 5, kind = 'auto', fetchPages = false, fetched_at = nowIso() } = {}) => {
   const c = client || createWebClient();
-  const items = await c.search(query, { k });
+  const items = await c.search(query, { kind, k });
   const out = [];
   for (const it of items) {
-    let text = it.summary || it.title || '';
-    if (fetchPages && it.link) {
-      try { text = htmlToText((await c.fetchUrl(it.link)).text) || text; } catch { /* keep the summary */ }
+    let text = it.text || it.title || '';
+    if (fetchPages && it.url) {
+      try { text = htmlToText((await c.fetchUrl(it.url)).text) || text; } catch { /* keep the snippet */ }
     }
-    const payload = { url: it.link || c.proxied(query), title: it.title, text,
-                      excerpt: it.summary, retrieval_query: query, engine: 'feed-proxy', fetched_at };
+    const payload = { url: it.url || c.proxied(query), title: it.title, text,
+                      excerpt: it.text, retrieval_query: query, engine: `web:${it.source || it.kind || kind}`, fetched_at };
     const admitted = store ? store.admit(payload) : admitWebSource(payload);
     out.push({ item: it, ...admitted });
   }

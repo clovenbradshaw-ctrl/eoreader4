@@ -17,7 +17,19 @@ export const COST_NOTICE =
 // answer loop already measures, scoped to the pointed `answer` task (a whole-document task's
 // connective gaps are not lookups to the world).
 export const proposeWebSearch = (ctx) => {
-  if (!ctx || ctx.route !== 'grounded') return null;
+  if (!ctx) return null;
+
+  // A CHAT turn answers from the model's own general knowledge — and that is fine. We do not
+  // replace it; we CHECK it. The proposal is a `verify` trigger: search the web on the question
+  // and flag whether the result supports the answer, leaving the answer itself alone. (Smalltalk
+  // / math / metadata short-circuit at `route`, so a chat turn here is a real question.)
+  if (ctx.route === 'chat') {
+    const q = String(ctx.question || '').trim();
+    return q ? { query: q, rationale: 'answered from general knowledge — checking it against the web',
+      trigger: 'verify', cost: COST_NOTICE } : null;
+  }
+
+  if (ctx.route !== 'grounded') return null;
   if (ctx.task && ctx.task !== 'answer') return null;
 
   const flags = new Set((ctx.vetoes || []).map(v => v.id));
