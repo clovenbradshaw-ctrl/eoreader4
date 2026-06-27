@@ -80,7 +80,7 @@ answer uses — stay byte-identical. Lens-conditioned arrest on the structural
 basis ("ride forward inside the dominant reading") is the follow-on, gated and
 bench-validated before it changes the reading by default.
 
-### 3. Close the surf's own verdicts into control
+### 3. Close the surf's own verdicts into control — stance veto + re-read DONE
 
 The surf measures actionable signals and logs them to telemetry:
 
@@ -90,14 +90,38 @@ The surf measures actionable signals and logs them to telemetry:
   (`stance-reserve`): on a pointed (`answer`) question, a Ground-grain commit is
   surfaced to the user as a thin-grounding flag, the surfer's own guard made
   visible. Pure wiring — the measurement already existed.
-- **paradigm `under-read` → re-read (staged; the loop now exists).** The verdict
-  means "the basis still commutes → stay at the Lens, *retrieve more*"
-  (`surf.js:286-288`). PR #127 landed exactly that loop as `inquire`
-  (`write/think.js`): read more of the source *on the engine's own open question*,
-  fold it in, repeat, self-terminating — embedder-free, dependency-injected. So
-  what remains is only the **trigger**: route the surf's `under-read` verdict (or a
-  `stance-reserve` / a think-void) into `inquire` to widen before answering. The
-  mechanism is built; the wiring is the work.
+- **didn't-settle → in-turn re-read — DONE (opt-in).** The active-inference loop,
+  brought in-turn (`src/turn/reread.js`): when the reading could not SETTLE on a pointed
+  question, the `fold` stage reads more of the document on the figure it focused on and
+  folds again from the wider evidence — bounded to one extra pass, dependency-injected,
+  audited in `fold.reread`. Armed by `runTurn({ reread: true })`; **off by default,
+  byte-identical** when off.
+
+  *The trigger, corrected by a test run.* The first cut keyed on the `stance-reserve`
+  guard — but a live probe showed that on the 9-dim operator basis the structural stance
+  almost always finds a dominant lens (`Making`), so `guard && focus` essentially never
+  co-occurred: the re-read was **dead on the default path**. The live signal is the
+  **referential field** (`referent-ambiguous` — a diffuse coref posterior, "the passage
+  does not settle which figure it is about"), which fires on a genuinely ambiguous read
+  while leaving `surf.focus` to widen on. Verified end-to-end: a pronoun-heavy two-rivals
+  passage, `concentrated=false`, `focus="Anna"` → the re-read reads more on "Anna" and
+  widens the span set. The stance guard remains an additional trigger (for the meaning
+  path); the `under-read` paradigm verdict can join once the structural paradigm pass
+  lands.
+
+  *Measured — and it does not yet earn the flip.* The re-read is now wired into the bench
+  (`surfaceNote` honours a `reread` force; `scripts/surf-bench.mjs --reread` runs the battery
+  off vs on, plus a `rereadRegression` on a crafted ambiguous-reference fixture). Two findings:
+  (1) the Metamorphosis battery is **flat** (Δ0) — its readings settle, so the trigger never
+  fires; (2) on the crafted fixture the trigger fires but the widening **adds nothing**. The
+  cause is a real design flaw the bench exposed: the trigger wants a **diffuse coref** (no
+  dominant figure) while the widening retrieves on the focus figure's **label** — which only
+  surfaces fresh spans when that figure is named in unread sentences, i.e. exactly when the
+  reading would have *settled* on it. The two conditions are **anti-correlated**, so the
+  in-turn re-read stays opt-in and OFF, correctly. **Redesign (next):** when the reading can't
+  settle WHO, widen *around the unsettled region* (pull adjacent context near the diffuse-coref
+  peak) rather than retrieve on the figure label — local context is what disambiguates a
+  reference, and it always has spans to add. Re-measure on the same harness.
 - **lensEntropy (staged).** The von Neumann entropy is the NPOV scalar *and* the
   predictive uncertainty — a calibrated confidence the answer could carry.
 

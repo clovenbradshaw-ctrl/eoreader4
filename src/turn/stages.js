@@ -15,6 +15,7 @@ import { surfFold, centroidBasis, projectUnits, structuralActivations } from '..
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
+import { rereadOnUnsettled } from './reread.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
 import { runVetoes, isUnbound } from '../ground/index.js';
@@ -208,6 +209,29 @@ export const stages = {
   // missed is folded in as a citable span (via:'surf', its index real), so it is both
   // read by the consciousness and bindable.
   async fold(ctx) {
+    const folded = await stages.foldReading(ctx);
+    // THE ACTIVE-INFERENCE RE-READ (surfing-next.md §3, opt-in via ctx.reread). When the surf
+    // could not SETTLE on a figure at the peak (the stance-reserve guard) on a pointed
+    // question, read more of the document on the figure the reading circled and fold AGAIN
+    // from the wider evidence — `inquire`'s loop brought in-turn, bounded to one extra pass.
+    // Inert unless the caller opts in, so the default turn is byte-identical to foldReading.
+    if (!ctx.reread || !folded.surf) return folded;
+    const re = pickRetrievalEmbedder(ctx);
+    const widened = await rereadOnUnsettled({
+      doc: ctx.doc, spans: folded.spans, surf: folded.surf, task: ctx.task,
+      referential: folded.referential,        // the diffuse-coref trigger (the live one on the default path)
+      query: ctx.retrievalQuery || ctx.question,
+      retrieve: (q, k) => retrieveHybrid(ctx.doc, q, re, k),
+    });
+    if (!widened.added) return folded;
+    const refolded = await stages.foldReading({ ...ctx, spans: widened.spans });
+    return { ...refolded, rereadInfo: { added: widened.added, asked: widened.asked } };
+  },
+
+  // The reading proper — fold the spans into the note (the surf + significance column). Split
+  // out from `fold` so the re-read can run it twice: once on the retrieved spans, once on the
+  // widened set. Byte-identical to the former fold body.
+  async foldReading(ctx) {
     if (!ctx.spans?.length) return { ...ctx, note: null };
     // Reference by reading (RULES_REV, docs/reference-by-reading.md §2–§3). The turn's
     // DEF target is read off the CONVERSATION CAST — the warmest figure the conversation

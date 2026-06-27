@@ -17,8 +17,9 @@
 import { retrieveHybrid }   from '../retrieve/index.js';
 import { retrieveLexical }  from '../retrieve/index.js';
 import { surfFold } from '../surfer/index.js';
-import { structureSurface } from '../perceiver/index.js';
+import { structureSurface, referentialConfidence } from '../perceiver/index.js';
 import { enactedReadingTo, enactedReadingMeaning } from '../enact/index.js';
+import { unsettled } from '../turn/reread.js';
 
 // The read-time forces, defaulted to the live system's own. A sweep overrides one
 // (or a small joint set) per run; everything else holds at the baseline.
@@ -30,6 +31,8 @@ export const DEFAULT_FORCES = Object.freeze({
   thresholds: undefined, // per-layer REC thresholds (calibrated when undefined)
   impulse: undefined,    // the shock threshold (DEFAULT_IMPULSE when undefined)
   depth: 'cheap',        // 'cheap' (γ-mass) | 'meaning' (MiniLM, needs a meaning embedder)
+  reread: false,         // the active-inference re-read (turn/reread.js): widen the window
+                         // when the reading did not SETTLE on a figure. Off → byte-identical.
 });
 
 // Surface the note for one probe. Async because retrieval and the meaning reader
@@ -58,6 +61,24 @@ export const surfaceNote = async (doc, query, { embedder = null, forces = {} } =
   const window = [...new Set([...hits.map(h => h.idx), ...surf.stops])]
     .filter(i => i >= 0 && i < S).sort((a, b) => a - b);
   if (window.length === 0 && S > 0) window.push(anchor);
+
+  // 2b — the active-inference RE-READ (turn/reread.js, surfing-next.md §3), opt-in via
+  // forces.reread so the baseline window is byte-identical. When the reading did not SETTLE
+  // on a figure — a diffuse coref posterior at the peak (the referent-ambiguous measure) —
+  // read more of the document on the figure it focused on and fold the fresh spans into the
+  // window. This is the same widening the turn does; surfacing it here lets the BENCH measure
+  // whether reading-more-on-the-open-figure improves the note (the gate on flipping it on).
+  if (f.reread && doc.corefField) {
+    const referential = referentialConfidence(doc.corefField.fieldGrounded(surf.peak));
+    if (unsettled(surf, 'answer', referential)) {
+      const q = `${query} ${surf.focus}`.trim();
+      let more = [];
+      try { more = embedder ? await retrieveHybrid(doc, q, embedder, 4) : retrieveLexical(doc, q, 4); }
+      catch { more = retrieveLexical(doc, q, 4); }
+      for (const h of more) if (h.idx >= 0 && h.idx < S && !window.includes(h.idx)) window.push(h.idx);
+      window.sort((a, b) => a - b);
+    }
+  }
 
   // 3 — fold the graph over the window (the notes register, structured), then
   // PIVOT to the topic. The note is "a topic-pivoted view of the graph" (§1): its
@@ -94,6 +115,7 @@ export const surfaceNote = async (doc, query, { embedder = null, forces = {} } =
     query,
     anchor,
     peak: surf.peak,
+    focus: surf.focus,                   // the figure the surf settled on (null when none) — what a re-read widens on
     spans: window,                       // the cited sentence indices (the citation channel)
     spanText,                            // window index → verbatim line (for grounding + silence)
     entities: structure.figures.map(x => ({ id: x.id, label: x.label, count: x.count })),

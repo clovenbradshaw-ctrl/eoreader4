@@ -42,7 +42,7 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, horizon = null }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, horizon = null, reread = false }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -76,7 +76,11 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // (created once per session), the `settle` stage folds this turn's reading into it, so the
   // conversation grows an interpretive state instead of re-deriving one each turn. Null on a
   // default turn → settle is byte-identical and the surf stays stateless, as today.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, horizon };
+  // `reread` arms the in-turn active-inference re-read (turn/reread.js, surfing-next.md §3):
+  // when the surf could not settle on a figure (stance-reserve) on a pointed turn, the fold
+  // reads more of the document on the circled figure and folds again. Off by default — the
+  // present single-pass fold is byte-identical when `reread` is false.
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, horizon, reread };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -186,6 +190,9 @@ const summarize = (name, ctx, ms) => {
                               ...(ctx.retrievalQuery && ctx.retrievalQuery !== ctx.question ? { q: ctx.retrievalQuery } : {}) };
     case 'fold':     return { ...base, noteLen: ctx.note?.text?.length || 0,
                               referential: ctx.referential || null,
+                              // the active-inference re-read (§3): present only when the surf
+                              // under-settled and reading more on the circled figure paid off
+                              ...(ctx.rereadInfo ? { reread: ctx.rereadInfo } : {}),
                               surf: ctx.surf ? {
                                 anchor: ctx.surf.anchor, peak: ctx.surf.peak, stops: ctx.surf.stops,
                                 focus:  ctx.surf.focus,  recs: ctx.surf.recCursors, rode: ctx.surf.rode,
