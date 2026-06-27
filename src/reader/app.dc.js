@@ -30,7 +30,11 @@ class Component extends DCLogic {
       // Chat — first-class alongside sources. Each chat is a thread grounded in what
       // has been read; answers are built from the read graph/sentences (no LLM; an
       // LLM refines them only if window.claude is present). Chats live in the left panel.
-      chats:[], activeChat:null, chatInput:'', chatBusy:false };
+      chats:[], activeChat:null, chatInput:'', chatBusy:false,
+      // Project Gutenberg — "a source of sources". A non-URL query searches the catalog;
+      // a chosen book is fetched and READ FULLY before it joins the sources (and so can
+      // be chatted with). gutenReading holds the id while a book is being read.
+      gutenResults:null, gutenLoading:false, gutenQuery:'', gutenReading:null };
   }
   // ── theme helpers ─────────────────────────────────────────────────────
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
@@ -290,6 +294,51 @@ class Component extends DCLogic {
       scopeLabel:cur.scope?(this.truncLabel(((this.pageOf(cur.scope)||{}).title)||this.short(cur.scope),36)):'everything read',
       messages:msgs,empty:msgs.length===0,
       placeholder:cur.scope?('Ask about “'+this.truncLabel(((this.pageOf(cur.scope)||{}).title)||'this source',26)+'”…'):'Ask about what you’ve read…'};
+  }
+  // ── Project Gutenberg — a source of sources ──────────────────────────────
+  // Search the catalog (gutendex), fetched through the same proxy. Returns books
+  // that have a plain-text edition we can read.
+  async searchGutenberg(query){
+    const api='https://gutendex.com/books/?search='+encodeURIComponent(query);
+    let data;
+    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
+    return (data.results||[]).map(b=>{
+      const f=b.formats||{};
+      const txt=f['text/plain; charset=utf-8']||f['text/plain; charset=us-ascii']||f['text/plain']||(Object.entries(f).find(([k,v])=>/text\/plain/i.test(k)&&!/\.zip$/i.test(v))||[])[1];
+      return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,downloads:b.download_count||0};
+    }).filter(b=>b.txtUrl).slice(0,12);
+  }
+  // Strip Project Gutenberg's license header/footer so only the work is read.
+  stripGutenberg(t){
+    t=String(t||'').replace(/\r\n/g,'\n');
+    const sm=t.match(/\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK[\s\S]*?\*\*\*/i);
+    if(sm)t=t.slice(sm.index+sm[0].length);
+    const em=t.match(/\*\*\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK/i);
+    if(em)t=t.slice(0,em.index);
+    return t.trim();
+  }
+  // Type a query: a URL is opened; anything else searches Project Gutenberg.
+  searchBooks(query){
+    this.setState({gutenLoading:true,gutenResults:null,gutenQuery:query,activeChat:null,viewUrl:null,selId:null});
+    this.searchGutenberg(query).then(res=>{this.setState({gutenLoading:false,gutenResults:res});if(!res.length)this.feedLine('warn','No books found for “'+query+'”.');});
+  }
+  // Read a chosen book FULLY (fetch → strip → parse) before it becomes a source.
+  // Until the parse completes the book is "reading…" and cannot be chatted with.
+  async readGutenberg(book){
+    if(this.state.gutenReading)return;
+    this.setState({gutenReading:book.id});
+    this.feedSep('Project Gutenberg');this.feedLine('read','Fetching “'+book.title+'”…');
+    let text;
+    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(book.txtUrl));if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
+    catch(e){this.feedLine('warn','Could not fetch the book — '+(e&&e.message||e));this.setState({gutenReading:null});return;}
+    text=this.stripGutenberg(text);
+    if(text.length<200){this.feedLine('warn','That edition had too little readable text.');this.setState({gutenReading:null});return;}
+    this.feedLine('read','Reading “'+book.title+'” fully — '+Math.round(text.length/1000)+'k chars…');
+    await this.sleep(20);                                  // let the feed paint before the synchronous parse
+    const r=await this.importText(text,book.title+' — '+book.author);
+    this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
+    if(r)this.feedLine('done','Read fully · '+r.sentenceCount+' propositions — ready to chat');
   }
   ingest(url,title,text,via,image,parent,wikiLinks){
     const doc=this.E.parseText(text,{coordSubjects:true});
@@ -1606,7 +1655,11 @@ class Component extends DCLogic {
   onDirInput(ev){this.setState({direction:ev&&ev.target?ev.target.value:''});}
   onUrlInput(ev){this.setState({url:ev&&ev.target?ev.target.value:''});}
   onUrlKey(ev){if(ev&&ev.key==='Enter')this.doReadUrl();}
-  doReadUrl(){const u=this.state.url.trim();if(!u)return;this.setState({url:''});this.goWeb(u);}
+  // A URL (or bare domain) is opened directly; anything else is a Project Gutenberg
+  // book search — type a title or author to find a book to read.
+  doReadUrl(){const u=this.state.url.trim();if(!u)return;this.setState({url:''});
+    if(/^https?:\/\//i.test(u)||/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(\/|$|\?)/i.test(u)){this.goWeb(u);}
+    else{this.searchBooks(u);}}
   setHover(s){this.setState({hoverSrc:s});}
   openSource(url,wide,tab){const isText=/^text:/i.test(url);this.setState({openSrc:url,srcTab:tab||(isText?'props':'page'),srcWide:!!wide});this.loadEmbed(url);}
   closeSource(){this._embedUrl=null;this.setState({openSrc:null,srcDoc:null,srcLoading:false,srcErr:null});}
@@ -1990,6 +2043,18 @@ class Component extends DCLogic {
     base.activity=this.activityVals();
     this.chatVals(base);
 
+    // Project Gutenberg search results take the center when present (and no chat open).
+    base.gutenOn=!base.chatOn&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
+    base.guten={loading:!!this.state.gutenLoading,query:this.state.gutenQuery||'',
+      hasResults:!!(this.state.gutenResults&&this.state.gutenResults.length),
+      empty:!!(this.state.gutenResults&&!this.state.gutenResults.length),
+      onClear:()=>this.setState({gutenResults:null,gutenQuery:''}),
+      results:(this.state.gutenResults||[]).map(b=>{const reading=this.state.gutenReading===b.id;
+        return {title:b.title,author:b.author,downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
+          btnLabel:reading?'Reading…':'Read fully',onRead:()=>this.readGutenberg(b),
+          rowStyle:'display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--card);',
+          btnStyle:'flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:'+(reading?'#9aa1ab':'var(--acc)')+';border:none;border-radius:9px;padding:8px 14px;cursor:'+(reading?'default':'pointer')+';'};})};
+
     const vu=this.state.viewUrl;
     if(vu){
       base.showWeb=true;
@@ -2005,10 +2070,10 @@ class Component extends DCLogic {
     base.onSortUpdated=()=>this.setState({sortMode:'updated'});base.onSortTop=()=>this.setState({sortMode:'mentions'});base.onSortAz=()=>this.setState({sortMode:'name'});
 
     if(!ready||!g||this.state.pages.length===0){
-      if(!vu&&!base.chatOn){
+      if(!vu&&!base.chatOn&&!base.gutenOn){
         base.showPrompt=true;
-        base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Read a URL to begin':'Loading the reading engine…');
-        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type any article or page URL in the address bar above. The page opens here, and — while detection is on — every entity in it is read into the graph on the right.';
+        base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Read a URL — or find a book':'Loading the reading engine…');
+        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Paste a page URL to read it here, type a title or author to find a book on Project Gutenberg, or use 📄 to import your own. Every entity is read into the graph on the right — then ask about it in a chat.';
         base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);}}));
         base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
       }
