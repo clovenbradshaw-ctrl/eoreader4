@@ -164,7 +164,7 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   el.classList.remove('streaming');     // the live stream is replaced by the cited answer
   const body  = el.querySelector('.body');
   const trail = el.querySelector('.trail');
-  if (body) body.innerHTML = linkifyCitations(text || '');
+  if (body) body.innerHTML = linkifyCitations(text || '', opts.citationSources);
 
   // The plain-language coverage verdict — the headline read of how grounded the
   // answer is, above the terse audit pills. (The pills stay for the trail.)
@@ -537,10 +537,20 @@ const formatVal = (v) => {
   return String(v ?? '');
 };
 
-const linkifyCitations = (text) => {
+// Per-claim attribution: each [sN] becomes a chip that names the source it cites. When a source
+// map is supplied (idx → {label, url}), a web citation links to the page and shows its title on
+// hover; a document citation still scrolls to the span. Falls back to the bare [sN] chip.
+const linkifyCitations = (text, citationSources = null) => {
   const escaped = escapeHtml(text);
-  return escaped.replace(/\[s(\d+)\]/g,
-    (_, n) => `<span class="cite" data-idx="${n}">[s${n}]</span>`);
+  return escaped.replace(/\[s(\d+)\]/g, (_, n) => {
+    const src = citationSources && citationSources[n];
+    if (src && src.url) {
+      const title = escapeHtml(`${src.label} — ${src.url}`);
+      return `<a class="cite cite-web" data-idx="${n}" href="${escapeHtml(src.url)}" target="_blank" rel="noopener" title="${title}">[s${n}]</a>`;
+    }
+    const title = src?.label ? ` title="${escapeHtml(src.label)}"` : '';
+    return `<span class="cite" data-idx="${n}"${title}>[s${n}]</span>`;
+  });
 };
 
 const escapeHtml = (s) =>

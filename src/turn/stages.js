@@ -14,7 +14,7 @@ import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerrainAt } from '../surfer/index.js';
-import { namedReferents, referentialConfidence, siteIndices, serializeEOT, structureSurface } from '../perceiver/index.js';
+import { namedReferents, referentialConfidence, siteIndices, serializeEOT } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
@@ -433,11 +433,14 @@ export const stages = {
     //   web we want the full meaning the parser extracted, not only the spans nearest the
     //   question. Its richness is bounded by relation extraction on prose (entities + their
     //   definitions always; typed relations where the parser recognized the verb).
+    // The graph is the SURFER's reading — the structure over the spans the surf actually settled
+    // on (ctx.note.levels.structure), NOT a dump of every unit. Reading the whole document folds
+    // in nav chrome and off-topic sentences ("Main -> Random : page"); the surf is what selects
+    // the significant few. EOT-serialized (docs/eot-surface-syntax.md) and scrubbed at the membrane.
     let fedGraph = '';
-    if (grounded && ctx.groundGraph && ctx.doc) {
-      const allIdxs = (ctx.doc.units || ctx.doc.sentences || []).map((_, i) => i);
+    if (grounded && ctx.groundGraph && ctx.note?.levels?.structure) {
       try {
-        const lines = serializeEOT(structureSurface(ctx.doc, allIdxs), { max: 24 });  // EOT surface (docs/eot-surface-syntax.md)
+        const lines = serializeEOT(ctx.note.levels.structure, { max: 24 });
         fedGraph = scrubGraphLines(lines).join('\n');
       } catch { fedGraph = ''; }
     }

@@ -553,19 +553,28 @@ const runQuery = async (question) => {
   // the updated answer. Returns nothing; it paints `thinking` and the doc-pane highlights.
   // Web docs cite back with an opaque "web-<hash>" docId; show the page's title/domain instead,
   // so the answer's source chips are transparent (not raw ids). Built from this turn's gather.
-  const webLabel = new Map();
+  const webLabel = new Map();   // web docId → display label
+  const webUrl   = new Map();   // web docId → url
   for (const d of (webGather?.docs || [])) {
     webLabel.set(d.docId, d.web?.title || (() => { try { return new URL(d.web?.url || '').host.replace(/^www\./, ''); } catch { return d.docId; } })());
+    if (d.web?.url || d.web?.final_url) webUrl.set(d.docId, d.web.url || d.web.final_url);
   }
   const render = (res, ms) => {
     const route = res.route || res.turn?.route;
     const docNames = route === 'grounded'
       ? (res.sourceDocs?.length ? res.sourceDocs : selectedDocs.map(d => d.docId)).map(n => webLabel.get(n) || n)
       : [];
+    // Per-claim attribution: map each cited [sN] to its source (label + web url), so a citation
+    // names the page it came from. Built from the pipeline's index→docId map (res.citeOrigins).
+    const citationSources = {};
+    for (const [idx, docId] of Object.entries(res.citeOrigins || {})) {
+      citationSources[idx] = { label: webLabel.get(docId) || docId, url: webUrl.get(docId) || '' };
+    }
     finalizeThinking(thinking, res.answer, res.sources, {
       route, ms, flags: res.flags,
       mode: STATE.grounding,
       docNames,
+      citationSources,
       onDocSource: (name) => {
         if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('doc');
         if (name && STATE.docs.has(name)) viewDoc(name);
