@@ -2,8 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseEOT, eotDoc } from '../src/ingest/index.js';
-import { projectGraph } from '../src/core/index.js';
+import { projectGraph, classify, canWitness } from '../src/core/index.js';
 import { trajectory, siteTerrainAt } from '../src/surfer/index.js';
+import { assembleBrief } from '../src/write/index.js';
 
 // EOT (docs/eot-surface-syntax.md): punctuation shape carries the common operators; the
 // ingester recovers the operator, mints anchors, derives the Site cell, and stamps provenance.
@@ -148,7 +149,7 @@ test('an EOT doc drives the trajectory like any other (focus by sign, read by id
   assert.ok(vias.includes('fed') && vias.includes('renounced'), 'the arc reads the EOT relations');
 });
 
-import { assembleBrief } from '../src/write/index.js';
+
 
 test('assembleBrief on an EOT doc selects the SALIENT relations (link-salience), drops off-thread', () => {
   const doc = eotDoc([
@@ -222,4 +223,30 @@ test('across rounds the focus follows the conversation, not the edge count (rece
   // moves there: recency over raw edge count.
   assert.equal(ask('And the father?'), 'father', 'shifts to the father the question names');
   assert.equal(ask('What about Klamm?'), 'Klamm', 'and to Klamm next');
+});
+
+
+
+test('EOT is the model\'s interpretation — reafference, and it CANNOT witness', () => {
+  // EOT is the model's NOTES of a reading, not the world. So its events are enactor-door
+  // (reafference, mine), and by the §8 type law canWitness is false — the conjecture, not the
+  // ground. The source text would be the exafference; this is the reading of it.
+  const doc = eotDoc('Alice : Person\nAlice -> Bob : knows');
+  for (const e of doc.log.snapshot()) {
+    assert.equal(e.door, 'enactor', 'EOT events carry the enactor door by default');
+    assert.equal(classify(e.prov), 'reafference', 'classified as reafference — mine');
+    assert.equal(canWitness(e.prov), false, 'a note of the reading cannot witness');
+  }
+});
+
+test('an EXTERNAL import is exafference — the world, which CAN witness', () => {
+  const doc = eotDoc('Alice : Person\nAlice -> Bob : knows', { door: 'perceiver', agent: 'import:owl' });
+  const e = doc.log.snapshot().find(x => x.op === 'CON');
+  assert.equal(e.door, 'perceiver');
+  assert.equal(canWitness(e.prov), true, 'real imported data is exafference — it witnesses');
+});
+
+test('the RDF brief reports the door honestly — enactor for the model\'s notes', () => {
+  const b = assembleBrief(eotDoc('Grete -> Gregor : fed'), { question: 'What did Grete do?' });
+  assert.match(b.prompt.user, /eo:door "enactor"/, 'the talker is told this is interpretation, not witnessed world');
 });

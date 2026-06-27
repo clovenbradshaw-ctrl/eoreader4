@@ -62,9 +62,12 @@ export const briefRDF = (doc, { max = 12, only = null } = {}) => {
     relations.add(p);
     const order = e.sentIdx ?? 0;
     const site = siteTerrainAt(doc, order);
-    // the spine triple, then its EO annotation as an RDF-star quoted triple.
+    // the spine triple, then its EO annotation as an RDF-star quoted triple. The door is read
+    // off the event (EOT notes are the model's reafference → "enactor"; prose read from the
+    // world → "perceiver"), so the talker can see what is witnessed vs what is interpreted.
+    const door = e.door ?? (e.prov?.door) ?? 'perceiver';
     lines.push(`${s} ${p} ${o} .`);
-    lines.push(`<< ${s} ${p} ${o} >> eo:op "${e.op}" ; eo:site "${site}" ; eo:band "${bandOf(e)}" ; eo:order ${order} ; eo:door "perceiver" .`);
+    lines.push(`<< ${s} ${p} ${o} >> eo:op "${e.op}" ; eo:site "${site}" ; eo:band "${bandOf(e)}" ; eo:order ${order} ; eo:door "${door}" .`);
   }
 
   const decls = [

@@ -3,12 +3,20 @@
 // Surface → canonical EO tuples. The producer writes punctuation shapes it already knows
 // (`X : T`, `X.f = v`, `X -> Y : r`) and never a 9-way operator classification; this module
 // RECOVERS the operator from shape + running state (§7), mints anchors and keeps the sign
-// table (§8.4), derives the Site-face cell and decal (Appendix B), defaults provenance from
-// the ingestion context (§8.3), and emits one fully-specified event per line (§8.1). A
-// malformed line is never dropped — it becomes a diagnostic (§9). Regular, line-oriented, no
-// nesting in the core profile: the parser is a handful of regexes, as the spec intends.
+// table (§8.4), derives the Site-face cell and decal (Appendix B), and emits one fully-
+// specified event per line (§8.1). A malformed line is never dropped — it becomes a
+// diagnostic (§9). Regular, line-oriented: the parser is a handful of regexes.
+//
+// PROVENANCE — the load-bearing point. EOT is NOT the world. It is the model's NOTES of a
+// reading — its representation of its own interpretation, not a record of what happened. So an
+// EOT event is REAFFERENCE (the enactor door): mine, and by the §8 type law it CANNOT witness.
+// The source text is the exafference (the world, what happened); the EOT is the conjecture
+// read off it, held defeasibly. So `door` defaults to 'enactor', and the events are stamped
+// with fromEnactor — canWitness(prov) is false. Only an EXTERNAL import (OWL/Airtable, real
+// data) is exafference, and the caller passes door:'perceiver' for that. A prior EOT reloaded
+// later comes back READ_BACK-of-prior-self via the indexical reload — never fresh world.
 
-import { isOperator, mintHash, terrainOf, createLog } from '../core/index.js';
+import { isOperator, mintHash, terrainOf, createLog, fromEnactor, fromPerceiver } from '../core/index.js';
 import { tok } from '../perceiver/parse/index.js';
 
 // ── Site / decal derivation (Appendix B) ──────────────────────────────────────
@@ -85,10 +93,13 @@ const parseList = (inner) => inner.split(',').map((x) => x.trim()).filter(Boolea
 //   signs    the final sign→anchor table (§8.4)
 export const parseEOT = (text, context = {}) => {
   const ctx = {
-    agent: context.agent ?? 'import:eot',
+    agent: context.agent ?? 'model:eot',
     mode: context.mode ?? 'asserted',
     frame: context.frame ?? 'eot',
     ts: context.ts ?? null,
+    // EOT is the model's interpretation by default → the ENACTOR door (reafference, cannot
+    // witness). An external import (real data) is exafference → the caller passes 'perceiver'.
+    door: context.door === 'perceiver' ? 'perceiver' : 'enactor',
   };
   const signs = new Map();        // sign → anchor (minted at first INS, §8.4)
   let seq = 0;
@@ -120,6 +131,7 @@ export const parseEOT = (text, context = {}) => {
       ts: meta.ts ?? ctx.ts,
       mode: ctx.mode,
       frame: ctx.frame,
+      door: ctx.door,              // enactor (the model's notes) unless an external import
       line: meta.lineNo,           // the source line (1-based) — the arrow of time for the log
     }));
   };
@@ -219,6 +231,15 @@ export const eotDoc = (text, context = {}) => {
   const lines = String(text ?? '').split('\n').map((l) => l.replace(/\r$/, ''));
   const log = createLog({ docId: context.docId || 'eot' });
 
+  // EOT is the model's interpretation → reafference (enactor), unless the caller marks it an
+  // external import (perceiver). Every native event is stamped with this provenance, so the §8
+  // type law holds: a note made of the reading CANNOT witness — it is the conjecture, not the
+  // ground. The source text is the world; this is the reading of it.
+  const door = context.door === 'perceiver' ? 'perceiver' : 'enactor';
+  const frame = context.frame ?? 'eot';
+  const prov = door === 'perceiver' ? fromPerceiver(frame) : fromEnactor(frame);
+  const app = (event) => log.append({ ...event, door, prov });
+
   const anchors = new Map();     // sign → immutable hashId (the coref identity)
   let seq = 0;
   // mint-or-reuse the id for a sign, INS'ing it once. The label is surface; the id is identity.
@@ -226,7 +247,7 @@ export const eotDoc = (text, context = {}) => {
     if (anchors.has(sign)) return anchors.get(sign);
     const id = mintHash(seq++);
     anchors.set(sign, id);
-    log.append({ op: 'INS', id, label, sentIdx });
+    app({ op: 'INS', id, label, sentIdx });
     return id;
   };
   const fieldOf = (path) => { const i = String(path).indexOf('.'); return i < 0 ? null : String(path).slice(i + 1); };
@@ -236,20 +257,20 @@ export const eotDoc = (text, context = {}) => {
     const op = t.op;
     if (op === 'INS') {
       const id = idOf(t.target, sentIdx);                          // mint the span, INS it
-      log.append({ op: 'SIG', src: id, via: 'is', tgt: t.operand.type, sentIdx });   // is-a, as a readable attribute
+      app({ op: 'SIG', src: id, via: 'is', tgt: t.operand.type, sentIdx });   // is-a, as a readable attribute
     } else if (op === 'SIG') {
       const id = idOf(rootSign(t.target), sentIdx);
-      log.append({ op: 'SIG', src: id, via: 'is', tgt: t.operand.designation, sentIdx, ...(t.operand.register ? { register: t.operand.register } : {}) });
+      app({ op: 'SIG', src: id, via: 'is', tgt: t.operand.designation, sentIdx, ...(t.operand.register ? { register: t.operand.register } : {}) });
     } else if (op === 'DEF') {
       const id = idOf(rootSign(t.target), sentIdx);
-      log.append({ op: 'DEF', src: id, via: fieldOf(t.target) ?? 'value', tgt: t.operand.value, sentIdx });
+      app({ op: 'DEF', src: id, via: fieldOf(t.target) ?? 'value', tgt: t.operand.value, sentIdx });
     } else if (op === 'NUL') {
       const id = idOf(rootSign(t.target), sentIdx);
-      log.append({ op: 'NUL', src: id, via: fieldOf(t.target) ?? 'value', sentIdx });
+      app({ op: 'NUL', src: id, via: fieldOf(t.target) ?? 'value', sentIdx });
     } else if (op === 'CON') {
       const s = idOf(t.target, sentIdx);
       const o = idOf(t.operand.to, sentIdx);                       // the object is a span too — its own id
-      log.append({ op: 'CON', src: s, tgt: o, via: t.operand.relation, sentIdx });
+      app({ op: 'CON', src: s, tgt: o, via: t.operand.relation, sentIdx });
     } else if (op === 'SYN' && t.operand.mode === 'identity') {
       // reconcile two SIGNS onto ONE immutable id (the coref law). The left is canonical; the
       // right's sign is repointed at it so every LATER mention resolves to the survivor — all
@@ -257,23 +278,23 @@ export const eotDoc = (text, context = {}) => {
       // identity (history preserved, §8.6); if unseen, it is simply another sign for the span.
       const a = idOf(t.target, sentIdx);
       const bSign = t.operand.same_as;
-      if (anchors.has(bSign)) log.append({ op: 'SYN', src: a, tgt: anchors.get(bSign), kind: 'identity', sentIdx });
-      else log.append({ op: 'SYN', src: a, tgt: a, kind: 'identity', alias: bSign, sentIdx });
+      if (anchors.has(bSign)) app({ op: 'SYN', src: a, tgt: anchors.get(bSign), kind: 'identity', sentIdx });
+      else app({ op: 'SYN', src: a, tgt: a, kind: 'identity', alias: bSign, sentIdx });
       anchors.set(bSign, a);
     } else if (op === 'SYN') {
       const whole = idOf(t.target, sentIdx);
       const parts = (t.operand.parts || []).map((p) => idOf(p, sentIdx));             // each part is its own span
-      log.append({ op: 'SYN', src: whole, parts, promotes: whole, sentIdx });
+      app({ op: 'SYN', src: whole, parts, promotes: whole, sentIdx });
     } else if (op === 'SEG') {
       const s = idOf(rootSign(t.target), sentIdx);
       const segId = mintHash(seq++);                               // the carved segment is its OWN referent
-      log.append({ op: 'INS', id: segId, label: t.operand.key, sentIdx });
-      log.append({ op: 'SEG', src: s, seg: segId, key: t.operand.key, sentIdx });
+      app({ op: 'INS', id: segId, label: t.operand.key, sentIdx });
+      app({ op: 'SEG', src: s, seg: segId, key: t.operand.key, sentIdx });
     } else if (op === 'EVA') {
       const id = idOf(rootSign(t.target), sentIdx);
-      log.append({ op: 'EVA', src: id, via: fieldOf(t.target) ?? 'state', from: t.operand.from, to: t.operand.to, sentIdx });
+      app({ op: 'EVA', src: id, via: fieldOf(t.target) ?? 'state', from: t.operand.from, to: t.operand.to, sentIdx });
     } else if (op === 'REC') {
-      log.append({ op: 'REC', target: t.target, old_terms: t.operand.old_terms, new_terms: t.operand.new_terms, ...(t.operand.mapping ? { mapping: t.operand.mapping } : {}), sentIdx });
+      app({ op: 'REC', target: t.target, old_terms: t.operand.old_terms, new_terms: t.operand.new_terms, ...(t.operand.mapping ? { mapping: t.operand.mapping } : {}), sentIdx });
     }
   }
 
