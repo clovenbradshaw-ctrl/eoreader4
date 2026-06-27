@@ -13,7 +13,7 @@ import { retrieveHybrid, pickRetrievalEmbedder, selectExcerpts, retrieveStructur
 import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
-import { surfFold, centroidBasis, projectUnits } from '../surfer/index.js';
+import { surfFold, centroidBasis, projectUnits, siteTerrainAt } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices } from '../perceiver/index.js';
 import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS } from './intent.js';
@@ -593,13 +593,22 @@ const correctiveFor = (ctx) =>
   (gateCondition(ctx) && !confabulating(ctx)) ? GROUNDING_CORRECTIVE : CONFAB_CORRECTIVE;
 
 // The Site-face terrain the reading typed at the answer locus, for the diagonal guard.
-// A measured void is a Void; a locus the document DEF'd as a site (boilerplate /
-// furniture, read/site.js) is ambient Ground (Atmosphere); otherwise the locus carries
-// a figure (Entity), where a specific claim sits on the diagonal and the guard passes.
+// The guard itself is general over all nine terrains (factcheck/correspond.js: terrainInfo →
+// domain+grain, grain the discriminator); it was only ever FED a corner of the face. Now it
+// gets the real terrain, typed off the locus's operators (surfer/terrain.js) — a bonded locus
+// is a Link, a bare figure an Entity, an interpretive locus a Lens — so the off-diagonal
+// verdict records the true Site, and a grain-mismatched claim is caught against whichever of
+// the nine the locus actually is, not a hardcoded Entity. The two authorities the engine has
+// already MEASURED still win: a measured void is Void (the confabulation guard's Void signal),
+// and a DEF'd site (boilerplate / furniture, read/site.js) is ambient Atmosphere. A
+// contentless locus that was NOT measured void is not downgraded to Void here (the measured
+// void is the only Void authority) — it falls back to Entity, exactly as before.
 const terrainAtLocus = (ctx, cursor) => {
   if (ctx.voidMeasure) return 'Void';
   if (cursor != null && Number.isFinite(cursor) && ctx.doc && siteIndices(ctx.doc).has(cursor)) return 'Atmosphere';
-  return 'Entity';
+  if (cursor == null || !Number.isFinite(cursor) || !ctx.doc) return 'Entity';
+  const t = siteTerrainAt(ctx.doc, cursor);
+  return (t === 'Void' || t === 'Field') ? 'Entity' : t;   // only a MEASURED void is Void
 };
 
 // The orientation line: the talker is handed the FILENAME, type, and length, read off
