@@ -211,6 +211,12 @@ export const SEED_STARTER = Object.freeze([
   'please', 'thanks', 'okay', 'hardly', 'scarcely', 'barely',
   'certainly', 'surely', 'clearly', 'apparently', 'obviously', 'probably', 'possibly',
   'eventually', 'gradually', 'usually', 'normally', 'generally',
+  // Framing / sequencing adverbs and a bare subordinator that open a clause but name no
+  // one — a capitalised one at segment start ("Originally the show…", "Roughly one third…",
+  // "After graduating…") is a stray capital the gravity floor otherwise admits as a figure
+  // off its segment-initial subject slot. None occurs inside a proper name (unlike "New",
+  // which heads "New York"), so stripping them as openers is safe.
+  'originally', 'initially', 'roughly', 'after',
   // Cardinals that commonly open a clause ("Two whole days…", "Seven o'clock…").
   'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
   'during',
