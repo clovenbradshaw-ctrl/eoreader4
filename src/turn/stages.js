@@ -20,7 +20,7 @@ import { taskOf, TASK_MAX_TOKENS } from './intent.js';
 import { rereadOnUnsettled } from './reread.js';
 import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
-import { runVetoes, isUnbound } from '../ground/index.js';
+import { runVetoes, isUnbound, classifyProvenance } from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
 import { projectGraph }     from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
@@ -573,9 +573,14 @@ export const stages = {
   // grounding vetoes entirely.
   async veto(ctx) {
     if (!ctx.spans?.length) return { ...ctx, vetoes: [] };
+    // The WITNESS check: classify the answer's propositions against the document's graph and
+    // ask whether they rest on the WORLD (exafference) or only on the engine's own reading
+    // (reafference — e.g. an EOT notes doc). When everything grounded is interpretation, the
+    // `interpretation` veto flags it. Inert for prose (the text is the world → exafference).
+    const provenance = ctx.doc && ctx.rawOutput ? classifyProvenance(ctx.rawOutput, { doc: ctx.doc }) : null;
     const { fired } = runVetoes({
       draft: ctx.rawOutput, bound: ctx.bound, question: ctx.question,
-      referential: ctx.referential, task: ctx.task,
+      referential: ctx.referential, task: ctx.task, provenance,
       // The surfer's measured commit stance — its own confabulation guard (stance-reserve):
       // a Ground-grain reserve at the peak means the reading did not settle on a figure.
       // Computed on every turn now the structural significance column is the default (§2).

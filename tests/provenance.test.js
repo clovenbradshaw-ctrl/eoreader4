@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { classifyProvenance } from '../src/ground/index.js';
+import { eotDoc } from '../src/ingest/index.js';
+import { runVetoes } from '../src/ground/index.js';
 import { parseText } from '../src/perceiver/parse/index.js';
 
 // A response is a sequence of propositions, each with its own grounding provenance —
@@ -56,4 +58,48 @@ test('one response, mixed provenance — the fabricated part is isolated, the wi
   assert.equal(g.placed, 'verbatim', 'the lifted proposition is verbatim');
   assert.equal(g.charted, 'fabricated', 'the invented proposition is isolated as fabricated');
   assert.equal(c.anyWitnessed, true, 'the response is not refused whole — the witnessed part stands');
+});
+
+
+test('the witness dimension: a claim grounded only by EOT notes is interpretation, not witnessed', () => {
+  // EOT is the model's reafferent notes — grounded (the relation is in the reading) but NOT
+  // witnessed, because nothing outside the engine's own reading attests it.
+  const notes = eotDoc('Grete : Person\nGregor : Person\nGrete -> Gregor : fed');
+  const c = classifyProvenance('Grete fed Gregor.', { doc: notes });
+  assert.equal(c.propositions[0].witness, 'reafference', 'witnessed only by the model\'s interpretation');
+  assert.equal(c.propositions[0].interpretation, true);
+  assert.equal(c.onlyInterpretation, true, 'the whole answer rests on interpretation');
+  assert.equal(c.anyWitnessed, false, 'nothing the world witnesses');
+});
+
+test('a claim grounded against PROSE (the world read) is witnessed by exafference', () => {
+  const prose = parseText('Grete fed Gregor.', { docId: 'p' });
+  const c = classifyProvenance('Grete fed Gregor.', { doc: prose });
+  assert.equal(c.propositions[0].witness, 'exafference', 'the text was the world — it witnesses');
+  assert.equal(c.onlyInterpretation, false);
+  assert.equal(c.anyWitnessed, true);
+});
+
+test('an EXTERNAL import (real data) witnesses, even though it arrived as EOT', () => {
+  const imported = eotDoc('Grete : Person\nGregor : Person\nGrete -> Gregor : fed', { door: 'perceiver' });
+  const c = classifyProvenance('Grete fed Gregor.', { doc: imported });
+  assert.equal(c.propositions[0].witness, 'exafference', 'imported data is exafference');
+});
+
+
+test('the interpretation veto fires when an answer rests only on the model\'s notes', () => {
+  const notes = eotDoc('Grete : Person\nGregor : Person\nGrete -> Gregor : fed');
+  const provenance = classifyProvenance('Grete fed Gregor.', { doc: notes });
+  const { fired, refuse } = runVetoes({ draft: 'Grete fed Gregor.', bound: [{ citation: 's0' }], task: 'answer', provenance });
+  const flag = fired.find(f => f.id === 'interpretation');
+  assert.ok(flag, 'the interpretation flag fires');
+  assert.equal(flag.refuses, false, 'flag-and-tell: the reading still rides, marked as interpretation');
+  assert.equal(refuse, false);
+});
+
+test('a prose-grounded answer does NOT fire the interpretation veto (the text is the world)', () => {
+  const prose = parseText('Grete fed Gregor.', { docId: 'p' });
+  const provenance = classifyProvenance('Grete fed Gregor.', { doc: prose });
+  const { fired } = runVetoes({ draft: 'Grete fed Gregor.', bound: [{ citation: 's0' }], task: 'answer', provenance });
+  assert.ok(!fired.some(f => f.id === 'interpretation'), 'witnessed by exafference — no interpretation flag');
 });

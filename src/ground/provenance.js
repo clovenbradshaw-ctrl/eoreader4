@@ -48,8 +48,13 @@ const docPropositions = (doc, spanIdxs = null) => {
   const allow = spanIdxs ? new Set(spanIdxs) : null;
   const props = [];
   for (const e of events) {
-    if ((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null && (!allow || allow.has(e.sentIdx)))
-      props.push({ subj: L(e.src), via: String(e.via).toLowerCase(), obj: e.tgt != null ? L(e.tgt) : null });
+    if ((e.op === 'CON' || e.op === 'SIG') && e.via && e.src != null && (!allow || allow.has(e.sentIdx))) {
+      // the door the proposition was constituted through: exafference (the world, witnessed) or
+      // reafference (the model's interpretation — an EOT note, which cannot witness). Prose
+      // events carry no door → exafference (the text WAS the world read), so prose is unchanged.
+      const door = e.door ?? e.prov?.door ?? 'perceiver';
+      props.push({ subj: L(e.src), via: String(e.via).toLowerCase(), obj: e.tgt != null ? L(e.tgt) : null, door });
+    }
   }
   return props;
 };
@@ -73,15 +78,36 @@ export const classifyProvenance = (answer, source = []) => {
   // grounds: "Ben was trusted by Anna" ↔ "Anna trusted Ben"); the relation must match.
   const relKey = (p) => `${[p.subj, p.obj || ''].sort().join('~')}|${p.via}`;
   const docRel = new Set(docProps.map(relKey));
+  // the relations the WORLD witnesses — grounded by at least one exafferent (perceiver) doc
+  // event. A relation present only through reafference (the model's EOT notes) is grounded but
+  // NOT witnessed: it is the engine's interpretation, defeasible, not the asserted ground.
+  const witnessedRel = new Set(docProps.filter((p) => p.door !== 'enactor').map(relKey));
+
+  // are the "spans" the WORLD, or the model's own notes? Prose sentences (and string spans) are
+  // exafference; an EOT doc's "sentences" are its note-lines — reafference — so a verbatim match
+  // against THEM is still interpretation, not a witnessed lift.
+  const spansAreWorld = !(fromDoc && source.doc?.eot);
 
   const out = propsOf(answer).map((p) => {
     const inSpan = spanLC.some((s) => s.includes(p.subj) && s.includes(p.via) && (!p.obj || s.includes(p.obj)));
     const grounded = docRel.has(relKey(p));
     const grounding = inSpan ? 'verbatim' : grounded ? 'grounded' : 'fabricated';
-    return Object.freeze({ ...p, grounding, witnessed: grounding !== 'fabricated' });
+    // the WITNESS dimension, orthogonal to grounding: a claim lifted from / grounded by the
+    // WORLD is witnessed (exafference); a claim present only through the model's notes is
+    // reafference — interpretation. `interpretation` flags exactly that: in the reading, but
+    // not witnessed by anything outside the engine's own reading.
+    const witness = grounding === 'fabricated' ? null
+      : ((inSpan && spansAreWorld) || witnessedRel.has(relKey(p))) ? 'exafference' : 'reafference';
+    return Object.freeze({ ...p, grounding, witnessed: grounding !== 'fabricated', witness, interpretation: witness === 'reafference' });
   });
 
-  const summary = { verbatim: 0, grounded: 0, fabricated: 0 };
-  for (const o of out) summary[o.grounding] += 1;
-  return Object.freeze({ propositions: out, summary, anyWitnessed: out.some((o) => o.witnessed), allFabricated: out.length > 0 && out.every((o) => !o.witnessed) });
+  const summary = { verbatim: 0, grounded: 0, fabricated: 0, interpretation: 0 };
+  for (const o of out) { summary[o.grounding] += 1; if (o.interpretation) summary.interpretation += 1; }
+  return Object.freeze({
+    propositions: out, summary,
+    anyWitnessed: out.some((o) => o.witness === 'exafference'),
+    allFabricated: out.length > 0 && out.every((o) => !o.witnessed),
+    // every grounded claim rests only on the model's interpretation — nothing the world witnesses.
+    onlyInterpretation: out.length > 0 && out.some((o) => o.witnessed) && !out.some((o) => o.witness === 'exafference'),
+  });
 };
