@@ -200,6 +200,33 @@ would break proposer-only everywhere else — and dropping back out of `auto` `c
 quarantine. A taken entry is byte-identical to a live fetch, so the bind/verify/veto stages
 downstream are unchanged; the only difference the user sees is that the result is already warm.
 
+## Saying it out loud — the "let me look that up" beat (built)
+
+The proposer already decides *whether* to search and *what for* (the sharpened, disambiguated
+`query`) and *why* (`trigger` + `rationale`). For a while that decision only reached the user
+*after* the model had spoken — as the `propose-web` audit step, or the post-answer "Grounded in N
+web sources" header. `searchAnnouncement(proposal)` (`src/turn/propose.js`) promotes it into a
+*first-person, pre-search* line said the moment a search fires:
+
+> *I don't think the document covers this — let me look it up. Searching the web for "what happens
+> at the end? Gregor Samsa"…*
+
+It is a pure string-mapping over the existing proposal — no new logic, no extra model call — so it
+costs nothing to show and reads as progress, not another wait (which matters on the slow local
+model). The "why" is keyed off the `trigger`, and for a `gap` off the measured `rationale`, so the
+promise matches what the engine actually found: a `verify` says *"I answered from what I already
+know — let me check that against the web"* (it will augment, never silently overwrite), a `witness`
+says *"that rests on my own reading — let me confirm it"*, and a `gap` names the specific hole. This
+makes the engine's uncertainty legible *at the moment it matters* and invites the user to redirect
+("no, it's in the document — scroll to the end") instead of reconstructing the reasoning afterward
+in an audit pane most users never open.
+
+Surfaced in `src/ui/chat.js` (`renderSearchNote`) and wired in `app.js`: in `confirm` mode the beat
+appears when the user approves the proposal card (announcing the query they may have edited); in
+`auto` mode — which searches up front, before any proposal exists — the pre-answer status note
+names the formulated query directly (`🔎 Looking this up: "…"`). Either way the note is transient:
+`finalizeThinking` clears it when the grounded answer comes back.
+
 ## What is next
 
 - **Source-aware UI** — globe-glyph source chips with provenance + a retract control; the

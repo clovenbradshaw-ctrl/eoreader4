@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { proposeWebSearch, COST_NOTICE } from '../src/turn/propose.js';
+import { proposeWebSearch, searchAnnouncement, COST_NOTICE } from '../src/turn/propose.js';
 import { runTurnWithWeb, runWebFollowup, verifyAgainstWeb, formulateSearchQuery } from '../src/turn/web.js';
 import { admitWebSource } from '../src/ingest/websource.js';
 
@@ -80,6 +80,39 @@ test('low-coverage alone proposes (few claims grounded)', () => {
     bound: [{ citation: 's0' }, { citation: null }], rawOutput: 'a lot happened across the report',
     vetoes: [{ id: 'low-coverage' }] });
   assert.ok(p && /few of the claims/.test(p.rationale));
+});
+
+// ── The announcement: the proposal promoted into a first-person, pre-search line ──
+
+test('a gap proposal announces in the first person, naming the gap and the query', () => {
+  const p = proposeWebSearch({ route: 'grounded', task: 'answer', question: 'what happens at the end?',
+    voidMeasure: true, bound: [], vetoes: [], surf: { focus: 'Gregor Samsa' } });
+  const line = searchAnnouncement(p);
+  assert.match(line, /don't think the document covers this/);
+  assert.match(line, /Searching the web for/);
+  assert.match(line, /what happens at the end\? Gregor Samsa/);   // the sharpened query, verbatim
+});
+
+test('a verify (chat) proposal promises to CHECK against the web, not replace the answer', () => {
+  const line = searchAnnouncement({ trigger: 'verify', query: 'capital of france', rationale: 'general knowledge' });
+  assert.match(line, /answered from what I already know/);
+  assert.match(line, /capital of france/);
+});
+
+test('a witness proposal promises to CONFIRM the engine’s own reading', () => {
+  const line = searchAnnouncement({ trigger: 'witness', query: 'gregor samsa transformation', rationale: 'engine’s own reading' });
+  assert.match(line, /rests on my own reading/);
+});
+
+test('a bare { query } (the auto path, no proposal yet) falls back to a neutral "let me look that up"', () => {
+  const line = searchAnnouncement({ query: 'eiffel tower height' });
+  assert.match(line, /Let me look that up/);
+  assert.match(line, /eiffel tower height/);
+});
+
+test('nothing to announce → null (no proposal, or an empty query)', () => {
+  assert.equal(searchAnnouncement(null), null);
+  assert.equal(searchAnnouncement({ query: '   ' }), null);
 });
 
 test('low-coverage does NOT propose when a loaded document already grounded the answer (no redundant fetch)', () => {
