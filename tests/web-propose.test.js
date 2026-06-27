@@ -183,6 +183,47 @@ test('runWebFollowup honours a query override (the confirmation card lets the us
   assert.equal(out.webFetched.results, 1);
 });
 
+// ── The currency check: a verify is UPGRADED to a gap-fill when the model is stale ──
+test('verify stays a witness when the model judges its answer current (corroborate, do not re-run)', async () => {
+  const calls = [];
+  const impl = async (args) => { calls.push(args); return { answer: 'Gregor Samsa is a Kafka character.',
+    webProposal: { query: 'gregor samsa', trigger: 'verify', rationale: 'general knowledge', cost: COST_NOTICE }, flags: [] }; };
+  const webSearch = async () => [{ doc: groundedDoc('Gregor Samsa is the protagonist of Kafka’s Metamorphosis.') }];
+  const assess = async () => ({ needsWeb: false, current: true, timeSensitive: false });
+  const out = await runWebFollowup({ question: 'who is gregor samsa?', docs: [], model: {}, today: '2026-06-27' },
+    await impl({ question: 'who is gregor samsa?' }), { webSearch, runTurnImpl: impl, assess });
+  assert.equal(out.webFetched.trigger, 'verify', 'a current answer is corroborated, not filled');
+  assert.equal(out.answer, 'Gregor Samsa is a Kafka character.', 'the model answer is kept');
+  assert.equal(calls.length, 1, 'verify does not re-run the turn');
+});
+
+test('verify is upgraded to a gap-fill when the model judges its answer stale / time-sensitive', async () => {
+  const calls = [];
+  const impl = async (args) => { calls.push(args);
+    if (calls.length === 1) return { answer: 'It is probably mild.',
+      webProposal: { query: 'weather NYC', trigger: 'verify', rationale: 'general knowledge', cost: COST_NOTICE }, flags: [] };
+    return { answer: 'It is 31°C and sunny in NYC.', webProposal: null, flags: [], sources: [0] }; };
+  const webSearch = async () => [{ doc: groundedDoc('New York City: 31°C and sunny today.') }];
+  const assess = async () => ({ needsWeb: true, current: false, timeSensitive: true });
+  const out = await runWebFollowup({ question: 'weather in NYC today?', docs: [], model: {}, today: '2026-06-27' },
+    await impl({ question: 'weather in NYC today?' }), { webSearch, runTurnImpl: impl, assess });
+  assert.equal(out.webFetched.trigger, 'gap', 'a stale answer is filled from live pages');
+  assert.equal(out.answer, 'It is 31°C and sunny in NYC.', 're-answered on the fetched pages');
+  assert.equal(calls.length, 2, 'the turn re-runs with the web sources in scope');
+});
+
+test('the currency check is skipped when no model is supplied (verify stands)', async () => {
+  const impl = async () => ({ answer: 'x',
+    webProposal: { query: 'q', trigger: 'verify', rationale: 'general knowledge', cost: COST_NOTICE }, flags: [] });
+  const webSearch = async () => [{ doc: groundedDoc('some corpus text here for the check') }];
+  let assessed = false;
+  const assess = async () => { assessed = true; return { needsWeb: true }; };
+  const out = await runWebFollowup({ question: 'q', docs: [] }, await impl(),
+    { webSearch, runTurnImpl: impl, assess });
+  assert.equal(assessed, false, 'no model ⇒ no self-check');
+  assert.equal(out.webFetched.trigger, 'verify');
+});
+
 test('off mode (and a no-proposal turn) never reach for the net', async () => {
   const { impl } = fakeRunner();
   let fetched = false;

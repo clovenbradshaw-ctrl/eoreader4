@@ -480,6 +480,9 @@ const runQuery = async (question) => {
   const t0 = performance.now();
   const turnArgs = {
     question,
+    // Today's date — the model's currency check (turn/void-check.js) reads it to judge whether
+    // a general-knowledge answer is stale or time-sensitive and should be filled from the web.
+    today: new Date().toISOString().slice(0, 10),
     shapeLibrary: STATE.shapeLibrary,   // the form predictor, once built (null until MiniLM warms)
     docs:     selectedDocs,     // the selected set — folded into one composite to ground against
     // In WEAVE mode the recalled lines are offered to the model as labelled background;

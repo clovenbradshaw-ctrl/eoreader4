@@ -20,9 +20,13 @@ export const proposeWebSearch = (ctx) => {
   if (!ctx) return null;
 
   // A CHAT turn answers from the model's own general knowledge — and that is fine. We do not
-  // replace it; we CHECK it. The proposal is a `verify` trigger: search the web on the question
-  // and flag whether the result supports the answer, leaving the answer itself alone. (Smalltalk
-  // / math / metadata short-circuit at `route`, so a chat turn here is a real question.)
+  // replace it; we CHECK it. The proposal is a `verify` trigger: witness the answer against the
+  // web and flag whether the result supports it, leaving the answer itself alone. At the
+  // followup, the model's own currency check (turn/void-check.js) may UPGRADE this verify to a
+  // gap-fill when it judges the answer stale or time-sensitive as of today — then live pages are
+  // fetched and the turn re-answers on them. (Every turn now reaches the talker — the mechanical
+  // smalltalk / math / metadata short-circuits at `route` were retired — so a chat turn here is
+  // a real general-knowledge question.)
   if (ctx.route === 'chat') {
     const q = String(ctx.question || '').trim();
     return q ? { query: q, rationale: 'answered from general knowledge — checking it against the web',

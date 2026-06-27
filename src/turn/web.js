@@ -12,6 +12,7 @@
 
 import { runTurn } from './pipeline.js';
 import { createCompositeDoc } from '../organs/in/index.js';
+import { assessKnowledgeVoid } from './void-check.js';
 
 // verifyAgainstWeb(answer, corpus) → does the web corpus SUPPORT the answer? An embedder-free
 // lexical check: how many of the answer's salient (content) terms appear in the fetched text.
@@ -48,25 +49,39 @@ export const runWebFollowup = async (args, first, {
   k = 4,
   runTurnImpl = runTurn,
   query,
+  assess = assessKnowledgeVoid,
 } = {}) => {
   const proposal = first?.webProposal;
   if (!proposal || !webSearch) return first;
   const q = (query != null && String(query).trim()) ? String(query).trim() : proposal.query;
 
+  // The model's own currency check (void-check.js). A general-knowledge answer (`verify`) is
+  // witnessed by default — corroborated against Wikipedia. But when the model judges its own
+  // answer stale or time-sensitive as of today, that is a VOID it cannot fill from memory: the
+  // reach is upgraded to a gap-FILL — fetch live pages and re-answer on them — instead of
+  // merely corroborating. Only the verify path is reconsidered; gap/witness stand as measured.
+  let trigger = proposal.trigger;
+  if (trigger === 'verify' && args?.model) {
+    try {
+      const v = await assess(args.model, { question: q, answer: first.answer, today: args.today });
+      if (v?.needsWeb) trigger = 'gap';
+    } catch { /* a failed self-check leaves the witness path as-is — never blocks the followup */ }
+  }
+
   // Pick the source per trigger: verify/witness want FACTS (Wikipedia); a gap wants to FIND the
   // answer in the wild, so auto-route and pull the actual result pages (random websites).
-  const opts = (proposal.trigger === 'verify' || proposal.trigger === 'witness')
+  const opts = (trigger === 'verify' || trigger === 'witness')
     ? { k, kind: 'wikipedia' }
     : { k, kind: 'auto', fetchPages: true };
   let admitted = [];
   try { admitted = await webSearch(q, opts); } catch { admitted = []; }
   const webDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
-  if (!webDocs.length) return { ...first, webFetched: { query: q, trigger: proposal.trigger, results: 0 } };
+  if (!webDocs.length) return { ...first, webFetched: { query: q, trigger, results: 0 } };
 
   // VERIFY — keep the model's answer (general knowledge is fine), check it against the web, and
   // attach a flag. The answer is NOT replaced: the engine's job here is to flag what's wrong or
   // unconfirmed, not to restrict the answer.
-  if (proposal.trigger === 'verify') {
+  if (trigger === 'verify') {
     const corpus = webDocs.map(d => String(d.text || '')).join('\n');
     const v = verifyAgainstWeb(first.answer, corpus, { question: q });
     const flag = v.supported
@@ -83,14 +98,14 @@ export const runWebFollowup = async (args, first, {
   // ALSO ride as `witnessSource`, so the veto's witness-seek confirms the reading against the
   // world and the `interpretation` flag can clear.
   const baseDocs = args.docs || (args.doc ? [args.doc] : []);
-  const extra = proposal.trigger === 'witness'
+  const extra = trigger === 'witness'
     ? { witnessSource: webDocs.length === 1 ? webDocs[0] : createCompositeDoc(webDocs) }
     : {};
   const second = await runTurnImpl({ ...args, doc: undefined, docs: [...baseDocs, ...webDocs], ...extra });
   return {
     ...second,
     webProposal: proposal,
-    webFetched: { query: q, trigger: proposal.trigger, results: webDocs.length,
+    webFetched: { query: q, trigger, results: webDocs.length,
                   sources: webDocs.map(d => ({ docId: d.docId, title: d.web?.title || d.title || '', url: d.web?.url || d.web?.final_url || '' })) },
   };
 };
