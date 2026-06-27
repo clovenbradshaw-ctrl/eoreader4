@@ -1,0 +1,228 @@
+// EOT — Existential-Operator Triples: a conforming ingester. (docs/eot-surface-syntax.md)
+//
+// Surface → canonical EO tuples. The producer writes punctuation shapes it already knows
+// (`X : T`, `X.f = v`, `X -> Y : r`) and never a 9-way operator classification; this module
+// RECOVERS the operator from shape + running state (§7), mints anchors and keeps the sign
+// table (§8.4), derives the Site-face cell and decal (Appendix B), defaults provenance from
+// the ingestion context (§8.3), and emits one fully-specified event per line (§8.1). A
+// malformed line is never dropped — it becomes a diagnostic (§9). Regular, line-oriented, no
+// nesting in the core profile: the parser is a handful of regexes, as the spec intends.
+
+import { isOperator, mintHash, terrainOf } from '../core/index.js';
+
+// ── Site / decal derivation (Appendix B) ──────────────────────────────────────
+// The Act face is the operator (Mode × Domain). The SITE is WHERE it lands — the target's
+// domain × the object grain — which is why a DEF on an entity's slot is an Entity site, not the
+// operator's own Interpretation row. ω (the decal) is the object position; the Site-face cell
+// follows from the site domain and the grain ω names.
+const GRAIN_OF = { '+': 'Figure', '*': 'Pattern', '−': 'Ground' };
+const OP_SITE = Object.freeze({
+  INS: { domain: 'Existence',      omega: '+' },   // an entity → Entity
+  SIG: { domain: 'Existence',      omega: '+' },   // a re-designation of an entity → Entity
+  DEF: { domain: 'Existence',      omega: '+' },   // a value on an entity's slot → Entity
+  NUL: { domain: 'Existence',      omega: '+' },   // an absence at an entity's slot → Entity
+  CON: { domain: 'Structure',      omega: '+' },   // a link → Link
+  SEG: { domain: 'Structure',      omega: '*' },   // a partition → Network
+  SYN: { domain: 'Structure',      omega: '*' },   // a derived whole / identity → Network
+  EVA: { domain: 'Interpretation', omega: '+' },   // a judgment → Lens
+  REC: { domain: 'Interpretation', omega: '*' },   // a reframe → Paradigm
+});
+const siteOf = (op) => {
+  const s = OP_SITE[op];
+  if (!s) return { site: null, omega: null };
+  return { site: terrainOf(s.domain, GRAIN_OF[s.omega]), omega: s.omega };
+};
+
+// ── Lexical helpers ───────────────────────────────────────────────────────────
+// strip a trailing comment — a `#` that is not inside a quoted string (§4.2).
+const stripComment = (line) => {
+  let q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') q = !q;
+    else if (c === '#' && !q) return line.slice(0, i);
+  }
+  return line;
+};
+
+// pull the trailing provenance trailer (§5.7): `@agent` and `~ts`, order-independent, both
+// optional, after the body. Returns { body, agent, ts }.
+const splitMeta = (line) => {
+  let body = line;
+  let agent = null;
+  let ts = null;
+  let m;
+  // a trailing @… or ~… token (whitespace-separated), stripped repeatedly so order is free.
+  while ((m = body.match(/\s+([@~])([^\s@~]+)\s*$/))) {
+    if (m[1] === '@') agent = m[2]; else ts = m[2];
+    body = body.slice(0, m.index).replace(/\s+$/, '');
+  }
+  return { body, agent, ts };
+};
+
+// parse a value literal (§4.5): quoted string, ∅/nil, bool, number, else bareword string.
+const parseValue = (raw) => {
+  const t = raw.trim();
+  if (t === '∅' || t === 'nil') return { value: null, isNull: true };
+  if (t.length >= 2 && t[0] === '"' && t[t.length - 1] === '"') return { value: t.slice(1, -1), isNull: false };
+  if (t === 'true' || t === 'false') return { value: t === 'true', isNull: false };
+  if (/^-?\d+(\.\d+)?([eE][-+]?\d+)?$/.test(t)) return { value: Number(t), isNull: false };
+  return { value: t, isNull: false };
+};
+
+// a target is a SIGN or PATH — no whitespace, no unbalanced quotes; a literal here is an error.
+const looksLikeTarget = (s) => /^[A-Za-z0-9_:.\-]+$/.test(s);
+const rootSign = (target) => String(target).split('.')[0];
+const parseList = (inner) => inner.split(',').map((x) => x.trim()).filter(Boolean);
+
+// ── The ingester ──────────────────────────────────────────────────────────────
+// parseEOT(text, context) → { events, diagnostics, signs }
+//   context  the ingestion envelope: { agent, ts, mode, frame } (§8.3). Defaults applied
+//            when a line carries no @/~ trailer.
+//   events   one canonical tuple per well-formed statement (§8.1)
+//   diagnostics  { line, raw, expected } for each malformed line (§9) — never silent
+//   signs    the final sign→anchor table (§8.4)
+export const parseEOT = (text, context = {}) => {
+  const ctx = {
+    agent: context.agent ?? 'import:eot',
+    mode: context.mode ?? 'asserted',
+    frame: context.frame ?? 'eot',
+    ts: context.ts ?? null,
+  };
+  const signs = new Map();        // sign → anchor (minted at first INS, §8.4)
+  let seq = 0;
+  let uid = 0;
+  const events = [];
+  const diagnostics = [];
+
+  const mintAnchor = (sign) => {
+    if (signs.has(sign)) return signs.get(sign);
+    const anchor = mintHash(seq++);
+    signs.set(sign, anchor);
+    return anchor;
+  };
+  const anchorOf = (target) => signs.get(rootSign(target)) ?? null;
+
+  // assemble a canonical tuple, deriving site/decal and stamping provenance.
+  const emit = (op, target, operand, meta, { mintFor = null, anchor = null } = {}) => {
+    if (!isOperator(op)) { diagnostics.push({ line: meta.lineNo, raw: meta.raw, expected: `unknown operator ${op}` }); return; }
+    const a = mintFor ? mintAnchor(mintFor) : (anchor ?? anchorOf(target));
+    const { site, omega } = siteOf(op);
+    events.push(Object.freeze({
+      uuid: `evt-${uid++}`,
+      op, target,
+      anchor: a,
+      operand: Object.freeze(operand),
+      addr: Object.freeze({ omega }),
+      site,
+      agent: meta.agent ?? ctx.agent,
+      ts: meta.ts ?? ctx.ts,
+      mode: ctx.mode,
+      frame: ctx.frame,
+    }));
+  };
+
+  const lines = String(text ?? '').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const lineNo = i + 1;
+    const raw = lines[i].replace(/\r$/, '');
+    const noComment = stripComment(raw).trim();
+    if (!noComment) continue;                                      // empty / comment-only (§4.2)
+    const { body, agent, ts } = splitMeta(noComment);
+    const meta = { agent, ts, lineNo, raw };
+    const bad = (expected) => diagnostics.push({ line: lineNo, raw, expected });
+
+    // ── tagged statements: the flag forces the operator (§5.4) ──
+    if (body[0] === '!') {
+      const tm = body.match(/^!([A-Za-z]+)\s+(.*)$/);
+      if (!tm) { bad('a tag must be "!flag body"'); continue; }
+      const flag = tm[1].toLowerCase();
+      const rest = tm[2].trim();
+      if (flag === 'nul') {
+        const t = rest.replace(/\s*=\s*(∅|nil)\s*$/, '').trim();
+        if (!looksLikeTarget(t)) { bad('!nul expects a path'); continue; }
+        emit('NUL', t, { value: null }, meta);
+      } else if (flag === 'sig' || flag === 'clm') {
+        const m = rest.match(/^(\S+)\s*:\s*(\S.*)$/);
+        if (!m) { bad(`!${flag} expects "SIGN : SIGN"`); continue; }
+        const op = flag === 'clm' ? { register: 'claim' } : {};
+        emit('SIG', m[1], { designation: m[2].trim(), ...op }, meta, { anchor: anchorOf(m[1]) ?? mintAnchor(m[1]) });
+      } else if (flag === 'seg') {
+        const m = rest.match(/^(\S+)\s*\|\s*(\S.*)$/);
+        if (!m) { bad('!seg expects "SIGN | KEY"'); continue; }
+        emit('SEG', m[1], { key: m[2].trim() }, meta, { anchor: anchorOf(m[1]) });
+      } else if (flag === 'syn') {
+        const m = rest.match(/^(\S+)\s*<-\s*\[(.*)\]\s*$/);
+        if (!m) { bad('!syn expects "SIGN <- [a, b, ...]"'); continue; }
+        emit('SYN', m[1], { parts: parseList(m[2]) }, meta, { mintFor: m[1] });
+      } else if (flag === 'eva') {
+        // PATH (":" old)? "->" new
+        const m = rest.match(/^(\S+?)(?:\s*:\s*(\S.*?))?\s*->\s*(\S.*)$/);
+        if (!m) { bad('!eva expects "PATH : old -> new" or "PATH -> new"'); continue; }
+        const from = m[2] != null ? parseValue(m[2]).value : null;
+        emit('EVA', m[1], { from, to: parseValue(m[3]).value }, meta, { anchor: anchorOf(m[1]) });
+      } else if (flag === 'rec') {
+        const ev = parseRec(rest);
+        if (!ev) { bad('!rec expects "PATH {a,b} => {c,d}" or "PATH => {k:[...]}"'); continue; }
+        emit('REC', ev.target, ev.operand, meta);
+      } else {
+        bad(`unknown flag !${flag}`);
+      }
+      continue;
+    }
+
+    // ── sugar + core, by the first distinguishing sigil (recovery §7.2) ──
+    let m;
+    if ((m = body.match(/^(\S+)\s*==\s*(\S+)$/))) {                 // identity → SYN(identity)
+      emit('SYN', m[1], { same_as: m[2], mode: 'identity' }, meta, { anchor: anchorOf(m[1]) ?? mintAnchor(m[1]) });
+    } else if ((m = body.match(/^(\S+)\s*<-\s*\[(.*)\]\s*$/))) {    // aggregate → SYN(aggregate)
+      emit('SYN', m[1], { parts: parseList(m[2]) }, meta, { mintFor: m[1] });
+    } else if (body.includes('->')) {                              // LINK → CON (§5.3)
+      m = body.match(/^(\S+)\s*->\s*(\S+)\s*:\s*(\S[\w.\-]*)\s*$/);
+      if (!m) { bad('a link must be "A -> B : relation" (the : relation label is required)'); continue; }
+      emit('CON', m[1], { to: m[2], relation: m[3] }, meta, { anchor: anchorOf(m[1]) ?? mintAnchor(m[1]) });
+    } else if ((m = body.match(/^(\S+)\s*\|\s*(\S.*)$/))) {         // partition sugar → SEG
+      emit('SEG', m[1], { key: m[2].trim() }, meta, { anchor: anchorOf(m[1]) });
+    } else if ((m = body.match(/^([A-Za-z0-9_:.\-]+)\s*=\s*(?![=>])(.+)$/))) {   // ASSIGN → DEF / NUL
+      const v = parseValue(m[2]);
+      if (v.isNull) emit('NUL', m[1], { value: null }, meta);
+      else emit('DEF', m[1], { value: v.value }, meta);
+    } else if ((m = body.match(/^([A-Za-z0-9_:.\-]+)\s+:\s+(\S.*)$/))) {   // IS-A → INS (first) / SIG (later)
+      const subj = m[1];
+      const type = m[2].trim();
+      if (!looksLikeTarget(type.replace(/^"|"$/g, '')) && !/^[A-Za-z]/.test(type)) { bad('IS-A type must be a sign, not a literal'); continue; }
+      if (signs.has(subj)) emit('SIG', `${subj}.type`, { designation: type }, meta, { anchor: signs.get(subj) });
+      else emit('INS', subj, { type }, meta, { mintFor: subj });
+    } else if (/\s:\S|\S:\s/.test(body)) {                         // a one-sided colon (§4.3, §9)
+      bad('colon adjacent to whitespace on only one side — " : " is IS-A, tight ":" is a namespace');
+    } else {
+      bad('not a recognized statement (expected X : T, X.f = v, or X -> Y : r)');
+    }
+  }
+
+  return Object.freeze({ events, diagnostics, signs });
+};
+
+// parse the !rec remap body (§5.5): set form `{a,b} => {c,d}` or map form `=> {k:[...]}`.
+const parseRec = (rest) => {
+  let m;
+  if ((m = rest.match(/^(\S+)\s*\{([^}]*)\}\s*=>\s*\{([^}]*)\}\s*$/))) {
+    return { target: m[1], operand: { old_terms: parseList(m[2]), new_terms: parseList(m[3]) } };
+  }
+  if ((m = rest.match(/^(\S+)\s*=>\s*\{(.*)\}\s*$/))) {
+    const mapping = {};
+    const newTerms = new Set();
+    // pairs: key : term  |  key : [a, b]
+    for (const pair of m[2].split(/,(?![^[]*\])/)) {
+      const pm = pair.match(/^\s*([\w"]+)\s*:\s*(.+)\s*$/);
+      if (!pm) continue;
+      const key = pm[1].replace(/^"|"$/g, '');
+      const val = pm[2].trim();
+      const targets = val.startsWith('[') ? parseList(val.replace(/^\[|\]$/g, '')) : [val];
+      mapping[key] = targets;
+      targets.forEach((x) => newTerms.add(x));
+    }
+    return { target: m[1], operand: { old_terms: Object.keys(mapping), new_terms: [...newTerms], mapping } };
+  }
+  return null;
+};
