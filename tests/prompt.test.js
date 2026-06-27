@@ -236,3 +236,20 @@ test('buildGroundedMessages: now folds the moment in without disturbing the subj
   assert.match(dated[0].content, /You just finished reading/);   // the frame is intact
   assert.match(dated[0].content, /27 June 2026/);                // the moment is appended
 });
+
+// ── The meaning graph in the prompt (the web path feeds the fold's relations) ──
+test('buildGroundedMessages: a graph block feeds the typed relations; absent → no block', () => {
+  const spans = [{ idx: 0, text: 'Ryan Coogler is developing the revival.' }];
+  const plain = buildGroundedMessages({ question: 'who is making it?', spans });
+  assert.doesNotMatch(plain[1].content, /What it means/, 'no graph block by default (subjective frame holds)');
+
+  const graph = 'revival --developed-by--> Ryan Coogler\nseries --produced-for--> 20th Television';
+  const withGraph = buildGroundedMessages({ question: 'who is making it?', spans, graph });
+  assert.match(withGraph[1].content, /What it means — the relations you read/, 'the graph block is present');
+  assert.match(withGraph[1].content, /revival --developed-by--> Ryan Coogler/, 'the relations are fed verbatim');
+  assert.match(withGraph[1].content, /Reason over THESE/, 'the talker is told to reason over the graph');
+  // The verbatim lines still ride as grounding beneath the graph.
+  assert.match(withGraph[1].content, new RegExp(EXCERPTS_HEADER));
+  assert.ok(withGraph[1].content.indexOf('What it means') < withGraph[1].content.indexOf(EXCERPTS_HEADER),
+    'the graph leads; the lines follow as its grounding');
+});

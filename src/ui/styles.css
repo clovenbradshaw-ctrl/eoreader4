@@ -324,6 +324,15 @@ section h2 .hint {
   margin: .4rem 0 .2rem; font-size: .82rem; line-height: 1.5; color: #e2e8f0;
   white-space: pre-wrap; word-break: break-word;
 }
+.msg.assistant .wr-graph { margin: .3rem 0 .1rem; }
+.msg.assistant .wr-graph summary {
+  cursor: pointer; font-size: .7rem; color: #a78bfa; letter-spacing: .02em; user-select: none;
+}
+.msg.assistant .wr-graph pre {
+  margin: .3rem 0 0; padding: .4rem .5rem; font-size: .7rem; line-height: 1.5;
+  color: #cbd5e1; background: #15151a; border-left: 2px solid #6d5bd0;
+  white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+}
 .msg.assistant .wr-source {
   display: flex; align-items: baseline; gap: .4rem; margin-top: .3rem; font-size: .72rem;
   color: #93c5fd; text-decoration: none; word-break: break-word;

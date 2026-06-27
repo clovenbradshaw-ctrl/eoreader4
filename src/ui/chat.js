@@ -404,6 +404,21 @@ export const renderWebResult = (el, fetched) => {
     // sources, so linkifying would mis-reference. The sources ride as chips just below.
     ans.textContent = String(fetched.augmented.answer).replace(/\s*\[s\d+\]/g, '').trim();
     box.appendChild(ans);
+
+    // The MEANING GRAPH the talker actually reasoned over — the typed relations the fold read
+    // off the web content (not the raw text). Collapsed by default; this is what "fed the meant
+    // graph, not just web data" looks like in the open.
+    if (fetched.augmented.graph) {
+      const det = document.createElement('details');
+      det.className = 'wr-graph';
+      const sum = document.createElement('summary');
+      sum.textContent = 'meaning graph fed to the model';
+      det.appendChild(sum);
+      const pre = document.createElement('pre');
+      pre.textContent = fetched.augmented.graph;
+      det.appendChild(pre);
+      box.appendChild(det);
+    }
   }
 
   const sources = fetched.augmented?.sources || fetched.sources || [];

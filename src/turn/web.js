@@ -122,10 +122,12 @@ export const runWebFollowup = async (args, first, {
         onToken: undefined, onStep: undefined, stream: false,   // a side answer — don't touch the live bubble
         auditLog: createAuditLog(),                             // a DETACHED log — runTurn needs one, but this
                                                                 // sub-step must not add a turn to the user's audit pane
+        groundGraph: true,                                      // feed the talker the MEANING GRAPH of the web
+                                                                // content — reason over the relations, not raw lines
       });
       const route = grounded?.route || grounded?.turn?.route;
       if (grounded?.answer && route !== 'error')
-        augmented = { answer: grounded.answer, sources: sourceList(webDocs) };
+        augmented = { answer: grounded.answer, sources: sourceList(webDocs), graph: grounded.fedGraph || '' };
     } catch { augmented = null; }
     return { ...first, webProposal: proposal,
       webFetched: { query: q, trigger: 'verify', results: webDocs.length,
