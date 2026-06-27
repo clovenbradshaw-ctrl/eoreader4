@@ -9,7 +9,8 @@
 // here decides content the model could fabricate — it selects, from the graph, what is grounded
 // and salient, and hands it over in a notation the model can consume.
 
-import { surfFold, threadBasis, trajectory } from '../surfer/index.js';
+import { surfFold, threadBasis, trajectory, linksBySentence, linkSalience, bornSalience } from '../surfer/index.js';
+import { deriveNull } from '../core/index.js';
 import { rdfRealizationPrompt, briefRDF } from './rdf.js';
 import { speakTriples } from './brief.js';
 
@@ -30,6 +31,52 @@ const edgesAtStops = (doc, stops, max) => {
   return out;
 };
 
+// The EOT-native salience path. An EOT log has no prose surprise field (the surfer's bayes is
+// a reading-of-prose artifact), so the surfer cannot select on it. But the edges are already
+// clean and curated, so salience IS the link channel run straight over the log: each span's
+// salience is its strongest link against the thread (the relation between thread figures beats
+// the mere mention), and the noise null over those saliences keeps the salient set. Returns
+// { stops, focus } — the salient sentence indices and the thread figure most often their subject.
+const eotSalience = (doc, thread) => {
+  const links = linksBySentence(doc);
+  const hasThread = thread.figures.size > 0 || thread.terms.size > 0;
+  const scored = [];
+  for (const [idx, ls] of links) {
+    const fig = ls.length ? Math.max(...ls.map((l) => linkSalience(thread.figures, l))) : 0;
+    const term = bornSalience(thread.terms, doc.tokensBySentence?.[idx]);
+    scored.push({ idx, score: Math.max(fig, term) });
+  }
+  if (!scored.length) return { stops: new Set(), focus: null };
+  let stops;
+  if (!hasThread) {
+    stops = new Set(scored.map((s) => s.idx));                 // no thread → the whole graph
+  } else {
+    // an edge touching NOTHING on the thread (salience 0) is off-thread — out, regardless of
+    // the null. Among the edges that DO touch it, the noise null ranks the rest (and on too few
+    // samples it is permissive, so the touching set rides — better than admitting the unrelated).
+    const live = scored.filter((s) => s.score > 0);
+    if (!live.length) stops = new Set(scored.map((s) => s.idx));
+    else {
+      const series = live.map((s) => s.score);
+      stops = new Set(live.filter((s) => s.score > deriveNull(series, { scale: 'linear', alpha: 0.05, leaveOut: s.score })).map((s) => s.idx));
+      if (!stops.size) stops = new Set(live.map((s) => s.idx)); // null permissive/killed → keep the touching set
+    }
+  }
+  // focus: the thread figure most often the SUBJECT of a salient link (whom the arc is about).
+  const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
+  const label = new Map();
+  for (const e of events) if (e.op === 'INS' && e.id != null && !label.has(e.id)) label.set(e.id, e.label);
+  const votes = new Map();
+  for (const e of events) {
+    if (!((e.op === 'CON' || e.op === 'SIG') && e.src != null && stops.has(e.sentIdx))) continue;
+    const lab = String(label.get(e.src) ?? e.src).toLowerCase();
+    if (thread.figures.has(lab)) votes.set(label.get(e.src), (votes.get(label.get(e.src)) || 0) + 1);
+  }
+  let focus = null; let best = 0;
+  for (const [f, v] of votes) if (v > best) { best = v; focus = f; }
+  return { stops, focus };
+};
+
 // assembleBrief(doc, { question, history, max }) → the LLM-facing payload + the reasoning.
 //   prompt        { system, user } — EXACTLY what the talker would be handed (RDF-star, EO-
 //                 annotated, restricted to the salient stops)
@@ -41,16 +88,25 @@ const edgesAtStops = (doc, stops, max) => {
 export const assembleBrief = (doc, { question = '', history = [], max = 24 } = {}) => {
   const thread = threadBasis({ query: question, history, doc });
   const hasThread = thread.terms.size > 0 || thread.figures.size > 0;
-  // adaptive reach reads the whole field; the thread (when present) conditions salience so the
-  // surf keeps only what the conversation is about — "as much as it needs", bounded by salience.
-  const surf = surfFold(doc, 0, hasThread ? { reach: 'adaptive', thread } : { reach: 'adaptive' });
-  const stops = new Set(surf.stops);
+
+  // Two reading paths, one selector contract. An EOT document is a clean, curated graph with no
+  // prose surprise field, so its salience IS the link channel run over the log (eotSalience).
+  // A parsed-prose document has the surfer's bayes field, so it rides the adaptive surf
+  // conditioned by the same thread. Both yield a salient stop set + a focus.
+  let stops; let focus; let recCursors = [];
+  if (doc.eot) {
+    const sel = eotSalience(doc, thread);
+    stops = sel.stops; focus = sel.focus;
+  } else {
+    const surf = surfFold(doc, 0, hasThread ? { reach: 'adaptive', thread } : { reach: 'adaptive' });
+    stops = new Set(surf.stops); focus = surf.focus; recCursors = surf.recCursors;
+  }
   const only = stops.size ? stops : null;
 
   const propositions = edgesAtStops(doc, only, max);
   const prompt = rdfRealizationPrompt(doc, { max, only });
   const draft = speakTriples(propositions, {});
-  const traj = surf.focus ? trajectory(doc, { focus: surf.focus, segments: surf.recCursors }) : null;
+  const traj = focus ? trajectory(doc, { focus, segments: recCursors }) : null;
 
   return Object.freeze({
     prompt,
@@ -58,7 +114,7 @@ export const assembleBrief = (doc, { question = '', history = [], max = 24 } = {
     draft,
     rdf: briefRDF(doc, { max, only }),
     thread: [...thread.figures],
-    surf: { peak: surf.peak, stops: surf.stops, recCursors: surf.recCursors, focus: surf.focus },
+    surf: { stops: [...stops], recCursors, focus },
     trajectory: traj,
   });
 };

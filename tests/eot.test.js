@@ -147,3 +147,26 @@ test('an EOT doc drives the trajectory like any other (focus by sign, read by id
   const vias = t.phases.flatMap(p => p.relations.map(r => r.via));
   assert.ok(vias.includes('fed') && vias.includes('renounced'), 'the arc reads the EOT relations');
 });
+
+import { assembleBrief } from '../src/write/index.js';
+
+test('assembleBrief on an EOT doc selects the SALIENT relations (link-salience), drops off-thread', () => {
+  const doc = eotDoc([
+    'Grete -> Gregor : fed',
+    'Grete -> Gregor : tended',
+    'Grete -> Gregor : nursed',
+    'Grete -> Gregor : renounced',
+    'Carol -> Dan : fled',          // off-thread — must not be selected
+  ].join('\n'));
+  const b = assembleBrief(doc, { question: 'How does Grete treat Gregor?' });
+  assert.equal(b.surf.focus, 'Grete', 'the focus is the subject of the salient links');
+  assert.match(b.prompt.user, /eo:renounced/, 'the reversal edge is kept');
+  assert.match(b.prompt.user, /eo:band "firm"/, 'EOT bonds read firm (clean, curated)');
+  assert.doesNotMatch(b.prompt.user, /Carol|eo:fled/, 'the off-thread relation is dropped by link-salience');
+});
+
+test('an EOT doc with no thread keeps the whole graph (nothing to narrow by)', () => {
+  const doc = eotDoc('Grete -> Gregor : fed\nGrete -> Gregor : renounced');
+  const b = assembleBrief(doc, {});   // no question
+  assert.ok(b.propositions.length >= 2, 'with no thread, the whole graph rides');
+});
