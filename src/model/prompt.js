@@ -83,13 +83,14 @@ export const SYSTEM_FREE = `You are a helpful, knowledgeable assistant. Answer t
 
 (This reply is free-form — it is not grounded in any document the user may have loaded.)`;
 
-// The current-moment line. A small talker, asked "what is today's date?", confabulates the
-// "I have no real-time clock" boilerplate — true of its weights, false of the running app,
-// which knows the moment exactly. This hands it that one fact so a date/time question is
-// answered directly, no web hop needed (the browser clock is the ground truth here). Off by
-// default (`now` null → '' → byte-identical prompts and golden tests); the live turn passes
-// `new Date()`. Formatted from LOCAL components — the user's wall clock, the date they mean —
-// with named day/month arrays so the wording is locale-independent and deterministic to test.
+// The current-moment line — AMBIENT CONTEXT, not an instruction. A small talker, asked "what
+// is today's date?", confabulates the "I have no real-time clock" boilerplate; handed the moment
+// as a plain known fact (the way it knows anything in its context), it just answers. So this is
+// stated as context the chat already has — no "use this", no "you do/don't have a clock", nothing
+// for the model to echo back about clocks at all. The browser is the ground truth; off by default
+// (`now` null → '' → byte-identical prompts and golden tests); the live turn passes `new Date()`.
+// Formatted from LOCAL components — the user's wall clock — with named day/month arrays so the
+// wording is locale-independent and deterministic to test.
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
   'September', 'October', 'November', 'December'];
@@ -101,8 +102,7 @@ export const currentMomentLine = (now = null) => {
   if (!d || Number.isNaN(d.getTime())) return '';
   const date = `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
   const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  return `For reference, the current date and time (the user's local clock) is ${date}, ${time}. ` +
-    `Use this to answer any question about the date, day, year, or time directly — do not say you lack a clock.`;
+  return `Current date and time, for context: ${date}, ${time} (the user's local time).`;
 };
 
 // The orientation line: filename, type, length — and NOTHING that lets the talker

@@ -218,7 +218,9 @@ test('currentMomentLine is empty without a clock and formatted with one (byte-id
   const d = new Date(2026, 5, 27, 14, 5);   // local: Sat 27 June 2026, 14:05
   const line = currentMomentLine(d);
   assert.match(line, /Saturday, 27 June 2026, 14:05/);
-  assert.match(line, /do not say you lack a clock/);
+  // Ambient context only — no clock-announcement framing for the model to echo back.
+  assert.doesNotMatch(line, /clock|real-time|do not say/i);
+  assert.match(line, /for context/i);
 });
 
 test('buildChatMessages: now folds the moment into the system message; absent → unchanged', () => {

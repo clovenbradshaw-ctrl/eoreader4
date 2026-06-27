@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseText } from '../src/perceiver/parse/index.js';
+import { parseRelations } from '../src/perceiver/parse/relations.js';
 import { answerRelation, answerWho } from '../src/answer/mechanical.js';
 import { editWithin, fuzzyMatches, fuzzCeiling } from '../src/perceiver/parse/fuzzy.js';
 
@@ -121,4 +122,27 @@ test('fuzzyMatches rescues an out-of-vocabulary term onto its near neighbour', (
   const greta = fuzzyMatches('greta', vocab);
   assert.deepEqual(greta, [{ token: 'grete', dist: 1 }], 'greta → grete at distance 1');
   assert.deepEqual(fuzzyMatches('zzzzz', vocab), [], 'nothing near → no phantom match');
+});
+
+// Passive voice → typed active edge (the meaning-graph richness for real prose). A copular
+// "<patient> was/is [being] <participle> by <AGENT>" used to flatten into a DEF that buried the
+// agent; now it emits AGENT --participle--> patient when the agent is an admitted named entity.
+test('passive with a named agent becomes a typed edge (created/written/produced by)', () => {
+  const doc = parseText('The Metamorphosis was written by Kafka. Gregor was created by Kafka.', { docId: 'pv' });
+  const rels = [];
+  for (const sent of (doc.sentences || doc.units)) rels.push(...parseRelations(sent, doc.admission, {}, { referents: true }));
+  const edges = rels.filter(r => r.op === 'CON').map(r => `${r.src} --${r.via}--> ${r.tgt}`);
+  assert.ok(edges.includes('kafka --written--> metamorphosis'), `expected the written-by edge, got ${JSON.stringify(edges)}`);
+  assert.ok(edges.includes('kafka --created--> gregor'), `expected the created-by edge, got ${JSON.stringify(edges)}`);
+  // It is a CON relation, not a flat "X: was written by …" DEF.
+  assert.ok(!rels.some(r => r.op === 'DEF' && /written by/i.test(r.value || '')), 'no flat copular DEF for the passive');
+});
+
+test('a copular non-passive still defines, and a passive with no named agent stays a DEF', () => {
+  const doc = parseText('Kafka was a writer. Gregor was transformed by the curse.', { docId: 'pv2' });
+  const rels = [];
+  for (const sent of (doc.sentences || doc.units)) rels.push(...parseRelations(sent, doc.admission, {}, { referents: true }));
+  assert.ok(rels.some(r => r.op === 'DEF' && /a writer/.test(r.value || '')), 'the copula predicate is still a DEF');
+  // "the curse" is not an admitted named entity → no spurious CON, stays a DEF.
+  assert.ok(!rels.some(r => r.op === 'CON' && r.via === 'transformed'), 'no edge to an unnamed agent');
 });
