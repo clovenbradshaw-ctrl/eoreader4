@@ -38,6 +38,21 @@ test('a well-grounded turn proposes nothing; a whole-doc task never proposes', (
   assert.equal(proposeWebSearch({ route: 'chat', task: 'answer', question: 'hi', bound: [], vetoes: [] }), null);
 });
 
+test('an interpretation-only turn proposes a WITNESS-seek, not a gap-fill', () => {
+  const p = proposeWebSearch({ route: 'grounded', task: 'answer', question: 'did Gregor change?',
+    bound: [{ claim: 'a', citation: 's0' }], rawOutput: 'a',   // grounded (cited) — not a gap
+    vetoes: [{ id: 'interpretation' }] });
+  assert.ok(p);
+  assert.equal(p.trigger, 'witness');
+  assert.match(p.rationale, /engine’s own reading/);
+});
+
+test('a gap dominates: void + interpretation proposes a gap-fill', () => {
+  const p = proposeWebSearch({ route: 'grounded', task: 'answer', question: 'q',
+    voidMeasure: true, bound: [], vetoes: [{ id: 'interpretation' }] });
+  assert.equal(p.trigger, 'gap');
+});
+
 test('low-coverage alone proposes (few claims grounded)', () => {
   const p = proposeWebSearch({ route: 'grounded', task: 'answer', question: 'what happened?',
     bound: [{ citation: 's0' }, { citation: null }], rawOutput: 'a lot happened across the report',
@@ -90,6 +105,22 @@ test('confirm mode: nothing is fetched without a go-ahead (proposer-only)', asyn
     { mode: 'confirm', confirm: () => true, webSearch, runTurnImpl: r2.impl });
   assert.equal(fetched, true, 'approved → fetched');
   assert.equal(approved.answer, 'Her name is Grete.');
+});
+
+test('a witness-trigger proposal feeds the fetched source in as the witnessSource on the re-run', async () => {
+  const calls = [];
+  const impl = async (args) => {
+    calls.push(args);
+    return calls.length === 1
+      ? { answer: 'Gregor changed.', webProposal: { query: 'gregor samsa transformation', trigger: 'witness', rationale: 'interp', cost: COST_NOTICE }, flags: [] }
+      : { answer: 'Gregor changed — confirmed.', webProposal: null, flags: [] };
+  };
+  const webSearch = async () => [{ doc: groundedDoc('Gregor Samsa woke transformed into an insect.') }];
+  const out = await runTurnWithWeb({ question: 'did Gregor change?', docs: [] },
+    { mode: 'auto', webSearch, runTurnImpl: impl });
+  assert.equal(out.webFetched.trigger, 'witness');
+  assert.ok(calls[1].witnessSource, 'the re-run received the web source as witnessSource');
+  assert.ok(calls[1].docs.length === 1, 'and it also joined the scope');
 });
 
 test('off mode (and a no-proposal turn) never reach for the net', async () => {

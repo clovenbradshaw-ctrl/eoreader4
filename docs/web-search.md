@@ -118,10 +118,18 @@ Wired into the app **off by default** (`STATE.webSearch` = `'off' | 'confirm' | 
 `auto` fires on a measured gap. The privacy thesis holds — nothing leaves without a go-ahead (or
 an explicit auto opt-in), and every hop is in the glass box.
 
+## Witness-seeking (built)
+
+The proposer carries a **trigger**: `gap` (the document can't close it → fill it) or `witness`
+(the answer is grounded but only on the engine's OWN reading — reafference, e.g. an EOT/notes
+source → confirm it against the world). A gap dominates when both hold (fill before confirm); an
+`interpretation` flag with no gap proposes a witness-seek. On a witness trigger,
+`runTurnWithWeb` feeds the fetched source in as `witnessSource` on the re-run, so the existing
+`veto` witness-seek confirms the reading against it and the `interpretation` flag can clear —
+the web upgrading an interpretation to a witnessed claim, not just filling a hole.
+
 ## What is next
 
-- **Witness-seeking** — make the web a `witnessSource` for the existing `veto` witness-seek, so an
-  interpretation is confirmed against the world (not just gaps filled).
 - **Source-aware UI** — globe-glyph source chips with provenance + a retract control; the
   `propose-web` / fetch steps rendered inline in the trace.
 - **Cross-source promotion** — the deep part above (the web completes the local graph).

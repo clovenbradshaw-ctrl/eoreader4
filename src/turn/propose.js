@@ -20,13 +20,24 @@ export const proposeWebSearch = (ctx) => {
   if (!ctx || ctx.route !== 'grounded') return null;
   if (ctx.task && ctx.task !== 'answer') return null;
 
+  const flags = new Set((ctx.vetoes || []).map(v => v.id));
+
+  // GAP triggers — the document cannot close it, so reach out to FILL it.
   const reasons = [];
   if (ctx.voidMeasure) reasons.push('the document does not cover it');
   if (isUnbound(ctx.bound || [], ctx.rawOutput || '')) reasons.push('the answer ties to nothing in the document');
   if (ctx.referential && ctx.referential.id != null && ctx.referential.concentrated === false)
     reasons.push('the passage does not settle who it is about');
-  const flags = new Set((ctx.vetoes || []).map(v => v.id));
   if (flags.has('low-coverage')) reasons.push('few of the claims are grounded in the document');
+
+  // WITNESS trigger — the answer is grounded but only on the engine's OWN reading (reafference,
+  // e.g. an EOT/notes source); reach out to CONFIRM it against the world. A gap, if present,
+  // dominates (fill before confirm); interpretation-only proposes a witness-seek.
+  let trigger = reasons.length ? 'gap' : null;
+  if (flags.has('interpretation')) {
+    reasons.push('the answer rests on the engine’s own reading, not on anything witnessed');
+    trigger = trigger || 'witness';
+  }
   if (!reasons.length) return null;
 
   // The query: the question, sharpened with the figure the reading centres on when we have a
@@ -36,5 +47,5 @@ export const proposeWebSearch = (ctx) => {
   const query = (figure && !q.toLowerCase().includes(String(figure).toLowerCase()))
     ? `${q} ${figure}`.trim() : q;
 
-  return { query: query || q, rationale: reasons.join('; '), trigger: 'gap', cost: COST_NOTICE };
+  return { query: query || q, rationale: reasons.join('; '), trigger, cost: COST_NOTICE };
 };

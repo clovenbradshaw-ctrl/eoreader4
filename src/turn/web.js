@@ -11,6 +11,7 @@
 // without a model or the network.
 
 import { runTurn } from './pipeline.js';
+import { createCompositeDoc } from '../organs/in/index.js';
 
 export const runTurnWithWeb = async (args, {
   webSearch,                 // (query, { k }) → [{ doc, … }] admitted web sources
@@ -32,12 +33,17 @@ export const runTurnWithWeb = async (args, {
   if (!webDocs.length) return { ...first, webFetched: { query: proposal.query, results: 0 } };
 
   // Re-run with the web sources added to the answer scope — retrieval/bind/veto treat them like
-  // any source, so the second answer can stand on (and cite) what the search brought back.
+  // any source, so the second answer can stand on (and cite) what the search brought back. On a
+  // WITNESS trigger the same sources ALSO ride as `witnessSource`, so the veto's witness-seek
+  // confirms the engine's reading against the world and the `interpretation` flag can clear.
   const baseDocs = args.docs || (args.doc ? [args.doc] : []);
-  const second = await runTurnImpl({ ...args, doc: undefined, docs: [...baseDocs, ...webDocs] });
+  const extra = proposal.trigger === 'witness'
+    ? { witnessSource: webDocs.length === 1 ? webDocs[0] : createCompositeDoc(webDocs) }
+    : {};
+  const second = await runTurnImpl({ ...args, doc: undefined, docs: [...baseDocs, ...webDocs], ...extra });
   return {
     ...second,
     webProposal: proposal,
-    webFetched: { query: proposal.query, results: webDocs.length, sources: webDocs.map(d => d.docId) },
+    webFetched: { query: proposal.query, trigger: proposal.trigger, results: webDocs.length, sources: webDocs.map(d => d.docId) },
   };
 };
