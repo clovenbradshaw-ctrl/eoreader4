@@ -166,7 +166,7 @@ class Component extends DCLogic {
     for(const pg of pages){ if(this._muted&&this._muted.has(pg.url))continue; const so=m.events.length,no=m.sentences.length;
       for(const e of pg.events){const ne={...e,seq:e.seq+so,__page:pg.url};if(e.refSeq!=null)ne.refSeq=e.refSeq+so;if(typeof e.ref==='number')ne.ref=e.ref+so;if(e.argspan!=null)ne.argspan=e.argspan+so;if(e.sentIdx!=null)ne.sentIdx=e.sentIdx+no;m.events.push(ne);}
       pg.sentences.forEach(s=>{m.sentences.push(s);m.sentenceSource.push(pg.url);});
-      m.pages.push({url:pg.url,title:pg.title,ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,seqStart:so,sentStart:no});
+      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,seqStart:so,sentStart:no});
     }
     this.master=m;
     const shim={events:m.events,snapshot:()=>m.events,get length(){return m.events.length;}};
@@ -187,14 +187,35 @@ class Component extends DCLogic {
     const url='text:'+(Date.now().toString(36)); const ttl=title||('Pasted text · '+text.slice(0,40).replace(/\s+/g,' ').trim()+'…');
     return this.ingest(url,ttl,text,'paste');
   }
+  // Import a book / text file: read it, then NAVIGATE the center to it so it opens
+  // as a readable book (loadCenter's text: branch) with its entities clickable.
+  async importText(text,title){
+    const r=await this.readText(text,title);
+    if(!r||!r.url){this.feedLine('warn','Could not import that text.');return false;}
+    this._srcUrl=null;this._pushLoc({t:'web',url:r.url});
+    this.setState(s=>({viewUrl:r.url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));
+    this.loadCenter(r.url);
+    this.feedSep('imported a book');this.feedLine('read','Read “'+r.title+'” · '+r.sentenceCount+' propositions');
+    return r;
+  }
+  onImportClick(){const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
+  onImportFile(ev){
+    const f=ev&&ev.target&&ev.target.files&&ev.target.files[0];if(!f)return;
+    const fr=new FileReader();
+    fr.onload=()=>{this.importText(String(fr.result||''),f.name.replace(/\.(txt|md|markdown|text)$/i,''));if(ev.target)ev.target.value='';};
+    fr.onerror=()=>{this.feedLine('warn','Could not read that file.');};
+    fr.readAsText(f);
+  }
   ingest(url,title,text,via,image,parent,wikiLinks){
     const doc=this.E.parseText(text,{coordSubjects:true});
-    const page={url,title,events:doc.log.snapshot(),sentences:doc.sentences,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null};
+    // Keep the raw text on the page so an imported book can be re-rendered as a
+    // readable book in the center (see _bookHtml / loadCenter's text: branch).
+    const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null};
     const pages=[...this.state.pages,page];this.rebuild(pages);
     this.setState(s=>({pages,rev:s.rev+1,selId:s.selId||this.topEntity()}));
     // Second reader: fold the LLM's SVO reading onto the same log, then re-project.
     if(this.state.llm && this.state.llmAvail && this.SVO) this.runSVO(page);
-    return {title,sentenceCount:doc.sentences.length};
+    return {title,sentenceCount:doc.sentences.length,url};
   }
   // A researched page is RELEVANT only if it actually shares a specific referent with
   // the focal entity's PRE-research context (proper-noun set captured before reading).
@@ -1441,11 +1462,36 @@ class Component extends DCLogic {
   goToHist(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hpos=i;this._applyLoc(this._hist[i]);}
   closeTab(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hist.splice(i,1);if(this._hpos>=i&&this._hpos>0)this._hpos--;if(this._hpos>=this._hist.length)this._hpos=this._hist.length-1;if(this._hpos>=0)this._applyLoc(this._hist[this._hpos]);else this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
   newTab(){this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
-  tabLabel(loc,g){if(loc.t==='web')return this.short(loc.url);return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
+  tabLabel(loc,g){if(loc.t==='web')return /^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url);return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
   buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';return {label:lab,i,active,isWeb,dotStyle:'width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';',onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};});return all.slice(-6);}
   // ---- live embed of the page shown in the CENTER viewport ----
+  // A readable "book" rendering of an imported text source. The author's own
+  // paragraphs (blank-line separated) are kept; if the text has no such structure
+  // we group sentences into readable paragraphs. Rendered into the SAME sandboxed
+  // iframe the web view uses, so decorateFrame() makes every known entity clickable.
+  _bookHtml(p){
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let paras=String(p.text||'').split(/\n\s*\n+/).map(s=>this.norm(s)).filter(s=>s.length);
+    if(paras.length<=1){
+      const sents=(p.sentences||[]).map(s=>this.norm(s)).filter(Boolean);
+      paras=[];for(let i=0;i<sents.length;i+=4)paras.push(sents.slice(i,i+4).join(' '));
+    }
+    const body=paras.map(t=>'<p>'+esc(t)+'</p>').join('\n');
+    const a=this.curAccent();
+    return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+
+      '<style>html,body{margin:0;background:#fff;}'+
+      'body{font:18px/1.72 Georgia,"Iowan Old Style","Times New Roman",serif;color:#23272e;}'+
+      '.eo-book{max-width:680px;margin:0 auto;padding:56px 30px 140px;}'+
+      'h1.eo-title{font:700 30px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-.01em;color:#14171c;margin:0 0 6px;}'+
+      '.eo-byline{font:13px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:#9aa1ab;margin:0 0 34px;border-bottom:1px solid #eef0f3;padding-bottom:18px;}'+
+      'p{margin:0 0 22px;}p:first-of-type::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:'+a+';font-family:Georgia,serif;}'+
+      '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
+      '<div class="eo-byline">Imported text · '+((p.sentences||[]).length)+' propositions · read as a book</div>'+
+      body+'</div></body></html>';
+  }
   loadCenter(url){
-    if(!url||/^text:/i.test(url)){this.setState({pageDoc:null,pageLoading:false,pageErr:null});return;}
+    if(/^text:/i.test(url)){const p=this.pageOf(url);this.setState({pageDoc:p?this._bookHtml(p):null,pageLoading:false,pageErr:p?null:'Text not found'});return;}
+    if(!url){this.setState({pageDoc:null,pageLoading:false,pageErr:null});return;}
     if(this._pageUrl===url&&this.state.pageDoc)return;
     this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null});
     fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
@@ -1825,6 +1871,7 @@ class Component extends DCLogic {
       clickDesc:this.state.clickAction==='ask'?'When an entity is also a hyperlink, clicking asks whether to open its profile or follow the link.':this.state.clickAction==='profile'?'Clicking always opens the entity’s profile. Follow the link from the hover card instead.':'Clicking always follows the hyperlink. Open the profile from the hover card instead.',
       url:this.state.url,onUrlInput:e=>this.onUrlInput(e),onUrlKey:e=>this.onUrlKey(e),onReadUrl:()=>this.doReadUrl(),
       onBack:()=>this.goBack(),onForward:()=>this.goForward(),onReloadTop:()=>this.forceUpdate(),onNewTab:()=>this.newTab(),
+      onImportClick:()=>this.onImportClick(),onImportFile:e=>this.onImportFile(e),
       onToggleDetect:()=>this.toggleDetect(),detect:this.state.detect,showWeb:false,web:null,srcCtxOn:false,
       detectDesc:this.state.detect?'On — every page you open is read into memory.':'Off — pages open without being read. Turn on to build memory.',
       detectSwitch:'flex:0 0 auto;width:34px;height:20px;border-radius:11px;padding:2px;transition:background .15s;background:'+(this.state.detect?'var(--acc)':'#cfd3da')+';',
@@ -1858,7 +1905,7 @@ class Component extends DCLogic {
     const vu=this.state.viewUrl;
     if(vu){
       base.showWeb=true;
-      base.web={url:vu,host:this.short(vu),loading:!!this.state.pageLoading&&!this.state.pageDoc,
+      base.web={url:vu,host:/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu),loading:!!this.state.pageLoading&&!this.state.pageDoc,
         err:(this.state.pageErr&&!this.state.pageDoc)?this.state.pageErr:null,hasDoc:!!this.state.pageDoc,doc:this.state.pageDoc||'',
         onReloadPage:()=>this.loadCenter(vu),detecting:this.state.detect&&this.state.busy};
     }
