@@ -8,6 +8,12 @@
 > navigation. This is the `surfFold` in the `read` holon and its use in the
 > `fold` turn stage.
 
+**SURF** stands for **S**ituated **U**nderstanding **R**etrieved by **F**olding:
+the understanding is *situated* in the field around the anchor (not a fixed
+cursor), *retrieved* by stepping down the gradient that field already maintains,
+and produced by *folding* that reach into the significance note. The name is the
+mechanism — each letter is one of the moves below.
+
 ## A router is a choice; surfing is a measurement
 
 A router reads a state and *emits* where to go next. The surfer reads a field
