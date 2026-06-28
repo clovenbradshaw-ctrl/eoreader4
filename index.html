@@ -1452,10 +1452,20 @@ class Component extends DCLogic {
   // category is the output of the reading, not its input. The same boundaries let the
   // reading cursor move by structural unit.
   _roman(r){const m={I:1,V:5,X:10,L:50,C:100,D:500,M:1000};let n=0;r=String(r).toUpperCase();for(let i=0;i<r.length;i++){const a=m[r[i]],b=m[r[i+1]];if(!a)return null;if(b&&a<b){n+=b-a;i++;}else n+=a;}return n;}
-  _headCandidate(s){s=this.norm(s);if(s.length>64||s.length<1)return null;
-    const kw=/^(chapter|chap\.?|part|book|canto|letter|act|scene|volume|stave|section|prologue|epilogue|introduction|preface|argument|chapitre|capitulo|capítulo|kapitel|глава)\b/i.test(s);
+  _headCandidate(s){s=this.norm(s);if(s.length<1||s.length>200)return null;
+    // Markdown ATX heading (#..######) — the reader imports .md; level = depth.
+    const md=s.match(/^(#{1,6})\s+(.+?)\s*#*$/);if(md)return {label:md[2],kind:'md',num:null,level:md[1].length};
+    if(s.length>64)return null;
+    // Decimal section number (1.2, 3.3.2) — technical docs; level = depth.
+    const dec=s.match(/^(\d+(?:\.\d+)+)\.?(?:\s|$)/);if(dec)return {label:s,kind:'dec',num:null,level:dec[1].split('.').length};
+    const words=s.split(/\s+/).length;
+    const kwStart=/^(chapter|chap\.?|part|book|canto|letter|act|scene|volume|stave|section|prologue|epilogue|introduction|preface|argument|chapitre|capitulo|capítulo|kapitel|глава)\b/i.test(s);
+    // Keyword after a short Capitalized prefix, ending at the numeral ("Inferno: Canto I").
+    // Anchored + ends-at-numeral so it can't catch list captions ("Heading to Chapter I. 1").
+    const kwAnyRe=/^(?:[A-Z][^\s]*\.?\s+){0,2}(chapter|chap|part|book|canto|act|scene|volume|stave|letter|section)\s+([ivxlcdm]+|\d+)\.?$/i;
+    const m2=words<=6?s.match(kwAnyRe):null;
     const rk=s.match(/(?:^|\s)([IVXLCDM]{1,7})\.?$/),ak=s.match(/(?:^|\s)(\d{1,3})\.?$/);
-    if(kw)return {label:s,kind:'kw',num:rk?this._roman(rk[1]):(ak?+ak[1]:null)};
+    if(kwStart||m2){const nm=(m2&&m2[2])||(rk&&rk[1])||(ak&&ak[1]);return {label:s,kind:'kw',num:nm?(/^\d+$/.test(nm)?+nm:this._roman(nm)):null};}
     if(/^[IVXLCDM]{1,7}\.?$/.test(s))return {label:s,kind:'roman',num:this._roman(s.replace(/\.$/,''))};
     if(/^\d{1,3}\.?$/.test(s))return {label:s,kind:'num',num:+s.replace(/\.$/,'')};
     if(s.length<=44&&/[A-Z]{3,}/.test(s)&&!/[a-z]/.test(s)&&/^[A-Z0-9][A-Z0-9 ,.'’\-—:;!?()&]+$/.test(s)&&!/[.!?]$/.test(s))return {label:s,kind:'caps',num:null};
@@ -1480,18 +1490,27 @@ class Component extends DCLogic {
   detectStructure(p,paras){
     const sets=this._paraField(p,paras);
     const cands=paras.map((t,i)=>{const c=this._headCandidate(t);return c?Object.assign(c,{i}):null;}).filter(Boolean);
-    const keep=new Set();
-    cands.forEach(c=>{if(c.kind==='kw')keep.add(c.i);});
+    const keep=new Set(),lvl={};
+    // Explicit markers — keyword, markdown, decimal — are kept outright (with their level).
+    cands.forEach(c=>{if(c.kind==='kw'||c.kind==='md'||c.kind==='dec'){keep.add(c.i);if(c.level)lvl[c.i]=c.level;}});
+    // Bare numerals only when part of a consecutive run (recovers a hidden first member,
+    // rejects strays like a lone page number).
     for(const kind of ['roman','num']){const seq=cands.filter(c=>c.kind===kind&&c.num!=null);
       for(let a=0;a<seq.length;a++){const run=[seq[a]];for(let b=a+1;b<seq.length;b++){if(seq[b].num===run[run.length-1].num+1)run.push(seq[b]);else break;}
         if(run.length>=2){run.forEach(c=>keep.add(c.i));a+=run.length-1;}}}
     const accepted=[...keep].sort((a,b)=>a-b);
-    if(accepted.length>=2)return accepted.map(i=>({paraIndex:i,label:this.norm(paras[i]).slice(0,72),kind:'heading'}));
+    if(accepted.length>=2)return accepted.map(i=>({paraIndex:i,label:this.norm(paras[i]).slice(0,72),kind:'heading',level:lvl[i]||1}));
     // Emergent: window comparison so a single blip can't fake a boundary; both sides
     // need ≥2 distinct entities (an essay with no named entities yields nothing).
     const N=paras.length,W=Math.max(2,Math.round(N/24));
     const win=(lo,hi)=>{const s=new Set();for(let k=Math.max(0,lo);k<Math.min(N,hi);k++)for(const e of sets[k])s.add(e);return s;};
-    const peaks=[];for(let i=1;i<N;i++){const L=win(i-W,i),R=win(i,i+W);if(L.size<2||R.size<2)continue;let x=0;for(const e of L)if(R.has(e))x++;const d=1-x/Math.sqrt(L.size*R.size);if(d>0.6)peaks.push({i,d});}
+    const peaks=[];let valid=0,deep=0;
+    for(let i=1;i<N;i++){const L=win(i-W,i),R=win(i,i+W);if(L.size<2||R.size<2)continue;valid++;let x=0;for(const e of L)if(R.has(e))x++;const d=1-x/Math.sqrt(L.size*R.size);if(d>0.6){deep++;peaks.push({i,d});}}
+    // Contrast guard: if almost every gap is a "boundary", the field is uniformly choppy —
+    // a glossary or anthology of independent short entries, not a chaptered work. Structure
+    // needs a stable background to stand out against (the repo's null-boundary idea); with
+    // none, refuse to invent one. (Better no TOC than a hallucinated one.)
+    if(valid>=8&&deep/valid>0.5)return [];
     peaks.sort((a,b)=>b.d-a.d);
     const minGap=Math.max(2,Math.round(N/40)),chosen=[];
     for(const pk of peaks){if(chosen.every(k=>Math.abs(k-pk.i)>=minGap))chosen.push(pk.i);if(chosen.length>=40)break;}
@@ -1503,7 +1522,7 @@ class Component extends DCLogic {
       if(i>0&&this._titleish(paras[i-1])&&!this._headCandidate(paras[i-1])){anchor=i-1;label=this.norm(paras[i-1]).slice(0,72);}
       else if(this._titleish(paras[i])){label=this.norm(paras[i]).slice(0,72);}
       else {const nw=[...sets[i]].filter(e=>i>0&&!sets[i-1].has(e));label=this._secLabel(nw[0]||[...sets[i]][0],paras[i]);}
-      if(seen.has(anchor))continue;seen.add(anchor);out.push({paraIndex:anchor,label,kind:'emergent'});}
+      if(seen.has(anchor))continue;seen.add(anchor);out.push({paraIndex:anchor,label,kind:'emergent',level:1});}
     return out;}
   // Set up the open book iframe once: apply the reading CSS, restore the saved scroll
   // position, and track progress as the reader scrolls (throttled).
@@ -3337,8 +3356,11 @@ class Component extends DCLogic {
     const toc=[],parts=[];let dropped=false;
     paras.forEach((t,i)=>{
       const hit=secAt.get(i);
-      if(hit){const id='eo-ch-'+hit.n;toc.push({id,label:this.norm(hit.s.label)});
-        if(hit.s.kind==='heading'||this._titleish(t)){parts.push('<h2 class="eo-chap'+(hit.s.kind==='emergent'?' eo-emergent':'')+'" id="'+id+'">'+esc(t)+'</h2>');return;}
+      if(hit){const id='eo-ch-'+hit.n,lv=hit.s.level||1;toc.push({id,label:this.norm(hit.s.label),level:lv});
+        // Markdown headings carry their #'s in the source line — show the clean title.
+        const disp=/^#{1,6}\s/.test(t)?t.replace(/^#{1,6}\s+/,'').replace(/\s*#+$/,''):t;
+        const ind=lv>1?' style="margin-left:'+((lv-1)*1.15)+'em"':'';
+        if(hit.s.kind==='heading'||this._titleish(t)){parts.push('<h2 class="eo-chap'+(hit.s.kind==='emergent'?' eo-emergent':'')+'" id="'+id+'"'+ind+'>'+esc(disp)+'</h2>');return;}
         parts.push('<p id="'+id+'"'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;return;}
       parts.push('<p'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;
     });
@@ -3911,7 +3933,7 @@ class Component extends DCLogic {
         hasToc:toc.length>1,tocOpen:!!this.state.tocOpen,onToggleTOC:()=>this.toggleTOC(),tocStyle:pill(!!this.state.tocOpen),
         onPrevSection:()=>this.jumpSection(-1),onNextSection:()=>this.jumpSection(1),
         toc:toc.map(c=>({label:c.label,onGo:()=>this.gotoChapter(c.id),
-          rowStyle:'display:block;width:100%;text-align:left;padding:9px 13px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink2);font-size:12.5px;line-height:1.35;cursor:pointer;'})),
+          rowStyle:'display:block;width:100%;text-align:left;padding:9px 13px 9px '+(13+((c.level||1)-1)*15)+'px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink'+((c.level||1)>1?'3':'2')+');font-size:12.5px;line-height:1.35;cursor:pointer;'})),
         progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
     }
     if(vu){

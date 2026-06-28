@@ -47,20 +47,52 @@ When a validated heading run exists it wins (it's the author's own structure). O
 one, or labelled by the entity that enters there. Emergent sections are drawn in italic with
 an accent rule — the reader can see these were *inferred*, not printed.
 
-## Result
+## Candidate conventions
 
-| Document | Engine-hybrid |
-|---|---|
-| *Metamorphosis* | **3/3**, first "I" recovered |
-| Classic `CHAPTER` | 3/3 |
-| Descriptive titles | sections emerge, snapped to the title lines |
-| Non-English | **3/3** (keyword list + the field) |
-| Essay traps (`42`, dateline, `MIX`) | **0** — nothing survives the run + persistence tests |
-| Flat essay, no entities | 0 (correct — it has no sections) |
+`_headCandidate` recognizes, in order: **markdown** ATX headings (`#`…`######`, level = depth);
+**decimal** section numbers (`1.2`, `3.3.2`, level = depth); a **keyword** at the line start,
+or after a short capitalized prefix and ending at the numeral (`Inferno: Canto I`) — anchored
+so it can't swallow caption lines like "Heading to Chapter I. 1"; bare **roman/arabic**
+numerals; and short **all-caps** lines. Keyword / markdown / decimal markers are kept outright
+(they carry a nesting level); bare numerals only when they form a consecutive run.
 
-It is still a *guess*: emergent detection on heading-less books is approximate, and a book
-with idiosyncratic formatting can still fool it. But it degrades honestly — it finds real
-structure the regex couldn't, and it stops inventing structure that isn't there.
+## Stress battery — real fetched documents
+
+Run against real sources (`scripts`/offline harness over the live engine):
+
+| Source | Result | Verdict |
+|---|---|---|
+| *Pride & Prejudice* (PG 1342) | Preface + Chapter I–LXI (62) | ✓ chapters; front-matter caption list rejected |
+| *Dracula* (PG 345, epistolary) | CHAPTER I–XXVII (27) | ✓ journals/letters don't fragment it |
+| *Divine Comedy* (PG 1004) | ~100 cantos (`Inferno: Canto I…`) | ✓ prefixed keyword + reset numbering |
+| *the-art-of-command-line* (Markdown) | 16, nested `#`/`##`/`###` | ✓ markup headings, code fences ignored |
+| arXiv HTML paper | top-level §1–5 | ✓ top level; subsection nesting partial |
+| RFC 2616 (deep decimal) | decimal tree `1.1`/`3.2.1`… | ✓ structure + levels; **ToC lines duplicate** |
+| *Devil's Dictionary* (flat A–Z) | **0** (flat) | ✓ refused to hallucinate |
+| *Spoon River* / short-story coll. | **0** (flat) | ⚠︎ suppressed — see below |
+| Essay traps (`42`, dateline, `MIX`) | **0** | ✓ |
+
+The **contrast guard** is why the flat cases return nothing: when almost every paragraph gap
+is a field shift, there is no stable background for a boundary to stand against, so no
+structure is asserted (the repo's null-boundary idea — *if everything is a boundary, nothing
+is*). Better an empty TOC than a hallucinated one.
+
+## Known limits (honest)
+
+- **Flat collections** (a dictionary, a poem/epitaph anthology, a dialogue-heavy story
+  collection) are suppressed to **0** rather than risk noise — so a real per-entry structure
+  is lost. The conservative call; recovering these cleanly needs a title-line model.
+- **Nesting is shallow.** Markdown and decimal carry real levels; everything else is flat.
+  Drama Act→Scene and scripture Book:Chapter:Verse are not modelled as a hierarchy.
+- **A literal Table of Contents** (RFC 2616) duplicates the body headings — ToC lines and the
+  real sections both match, so each appears twice.
+- **HTML/PDF** depend on the text-extraction step; semantic `<h2>` tags are flattened to text
+  lines (the detector reads the *prose*, not the markup), and two-column PDF reading-order is
+  not addressed here.
+
+It remains a *best guess*: it finds real structure a regex can't (untitled, multilingual,
+markdown, decimal), and it refuses to invent structure that isn't there — but odd formatting
+can still fool it.
 
 ## The same boundaries move the cursor
 
