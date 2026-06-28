@@ -346,7 +346,10 @@ class Component extends DCLogic {
   groundNotes(q,sources){const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
     const a=this.answerQuestion(q,scope);
     const span=i=>({text:this.norm(this.master.sentences[i]),score:1,i,u:this.master.sentenceSource[i]});
-    if(a.refs&&a.refs.length)return {spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[]};
+    // `relevant` = the question actually matched read text (keyword overlap). Only relevant
+    // spans are shown as linked grounding; the fallback below still feeds the model context
+    // but is NOT surfaced as a citation (it isn't really "where the answer came from").
+    if(a.refs&&a.refs.length)return {spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[],relevant:true};
     // No keyword match (e.g. "what is this about?", "summarize this book") — fall back to the
     // opening lines of the source(s) in scope (or the page being viewed) so the model speaks
     // from the actual text instead of answering as a blank-slate assistant.
@@ -354,9 +357,29 @@ class Component extends DCLogic {
     if(this.master&&this.master.sentences.length&&(scope.length||this.state.viewUrl)){
       const idxs=[],used=new Set();
       for(let i=0;i<this.master.sentences.length&&idxs.length<8;i++){const u=this.master.sentenceSource[i];if(!inScope(u))continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(this._proseOk(low)){idxs.push(i);used.add(u);}}
-      if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used]};
+      if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
     }
-    return {spans:[],entities:a.entities||[],sources:[]};}
+    return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
+  // Other read documents OUTSIDE the chat's scope, ranked by how well they match the
+  // question (content-word overlap). The "related" set offered alongside an answer —
+  // especially when the in-scope sources didn't ground it well. Empty if nothing else
+  // read matches. Ranked desc; the UI shows only the top few by default.
+  relatedDocs(q,sources){
+    if(!this.master||!this.master.sentences.length)return [];
+    const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    const qwords=q.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
+    if(!qwords.length)return [];
+    const byUrl={};
+    for(let i=0;i<this.master.sentences.length;i++){
+      const u=this.master.sentenceSource[i];if(!u||scope.includes(u))continue;
+      const low=this.norm(this.master.sentences[i]).toLowerCase();if(!this._proseOk(low))continue;
+      let v=0;for(const w of qwords)if(low.includes(w))v++;
+      if(v>0)byUrl[u]=(byUrl[u]||0)+v;
+    }
+    return Object.keys(byUrl)
+      .map(u=>({url:u,score:byUrl[u],title:this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),28)}))
+      .sort((a,b)=>b.score-a.score).slice(0,8);
+  }
   // ── The meaning graph, serialized as EOT triples for the talker ───────────
   // What the reading MEANS, folded into typed relations: "A -> B : rel" for a
   // relationship, "A : fact" for a property. This is the structure buildGroundedMessages
@@ -494,16 +517,18 @@ class Component extends DCLogic {
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
       const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
-      // Surface the verbatim spans the model leaned on as clickable grounding (collapsed
-      // by default in the UI). This is the mechanical "where did this come from" trail.
-      const passages=(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i}));
-      finish({text,entities:ground.entities,sources:ground.sources,passages});
+      // Only surface grounding when the question actually matched the read text. Weak
+      // fallback context (intro lines) is NOT shown as a citation — instead we offer the
+      // related docs (ranked) the reader has open. This keeps "linked" = genuinely relevant.
+      const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
+      finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
     }catch(e){
       // model unavailable — answer structurally from what's read, or say so plainly
       const fb=this.answerQuestion(q,sources);
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
-      const passages=(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i}));
-      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:fb.sources,passages,modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      const relevant=!!(fb.refs&&fb.refs.length);
+      const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
       this.setState({modelStatus:''});
     }
   }
@@ -572,6 +597,13 @@ class Component extends DCLogic {
       const gKey=cur.id+':'+mi, gOn=!!gOpen[gKey];
       const gBits=[]; if(cites.length)gBits.push(cites.length+(passages.length?(' passage'+(cites.length!==1?'s':'')):(' source'+(cites.length!==1?'s':''))));
       if(entities.length)gBits.push(entities.length+' entit'+(entities.length!==1?'ies':'y'));
+      // Related docs — other read sources ranked by relevancy. Default to the top 3; a
+      // "+N more" reveals the rest. Offered alongside an answer (and instead of weak
+      // grounding when the in-scope sources didn't actually match the question).
+      const relAll=(m.related||[]).map(r=>({label:r.title,title:r.url,onOpen:()=>this.goWeb(r.url),
+        chipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'}));
+      const relKey=cur.id+':'+mi+':rel', relOn=!!gOpen[relKey];
+      const related=relOn?relAll:relAll.slice(0,3);
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
       return {isUser,pending:!!m.pending,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
@@ -580,6 +612,12 @@ class Component extends DCLogic {
         groundLabel:'Grounded in '+gBits.join(' · '),groundCaret:gOn?'▾':'▸',
         groundStyle:'max-width:80%;margin-top:7px;',
         groundHeadStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);background:transparent;border:none;padding:2px 0;cursor:pointer;',
+        related,hasRelated:relAll.length>0,relatedHasMore:relAll.length>3,
+        onToggleRelated:()=>this.toggleGround(relKey),
+        relatedMoreLabel:relOn?'Show fewer':('+'+(relAll.length-3)+' more'),
+        relatedStyle:'max-width:80%;margin-top:7px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;',
+        relatedHeadStyle:'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:1px;',
+        relatedMoreStyle:'font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
         hasNote:!!m.modelNote,note:m.modelNote||'',
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
         bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
