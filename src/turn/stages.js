@@ -29,6 +29,7 @@ import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
 import { buildConceptTokenMap } from '../write/concept-tokens.js';
+import { mountPersonality, defaultPantheonBank } from '../write/voice.js';
 
 // Weave the mind's recalled lines into the prompt as labelled BACKGROUND — only when
 // the user has the Mind chip in weave mode (ctx.mindSpans present). The memory is
@@ -568,7 +569,7 @@ export const stages = {
           onToken: ctx.onToken, alpha: ctx.alpha ?? undefined, orientation: orientationOf(ctx.doc), lens,
         });
         if (streamed && streamed.draft) {
-          return { ...ctx, rawOutput: streamed.draft, maxTokens, streamed, lensEvents: drainLens(ctx) };
+          return { ...ctx, rawOutput: streamed.draft, maxTokens, streamed, lensEvents: drainLens(ctx), lensMounted: lens?.mounted || null };
         }
       } catch { /* a streaming fault degrades to the one-shot path below, never a dead turn */ }
     }
@@ -587,7 +588,7 @@ export const stages = {
     // wllama). A backend without one falls back to draw-then-emit — the whole answer
     // once — and a turn with no `onToken` is byte-identical to the bare phrase().
     const raw = await streamPhrase(ctx.model, ctx.messages, { maxTokens, onToken: ctx.onToken, lens });
-    return { ...ctx, rawOutput: raw, maxTokens, lensEvents: drainLens(ctx) };
+    return { ...ctx, rawOutput: raw, maxTokens, lensEvents: drainLens(ctx), lensMounted: lens?.mounted || null };
   },
 
   // Mechanical citation binding. The model never wrote [sN]; we do.
@@ -1006,12 +1007,35 @@ const buildLens = (ctx) => {
   const extraForms = (() => { try { return ctx.model.lensApproved?.() || []; } catch { return []; } })();
   const conceptMap = buildConceptTokenMap(ctx.doc, ctx.surf, tokenizer, { extraForms });
   if (!conceptMap.coverage.figuresMapped && !conceptMap.coverage.groundedNumbers) return null;
+
+  // THE PANTHEON (spec-the-pantheon.md): auto-mount the Act cartridge for the cell the surfer
+  // already read, Born-weighted by the stance firmness, under a total bias budget. NUL-on-VOID
+  // is a GOVERNANCE LOCK — when the void gate fires, Chaos mounts and cannot be dialed into a
+  // confident register, the exact failure the provenance stance exists to prevent. The baked
+  // vectors ship empty, so this names which gods mount (the log) while λ stays a no-op until the
+  // bake lands; with vectors present it becomes the standing voice tilt.
+  const st = ctx.surf?.stance || {};
+  const cell = ctx.voidMeasure
+    ? { act: 'NUL', grain: st.grain || null, stance: st.stance || null, locked: true }
+    : { act: st.op || null, grain: st.grain || null, stance: st.stance || null };
+  const { bias: personality, mounted } = mountPersonality({
+    cell, weights: { act: Number.isFinite(st.firmness) ? st.firmness : 1, tilt: 1 },
+    bank: pantheonBank(), budget: 6,
+  });
+
   return {
     conceptMap,
     figureWeights: figureWeightsFromSurf(ctx.surf),   // the surfer's salience as a token bias (μ)
-    mu: 2, lambda: 0, alpha: ctx.alpha ?? 0.05,
+    personality,                                      // the Born-weighted, budget-capped λ sum
+    mounted,                                           // the mounted-set, for the Given-Log
+    mu: 2, lambda: personality.size ? 1 : 0, alpha: ctx.alpha ?? 0.05,
   };
 };
+
+// The Act pantheon bank, loaded once. Ships with EMPTY baked vectors (λ no-op); a baked
+// data/pantheon.json swaps in the steering vectors without changing the mount mechanism.
+let _pantheonBank = null;
+const pantheonBank = () => (_pantheonBank ||= defaultPantheonBank());
 
 // figureWeightsFromSurf — the surfer's Born-rule salience as a distribution over figure labels.
 // First cut (the spec's smallest test): the focus figure carries the mass; Track-D full reads the

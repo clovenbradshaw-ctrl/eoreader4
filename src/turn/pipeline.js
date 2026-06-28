@@ -355,10 +355,13 @@ const summarize = (name, ctx, ms) => {
                               } } : {}),
                               // the lens-port steering provenance (spec-the-lens-port.md): which
                               // terms fired, suppressed tokens, void-conflicts, per-gated entropy.
-                              ...(ctx.lensEvents?.length ? { lens: {
-                                events: ctx.lensEvents.length,
-                                voidConflicts: ctx.lensEvents.filter(e => e.type === 'void-conflict').length,
-                                suppressed: ctx.lensEvents.filter(e => e.type === 'suppress').length,
+                              ...(ctx.lensEvents?.length || ctx.lensMounted?.length ? { lens: {
+                                events: ctx.lensEvents?.length || 0,
+                                voidConflicts: ctx.lensEvents?.filter(e => e.type === 'void-conflict').length || 0,
+                                suppressed: ctx.lensEvents?.filter(e => e.type === 'suppress').length || 0,
+                                regrounded: ctx.lensEvents?.filter(e => e.type === 'rec' && e.decision === 'widen').length || 0,
+                                // the pantheon mounted-set: which gods voiced this turn, at what weight
+                                mounted: (ctx.lensMounted || []).map(m => ({ god: m.god, op: m.op, weight: m.weight, locked: !!m.locked })),
                               } } : {}) };
     case 'bind':     return { ...base,
                               claims: ctx.bound?.length || 0,
