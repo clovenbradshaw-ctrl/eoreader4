@@ -107,7 +107,7 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, inquire = false, horizon = null, cast = null, reread = false, witnessSource = null, shapeLibrary = null, groundGraph = false, now = null, lensPort = false }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, inquire = false, horizon = null, cast = null, reread = false, witnessSource = null, shapeLibrary = null, groundGraph = false, now = null, lensPort = false, voicePref = null }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -152,7 +152,7 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // retrieves from to confirm an interpretation: when the grounding doc is the model's own
   // notes (reafference) and the answer rests only on them, the engine fetches the source spans
   // on the claim's figures and re-checks. Null → no seeking, byte-identical.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, inquire, horizon, cast, reread, witnessSource, shapeLibrary, groundGraph, now, lensPort };
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, inquire, horizon, cast, reread, witnessSource, shapeLibrary, groundGraph, now, lensPort, voicePref };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -355,10 +355,13 @@ const summarize = (name, ctx, ms) => {
                               } } : {}),
                               // the lens-port steering provenance (spec-the-lens-port.md): which
                               // terms fired, suppressed tokens, void-conflicts, per-gated entropy.
-                              ...(ctx.lensEvents?.length ? { lens: {
-                                events: ctx.lensEvents.length,
-                                voidConflicts: ctx.lensEvents.filter(e => e.type === 'void-conflict').length,
-                                suppressed: ctx.lensEvents.filter(e => e.type === 'suppress').length,
+                              ...(ctx.lensEvents?.length || ctx.lensMounted?.length ? { lens: {
+                                events: ctx.lensEvents?.length || 0,
+                                voidConflicts: ctx.lensEvents?.filter(e => e.type === 'void-conflict').length || 0,
+                                suppressed: ctx.lensEvents?.filter(e => e.type === 'suppress').length || 0,
+                                regrounded: ctx.lensEvents?.filter(e => e.type === 'rec' && e.decision === 'widen').length || 0,
+                                // the pantheon mounted-set: which gods voiced this turn, at what weight
+                                mounted: (ctx.lensMounted || []).map(m => ({ god: m.god, op: m.op, weight: m.weight, locked: !!m.locked })),
                               } } : {}) };
     case 'bind':     return { ...base,
                               claims: ctx.bound?.length || 0,

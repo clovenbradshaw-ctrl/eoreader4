@@ -16,8 +16,10 @@
 // so the loader stays exercised and the file shape is canonical.
 
 import { writeFileSync } from 'node:fs';
+import { PANTHEON } from '../src/write/voice.js';
 
 const OUT = 'data/voice-cartridge.json';
+const PANTHEON_OUT = 'data/pantheon.json';
 
 // The expert / anti-expert prompt pair. The difference between the two next-token distributions,
 // averaged over the corpus contexts, is the register direction. (Per spec-the-pantheon, the Act
@@ -36,6 +38,26 @@ const writeCartridge = (tokens, meta) => {
   writeFileSync(OUT, JSON.stringify(json, null, 2) + '\n');
   console.log(`wrote ${OUT} (${Object.keys(tokens).length} token biases)`);
 };
+
+// --pantheon: bake the nine Act gods (spec-the-pantheon.md, Track A) — one contrastive vector per
+// face-value from PANTHEON's toward/against seeds (or, better, the cell's post-correction exemplars
+// from a legal run's classified.jsonl, domain-matched). Each clears noise-null against a same-norm
+// random vector before it earns a slot; caps are asymmetric by risk (PANTHEON[op].cap).
+if (arg('--pantheon') != null) {
+  if (arg('--demo') != null) {
+    const gods = {};
+    for (const [op, m] of Object.entries(PANTHEON)) gods[op] = { god: m.god, cap: m.cap, tokens: {} };
+    const json = { meta: { kind: 'demo-empty', note: 'Placeholder — no gods baked. Bake toward−against per god with --model.', domain: null, built: new Date().toISOString() }, gods };
+    writeFileSync(PANTHEON_OUT, JSON.stringify(json, null, 2) + '\n');
+    console.log(`wrote ${PANTHEON_OUT} (${Object.keys(gods).length} gods, empty)`);
+    process.exit(0);
+  }
+  console.log('pantheon bake — for each god, average (logit | toward-prompt) − (logit | against-prompt)');
+  console.log('over the cell\'s exemplars; keep top-|Δ| tokens; gate each by noise-null; write', PANTHEON_OUT, '.');
+  for (const [op, m] of Object.entries(PANTHEON)) console.log(`  ${op.padEnd(3)} ${m.god.padEnd(10)} cap ${m.cap}  toward: ${m.toward.slice(0, 60)}…`);
+  console.log('\nNeeds a backend with logit access (see eoreader4-eval/mechanics). Re-run with --model, or --pantheon --demo.');
+  process.exit(0);
+}
 
 if (arg('--demo') != null) {
   // A placeholder: empty token map, canonical shape. loadVoiceCartridge → zero bias (no-op).
