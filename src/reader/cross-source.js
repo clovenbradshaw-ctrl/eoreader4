@@ -188,3 +188,21 @@ export const referentMap = (pages) => {
 
   return { remap, forks };
 };
+
+// referentLabels(remap) — invert the re-key plan into a hashId → display-name index.
+//
+// The display name rides on the INS event, and projectGraph only labels a referent it
+// saw INS'd. A referent that appears ONLY as a relation endpoint (an object never
+// introduced in its own right) has no INS to carry its name, so after re-keying to a
+// nameless hashId the reader's labelOf() would fall back to the bare hash — the
+// "hashIds instead of display names" the graph showed. Every such referent IS in the
+// remap (allIds covers src/tgt/from/to/node), and its entry carries the readable label
+// the anchor knew (a proper INS label where one exists, else the base token). Inverting
+// the remap recovers that name for the endpoint-only referents projectGraph left blank.
+export const referentLabels = (remap) => {
+  const out = new Map();
+  for (const byBase of remap.values())
+    for (const r of byBase.values())
+      if (r && r.id != null && r.label != null && !out.has(r.id)) out.set(r.id, r.label);
+  return out;
+};

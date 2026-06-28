@@ -20,4 +20,4 @@ export { segmentClauses } from '../perceiver/parse/clauses.js';
 export { projectGraph, DEFAULT_PROJECTION_RULES } from '../core/index.js';
 // Cross-source identity for the memory fold: nameless referent hashIds, with a name
 // forked into distinct referents where context defeats the default coreference.
-export { referentMap } from './cross-source.js';
+export { referentMap, referentLabels } from './cross-source.js';
