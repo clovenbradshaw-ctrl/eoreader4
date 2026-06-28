@@ -337,7 +337,11 @@ section h2 .hint {
   text-overflow: ellipsis; white-space: nowrap;
 }
 a.prop-source:hover { text-decoration: underline; }
+/* A document-grounded source is a clickable [sN] chip that jumps to the sentence. */
+.msg.assistant .prop-source.cite { cursor: pointer; text-decoration: underline; }
+.msg.assistant .prop-source.cite:hover { color: #bfdbfe; }
 .msg.assistant .prop.inaccurate { border-color: #7f1d1d; }
+.msg.assistant .prop.unsupported { border-color: #78350f; }
 
 /* Retry affordance on an errored turn. */
 .msg.assistant .retry { margin-top: .55rem; }

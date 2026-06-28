@@ -47,6 +47,30 @@ test('a corroborated verdict upgrades an uncited claim and lends it the source',
   assert.equal(props[0].source.url, 'https://x/Sinners');
 });
 
+test('an unsupported verdict flags an uncited claim as having no witness', () => {
+  const res = {
+    route: 'grounded',
+    bound: [{ claim: 'The captain married the cook.', citation: null }],
+    verdicts: [{ sentence: 'captain married cook', verdict: 'unsupported', reason: 'no-edge' }],
+  };
+  const props = buildPropositions(res, {});
+  assert.equal(props[0].status, 'unsupported');
+  assert.equal(props[0].verdict, 'unsupported');
+  assert.equal(props[0].reason, 'no-edge');
+});
+
+test('a corroborated verdict lends its citation so the claim points back at the source span', () => {
+  const res = {
+    route: 'grounded',
+    bound: [{ claim: 'Gregor’s sister is Grete.', citation: null }],
+    verdicts: [{ sentence: 'Gregor sister Grete', verdict: 'corroborated', citation: 's7' }],
+  };
+  const props = buildPropositions(res, {});
+  assert.equal(props[0].status, 'grounded');
+  assert.equal(props[0].citation, 's7', 'the document edge’s citation is lent to the bound claim');
+  assert.equal(props[0].verdict, 'corroborated');
+});
+
 test('a chat-route answer is marked general knowledge, not grounded', () => {
   const res = {
     route: 'chat',
