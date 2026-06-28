@@ -17,7 +17,7 @@ class Component extends DCLogic {
     this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
     this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
     this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
-    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');}catch(e){}
+    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null,savedWebBrain=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');savedWebBrain=localStorage.getItem('eo_webbrain');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
@@ -36,6 +36,11 @@ class Component extends DCLogic {
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
       hoverCite:null, liveResearch:{on:false},
+      // WEB AS BRAIN — on by default. A 3B chat model knows little, so by default a question it
+      // can't ground in what's already been read+folded sends the engine to the web first (fetch,
+      // fold, then answer from the new reading) instead of letting the model guess. Turning it off
+      // (the composer toggle) makes the chat answer ONLY from what you've read — no web at all.
+      webBrain:(savedWebBrain!=='0'),
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
       // Temporal cursor on the entity summary. Keyed by entity id → a fraction in
       // [0,1] of the way through that entity's attested record. Undefined means the
@@ -943,16 +948,30 @@ class Component extends DCLogic {
     const names=srcs.slice(0,2).map(titleOf).join(', '),more=srcs.length-2;
     return names+(more>0?(' and '+more+' more'):'')+' ('+srcs.length+' sources) · '+props;
   }
+  // WEB AS BRAIN — should THIS turn go read the web (then answer grounded) instead of answering
+  // straight from the 3B model? The default is yes whenever the model would otherwise be guessing:
+  // the web is on, it isn't a clock question, and the turn either explicitly asks to research
+  // ("research X", "more about this book") OR names a real subject the in-scope READING doesn't
+  // already cover. A summary of the open doc, a bare greeting, or a turn already grounded in folded
+  // sources is answered offline. Turning the web off makes this always false → pure offline chat.
+  _shouldWeb(q,sources){
+    if(this.state.webBrain===false)return false;            // web turned off → never touch it
+    if(this.mechanicalAnswer(q))return false;               // a clock question answers itself
+    if(this._researchIntent(q)||this._isMetaResearch(q))return true;   // asked for research / "more"
+    if(this._isSummaryQ(q))return false;                    // "summarize this" → from the doc you have
+    // A bare pleasantry / acknowledgement names no subject — don't go research "thanks".
+    if(/^(?:thanks?|thank you|thx|ty|ok|okay|k|cool|nice|great|awesome|got it|sounds good|sure|yep|yes|no|yeah|nope|lol|haha|hi|hey|hello|yo|sup|np|no problem|cheers|bye|goodbye|good (?:morning|night))[\s.!?]*$/i.test(q))return false;
+    if(!this._researchTerms(q).length)return false;         // nothing contentful to chase
+    return !this.groundNotes(q,sources).relevant;           // not covered by matched reading → go read
+  }
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
-    // RESEARCH MODE — a way of asking, not a separate screen (docs/curiosity-research.md).
-    // When the composer's research toggle is on, or the message itself asks to research
-    // ("research dolphins", "look into X", "dig into Y"), the turn doesn't just answer from
-    // what's already read — it goes and CHASES the topic through fresh sources, following
-    // what surprises it while it stays on the question, then answers grounded in what it found.
-    // A clock question ("what's the date") still short-circuits, even with the toggle on.
-    if((this.state.researchMode||this._researchIntent(q))&&!this.mechanicalAnswer(q))return this.chatResearch(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
+    // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
+    // a question it can't ground in what's been read+folded sends the engine to the web first — it
+    // fetches, FOLDS every page into memory (chatResearch → the curiosity walk → readURL→ingest),
+    // then answers grounded in the new reading. Raw text only counts once it's parsed and folded.
+    if(this._shouldWeb(q,sources))return this.chatResearch(q);
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // append the user turn + a pending assistant bubble
     let id=this.state.activeChat;
@@ -1021,6 +1040,9 @@ class Component extends DCLogic {
   // leashed); reads every kept page into memory; folds them into what the chat is About; and
   // finally answers, grounded in everything it gathered. One thread per hop, never a fan-out.
   toggleResearchMode(){this.setState(s=>({researchMode:!s.researchMode}));}
+  // The web on/off switch (the composer toggle). On is the default; off means the chat answers only
+  // from what you've already read, never reaching for the internet. Persisted so the choice sticks.
+  toggleWebBrain(){this.setState(s=>{const on=!(s.webBrain!==false);try{localStorage.setItem('eo_webbrain',on?'1':'0');}catch(e){}return {webBrain:on};});}
   async chatResearch(q){
     if(this._busy)return;
     // The SUBJECT to chase — named outright when the message carries its own topic, or DERIVED
@@ -3252,10 +3274,11 @@ class Component extends DCLogic {
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
       chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
       onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
-      onToggleResearchMode:()=>this.toggleResearchMode(),researchModeOn:!!this.state.researchMode,
-      researchModeTitle:this.state.researchMode?'Research mode is on — the next message will go search and read fresh sources before answering. Click to turn off.':'Turn on research mode — your next message becomes a topic to chase through fresh sources, following what surprises me while it stays on topic.',
-      researchModeHint:this.state.researchMode?'Your message becomes a topic I’ll chase through fresh sources.':'Off — answers come from what you’ve already read.',
-      researchModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.researchMode?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
+      onToggleResearchMode:()=>this.toggleWebBrain(),researchModeOn:this.state.webBrain!==false,
+      webBtnLabel:this.state.webBrain!==false?'✦ Web on':'✦ Web off',
+      researchModeTitle:this.state.webBrain!==false?'Web is on — when your own reading doesn’t cover a question I go read the internet, fold it into memory, and answer grounded in what I found. Click to turn the web off.':'Web is off — answers come only from what you’ve read, nothing from the internet. Click to let me read the web when your reading doesn’t cover a question.',
+      researchModeHint:this.state.webBrain!==false?'I’ll read the web when your own reading doesn’t cover it.':'Off — answering only from what you’ve read.',
+      researchModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       backend:this.state.backend||'webllm',
       backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},{v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
