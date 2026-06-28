@@ -5,16 +5,18 @@
 //
 // CHATBOT SURFACE. The chat is deliberately spare — a user bubble, a
 // thinking indicator, the streamed answer (with its citations still
-// clickable), and a retry on error. Nothing else. All the machinery the
-// engine produces per turn — the per-stage trace, the verbatim prompt and
-// raw model output, the retrieved spans, the coverage verdict, the
-// per-claim transparency list, the veto flags, the route/timing meta, the
-// recalled-memory and web-source blocks — is NOT shown here. It lives, in
-// full and verbatim, in the Audit pane (renderAuditTurn, fed independently
-// off STATE.audit) and the Log tab. "Hide it in the chat, keep it in the
-// log." Each renderer below still accepts `opts.verbose` as an escape
-// hatch: pass it to bring a block back inline for debugging, but the
-// default — and the shipped experience — is the bare chatbot.
+// clickable), a retry on error, and the per-claim SOURCE view. Most of the
+// machinery the engine produces per turn — the per-stage trace, the verbatim
+// prompt and raw model output, the retrieved spans, the coverage verdict, the
+// veto flags, the route/timing meta, the recalled-memory and web-source blocks
+// — is NOT shown here. It lives, in full and verbatim, in the Audit pane
+// (renderAuditTurn, fed independently off STATE.audit) and the Log tab. "Hide
+// it in the chat, keep it in the log." The one deliberate exception is the
+// transparency panel (renderTransparency): every proposition the answer makes,
+// reviewed against the document graph and traced to its source — that IS the
+// point of the surface, so it ships by default, governed by the user's
+// collapse/expand toggle. Each other renderer accepts `opts.verbose` as an
+// escape hatch to bring its block back inline for debugging.
 
 // ── Per-message actions: copy · reply/quote · fork ─────────────────────────
 //
@@ -271,12 +273,18 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   if (body) body.innerHTML = linkifyCitations(text || '', opts.citationSources);
 
   // CHATBOT SURFACE (default): the answer is the whole message. The coverage
-  // verdict, doc-source chips, per-claim transparency list, veto pills, the
-  // route/timing meta line, and the per-stage trace are all suppressed here —
-  // they live in the Audit pane and the Log, where the full record is kept.
-  // The error-retry below stays (it's an action, not info). Pass opts.verbose
-  // to bring every block back inline.
+  // verdict, doc-source chips, veto pills, the route/timing meta line, and the
+  // per-stage trace are all suppressed here — they live in the Audit pane and the
+  // Log, where the full record is kept. The error-retry below stays (it's an
+  // action, not info). Pass opts.verbose to bring every block back inline.
   if (opts.verbose) finalizeVerbose(el, text, sources, opts, body, trail);
+
+  // The per-claim SOURCE view is the exception to "hide it in the chat": every
+  // proposition the answer makes, reviewed against the document graph and traced to
+  // the sentence that grounds (or the verdict that contradicts) it. It ships in the
+  // default surface — collapsed or expanded per the persisted `opts.transparency`
+  // toggle — because seeing the source of each assertion is the point, not debug noise.
+  renderTransparency(el, opts);
 
   // Retry affordance — re-runs the same query. Shown on errored turns so a
   // transient backend fault isn't a dead end.
@@ -335,9 +343,8 @@ const finalizeVerbose = (el, text, sources, opts, body, trail) => {
     el.appendChild(wrap);
   }
 
-  // The transparency view — every proposition the answer makes, traced to its source (or marked
-  // unsupported / inaccurate). Rendered between the coverage headline and the terse flag pills.
-  renderTransparency(el, opts);
+  // The transparency view (every proposition traced to its source) is rendered by
+  // finalizeThinking itself now — it ships in the default surface, not only here.
 
   // Flags ride alongside the answer — never substitute it.
   if (opts.flags?.length) {
@@ -764,48 +771,67 @@ const bestMatch = (claims, text) => {
 
 export const buildPropositions = (res = {}, citationSources = {}) => {
   const route = res.route || res.turn?.route || 'grounded';
-  const sourceFor = (citation) => {
+  const idxOf = (citation) => {
     if (!citation) return null;
     const idx = parseInt(String(citation).slice(1), 10);
-    return Number.isFinite(idx) ? (citationSources[idx] || citationSources[String(idx)] || null) : null;
+    return Number.isFinite(idx) ? idx : null;
+  };
+  const sourceFor = (citation) => {
+    const idx = idxOf(citation);
+    return idx == null ? null : (citationSources[idx] || citationSources[String(idx)] || null);
   };
   // One proposition per bound claim (an answer sentence). On a chat turn nothing is grounded —
-  // the answer is the model's own knowledge, and the view says so plainly.
+  // the answer is the model's own knowledge, and the view says so plainly. Pair each claim with
+  // its bound record up front so the verdict overlay can re-index safely (an empty claim dropped
+  // here must not shift the others off their sources).
   const claims = (res.bound || [])
-    .map((b) => String(b.claim || '').trim())
-    .filter(Boolean)
-    .map((text, i) => {
-      const b = res.bound[i];
-      const source = sourceFor(b.citation);
-      return {
-        text, citation: b.citation || null, source,
-        status: route === 'chat' ? 'general' : (b.citation ? 'grounded' : 'ungrounded'),
-        reason: null,
-      };
-    });
-  // Overlay the fact-check verdicts: a contradicted / off-diagonal relation marks the claim it
-  // belongs to as inaccurate; a corroborated relation that earned a citation the binder missed
-  // upgrades that claim to grounded with the source it was confirmed against.
+    .map((b) => ({ b, text: String(b.claim || '').trim() }))
+    .filter(({ text }) => text)
+    .map(({ b, text }) => ({
+      text, citation: b.citation || null, source: sourceFor(b.citation),
+      status: route === 'chat' ? 'general' : (b.citation ? 'grounded' : 'ungrounded'),
+      reason: null,
+      // `verdict` is the graph-comparison outcome (corroborated / contradicted / unsupported …)
+      // once the fact-check overlay below finds the claim; null means the claim was not a
+      // relational assertion the edge-grounding check could measure.
+      verdict: null,
+    }));
+  // Overlay the fact-check verdicts — the comparison of each asserted proposition against the
+  // document graph (factcheck/correspond.js). A contradicted / off-diagonal relation marks the
+  // claim INACCURATE; a corroborated relation CONFIRMS it and lends the document edge's citation
+  // (so a graph-witnessed claim the lexical binder missed still points back at its source); an
+  // unsupported relation — endpoints resolve, relation types, but the reading does not witness it
+  // — is flagged as having no witness, distinct from a claim simply never cited. Indeterminate is
+  // held (the check could not run) and leaves the claim's binding status untouched.
   for (const v of (res.verdicts || [])) {
     const text = v.sentence || [v.src, v.tgt].filter(Boolean).join(' ');
     const claim = bestMatch(claims, text);
     if (!claim) continue;
+    claim.verdict = v.verdict;
     if (v.verdict === 'contradicted' || v.verdict === 'off_diagonal') {
       claim.status = 'inaccurate';
       claim.reason = v.reason || 'the source does not support this';
-    } else if (v.verdict === 'corroborated' && claim.status === 'ungrounded') {
-      claim.status = 'grounded';
-      if (!claim.source) claim.source = sourceFor(v.citation);
+    } else if (v.verdict === 'corroborated') {
+      if (claim.status === 'ungrounded') claim.status = 'grounded';
+      if (v.citation) {
+        if (!claim.citation) claim.citation = v.citation;
+        if (!claim.source) claim.source = sourceFor(v.citation);
+      }
+      claim.reason = 'confirmed against the document graph';
+    } else if (v.verdict === 'unsupported' && claim.status === 'ungrounded') {
+      claim.status = 'unsupported';
+      claim.reason = v.reason || 'no witness for this relation in the document';
     }
   }
   return claims;
 };
 
 const PROP_STATUS = {
-  grounded:   { glyph: '✓', label: 'grounded',     cls: 'good' },
-  inaccurate: { glyph: '✗', label: 'not supported', cls: 'weak' },
-  ungrounded: { glyph: '·', label: 'not in sources', cls: 'partial' },
-  general:    { glyph: '◇', label: 'general knowledge', cls: 'free' },
+  grounded:    { glyph: '✓', label: 'grounded',     cls: 'good' },
+  inaccurate:  { glyph: '✗', label: 'conflicts with source', cls: 'weak' },
+  unsupported: { glyph: '?', label: 'no witness in source', cls: 'partial' },
+  ungrounded:  { glyph: '·', label: 'not in sources', cls: 'partial' },
+  general:     { glyph: '◇', label: 'general knowledge', cls: 'free' },
 };
 
 // The transparency panel — a toggleable list of every proposition and what backs it. Collapsed
@@ -842,12 +868,31 @@ export const renderTransparency = (el, opts = {}) => {
     claim.textContent = p.text;
     row.appendChild(claim);
 
-    if (p.source && (p.source.label || p.source.url)) {
-      const src = p.source.url ? document.createElement('a') : document.createElement('span');
+    // The source of the assertion. A web-sourced claim links out to the page it cites; a
+    // document-grounded claim renders its [sN] citation as a clickable chip that scrolls to —
+    // and highlights — the source sentence in the doc pane (the delegated `.cite` handler in
+    // app.js does the jump). So every grounded proposition points back at where it came from.
+    const citeIdx = p.citation ? parseInt(String(p.citation).slice(1), 10) : NaN;
+    if (p.source?.url) {
+      const src = document.createElement('a');
       src.className = 'prop-source';
-      if (p.source.url) { src.href = p.source.url; src.target = '_blank'; src.rel = 'noopener'; }
+      src.href = p.source.url; src.target = '_blank'; src.rel = 'noopener';
       src.textContent = p.source.label || p.source.url;
-      src.title = `Source — ${p.source.url || p.source.label}`;
+      src.title = `Source — ${p.source.url}`;
+      row.appendChild(src);
+    } else if (Number.isFinite(citeIdx)) {
+      const src = document.createElement('span');
+      src.className = 'prop-source cite';
+      src.dataset.idx = String(citeIdx);
+      const label = p.source?.label && p.source.label !== `s${citeIdx}` ? ` · ${p.source.label}` : '';
+      src.textContent = `[s${citeIdx}]${label}`;
+      src.title = 'Jump to the source sentence in the document';
+      row.appendChild(src);
+    } else if (p.source?.label) {
+      const src = document.createElement('span');
+      src.className = 'prop-source';
+      src.textContent = p.source.label;
+      src.title = `Source — ${p.source.label}`;
       row.appendChild(src);
     }
     panel.appendChild(row);
