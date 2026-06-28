@@ -3,6 +3,7 @@ class Component extends DCLogic {
   constructor(props){
     super(props);
     this.PROXY='https://n8n.intelechia.com/webhook';
+    this.MAX_PASSAGE=600;   // a real prose sentence rarely exceeds this; beyond it is a list/table/directory segmentation artifact, never a passage to quote
     this.STOP=new Set('the a an of to in on at for and or but with by from as is are was were be been being this that these those it its their his her our your they we you i he she him them us me year years some most many few what who whom which when where how why than then so if not no nor only also just very more less new over under into out up down off above below'.split(' '));
     this.MONTHS=new Set('january february march april may june july august september october november december jan feb mar apr jun jul aug sept sep oct nov dec'.split(' '));
     this.DOW=new Set('monday tuesday wednesday thursday friday saturday sunday mon tue tues wed thu thur thurs fri sat sun'.split(' '));
@@ -756,7 +757,7 @@ class Component extends DCLogic {
   // everything read. Empty spans when nothing relevant has been read.
   groundNotes(q,sources){const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
     const a=this.answerQuestion(q,scope);
-    const span=i=>({text:this.norm(this.master.sentences[i]),score:1,i,u:this.master.sentenceSource[i]});
+    const span=i=>({text:this._clipPassage(this.norm(this.master.sentences[i])),score:1,i,u:this.master.sentenceSource[i]});
     // `relevant` = the question actually matched read text (keyword overlap). Only relevant
     // spans are shown as linked grounding; the fallback below still feeds the model context
     // but is NOT surfaced as a citation (it isn't really "where the answer came from").
@@ -1233,6 +1234,10 @@ class Component extends DCLogic {
     if(!t)return a;if(!a)return t;return a.toLowerCase().includes(t.toLowerCase())?a:(a+' '+t);}
   // The grounded answer: rank read sentences by question-term overlap, quote the best,
   // and surface the entities the question names. Scope restricts to one source.
+  // Clip a passage to a sane sentence length for display/grounding — a guard against a
+  // mis-segmented giant "sentence" being pasted verbatim or blowing the model's context. Cuts on
+  // a word boundary and marks the elision; a normal sentence (under the cap) is returned untouched.
+  _clipPassage(s){s=String(s||'');if(s.length<=this.MAX_PASSAGE)return s;return s.slice(0,this.MAX_PASSAGE).replace(/\s+\S*$/,'')+'…';}
   answerQuestion(q,scope){
     if(!this.master||!this.master.sentences.length)
       return {text:'I haven’t read anything yet. Read a URL or import a book — it has to be read fully — then ask.',refs:[],entities:[],sources:[]};
@@ -1243,11 +1248,17 @@ class Component extends DCLogic {
     const ents=[];
     if(this.graph)for(const e of this.graph.entities.values()){if(!this.showable(e.id))continue;const lab=this.labelOf(e.id).toLowerCase();if(qwords.some(w=>lab===w||(lab.length>3&&lab.includes(w))||(w.length>3&&w.includes(lab))))ents.push(e.id);}
     const scored=[];
-    for(let i=0;i<this.master.sentences.length;i++){if(!inScope(i))continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(!this._proseOk(low))continue;let v=0;for(const w of qwords)if(low.includes(w))v++;if(v>0)scored.push({i,v});}
+    for(let i=0;i<this.master.sentences.length;i++){if(!inScope(i))continue;const s=this.norm(this.master.sentences[i]);
+      // A "sentence" longer than this is a SEGMENTATION ARTIFACT — a list, table, or directory
+      // page (e.g. "List of Russian sportspeople") the parser couldn't break into real sentences.
+      // It is not a prose answer; pasting it dumps thousands of off-topic names. Skip it as a
+      // passage. (The page is still folded into the graph as entities; it just can't BE the answer.)
+      if(s.length>this.MAX_PASSAGE)continue;
+      const low=s.toLowerCase();if(!this._proseOk(low))continue;let v=0;for(const w of qwords)if(low.includes(w))v++;if(v>0)scored.push({i,v});}
     scored.sort((a,b)=>b.v-a.v||a.i-b.i);
     const top=scored.slice(0,3);
     if(!top.length) return {text:'I didn’t find anything about that in what I’ve read.',refs:[],entities:ents.slice(0,6),sources:[]};
-    const text=top.map(o=>this.norm(this.master.sentences[o.i])).join(' ');
+    const text=top.map(o=>this._clipPassage(this.norm(this.master.sentences[o.i]))).join(' ');
     const sources=[...new Set(top.map(o=>this.master.sentenceSource[o.i]).filter(Boolean))];
     return {text,refs:top.map(o=>o.i),entities:ents.slice(0,6),sources};
   }
