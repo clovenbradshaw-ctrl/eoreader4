@@ -115,6 +115,18 @@
 
             <div style="height:1px;background:var(--line);margin:14px 0;"></div>
 
+            <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:8px;">Chat answers</div>
+            <div onclick="{{ onToggleChatCites }}" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:11px;">
+              <div style="{{ chatCitesSwitch }}"><div style="{{ chatCitesKnob }}"></div></div>
+              <div style="min-width:0;"><div style="font-size:12.5px;font-weight:600;color:var(--ink);">Source citations</div><div style="font-size:11px;color:var(--ink3);line-height:1.45;margin-top:1px;">{{ chatCitesDesc }}</div></div>
+            </div>
+            <div onclick="{{ onToggleChatEntities }}" style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+              <div style="{{ chatEntitiesSwitch }}"><div style="{{ chatEntitiesKnob }}"></div></div>
+              <div style="min-width:0;"><div style="font-size:12.5px;font-weight:600;color:var(--ink);">Entity links</div><div style="font-size:11px;color:var(--ink3);line-height:1.45;margin-top:1px;">{{ chatEntitiesDesc }}</div></div>
+            </div>
+
+            <div style="height:1px;background:var(--line);margin:14px 0;"></div>
+
             <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:8px;">Hover an entity</div>
             <div style="display:flex;gap:2px;background:#eef0f3;border-radius:8px;padding:3px;margin-bottom:5px;">
               <sc-for list="{{ hoverOptions }}" as="hv" hint-placeholder-count="3"><div onclick="{{ hv.onPick }}" style="{{ hv.style }}">{{ hv.label }}</div></sc-for>
@@ -1349,7 +1361,7 @@ class Component extends DCLogic {
     this.SUGG=[];  // filled on mount by loadSuggestions(): a random Wikipedia page + random English books
     this.PALETTE=['#2563eb','#7c3aed','#0e7490','#b45309','#dc2626','#15803d','#be185d','#4f46e5','#0891b2','#9333ea'];
     this.THEMES=[{name:'EO Violet',hex:'#5b34d6'},{name:'Indigo',hex:'#4f46e5'},{name:'Royal',hex:'#2563eb'},{name:'Teal',hex:'#0d9488'},{name:'Forest',hex:'#15803d'},{name:'Magenta',hex:'#be185d'},{name:'Amber',hex:'#b45309'},{name:'Slate',hex:'#475569'}];
-    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');}catch(e){}
+    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedCites=null,savedChatEnts=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedCites=localStorage.getItem('eo_chatcites');savedChatEnts=localStorage.getItem('eo_chatents');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
@@ -1368,6 +1380,9 @@ class Component extends DCLogic {
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
       hoverCite:null, liveResearch:{on:false},
+      // Chat answer decorations (both default ON): clickable source citations (superscripts that
+      // jump to the source line) and clickable entity links (open the entity explorer).
+      chatCites:savedCites!=='0', chatEntities:savedChatEnts!=='0',
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
       // Temporal cursor on the entity summary. Keyed by entity id → a fraction in
       // [0,1] of the way through that entity's attested record. Undefined means the
@@ -1409,6 +1424,29 @@ class Component extends DCLogic {
     const uni=new Set([...A,...B]);return {pct:Math.round(100*shared.length/uni.size),shared,aOnly,bOnly};}
 
   async componentDidMount(){
+    // Chat answers carry three kinds of clickable, in-answer affordances, dispatched by one
+    // delegated listener (document-level + capture, so it survives re-renders and beats the
+    // page's own handlers): a source citation superscript [data-eo-claim] → open the source at
+    // its line; an entity link [data-eo-ent] → open the entity explorer; a site link
+    // [data-eo-site] → read that site in the hero. The claim map is rebuilt from messages each render.
+    if(!this._claimClickBound){this._claimClickBound=true;this._claims={};
+      document.addEventListener('click',e=>{
+        const tgt=e.target;if(!tgt||!tgt.closest)return;
+        const cite=tgt.closest('[data-eo-claim]');
+        if(cite){const c=this._claims&&this._claims[cite.getAttribute('data-eo-claim')];if(c){e.preventDefault();e.stopPropagation();this.jumpToSource(c.url,c.sentence);}return;}
+        const ent=tgt.closest('[data-eo-ent]');
+        if(ent){const id=ent.getAttribute('data-eo-ent');if(id){e.preventDefault();e.stopPropagation();this.clickEntity(id);}return;}
+        const site=tgt.closest('[data-eo-site]');
+        if(site){const u=site.getAttribute('data-eo-site');if(u){e.preventDefault();e.stopPropagation();this.openInHero(u.replace(/%22/g,'"'));}return;}
+      },true);
+      try{const st=document.createElement('style');st.id='eo-claim-style';const a='rgba(91,52,214,';
+        st.textContent=
+          '.eo-cite{cursor:pointer;color:var(--acc);font-weight:700;font-size:.7em;padding:0 1px;vertical-align:super;line-height:0;text-decoration:none;}'+
+          '.eo-cite:hover{text-decoration:underline;}'+
+          '.eo-ent-link{cursor:pointer;border-bottom:1px solid '+a+'.32);transition:background .12s;border-radius:2px;}'+
+          '.eo-ent-link:hover{background:'+a+'.12);}'+
+          '.eo-site{text-decoration:none;}.eo-site:hover{text-decoration:underline;}';
+        document.head.appendChild(st);}catch(_){}}
     const __res=(typeof window!=='undefined'&&window.__resources)||{};
     try{ this.E=await import(__res.eoEngine||'./eoreader4-bundle.js'); }
     catch(e){ this.setState({ready:true,engineErr:String(e)}); return; }
@@ -1664,7 +1702,7 @@ class Component extends DCLogic {
     if(c.id!==s.activeChat)return c;return {...c,sources:this.chatSourcesOf(c).filter(u=>u!==url)};})}));}
   toggleChatAdd(){this.setState(s=>({chatAddOpen:!s.chatAddOpen}));}
   // The discoverable "chat with this page": scope a chat to whatever is open.
-  askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
+  askThisPage(){const u=this.state.viewUrl;if(u)this.chatWithSource(u);else this.newChat(null);}
   openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false,rightOpen:true});}
   closeChat(){this.setState({activeChat:null,chatAddOpen:false});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
@@ -1757,27 +1795,43 @@ class Component extends DCLogic {
   // Minimal, SAFE markdown → HTML for chat answers (the model replies in markdown:
   // **bold**, lists, `code`, links). Everything is HTML-escaped FIRST, then only a fixed
   // set of tags is emitted, so nothing the model writes can inject raw markup.
-  _md(src){
+  // `opts.ground(sentence, inlineHtml)` — when given, each block is split into sentences and the
+  // callback may wrap a sentence's html (e.g. to make a grounded proposition clickable). It returns
+  // the html to emit for that sentence, so a no-op callback leaves the markdown byte-identical.
+  _md(src,opts){
+    const ground=opts&&opts.ground;
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const inline=s=>esc(s)
+    // md(): markdown inline on already-escaped html. Linkifies markdown links AND bare URLs so every
+    // site named in an answer is clickable — each opens in the hero via the delegated [data-eo-site]
+    // handler (the same in-app read the rest of the chat uses), not a raw new tab.
+    const md=h=>h
       .replace(/`([^`]+)`/g,(m,c)=>'<code style="background:rgba(0,0,0,.07);border-radius:4px;padding:1px 4px;font-size:.92em;">'+c+'</code>')
-      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);">$1</a>')
-      // Auto-link bare site URLs so every site mentioned in chat is clickable. Runs after
-      // the markdown-link rule; the leading [\s(]/^ guard skips URLs already inside an
-      // href="…" (preceded by a quote) so we never double-wrap a link.
-      .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);word-break:break-all;">$2</a>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,(m,t,u)=>'<a class="eo-site" data-eo-site="'+u.replace(/"/g,'%22')+'" href="'+u+'" style="color:var(--acc);cursor:pointer;">'+t+'</a>')
+      .replace(/(^|[\s(>])(https?:\/\/[^\s<)]+)/g,(m,pre,u)=>pre+'<a class="eo-site" data-eo-site="'+u.replace(/"/g,'%22')+'" href="'+u+'" style="color:var(--acc);cursor:pointer;word-break:break-all;">'+esc(this.short(u))+'</a>')
       .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
+    const inline=s=>md(esc(s));
+    // Render a block's text: plain inline markdown, or — when grounding — each sentence handed to
+    // the callback (with esc/md helpers) so it can wrap entities and append a source citation.
+    // Whitespace between sentences is preserved so the prose reads unchanged.
+    const render=s=>{
+      if(!ground)return inline(s);
+      return String(s).split(/([.!?]['"’)]?\s+)/).reduce((acc,part,i)=>{
+        if(i%2===1)return acc+part;                    // the boundary delimiter, kept verbatim
+        const t=part.trim();
+        return acc+(t?ground(part,{esc,md}):inline(part));
+      },'');
+    };
     const lines=String(src||'').replace(/\r/g,'').split('\n');
     const out=[];let list=null;
     const flush=()=>{if(list){out.push('<'+list.tag+' style="margin:6px 0;padding-left:20px;">'+list.items.join('')+'</'+list.tag+'>');list=null;}};
     for(const raw of lines){
       const line=raw.trim();let m;
       if(!line){flush();continue;}
-      if(m=line.match(/^(#{1,6})\s+(.*)$/)){flush();out.push('<div style="font-weight:700;margin:9px 0 2px;">'+inline(m[2])+'</div>');continue;}
-      if(m=line.match(/^[-*]\s+(.*)$/)){if(!list||list.tag!=='ul'){flush();list={tag:'ul',items:[]};}list.items.push('<li>'+inline(m[1])+'</li>');continue;}
-      if(m=line.match(/^\d+\.\s+(.*)$/)){if(!list||list.tag!=='ol'){flush();list={tag:'ol',items:[]};}list.items.push('<li>'+inline(m[1])+'</li>');continue;}
-      flush();out.push('<p style="margin:6px 0;">'+inline(line)+'</p>');
+      if(m=line.match(/^(#{1,6})\s+(.*)$/)){flush();out.push('<div style="font-weight:700;margin:9px 0 2px;">'+render(m[2])+'</div>');continue;}
+      if(m=line.match(/^[-*]\s+(.*)$/)){if(!list||list.tag!=='ul'){flush();list={tag:'ul',items:[]};}list.items.push('<li>'+render(m[1])+'</li>');continue;}
+      if(m=line.match(/^\d+\.\s+(.*)$/)){if(!list||list.tag!=='ol'){flush();list={tag:'ol',items:[]};}list.items.push('<li>'+render(m[1])+'</li>');continue;}
+      flush();out.push('<p style="margin:6px 0;">'+render(line)+'</p>');
     }
     flush();return out.join('');
   }
@@ -1820,6 +1874,9 @@ class Component extends DCLogic {
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
+    // Ground (and cite) against the chat's sources AND everything research pulled in under them,
+    // so an answer can stand on — and link back to — the pages the search brought in.
+    const scope=this.researchScope(sources);
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // append the user turn + a pending assistant bubble
     let id=this.state.activeChat;
@@ -1832,8 +1889,8 @@ class Component extends DCLogic {
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     // 1) clock questions — no model
     const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
-    // 2) the spans that surface for this question, scoped to the chat's sources
-    const ground=this.groundNotes(q,sources);
+    // 2) the spans that surface for this question, scoped to the chat's sources + research
+    const ground=this.groundNotes(q,scope);
     // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
     //    graph, so it speaks from the document instead of as a blank-slate assistant.
     try{
@@ -1843,8 +1900,8 @@ class Component extends DCLogic {
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
-          question:q, spans:ground.spans||[], graph:this.meaningGraph(sources),
-          orientation:this.chatOrientation(sources),
+          question:q, spans:ground.spans||[], graph:this.meaningGraph(scope),
+          orientation:this.chatOrientation(scope),
           task:this._isSummaryQ(q)?'summary':'answer',
           conversation:{pastTurns}, now:new Date(),
         });
@@ -1861,19 +1918,24 @@ class Component extends DCLogic {
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
-      const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
-      // Only surface grounding when the question actually matched the read text. Weak
-      // fallback context (intro lines) is NOT shown as a citation — instead we offer the
-      // related docs (ranked) the reader has open. This keeps "linked" = genuinely relevant.
+      const text=this.norm(raw)||this.answerQuestion(q,scope).text||'(no answer)';
+      // Only surface grounding when the question actually matched the read text (main's relevance
+      // gate) — weak fallback context is offered as related docs instead, not as citations. When it
+      // IS relevant: passages = the spans, and the source chips = spans' sources ∪ every inline-cited
+      // claim's source. The decorated answer html (superscripts/entity links) is rebuilt at render.
+      const g=this._buildGrounded(text,scope);
       const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
-      finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
+      const srcChips=ground.relevant?[...new Set([...(ground.sources||[]),...g.claims.map(c=>c.url)])]:[];
+      finish({text,entities:ground.entities,sources:srcChips,passages,related:this.relatedDocs(q,sources),relevant:ground.relevant});
     }catch(e){
       // model unavailable — answer structurally from what's read, or say so plainly
-      const fb=this.answerQuestion(q,sources);
+      const fb=this.answerQuestion(q,scope);
+      const g=this._buildGrounded(fb.text,scope);
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
-      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      const srcChips=relevant?[...new Set([...(fb.sources||[]),...g.claims.map(c=>c.url)])]:[];
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:srcChips,passages,related:this.relatedDocs(q,sources),relevant,modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
       this.setState({modelStatus:''});
     }
   }
@@ -1896,6 +1958,144 @@ class Component extends DCLogic {
     const text=top.map(o=>this.norm(this.master.sentences[o.i])).join(' ');
     const sources=[...new Set(top.map(o=>this.master.sentenceSource[o.i]).filter(Boolean))];
     return {text,refs:top.map(o=>o.i),entities:ents.slice(0,6),sources};
+  }
+  // A chat scoped to a source also draws on the sources RESEARCH pulled in under it — the
+  // nested children in the source tree — so an answer can use, and cite, what was found.
+  // Expands an explicit source set with its researched descendants (transitively). An empty
+  // set already ranges over everything read, so it is returned unchanged.
+  researchScope(sources){
+    const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    if(!scope.length)return scope;
+    const pages=(this.master&&this.master.pages)||[];
+    const kids=u=>pages.filter(p=>p.parent===u).map(p=>p.url);
+    const out=new Set(scope);
+    const walk=u=>kids(u).forEach(c=>{if(!out.has(c)){out.add(c);walk(c);}});
+    scope.forEach(walk);
+    return [...out];
+  }
+  // Ground a single proposition (a sentence the model wrote) to the read sentence that best
+  // supports it, within `scope`. Returns {url,sentence} or null — null means "not linkable",
+  // so only genuinely-supported claims become clickable. Conservative on purpose: a claim
+  // links only when it shares enough distinctive content words with a real source sentence.
+  groundProp(claim,scope){
+    if(!this.master||!this.master.sentences.length)return null;
+    const scopes=(Array.isArray(scope)?scope:(scope?[scope]:[]));
+    const cw=s=>(String(s||'').toLowerCase().match(/[a-z0-9][a-z0-9'-]{2,}/g)||[]).filter(w=>!this.STOP.has(w));
+    const qset=new Set(cw(claim));
+    if(qset.size<2)return null;
+    const inScope=i=>!scopes.length||scopes.includes(this.master.sentenceSource[i]);
+    let best=-1,bestScore=0;
+    for(let i=0;i<this.master.sentences.length;i++){
+      if(!inScope(i))continue;
+      const low=this.norm(this.master.sentences[i]).toLowerCase();
+      if(!this._proseOk(low))continue;
+      const have=new Set(cw(low));if(!have.size)continue;
+      let shared=0;for(const w of qset)if(have.has(w))shared++;
+      if(shared<2)continue;
+      const score=shared/qset.size+shared*0.01;       // fraction matched, longer overlaps win ties
+      if(score>bestScore){bestScore=score;best=i;}
+    }
+    if(best<0||bestScore<0.34)return null;             // too thin to call it "linked"
+    return {url:this.master.sentenceSource[best],sentence:this.norm(this.master.sentences[best])};
+  }
+  // An index of the entity labels in scope → entity id, plus one alternation regex, so the chat
+  // can underline-and-link entity mentions inside an answer (cap the alternation so a huge graph
+  // can't build a pathological regex). Null when there's nothing to link.
+  _entIndex(scope){
+    if(!this.graph)return null;
+    const scopes=(Array.isArray(scope)?scope:(scope?[scope]:[]));
+    const inScope=id=>!scopes.length||this.mentionsOf(id).some(i=>scopes.includes(this.master.sentenceSource[i]));
+    const byLabel={};const labels=[];
+    for(const e of this.graph.entities.values()){
+      if(!this.showable(e.id))continue;
+      const lab=this.labelOf(e.id);if(!lab||lab.length<3||this.isURLish(lab))continue;
+      if(!inScope(e.id))continue;
+      const k=lab.toLowerCase();if(byLabel[k])continue;byLabel[k]=e.id;labels.push(lab);
+    }
+    if(!labels.length)return null;
+    labels.sort((a,b)=>b.length-a.length);                 // longest-first so "La Guaira" wins over "Guaira"
+    const re=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    let rx=null;try{rx=new RegExp('\\b('+labels.slice(0,400).map(re).join('|')+')\\b','gi');}catch(e){rx=null;}
+    return {re:rx,byLabel};
+  }
+  // Settle a chat answer's HTML two ways (both governed by the chat-answer visibility settings):
+  //   • entity links — mentions underlined and clickable into the entity explorer (chatEntities);
+  //   • source citations — a clickable superscript after each grounded proposition that opens the
+  //     source at the exact line (chatCites). Same source reuses its number, footnote-style.
+  // Returns {html, claims}; `claims` is re-registered each render so the delegated handler resolves
+  // a superscript back to its {url,sentence}.
+  // `allowCite` (default true) lets the caller suppress source citations when the answer wasn't
+  // judged relevant to the read text (main's relevance gate) — entity links still apply.
+  _buildGrounded(text,scope,allowCite){
+    const citeOn=this.state.chatCites!==false && allowCite!==false, entOn=this.state.chatEntities!==false;
+    const ent=entOn?this._entIndex(scope):null;
+    const claims=[];const keyMap={};let num=0;
+    const escT=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const html=this._md(String(text||''),{ground:(sentence,{esc,md})=>{
+      let h=esc(sentence);
+      if(ent&&ent.re)h=h.replace(ent.re,(mm)=>{const id=ent.byLabel[mm.toLowerCase()];return id?('<span class="eo-ent-link" data-eo-ent="'+id+'">'+mm+'</span>'):mm;});
+      h=md(h);
+      if(citeOn){
+        const mt=this.groundProp(sentence,scope);
+        if(mt){const key=mt.url+'\n'+mt.sentence;let rec=keyMap[key];
+          if(!rec){const cid='k'+(this._claimN=(this._claimN||0)+1);rec={num:++num,cid};keyMap[key]=rec;claims.push({cid:rec.cid,url:mt.url,sentence:mt.sentence});}
+          const title=escT('Source '+rec.num+' — open “'+this.truncLabel(((this.pageOf(mt.url)||{}).title)||this.short(mt.url),46)+'” at this line');
+          h+='<sup class="eo-cite" data-eo-claim="'+rec.cid+'" title="'+title+'">'+rec.num+'</sup>';
+        }
+      }
+      return h;
+    }});
+    return {html,claims};
+  }
+  // Memoized per-message grounded html: rebuilds only when the answer text, the visibility settings,
+  // the graph revision, or the chat's scope change — so toggling a setting re-decorates past answers
+  // without recomputing grounding on every keystroke-driven render.
+  _groundedFor(m,scope){
+    const allowCite=m.relevant!==false;                    // honor the answer's relevance gate
+    const sig=(this.state.chatCites!==false?'c':'-')+(this.state.chatEntities!==false?'e':'-')+(allowCite?'r':'-')+'|'+(this.state.rev||0)+'|'+scope.join(',')+'|'+String(m.text||'').length;
+    if(!m._g||m._g.sig!==sig){const g=this._buildGrounded(m.text,scope,allowCite);m._g={sig,html:g.html,claims:g.claims};}
+    return m._g;
+  }
+  // Open a source in the HERO (center) panel without closing the chat — the lighter sibling of
+  // goWeb, which clears the active chat. Used when a claim or source chip is clicked from within
+  // a conversation so the chat stays open alongside the source it points at.
+  openInHero(url){
+    if(!url)return;
+    this._srcUrl=null;this._pushLoc({t:'web',url});
+    // The chat keeps its own column (docked) or tab, so opening a source never closes it — unlike
+    // goWeb, which clears the active chat. On phone the panes are exclusive, so surface the reader.
+    const extra=this.phone()?{pane:'doc'}:{};
+    this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1,...extra}));
+    this.loadCenter(url);if(this.state.detect)this.processPage(url);
+  }
+  // Click a grounded proposition (or source chip): show its source doc in the hero and scroll to
+  // the exact sentence. Navigates only when the source isn't already the one in view, then waits
+  // for the (async) page render before scrolling.
+  jumpToSource(url,sentence){
+    if(!url)return;
+    if(this.state.viewUrl!==url)this.openInHero(url);
+    else if(this.phone())this.setState({pane:'doc'});
+    if(sentence)this._scrollToTextWhenReady(sentence,0);
+  }
+  // _scrollToText needs the center iframe rendered; after a navigation that can take a beat, so
+  // retry briefly until the page is in the DOM, then scroll+highlight the spot.
+  _scrollToTextWhenReady(text,tries){
+    tries=tries||0;
+    const ifr=document.querySelector('iframe[data-eo-center]');
+    const d=ifr&&ifr.contentDocument;
+    if(d&&d.body&&d.body.childNodes.length){this._scrollToText(text);return;}
+    if(tries<60)setTimeout(()=>this._scrollToTextWhenReady(text,tries+1),100);
+  }
+  // "Chat with this source" should RESUME the conversation you already had about it, not spawn a
+  // fresh one each time. Prefer a chat scoped solely to this source; fall back to any chat that
+  // includes it; otherwise start a new one. (chats are most-recent-first, so .find resumes the latest.)
+  chatWithSource(url){
+    if(!url){this.newChat(null);return;}
+    const chats=this.state.chats||[];
+    const sole=chats.find(c=>{const s=this.chatSourcesOf(c);return s.length===1&&s[0]===url;});
+    const found=sole||chats.find(c=>this.chatSourcesOf(c).includes(url));
+    if(found){this.openChat(found.id);return;}
+    this.newChat(url);
   }
   // View-model for the chat: the left-panel thread list + the active thread, ready
   // for the template. Pure read of state.chats; no engine work here.
@@ -1927,13 +2127,22 @@ class Component extends DCLogic {
     base.chatOverlayOn=!docked && !onPhone;
     const gOpen=this.state.groundOpen||{};
     const titleForUrl=u=>this.truncLabel(((this.pageOf(u)||{}).title)||(/^text:/i.test(u)?'text':this.short(u)),24);
+    // The grounding scope is the chat's sources plus everything research pulled in under them —
+    // the same scope answers are grounded against, so citations and entity links resolve to it.
+    const gScope=this.researchScope(this.chatSourcesOf(cur));
+    // Rebuild the grounded-proposition click registry from scratch each render so the delegated
+    // handler resolves every data-eo-claim superscript back to its source. Cleared here, refilled below.
+    this._claims={};
     const msgs=cur.messages.map((m,mi)=>{
       const isUser=m.role==='user';
-      // Grounding chips: the verbatim passages the answer leaned on (the richest, most
-      // mechanical trail), then the source(s) and the entities it named. Each passage chip
-      // opens its source; entity chips pivot the panel.
-      const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this.goWeb(p.u)}));
-      const sources=(m.sources||[]).map(u=>({label:titleForUrl(u),title:u,onOpen:()=>this.goWeb(u)}));
+      // Decorate the answer (entity links + source-citation superscripts), memoized per message.
+      const g=(!isUser&&!m.pending&&m.text)?this._groundedFor(m,gScope):null;
+      if(g)(g.claims||[]).forEach(c=>{this._claims[c.cid]={url:c.url,sentence:c.sentence};});
+      // Grounding chips: the verbatim passages the answer leaned on (the richest, most mechanical
+      // trail), then the source(s) and the entities it named. A passage chip opens its source at the
+      // exact line; a source chip opens the source — both keep the chat open. Entity chips pivot the panel.
+      const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this.jumpToSource(p.u,this.norm(p.text))}));
+      const sources=(m.sources||[]).map(u=>({label:titleForUrl(u),title:u,onOpen:()=>this.openInHero(u)}));
       const cites=passages.length?passages:sources;   // prefer passages; fall back to bare sources
       const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
         style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
@@ -1945,12 +2154,13 @@ class Component extends DCLogic {
       // Related docs — other read sources ranked by relevancy. Default to the top 3; a
       // "+N more" reveals the rest. Offered alongside an answer (and instead of weak
       // grounding when the in-scope sources didn't actually match the question).
-      const relAll=(m.related||[]).map(r=>({label:r.title,title:r.url,onOpen:()=>this.goWeb(r.url),
+      const relAll=(m.related||[]).map(r=>({label:r.title,title:r.url,onOpen:()=>this.openInHero(r.url),
         chipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'}));
       const relKey=cur.id+':'+mi+':rel', relOn=!!gOpen[relKey];
       const related=relOn?relAll:relAll.slice(0,3);
-      // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
-      return {isUser,pending:!!m.pending,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
+      // The answer's markdown, decorated with entity links + source-citation superscripts (g.html);
+      // falls back to plain markdown for un-grounded / streaming turns.
+      return {isUser,pending:!!m.pending,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?((g&&g.html)||this._md(m.text)):'',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
         sources:cites,hasSources:cites.length>0,entities,hasEntities:entities.length>0,
         hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
@@ -1967,7 +2177,8 @@ class Component extends DCLogic {
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
         bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
         noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',
-        srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
+        srcRowStyle:'display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:7px;max-width:80%;',
+        srcLabelStyle:'font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-right:1px;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
     });
     // What this chat is ABOUT — one chip per source, removable, plus the sources you can
@@ -3244,6 +3455,11 @@ class Component extends DCLogic {
   goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+res.sentenceCount+' propositions');this._busy=false;this.setState({busy:false});});}
   toggleDetect(){this.setState(s=>({detect:!s.detect}));}
+  // Chat answer decorations — persisted, like the other visibility settings. Re-rendering picks
+  // up the new flag; already-settled answers keep their stored html until the next answer, which
+  // is fine (the toggle governs how new answers are decorated).
+  toggleChatCites(){this.setState(s=>{const v=!s.chatCites;try{localStorage.setItem('eo_chatcites',v?'1':'0');}catch(e){}return {chatCites:v};});}
+  toggleChatEntities(){this.setState(s=>{const v=!s.chatEntities;try{localStorage.setItem('eo_chatents',v?'1':'0');}catch(e){}return {chatEntities:v};});}
   canBack(){return !!(this._hist&&this._hpos>0);}
   canForward(){return !!(this._hist&&this._hpos<this._hist.length-1);}
   goBack(){if(this.canBack()){this._hpos--;this._applyLoc(this._hist[this._hpos]);}}
@@ -3687,6 +3903,15 @@ class Component extends DCLogic {
       detectDesc:this.state.detect?'On — every page you open is read into memory.':'Off — pages open without being read. Turn on to build memory.',
       detectSwitch:'flex:0 0 auto;width:34px;height:20px;border-radius:11px;padding:2px;transition:background .15s;background:'+(this.state.detect?'var(--acc)':'#cfd3da')+';',
       detectKnob:'width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s;transform:translateX('+(this.state.detect?'14px':'0')+');',
+      // Chat answer decoration toggles (same switch styling as Reading).
+      onToggleChatCites:()=>this.toggleChatCites(),chatCitesOn:this.state.chatCites!==false,
+      chatCitesDesc:this.state.chatCites!==false?'On — each claim carries a superscript that opens its source at the exact line.':'Off — answers read plainly, with sources only in the grounding panel.',
+      chatCitesSwitch:'flex:0 0 auto;width:34px;height:20px;border-radius:11px;padding:2px;transition:background .15s;background:'+(this.state.chatCites!==false?'var(--acc)':'#cfd3da')+';',
+      chatCitesKnob:'width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s;transform:translateX('+(this.state.chatCites!==false?'14px':'0')+');',
+      onToggleChatEntities:()=>this.toggleChatEntities(),chatEntitiesOn:this.state.chatEntities!==false,
+      chatEntitiesDesc:this.state.chatEntities!==false?'On — entities in answers are underlined and open the entity explorer.':'Off — entities in answers are plain text.',
+      chatEntitiesSwitch:'flex:0 0 auto;width:34px;height:20px;border-radius:11px;padding:2px;transition:background .15s;background:'+(this.state.chatEntities!==false?'var(--acc)':'#cfd3da')+';',
+      chatEntitiesKnob:'width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s;transform:translateX('+(this.state.chatEntities!==false?'14px':'0')+');',
       onToggleAudit:()=>this.toggleAudit(),
       auditDesc:this.state.auditMode?'On — each entity shows its raw graph contents, the integral fold vs. Wikipedia, and the sources in play.':'Off — turn on to inspect coref, definitions, and the propositions behind each profile.',
       auditSwitch:'flex:0 0 auto;width:34px;height:20px;border-radius:11px;padding:2px;transition:background .15s;background:'+(this.state.auditMode?'var(--acc)':'#cfd3da')+';',
@@ -3869,7 +4094,7 @@ class Component extends DCLogic {
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
     base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=(bucket.get(p.url)||[]).length;
-      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
+      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.chatWithSource(p.url);},
         hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
         onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
         caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
