@@ -28,6 +28,7 @@ import { projectGraph, VERDICTS } from '../core/index.js';
 import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
+import { buildConceptTokenMap } from '../write/concept-tokens.js';
 
 // Weave the mind's recalled lines into the prompt as labelled BACKGROUND — only when
 // the user has the Mind chip in weave mode (ctx.mindSpans present). The memory is
@@ -543,6 +544,15 @@ export const stages = {
   async llm(ctx) {
     const maxTokens = ctx.maxTokens || 384;
 
+    // THE LENS PORT (spec-the-lens-port.md). When the toggle is on, the backend exposes its
+    // tokenizer, and a doc + surfer reading are in hand, build the per-document concept→token
+    // map and a Born distribution over the salient figures, and hand the steering config down
+    // the same beat loop. Off (or any precondition absent) ⇒ lens === null ⇒ the golden path is
+    // byte-identical. The void numeral/entity gates are always on once armed; relevance leads
+    // (μ on the surfer's focus); personality (λ) stays off until per-figure activations are wired
+    // (the spec's build order: the smallest honest first test is μ-only relevance + the void gate).
+    const lens = buildLens(ctx);
+
     // The STREAMING ANSWER path (docs/streaming-answer.md §5). When a doc is
     // grounded, a surfer path exists, and streaming is requested, the answer is
     // realised one grounded sentence per surfer stop — emitted token by token
@@ -555,10 +565,10 @@ export const stages = {
       try {
         const streamed = await streamAnswer({
           doc: ctx.doc, surf: ctx.surf, model: ctx.model, focus: ctx.focus || [],
-          onToken: ctx.onToken, alpha: ctx.alpha ?? undefined, orientation: orientationOf(ctx.doc),
+          onToken: ctx.onToken, alpha: ctx.alpha ?? undefined, orientation: orientationOf(ctx.doc), lens,
         });
         if (streamed && streamed.draft) {
-          return { ...ctx, rawOutput: streamed.draft, maxTokens, streamed };
+          return { ...ctx, rawOutput: streamed.draft, maxTokens, streamed, lensEvents: drainLens(ctx) };
         }
       } catch { /* a streaming fault degrades to the one-shot path below, never a dead turn */ }
     }
@@ -576,8 +586,8 @@ export const stages = {
     // token by token where the backend exposes a decode callback (webllm, onnx-chat,
     // wllama). A backend without one falls back to draw-then-emit — the whole answer
     // once — and a turn with no `onToken` is byte-identical to the bare phrase().
-    const raw = await streamPhrase(ctx.model, ctx.messages, { maxTokens, onToken: ctx.onToken });
-    return { ...ctx, rawOutput: raw, maxTokens };
+    const raw = await streamPhrase(ctx.model, ctx.messages, { maxTokens, onToken: ctx.onToken, lens });
+    return { ...ctx, rawOutput: raw, maxTokens, lensEvents: drainLens(ctx) };
   },
 
   // Mechanical citation binding. The model never wrote [sN]; we do.
@@ -852,6 +862,10 @@ export const stages = {
       const live = activations.filter(v => v.some(x => x > 0));
       if (live.length) {
         const reading = ctx.horizon.observe(live);
+        // Track F staleness: when the Horizon re-grounds (the helix turns), the steering rules
+        // tuned to the old frame decay back toward σ — a rule good for one frame should not keep
+        // firing once the field has moved (the lens-port addendum, invariant #4).
+        if (reading?.regrounded) { try { ctx.model?.lensDecay?.({ regrounded: true }); } catch { /* best-effort */ } }
         return { ...ctx, horizonReading: reading };
       }
     } catch { /* a memory fold must never break a settled answer */ }
@@ -979,6 +993,50 @@ const orientationOf = (doc) => {
     type:     doc.modality === 'image' ? 'image' : 'text',
     length:   units.length,
   });
+};
+
+// buildLens — assemble the lens-port steering config for this turn, or null to leave the
+// golden path untouched (spec-the-lens-port.md, Tracks B–D). Requires the toggle, a backend
+// that exposes its tokenizer (the bridge seam), and a doc + surfer reading.
+const buildLens = (ctx) => {
+  if (!ctx.lensPort) return null;
+  const tokenizer = ctx.model?.getTokenizer?.();
+  if (!tokenizer || !ctx.doc || !ctx.surf) return null;
+  // Track F: fold in surfaces a span-gated REC re-grounded on earlier turns — the gate tightens.
+  const extraForms = (() => { try { return ctx.model.lensApproved?.() || []; } catch { return []; } })();
+  const conceptMap = buildConceptTokenMap(ctx.doc, ctx.surf, tokenizer, { extraForms });
+  if (!conceptMap.coverage.figuresMapped && !conceptMap.coverage.groundedNumbers) return null;
+  return {
+    conceptMap,
+    figureWeights: figureWeightsFromSurf(ctx.surf),   // the surfer's salience as a token bias (μ)
+    mu: 2, lambda: 0, alpha: ctx.alpha ?? 0.05,
+  };
+};
+
+// figureWeightsFromSurf — the surfer's Born-rule salience as a distribution over figure labels.
+// First cut (the spec's smallest test): the focus figure carries the mass; Track-D full reads the
+// per-span field. Returns null when the reading named no figure.
+const figureWeightsFromSurf = (surf) => {
+  const focus = surf?.focus ? String(surf.focus).toLowerCase() : null;
+  return focus ? new Map([[focus, 1]]) : null;
+};
+
+// drainLens — pull the steering provenance the stack accumulated this turn into the Given-Log
+// (which lenses fired, suppressed tokens, void-conflicts, the entropy at each gated step), and
+// close the Track-F loop: run the SPAN-GATED re-grounding decision on each void-conflict so a
+// conflict only widens the trie when a SOURCE SPAN justifies it (else it stays a review entry).
+const drainLens = (ctx) => {
+  let events = [];
+  try { events = ctx.model?.lensEvents?.() || []; } catch { events = []; }
+  const recs = [];
+  for (const ev of events) {
+    if (ev.type === 'void-conflict' && ev.surface) {
+      try { const r = ctx.model.lensRecGate?.(ev.surface, ctx.spans || []); if (r) recs.push({ type: 'rec', ...r }); }
+      catch { /* re-grounding is best-effort; the conflict is already logged */ }
+    }
+  }
+  const all = [...events, ...recs];
+  return all.length ? all : null;
 };
 
 // The conversation the GROUNDED prompt carries: the user's OWN recent turns — the thread
