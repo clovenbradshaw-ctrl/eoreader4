@@ -615,6 +615,32 @@ class Component extends DCLogic {
       if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
     }
     return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
+  // Disclose WHERE an answer is grounded — honestly, so a summary never reads as fact
+  // pulled from the page when it was really the model drawing the lines together. Maps a
+  // groundNotes result (+ sendChat's `grounded` flag) onto the chip's three modes:
+  //   'matched' — read lines that actually MATCHED the question (the firmest footing): the
+  //               verbatim passages are shown as the grounding, no caveat needed.
+  //   'opening' — no line matched (e.g. "summarize this"): the answer leaned on the OPENING
+  //               lines of the source(s) in scope. Those lines are still shown — so you can
+  //               see what it drew on — but labelled as the source's opening, and disclosed
+  //               as drawn-together-in-the-model's-words, not lifted from one matched line.
+  //   'model'   — nothing from the reading bore on it. The reply is the model's OWN words;
+  //               we say so plainly (graph-only → "the shape of what you've read"; no
+  //               document at all → "not grounded in a source") rather than implying a cite.
+  // `grounded` is sendChat's flag (spans OR a meaning graph existed) — it separates the
+  // graph-only case from the no-document case in the 'model' disclosure.
+  _groundReport(ground,grounded){
+    const spans=((ground&&ground.spans)||[]).map(s=>({text:s.text,u:s.u,i:s.i}));
+    if(ground&&ground.relevant&&spans.length)
+      return {groundKind:'matched',passages:spans,sources:ground.sources||[],disclosure:''};
+    if(spans.length)
+      return {groundKind:'opening',passages:spans,sources:(ground&&ground.sources)||[],
+        disclosure:'No passage matched your question directly — this draws together the opening of the source, in the model’s own words.'};
+    return {groundKind:'model',passages:[],sources:[],
+      disclosure:grounded
+        ? 'Drawn from the overall shape of what you’ve read, not any one passage — the wording is the model’s own.'
+        : 'The model’s own answer — nothing you’ve read bears on it, so it isn’t grounded in a source.'};
+  }
   // Other read documents OUTSIDE the chat's scope, ranked by how well they match the
   // question (content-word overlap). The "related" set offered alongside an answer —
   // especially when the in-scope sources didn't ground it well. Empty if nothing else
@@ -818,11 +844,12 @@ class Component extends DCLogic {
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
-      // Only surface grounding when the question actually matched the read text. Weak
-      // fallback context (intro lines) is NOT shown as a citation — instead we offer the
-      // related docs (ranked) the reader has open. This keeps "linked" = genuinely relevant.
-      const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
-      finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
+      // Surface grounding for EVERY answer, honestly. Matched lines show as citations; a
+      // summary that leaned on the source's opening shows those lines, disclosed as such;
+      // an answer with no read footing says plainly it's the model's own (_groundReport).
+      const gr=this._groundReport(ground,grounded);
+      finish({text,entities:ground.entities,sources:gr.sources,passages:gr.passages,
+        groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
       this._pivotChatPanel(q+' '+text);
     }catch(e){
       // model unavailable — answer structurally from what's read, or say so plainly
@@ -830,7 +857,7 @@ class Component extends DCLogic {
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
-      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,groundKind:relevant?'matched':undefined,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
       this._pivotChatPanel(q+' '+(fb.text||''));
       this.setState({modelStatus:''});
     }
@@ -903,13 +930,14 @@ class Component extends DCLogic {
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
       const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
-      const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
-      finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
+      const gr=this._groundReport(ground,grounded);
+      finish({text,entities:ground.entities,sources:gr.sources,passages:gr.passages,
+        groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
     }catch(e){
       const fb=this.answerQuestion(q,sources);
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
-      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from what I gathered — the chat model didn’t load.'});
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,groundKind:relevant?'matched':undefined,related:this.relatedDocs(q,sources),modelNote:'Answered from what I gathered — the chat model didn’t load.'});
       this.setState({modelStatus:''});
     }
   }
@@ -1067,10 +1095,25 @@ class Component extends DCLogic {
       const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
         style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
       const isMd=!isUser&&!m.pending&&!!m.text;   // render the model's markdown; user/pending stay plain
-      const hasGround=!isUser&&!m.pending&&(cites.length>0||entities.length>0);
+      // The grounding mode this turn was tagged with (sendChat/_answerInto via _groundReport):
+      // 'matched' (lines that matched), 'opening' (drew on the source's opening), 'model' (the
+      // model's own words). Older/structural turns carry none — fall back to the matched look
+      // when there are chips to show. The disclosure line rides alongside (opening / model).
+      const groundKind=m.groundKind||((cites.length||entities.length)?'matched':null);
+      const disclosure=m.disclosure||'';
+      // Always disclose the footing of an assistant answer: chips when grounded, a plain
+      // caveat when it's the model's own. Only a bare 'model' turn with nothing to say (no
+      // disclosure, no chips) stays silent.
+      const hasGround=!isUser&&!m.pending&&(cites.length>0||entities.length>0||!!disclosure);
       const gKey=cur.id+':'+mi, gOn=!!gOpen[gKey];
       const gBits=[]; if(cites.length)gBits.push(cites.length+(passages.length?(' passage'+(cites.length!==1?'s':'')):(' source'+(cites.length!==1?'s':''))));
       if(entities.length)gBits.push(entities.length+' entit'+(entities.length!==1?'ies':'y'));
+      // The chip's headline reflects the mode — never implying a citation the answer doesn't have.
+      const groundLabel=groundKind==='opening'
+        ? 'Drawn from the opening'+(gBits.length?(' — '+gBits.join(' · ')):'')
+        : groundKind==='model'
+        ? 'Not grounded in your reading'+(entities.length?(' — '+entities.length+' entit'+(entities.length!==1?'ies':'y')):'')
+        : 'Grounded in '+gBits.join(' · ');
       // Related docs — other read sources ranked by relevancy. Default to the top 3; a
       // "+N more" reveals the rest. Offered alongside an answer (and instead of weak
       // grounding when the in-scope sources didn't actually match the question).
@@ -1106,7 +1149,9 @@ class Component extends DCLogic {
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
         sources:cites,hasSources:cites.length>0,entities,hasEntities:entities.length>0,
         hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
-        groundLabel:'Grounded in '+gBits.join(' · '),groundCaret:gOn?'▾':'▸',
+        groundLabel,groundCaret:gOn?'▾':'▸',
+        groundDisclosure:disclosure,hasDisclosure:!!disclosure,
+        disclosureStyle:'font-size:11px;line-height:1.45;color:var(--ink3);font-style:italic;margin-top:5px;',
         groundStyle:'max-width:80%;margin-top:7px;',
         groundHeadStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);background:transparent;border:none;padding:2px 0;cursor:pointer;',
         related,hasRelated:relAll.length>0,relatedHasMore:relAll.length>3,
