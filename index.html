@@ -212,12 +212,13 @@
       <sc-if value="{{ askPageOn }}" hint-placeholder-val="{{ false }}">
         <button onclick="{{ onAskPage }}" title="Chat about this page" style="position:absolute;right:22px;bottom:22px;z-index:18;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:24px;padding:11px 18px;box-shadow:0 8px 24px rgba(20,24,30,.22);cursor:pointer;">✦ Ask about this page</button>
       </sc-if>
-      <sc-if value="{{ chatOn }}" hint-placeholder-val="{{ false }}">
+      <sc-if value="{{ chatInMain }}" hint-placeholder-val="{{ false }}">
         <div style="{{ chat.shellStyle }}">
           <div style="flex:0 0 auto;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--card);display:flex;align-items:center;gap:10px;">
             <div style="width:26px;height:26px;border-radius:7px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto;">✦</div>
             <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
               <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">grounded in {{ chat.scopeLabel }}</div></div>
+            <button onclick="{{ chat.onDock }}" title="{{ chat.dockTitle }}" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">{{ chat.dockGlyph }}</button>
             <button onclick="{{ onCloseChat }}" title="Close chat" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
           </div>
           <div id="eo-chat-scroll" style="flex:1;overflow-y:auto;padding:24px 22px;min-height:0;">
@@ -624,6 +625,39 @@
 
     <sc-if value="{{ rightOpen }}" hint-placeholder-val="{{ true }}">
     <aside id="eo-panel-scroll" style="border-left:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;order:{{ rightOrder }};">
+      <sc-if value="{{ showChatTab }}" hint-placeholder-val="{{ false }}">
+        <div style="background:var(--card);border-bottom:1px solid var(--line);padding:8px 10px;display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;flex:1;gap:3px;background:#eef0f3;border-radius:9px;padding:2px;">
+            <button onclick="{{ onRightTabEnt }}" style="{{ rightTabEntStyle }}">Entities</button>
+            <button onclick="{{ onRightTabChat }}" style="{{ rightTabChatStyle }}">Chat</button>
+          </div>
+          <button onclick="{{ chat.onDetach }}" title="Pop the chat out into its own pane" style="width:26px;height:26px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);color:var(--ink3);border-radius:7px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc);border-color:var(--accline)">⤢</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ rightChatOn }}" hint-placeholder-val="{{ false }}">
+        <div id="eo-chat-scroll" style="padding:8px 13px 14px;">
+          <div style="font-size:11px;color:var(--ink3);padding:0 2px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">grounded in {{ chat.scopeLabel }}</div>
+          <sc-if value="{{ chat.empty }}" hint-placeholder-val="{{ true }}">
+            <div style="text-align:center;color:var(--ink3);font-size:12.5px;line-height:1.6;padding:28px 8px;">Ask anything about what you’ve read.<br>Answers link back to your sources.</div>
+          </sc-if>
+          <sc-for list="{{ chat.messages }}" as="m" hint-placeholder-count="0">
+            <div style="{{ m.rowStyle }}">
+              <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+              <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ false }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" style="{{ m.srcChipStyle }}">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+              <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}"><div style="max-width:100%;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div></sc-if>
+              <sc-if value="{{ m.hasNote }}" hint-placeholder-val="{{ false }}"><div style="{{ m.noteStyle }}">{{ m.note }}</div></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="position:sticky;bottom:0;padding:10px 12px 12px;border-top:1px solid var(--line);background:var(--card);">
+          <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:var(--ink3);display:flex;align-items:center;gap:7px;margin-bottom:7px;"><span style="width:12px;height:12px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div></sc-if>
+          <div style="display:flex;gap:8px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:12px;padding:3px 4px 3px 13px;" style-focus-within="border-color:var(--accline);background:var(--card)">
+            <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13px;color:var(--ink);background:transparent;border:none;outline:none;padding:8px 0;">
+            <button onclick="{{ onSendChat }}" style="font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:10px;padding:8px 14px;flex:0 0 auto;cursor:pointer;">Ask</button>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ rightEntitiesOn }}" hint-placeholder-val="{{ true }}">
       <sc-if value="{{ panelProfileOn }}" hint-placeholder-val="{{ false }}">
         <div style="position:sticky;top:0;background:var(--card);z-index:3;border-bottom:1px solid var(--line);box-shadow:0 1px 0 rgba(0,0,0,.02);">
           <div style="display:flex;align-items:center;gap:6px;padding:8px 10px 0;">
@@ -1031,6 +1065,7 @@
           </sc-if>
         </sc-for>
         <sc-if value="{{ inboxEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:18px 14px;color:var(--ink3);font-size:12px;line-height:1.5;">No entities yet. Open a page — detection reads its entities into here.</div></sc-if>
+      </sc-if>
       </sc-if>
     </aside>
       <div id="eo-resize" onpointerdown="{{ onResizeDown }}" ondoubleclick="{{ onResizeReset }}" title="Drag to resize the panel · double-click to reset" style="{{ resizeHandleStyle }}" style-hover="background:var(--accbg)"><div style="width:4px;height:42px;border-radius:2px;background:var(--line2);"></div></div>
@@ -1478,12 +1513,15 @@ class Component extends DCLogic {
   newChat(scopeUrl){
     const id=this.chatId();
     const title=scopeUrl?(((this.pageOf(scopeUrl)||{}).title)||this.short(scopeUrl)):'New chat';
-    this.setState(s=>({chats:[{id,title,scope:scopeUrl||null,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:''}));
+    this.setState(s=>({chats:[{id,title,scope:scopeUrl||null,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',rightTab:'chat',rightOpen:true}));
     return id;
   }
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
-  openChat(id){this.setState({activeChat:id,hoverEnt:null});}
+  openChat(id){this.setState({activeChat:id,hoverEnt:null,rightTab:'chat',rightOpen:true});}
+  // Pull the chat out of the right panel into the main drawer (and back).
+  detachChat(){this.setState({chatDock:false});}
+  dockChat(){this.setState({chatDock:true,rightTab:'chat',rightOpen:true});}
   closeChat(){this.setState({activeChat:null});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
@@ -1634,7 +1672,11 @@ class Component extends DCLogic {
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
     });
-    base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,
+    const docked=this.state.chatDock!==false;
+    base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,docked,detached:!docked,
+      onDetach:()=>this.detachChat(),onDock:()=>this.dockChat(),
+      dockTitle:docked?'Pop the chat out into its own pane':'Dock the chat back into the panel',
+      dockGlyph:docked?'⤢':'⤡',
       scopeLabel:cur.scope?(this.truncLabel(((this.pageOf(cur.scope)||{}).title)||this.short(cur.scope),36)):'everything read',
       messages:msgs,empty:msgs.length===0,modelStatus:this.state.modelStatus||'',hasStatus:!!this.state.modelStatus,
       shellStyle:drawer
@@ -3406,8 +3448,22 @@ class Component extends DCLogic {
     base.activity=this.activityVals();
     this.chatVals(base);
 
+    // Right-panel tabs: Entities | Chat. The chat DOCKS into the right panel by default
+    // (alongside the entities); the detach affordance pops it back out into the main drawer.
+    base.chatDocked=this.state.chatDock!==false;
+    base.showChatTab=base.chatDocked&&base.chatOn;          // tab bar appears only when a chat exists & is docked
+    base.rightChatOn=base.showChatTab&&(this.state.rightTab||'chat')==='chat';
+    base.rightEntitiesOn=!base.rightChatOn;
+    base.chatInMain=base.chatOn&&!base.chatDocked;          // detached → render in <main> as before
+    base.rightTabEntActive=!base.rightChatOn;
+    base.onRightTabEnt=()=>this.setState({rightTab:'entities'});
+    base.onRightTabChat=()=>this.setState({rightTab:'chat'});
+    const _tabOn='flex:1;text-align:center;font-size:11.5px;font-weight:700;padding:7px 6px;border-radius:7px;cursor:pointer;border:none;background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);',
+          _tabOff='flex:1;text-align:center;font-size:11.5px;font-weight:600;padding:7px 6px;border-radius:7px;cursor:pointer;border:none;background:transparent;color:var(--ink3);';
+    base.rightTabEntStyle=base.rightTabEntActive?_tabOn:_tabOff;base.rightTabChatStyle=base.rightChatOn?_tabOn:_tabOff;
+
     // Project Gutenberg search results take the center when present (and no chat open).
-    base.gutenOn=!base.chatOn&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
+    base.gutenOn=!base.chatInMain&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
     base.guten={loading:!!this.state.gutenLoading,query:this.state.gutenQuery||'',
       hasResults:!!(this.state.gutenResults&&this.state.gutenResults.length),
       empty:!!(this.state.gutenResults&&!this.state.gutenResults.length),

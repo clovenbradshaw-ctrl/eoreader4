@@ -285,12 +285,15 @@ class Component extends DCLogic {
   newChat(scopeUrl){
     const id=this.chatId();
     const title=scopeUrl?(((this.pageOf(scopeUrl)||{}).title)||this.short(scopeUrl)):'New chat';
-    this.setState(s=>({chats:[{id,title,scope:scopeUrl||null,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:''}));
+    this.setState(s=>({chats:[{id,title,scope:scopeUrl||null,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',rightTab:'chat',rightOpen:true}));
     return id;
   }
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
-  openChat(id){this.setState({activeChat:id,hoverEnt:null});}
+  openChat(id){this.setState({activeChat:id,hoverEnt:null,rightTab:'chat',rightOpen:true});}
+  // Pull the chat out of the right panel into the main drawer (and back).
+  detachChat(){this.setState({chatDock:false});}
+  dockChat(){this.setState({chatDock:true,rightTab:'chat',rightOpen:true});}
   closeChat(){this.setState({activeChat:null});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
@@ -441,7 +444,11 @@ class Component extends DCLogic {
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
     });
-    base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,
+    const docked=this.state.chatDock!==false;
+    base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,docked,detached:!docked,
+      onDetach:()=>this.detachChat(),onDock:()=>this.dockChat(),
+      dockTitle:docked?'Pop the chat out into its own pane':'Dock the chat back into the panel',
+      dockGlyph:docked?'⤢':'⤡',
       scopeLabel:cur.scope?(this.truncLabel(((this.pageOf(cur.scope)||{}).title)||this.short(cur.scope),36)):'everything read',
       messages:msgs,empty:msgs.length===0,modelStatus:this.state.modelStatus||'',hasStatus:!!this.state.modelStatus,
       shellStyle:drawer
@@ -2213,8 +2220,22 @@ class Component extends DCLogic {
     base.activity=this.activityVals();
     this.chatVals(base);
 
+    // Right-panel tabs: Entities | Chat. The chat DOCKS into the right panel by default
+    // (alongside the entities); the detach affordance pops it back out into the main drawer.
+    base.chatDocked=this.state.chatDock!==false;
+    base.showChatTab=base.chatDocked&&base.chatOn;          // tab bar appears only when a chat exists & is docked
+    base.rightChatOn=base.showChatTab&&(this.state.rightTab||'chat')==='chat';
+    base.rightEntitiesOn=!base.rightChatOn;
+    base.chatInMain=base.chatOn&&!base.chatDocked;          // detached → render in <main> as before
+    base.rightTabEntActive=!base.rightChatOn;
+    base.onRightTabEnt=()=>this.setState({rightTab:'entities'});
+    base.onRightTabChat=()=>this.setState({rightTab:'chat'});
+    const _tabOn='flex:1;text-align:center;font-size:11.5px;font-weight:700;padding:7px 6px;border-radius:7px;cursor:pointer;border:none;background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);',
+          _tabOff='flex:1;text-align:center;font-size:11.5px;font-weight:600;padding:7px 6px;border-radius:7px;cursor:pointer;border:none;background:transparent;color:var(--ink3);';
+    base.rightTabEntStyle=base.rightTabEntActive?_tabOn:_tabOff;base.rightTabChatStyle=base.rightChatOn?_tabOn:_tabOff;
+
     // Project Gutenberg search results take the center when present (and no chat open).
-    base.gutenOn=!base.chatOn&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
+    base.gutenOn=!base.chatInMain&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
     base.guten={loading:!!this.state.gutenLoading,query:this.state.gutenQuery||'',
       hasResults:!!(this.state.gutenResults&&this.state.gutenResults.length),
       empty:!!(this.state.gutenResults&&!this.state.gutenResults.length),
