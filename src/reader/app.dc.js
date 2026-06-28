@@ -36,7 +36,11 @@ class Component extends DCLogic {
       // be chatted with). gutenReading holds the id while a book is being read.
       gutenResults:null, gutenLoading:false, gutenQuery:'', gutenReading:null,
       // Panel layout: swap the left (sources/chats) and right (entities) sides.
-      swapped:(()=>{try{return localStorage.getItem('eo_swap')==='1';}catch(e){return false;}})() };
+      swapped:(()=>{try{return localStorage.getItem('eo_swap')==='1';}catch(e){return false;}})(),
+      // Chat model — like the old app. Loaded lazily on first chat; grounded in what
+      // you've read when relevant, a normal assistant otherwise. Falls back to a
+      // structural answer if the model can't load.
+      backend:(()=>{try{return localStorage.getItem('eo_backend')||'webllm';}catch(e){return 'webllm';}})(), modelStatus:'' };
   }
   // ── theme helpers ─────────────────────────────────────────────────────
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
@@ -203,7 +207,7 @@ class Component extends DCLogic {
     const r=await this.readText(text,title);
     if(!r||!r.url){this.feedLine('warn','Could not import that text.');return false;}
     this._srcUrl=null;this._pushLoc({t:'web',url:r.url});
-    this.setState(s=>({viewUrl:r.url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));
+    this.setState(s=>({viewUrl:r.url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));
     this.loadCenter(r.url);
     this.feedSep('imported a book');this.feedLine('read','Read “'+r.title+'” · '+r.sentenceCount+' propositions');
     return r;
@@ -223,29 +227,78 @@ class Component extends DCLogic {
   // every claim traces to a source. window.claude, if present, is not required.
   chatId(){this._chatN=(this._chatN||0)+1;return 'c'+Date.now().toString(36)+this._chatN;}
   activeChatObj(){return this.state.chats.find(c=>c.id===this.state.activeChat)||null;}
+  // Opening / starting a chat does NOT close the page you're reading — when a page
+  // or book is open the chat rides alongside it as a drawer (the page stays the
+  // hero); with nothing open the chat takes the center.
   newChat(scopeUrl){
     const id=this.chatId();
     const title=scopeUrl?(((this.pageOf(scopeUrl)||{}).title)||this.short(scopeUrl)):'New chat';
-    const chat={id,title,scope:scopeUrl||null,messages:[],ts:Date.now()};
-    this.setState(s=>({chats:[chat,...s.chats],activeChat:id,viewUrl:null,selId:null,panelSel:null,chatInput:''}));
+    this.setState(s=>({chats:[{id,title,scope:scopeUrl||null,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:''}));
     return id;
   }
-  openChat(id){this.setState({activeChat:id,viewUrl:null,selId:null,panelSel:null,hoverEnt:null});}
+  // The discoverable "chat with this page": scope a chat to whatever is open.
+  askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
+  openChat(id){this.setState({activeChat:id,hoverEnt:null});}
   closeChat(){this.setState({activeChat:null});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
-  sendChat(){
+  _scrollChat(){requestAnimationFrame(()=>{const a=document.getElementById('eo-chat-scroll');if(a)a.scrollTop=a.scrollHeight;});}
+  setBackend(name){try{localStorage.setItem('eo_backend',name);}catch(e){}if(this._chatModel&&this._chatModel.id!==name)this._chatModel=null;this.setState({backend:name,modelStatus:''});}
+  // Questions a clock answers — handled without any model so they always work.
+  mechanicalAnswer(q){const low=q.toLowerCase();
+    if(/\b(today'?s date|what'?s? (the )?date|what day is it|current date)\b/.test(low))
+      return 'Today is '+new Date().toLocaleDateString(undefined,{weekday:'long',year:'numeric',month:'long',day:'numeric'})+'.';
+    if(/\b(what'?s? (the )?time|what time is it|current time)\b/.test(low))
+      return 'It is '+new Date().toLocaleTimeString()+'.';
+    return null;}
+  // The read context for a question, as notes the model can lean on (and the source
+  // chips/entities to show). Empty when nothing relevant has been read.
+  groundNotes(q,scope){const a=this.answerQuestion(q,scope);
+    if(!a.refs||!a.refs.length)return {notes:'',entities:a.entities||[],sources:[]};
+    return {notes:'From what you have read:\n'+a.refs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:a.sources||[]};}
+  // Lazily load the chat model (the old app's backends). Cached on the instance.
+  async ensureChatModel(){
+    const name=this.state.backend||'webllm';
+    if(this._chatModel&&this._chatModel.id===name)return this._chatModel;
+    if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
+    const model=this._ME.createModel(name);
+    this.setState({modelStatus:name+' · loading…'});
+    await model.load(p=>{const pct=Math.round((p&&p.pct||0)*100);this.setState({modelStatus:name+' · '+((p&&p.phase)||'loading')+(pct?(' '+pct+'%'):'')});});
+    this._chatModel=model;this.setState({modelStatus:''});
+    return model;
+  }
+  async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
     const cur=this.activeChatObj();const scope=cur?cur.scope:null;
-    const ans=this.answerQuestion(q,scope);
-    this.setState(s=>{
-      let chats=s.chats.slice();let id=s.activeChat;let idx=chats.findIndex(c=>c.id===id);
+    const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
+    // append the user turn + a pending assistant bubble
+    let id=this.state.activeChat;
+    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
       if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),scope:null,messages:[],ts:Date.now()},...chats];idx=0;}
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:ans.text,refs:ans.refs,entities:ans.entities,sources:ans.sources}]};
-      return {chats,activeChat:id,chatInput:''};
-    });
-    requestAnimationFrame(()=>{const a=document.getElementById('eo-chat-scroll');if(a)a.scrollTop=a.scrollHeight;});
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true}]};
+      return {chats,activeChat:id,chatInput:''};});
+    this._scrollChat();
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    // 1) clock questions — no model
+    const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
+    // 2) grounded notes from what's been read
+    const ground=this.groundNotes(q,scope);
+    // 3) the model — normal chat, leaning on the notes when present
+    try{
+      const model=await this.ensureChatModel();
+      const history=prev.slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
+      const messages=this._ME.buildChatMessages({question:q,history,notes:ground.notes,now:new Date()});
+      const raw=await model.phrase(messages,{maxTokens:512,temperature:0.4});
+      const text=this.norm(raw)||(ground.notes?this.answerQuestion(q,scope).text:'(no answer)');
+      finish({text,entities:ground.entities,sources:ground.sources});
+    }catch(e){
+      // model unavailable — answer structurally from what's read, or say so plainly
+      const fb=this.answerQuestion(q,scope);
+      const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:fb.sources,modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      this.setState({modelStatus:''});
+    }
   }
   // The grounded answer: rank read sentences by question-term overlap, quote the best,
   // and surface the entities the question names. Scope restricts to one source.
@@ -280,22 +333,29 @@ class Component extends DCLogic {
     const cur=this.activeChatObj();
     if(!cur)return;
     base.chatOn=true;
+    const drawer=!!this.state.viewUrl;   // a page/book is open → chat rides as a drawer
     const msgs=cur.messages.map(m=>{
       const isUser=m.role==='user';
       const sources=(m.sources||[]).map(u=>({label:/^text:/i.test(u)?(this.truncLabel(((this.pageOf(u)||{}).title)||'text',20)):this.short(u),onOpen:()=>this.goWeb(u)}));
       const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
         style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
-      return {isUser,text:m.text,hasMeta:!isUser&&(sources.length>0||entities.length>0),
+      return {isUser,pending:!!m.pending,text:m.pending?'…':m.text,
+        hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
         sources,hasSources:sources.length>0,entities,hasEntities:entities.length>0,
+        hasNote:!!m.modelNote,note:m.modelNote||'',
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
-        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:var(--ink);border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;',
+        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending?'animation:eopulse 1.4s infinite;':''),
+        noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
     });
-    base.chat={title:this.truncLabel(cur.title||'New chat',40),
+    base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,
       scopeLabel:cur.scope?(this.truncLabel(((this.pageOf(cur.scope)||{}).title)||this.short(cur.scope),36)):'everything read',
-      messages:msgs,empty:msgs.length===0,
-      placeholder:cur.scope?('Ask about “'+this.truncLabel(((this.pageOf(cur.scope)||{}).title)||'this source',26)+'”…'):'Ask about what you’ve read…'};
+      messages:msgs,empty:msgs.length===0,modelStatus:this.state.modelStatus||'',hasStatus:!!this.state.modelStatus,
+      shellStyle:drawer
+        ? 'position:absolute;top:0;right:0;bottom:0;width:min(440px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
+        : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);',
+      placeholder:cur.scope?('Ask about “'+this.truncLabel(((this.pageOf(cur.scope)||{}).title)||'this source',24)+'”…'):'Ask anything…'};
   }
   // ── Project Gutenberg — a source of sources ──────────────────────────────
   // Search the catalog (gutendex), fetched through the same proxy. Returns books
@@ -1589,7 +1649,7 @@ class Component extends DCLogic {
       onAskBreadth:()=>{this.setState({mode:'breadth'});this.research(id,'breadth');},
       onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');}};
   }
-  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
+  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+res.sentenceCount+' propositions');this._busy=false;this.setState({busy:false});});}
   toggleDetect(){this.setState(s=>({detect:!s.detect}));}
   canBack(){return !!(this._hist&&this._hpos>0);}
@@ -2025,8 +2085,11 @@ class Component extends DCLogic {
       backStyle:this.navBtnStyle(this.canBack()),fwdStyle:this.navBtnStyle(this.canForward()),
       readBtnLabel:this.state.busy?'…':'Read',readBtnStyle:'font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:7px;padding:6px 13px;flex:0 0 auto;cursor:pointer;'+(this.state.busy?'opacity:.6;':''),
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
-      chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',
-      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onCloseChat:()=>this.closeChat(),
+      chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
+      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
+      backend:this.state.backend||'webllm',
+      backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},{v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
+        style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
       sources:[],srcCount:0,srcEmpty:true,rightOpen:this.state.rightOpen,rightClosed:!this.state.rightOpen,onToggleRight:()=>this.toggleRight(),panelProfileOn:false,panelListOn:true,panelPageOn:false,pageOverview:null,listFromPage:false,onShowAllEntities:()=>this.showAllEntities(),onShowOverview:()=>this.showOverview(),panelProfile:null,previewOn:false,preview:null,
       pageLinked:this.state.linkMode,onTogglePlain:()=>this.toggleLinkMode(),
       plainLabel:this.state.linkMode?'Names linked':'Plain text',
@@ -2066,6 +2129,7 @@ class Component extends DCLogic {
           btnStyle:'flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:'+(reading?'#9aa1ab':'var(--acc)')+';border:none;border-radius:9px;padding:8px 14px;cursor:'+(reading?'default':'pointer')+';'};})};
 
     const vu=this.state.viewUrl;
+    base.askPageOn=!!vu&&!base.chatOn;   // the discoverable "Ask about this page" FAB
     if(vu){
       base.showWeb=true;
       base.web={url:vu,host:/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu),loading:!!this.state.pageLoading&&!this.state.pageDoc,
