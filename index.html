@@ -1884,7 +1884,21 @@ class Component extends DCLogic {
   }
   paras(t){ return String(t||'').split(/\n\s*\n/).map(p=>this.norm(p.replace(/\n/g,' '))).filter(p=>p.length>2).join('\n'); }
   async fetchPage(url){const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));if(!r.ok)throw new Error('HTTP '+r.status);const html=await r.text();if(html.trim().length<60)throw new Error('empty page');if(/<title>\s*(?:just a moment|attention required|access denied|verify you are human|are you a robot|enable javascript|please wait\b|checking your browser)/i.test(html))throw new Error('blocked by anti-bot check');return this.extract(html,r.headers.get('content-type')||'',url);}
+  // Candidate URLs for a query — the entry point both research paths (the ✦ button and the
+  // chat research mode) walk from. PRIMARY: DuckDuckGo's HTML endpoint via the proxy. FALLBACK:
+  // Wikipedia's search API, which is CORS-direct (no proxy) through _wikiJSON. A research walk
+  // that gets ZERO candidates here ends at 0 hops and silently degrades to a generic, ungrounded
+  // answer — exactly "it's not actually doing research". So a single provider must never be the
+  // whole story: if DuckDuckGo throws (proxy hiccup, rate-limit) OR comes back empty (a bot-wall
+  // / blank result page), fall back to Wikipedia so the walk always has a real source to read.
   async searchLinks(query,n){
+    let out=[];
+    try{out=await this._searchDDG(query,n);}catch(e){out=[];}
+    if(out.length)return out;
+    try{out=await this._searchWiki(query,n);}catch(e){out=[];}
+    return out;
+  }
+  async _searchDDG(query,n){
     const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)));
     if(!r.ok)throw new Error('HTTP '+r.status);
     const doc=new DOMParser().parseFromString(await r.text(),'text/html');const out=[];
@@ -1892,6 +1906,14 @@ class Component extends DCLogic {
     doc.querySelectorAll('a.result__a, .result__title a').forEach(grab);
     if(!out.length)doc.querySelectorAll('a[href]').forEach(grab);
     return [...new Set(out)].slice(0,n||4);
+  }
+  // CORS-direct search (origin=*); _wikiJSON tries the direct fetch first and falls back to the
+  // proxy if the frame blocks it. Each hit becomes its article URL — pages that read cleanly.
+  async _searchWiki(query,n){
+    const u='https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(query)+'&srlimit='+(n||6)+'&format=json&origin=*';
+    const data=await this._wikiJSON(u);
+    const hits=(data&&data.query&&data.query.search)||[];
+    return hits.map(h=>'https://en.wikipedia.org/wiki/'+encodeURIComponent(String(h.title).replace(/ /g,'_'))).slice(0,n||6);
   }
 
   rebuild(pages){
