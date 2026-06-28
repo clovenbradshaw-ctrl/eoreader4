@@ -4239,18 +4239,52 @@ class Component extends DCLogic {
       // show what's relevant right in the hover card (no navigation needed).
       if(p.href)this._fetchHoverWiki(p.href);},delay);
   }
-  // Prefetch a linked Wikipedia article's summary for the hover card (cached per title).
+  // A reasonable label for a link BEFORE its preview resolves: a Wikipedia article's
+  // title if the URL is a /wiki/ path, else the bare host. Lets the card/panel name
+  // the destination immediately instead of flashing the raw URL.
+  _linkLabel(href){
+    const m=String(href||'').match(/\/wiki\/([^#?:]+)$/);
+    if(m&&/wikipedia\.org/i.test(href))return decodeURIComponent(m[1]).replace(/_/g,' ');
+    try{return new URL(href).hostname.replace(/^www\./,'');}catch(e){return String(href||'');}
+  }
+  // Run-ahead preview for ANY in-article hyperlink, not only Wikipedia. A wiki link uses
+  // the REST summary (clean lede + thumbnail); any other link is fetched through the same
+  // proxy the reader uses and reader-extracted, so a news article shows its own title +
+  // lede right in the card/panel — no navigation. Cached per href. Throws on fetch failure
+  // so callers can render an error state. (docs/source-activation.md: run ahead one layer.)
+  async _linkPreview(href){
+    this._linkPrev=this._linkPrev||{};
+    if(this._linkPrev[href])return this._linkPrev[href];
+    const wm=String(href||'').match(/\/wiki\/([^#?:]+)$/);
+    let rec;
+    if(wm&&/wikipedia\.org/i.test(href)){
+      const title=decodeURIComponent(wm[1]).replace(/_/g,' ');
+      const d=await this._wikiSummary(title);
+      rec={title:d.title||title,extract:this.norm(d.extract||''),desc:d.description||'',
+        thumb:(d.thumbnail&&d.thumbnail.source)||null,
+        url:(d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page)||href};
+    }else{
+      const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(href));
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const ex=this.extract(await r.text(),r.headers.get('content-type')||'',href);
+      // The lede is the first few real blocks of the extracted body, abbreviation-safe.
+      const lede=this.norm(String(ex.text||'').split('\n').map(s=>s.trim()).filter(s=>s.length>2).slice(0,3).join(' '));
+      const host=this._linkLabel(href);
+      rec={title:(ex.title&&ex.title!=='(untitled)')?ex.title:host,
+        extract:this._clipExtract(lede,420)||lede,desc:host,thumb:ex.image||null,url:href};
+    }
+    return (this._linkPrev[href]=rec);
+  }
+  // Prefetch a link's summary for the hover card (any link; cached per href).
   async _fetchHoverWiki(href){
-    const m=String(href||'').match(/\/wiki\/([^#?:]+)$/);if(!m)return;
-    const title=decodeURIComponent(m[1]).replace(/_/g,' ');
-    this._wikiPrev=this._wikiPrev||{};
-    if(this._wikiPrev[title]){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:this._wikiPrev[title].title,extract:this.endOnBoundary(this._wikiPrev[title].extract,260),loading:false}});return;}
-    this.setState({hoverWiki:{href,title,extract:'',loading:true}});
-    try{const d=await this._wikiSummary(title);
-      const full=this.norm(d.extract||'');
-      this._wikiPrev[title]={title:d.title||title,extract:full,desc:d.description||'',loading:false};
-      if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:d.title||title,extract:this.endOnBoundary(full,260),loading:false}});
-    }catch(e){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title,extract:'',loading:false,err:true}});}
+    if(!href||/^#/.test(href)||/^javascript:/i.test(href))return;
+    this._linkPrev=this._linkPrev||{};
+    const cached=this._linkPrev[href];
+    if(cached){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:cached.title,extract:this.endOnBoundary(cached.extract,260),loading:false}});return;}
+    this.setState({hoverWiki:{href,title:this._linkLabel(href),extract:'',loading:true}});
+    try{const rec=await this._linkPreview(href);
+      if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:rec.title,extract:this.endOnBoundary(rec.extract,260),loading:false}});
+    }catch(e){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:this._linkLabel(href),extract:'',loading:false,err:true}});}
   }
   // Anti-stick: once the card is up, watch the real pointer. The instant it leaves both
   // the card (with a small bridge) and a radius around the word that opened it, drop it.
@@ -4269,13 +4303,14 @@ class Component extends DCLogic {
   }
   _stopCardWatch(){if(this._cardWatch){window.removeEventListener('mousemove',this._cardWatch,true);this._cardWatch=null;}}
   _hideCardNow(){this._stopCardWatch();clearTimeout(this._cardT);clearTimeout(this._hovT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;if(this.state.hoverEnt!=null)this.setState({hoverEnt:null,hoverHref:null,hoverWiki:null});}
-  // A hyperlink that ISN'T a folded entity (e.g. "Proceedings of the National Academy
-  // of Sciences") still has a referent — its Wikipedia article. Dwelling on it pivots
-  // the panel to a lightweight preview of that article, with a way to read it in.
+  // A hyperlink that ISN'T a folded entity (a news article, "Proceedings of the National
+  // Academy of Sciences", &c.) still has a referent — the page it points at. Dwelling on
+  // it pivots the panel to a lightweight preview of that page (title + lede, or a wiki
+  // summary), with a way to read it in. Works for any link, not only Wikipedia.
   wikiPreviewHover(href){
     if((this.state.hoverPivot||'dwell')==='off')return;
-    const m=String(href||'').match(/\/wiki\/([^#?:]+)$/);if(!m)return;
-    const title=decodeURIComponent(m[1]).replace(/_/g,' ');
+    if(!href||/^#/.test(href)||/^javascript:/i.test(href))return;
+    const title=this._linkLabel(href);
     clearTimeout(this._prevT);this._prevHref=href;
     const delay=this.state.hoverPivot==='hover'?60:(this.state.hoverDelay||1100);
     this._prevT=setTimeout(()=>{if(this._prevHref!==href)return;
@@ -4283,12 +4318,10 @@ class Component extends DCLogic {
       this._fetchWikiPreview(title,href);},delay);
   }
   async _fetchWikiPreview(title,href){
-    this._wikiPrev=this._wikiPrev||{};
-    if(this._wikiPrev[title]){if(this.state.previewWiki&&this.state.previewWiki.href===href)this.setState({previewWiki:{...this._wikiPrev[title],href}});return;}
-    try{const d=await this._wikiSummary(title);
-      const rec={title:d.title||title,extract:this.norm(d.extract||''),desc:d.description||'',thumb:(d.thumbnail&&d.thumbnail.source)||null,url:(d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page)||href,loading:false};
-      this._wikiPrev[title]=rec;
-      if(this.state.previewWiki&&this.state.previewWiki.href===href)this.setState({previewWiki:{...rec,href}});
+    this._linkPrev=this._linkPrev||{};
+    if(this._linkPrev[href]){if(this.state.previewWiki&&this.state.previewWiki.href===href)this.setState({previewWiki:{...this._linkPrev[href],href,loading:false}});return;}
+    try{const rec=await this._linkPreview(href);
+      if(this.state.previewWiki&&this.state.previewWiki.href===href)this.setState({previewWiki:{...rec,href,loading:false}});
     }catch(e){if(this.state.previewWiki&&this.state.previewWiki.href===href)this.setState({previewWiki:{title,href,loading:false,extract:'',err:true}});}
   }
   closePreview(){clearTimeout(this._prevT);this._prevHref=null;if(this.state.previewWiki)this.setState({previewWiki:null});}
