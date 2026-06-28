@@ -363,6 +363,10 @@
               </sc-if>
               <sc-if value="{{ reading.hasMarks }}" hint-placeholder-val="{{ false }}">
                 <button onclick="{{ reading.onToggleMarks }}" title="Highlight the moments the reading flagged as important" style="{{ reading.marksStyle }}">❖ {{ reading.marksCount }}</button>
+                <sc-if value="{{ reading.marksOn }}" hint-placeholder-val="{{ false }}">
+                  <button onclick="{{ reading.onPrevMark }}" title="Previous flagged moment" style="{{ reading.btnStyle }}">◆↑</button>
+                  <button onclick="{{ reading.onNextMark }}" title="Next flagged moment" style="{{ reading.btnStyle }}">◆↓</button>
+                </sc-if>
               </sc-if>
               <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
                 <div style="position:relative;flex:0 0 auto;">
@@ -1560,6 +1564,16 @@ class Component extends DCLogic {
     this.setState({bookmarkMode:v});}
   gotoBookmark(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;
     if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-Math.round(win.innerHeight*0.18);try{win.scrollTo({top:Math.max(0,top),behavior:'smooth'});}catch(e){win.scrollTo(0,Math.max(0,top));}}}
+  // Hop to the previous / next flagged moment from where we're reading now. Turns the marks
+  // on if they're off, so the button always lands you on a visible highlight.
+  jumpMark(dir){const d=this._bookDoc();if(!d||!d.defaultView)return;const win=d.defaultView;
+    if(!this.state.bookmarkMode)this.toggleBookmarks();
+    const margin=Math.round(win.innerHeight*0.18);
+    const tops=(this.state.bookmarks||[]).map(b=>{const el=d.getElementById(b.id);return el?el.getBoundingClientRect().top+win.scrollY:null;}).filter(v=>v!=null).sort((a,b)=>a-b);
+    if(!tops.length)return;const cur=win.scrollY+margin+6;let target=null;
+    if(dir>0){for(const t of tops){if(t>cur){target=t;break;}}if(target==null)target=tops[tops.length-1];}
+    else{for(let k=tops.length-1;k>=0;k--){if(tops[k]<cur-2){target=tops[k];break;}}if(target==null)target=tops[0];}
+    const top=Math.max(0,target-margin);try{win.scrollTo({top,behavior:'smooth'});}catch(e){win.scrollTo(0,top);}}
   // Compute the live scroll fraction of each bookmarked element for the marker rail.
   _bookmarkRail(d){if(!d)return [];const h=(d.documentElement.scrollHeight||d.body.scrollHeight||1);
     return (this.state.bookmarks||[]).map(b=>{const el=d.getElementById(b.id);if(!el)return null;
@@ -1987,16 +2001,51 @@ class Component extends DCLogic {
     const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
     const qwords=q.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
     if(!qwords.length)return [];
+    // "Related" has to mean a shared SUBJECT, not an incidental common word — otherwise
+    // every other thing you've read shows up just for containing "name" or "story". Keep
+    // only the query words that name a folded entity (a real proper-noun subject); if the
+    // question names nothing distinctive, surface nothing rather than a wall of noise.
+    const salient=new Set();
+    if(this.graph)for(const e of this.graph.entities.values()){
+      if(!this.showable(e.id))continue;
+      const lab=this.labelOf(e.id).toLowerCase(),toks=lab.split(/\s+/);
+      for(const w of qwords){if(lab===w||toks.includes(w)||(w.length>4&&lab.includes(w)))salient.add(w);}
+    }
+    if(!salient.size)return [];
     const byUrl={};
     for(let i=0;i<this.master.sentences.length;i++){
       const u=this.master.sentenceSource[i];if(!u||scope.includes(u))continue;
       const low=this.norm(this.master.sentences[i]).toLowerCase();if(!this._proseOk(low))continue;
-      let v=0;for(const w of qwords)if(low.includes(w))v++;
+      let v=0;for(const w of salient)if(low.includes(w))v++;
       if(v>0)byUrl[u]=(byUrl[u]||0)+v;
     }
+    // A real footing, not one stray mention: the subject has to actually recur in the doc.
     return Object.keys(byUrl)
+      .filter(u=>byUrl[u]>=2)
       .map(u=>({url:u,score:byUrl[u],title:this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),28)}))
       .sort((a,b)=>b.score-a.score).slice(0,8);
+  }
+  // The entity a chat turn is really ABOUT — the folded name most mentioned across the
+  // question and its answer, tie-broken by overall weight. Drives the panel pivot so the
+  // right rail follows the conversation. Reuses the link index (full names + aliases).
+  _chatTopicEntity(text){
+    if(!this.graph||!text)return null;
+    this.buildLinkIndex();const map=this._linkMap,re=this._linkRe;if(!re)return null;
+    const counts=new Map();re.lastIndex=0;let m,n=0;
+    while((m=re.exec(text))&&n<800){n++;const id=map.get(m[0].toLowerCase());if(id==null)continue;counts.set(id,(counts.get(id)||0)+1);}
+    let best=null,bestScore=-1;
+    for(const [id,c] of counts){if(!this.graph.entities.has(id))continue;const s=c*100+this.weightOf(this.graph.entities.get(id));if(s>bestScore){bestScore=s;best=id;}}
+    return best;
+  }
+  // Pivot the right panel to the latest topic of the chat. Stays out of the way on a phone
+  // (where it would steal the chat pane) and never re-pivots to what's already shown.
+  _pivotChatPanel(text){
+    if(this.phone())return;
+    const id=this._chatTopicEntity(text);
+    if(id==null||!this.graph||!this.graph.entities.has(id)||this.state.panelSel===id)return;
+    this._panelStack=[];
+    this.setState({panelSel:id,rightOpen:true,panelLens:null});
+    try{this._highlightFirst(id);}catch(e){}this._scrollPanelTop();
   }
   // ── The meaning graph, serialized as EOT triples for the talker ───────────
   // What the reading MEANS, folded into typed relations: "A -> B : rel" for a
@@ -2144,6 +2193,7 @@ class Component extends DCLogic {
       // related docs (ranked) the reader has open. This keeps "linked" = genuinely relevant.
       const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
       finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
+      this._pivotChatPanel(q+' '+text);
     }catch(e){
       // model unavailable — answer structurally from what's read, or say so plainly
       const fb=this.answerQuestion(q,sources);
@@ -2151,6 +2201,7 @@ class Component extends DCLogic {
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
       finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      this._pivotChatPanel(q+' '+(fb.text||''));
       this.setState({modelStatus:''});
     }
   }
@@ -3724,12 +3775,37 @@ class Component extends DCLogic {
   buildLinkIndex(){
     if(this._linkRe!==undefined&&this._linkRev===this.state.rev)return this._linkMap;
     const map=new Map(),labels=[];
-    if(this.graph){for(const e of this.graph.entities.values()){
-      if(!this.showable(e.id))continue;const l=this.labelOf(e.id);if(!l||l.length<3)continue;
-      const lc=l.toLowerCase();if(this.STOP.has(lc))continue;if(!map.has(lc)){map.set(lc,e.id);labels.push(l);}}}
+    const HON=new Set(['mr','mrs','ms','dr','sir','lady','lord','prof','professor','miss','madam','madame','herr','frau','st','saint']);
+    if(this.graph){
+      for(const e of this.graph.entities.values()){
+        if(!this.showable(e.id))continue;const l=this.labelOf(e.id);if(!l||l.length<3)continue;
+        const lc=l.toLowerCase();if(this.STOP.has(lc))continue;if(!map.has(lc)){map.set(lc,e.id);labels.push(l);}}
+      // Books name people by a single name ("Gregor"), but the graph keeps the full
+      // name ("Gregor Samsa"), so a bare first/last name would never light up. Register
+      // the distinctive proper-noun word of each multi-word name as an alias to the same
+      // entity. Skip honorifics, stop-words, short/lowercase tokens, anything already a
+      // label, and any token that is ambiguous across entities (drop it rather than
+      // mislink). This is what makes "Gregor", "Grete" &c. clickable in the reading.
+      const cand=new Map();   // token -> {id,w,disp} ; null marks an ambiguous token
+      for(const e of this.graph.entities.values()){
+        if(!this.showable(e.id))continue;const l=this.labelOf(e.id);if(!l)continue;
+        const parts=l.split(/\s+/);if(parts.length<2)continue;const w=this.weightOf(e);
+        for(const part of parts){
+          if(!/^[A-Z]/.test(part))continue;                         // proper-noun words only
+          const tok=part.toLowerCase().replace(/[^a-z0-9'-]/g,'');
+          if(tok.length<3||HON.has(tok)||this.STOP.has(tok))continue;
+          if(map.has(tok))continue;                                  // a real label wins
+          const prev=cand.get(tok);
+          if(prev===null)continue;
+          if(prev===undefined)cand.set(tok,{id:e.id,w,disp:part});
+          else if(prev.id!==e.id)cand.set(tok,null);                 // collides → forget it
+        }
+      }
+      for(const [tok,v] of cand){if(v&&!map.has(tok)){map.set(tok,v.id);labels.push(v.disp);}}
+    }
     labels.sort((a,b)=>b.length-a.length);
     const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const pat=labels.slice(0,500).map(esc).join('|');
+    const pat=labels.slice(0,600).map(esc).join('|');
     this._linkRe=pat?new RegExp('\\b('+pat+')\\b','gi'):null;
     this._linkMap=map;this._linkRev=this.state.rev;return map;
   }
@@ -4215,6 +4291,7 @@ class Component extends DCLogic {
         // Auto-bookmarks: a toggle + a marker rail down the page edge.
         hasMarks:(this.state.bookmarks||[]).length>0,marksCount:(this.state.bookmarks||[]).length,
         marksOn:!!this.state.bookmarkMode,onToggleMarks:()=>this.toggleBookmarks(),marksStyle:pill(!!this.state.bookmarkMode),
+        onPrevMark:()=>this.jumpMark(-1),onNextMark:()=>this.jumpMark(1),
         railOn:!!this.state.bookmarkMode&&(this.state.bmRail||[]).length>0,
         marks:(this.state.bmRail||[]).map(m=>({top:(m.frac*100).toFixed(2)+'%',why:m.why||'Something important here',onGo:()=>this.gotoBookmark(m.id)})),
         progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
