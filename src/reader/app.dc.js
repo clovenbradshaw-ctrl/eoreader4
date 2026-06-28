@@ -519,7 +519,7 @@ class Component extends DCLogic {
     this._srcUrl=null;this._pushLoc({t:'web',url:r.url});
     this.setState(s=>({viewUrl:r.url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));
     this.loadCenter(r.url);
-    this.feedSep('imported a book');this.feedLine('read','Read “'+r.title+'” · '+r.sentenceCount+' propositions');
+    this.feedSep('imported a book');this.feedLine('read','Read “'+r.title+'” · '+(r.propCount!=null?r.propCount:r.sentenceCount)+' propositions');
     return r;
   }
   onImportClick(){const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
@@ -1008,19 +1008,33 @@ class Component extends DCLogic {
     await this.sleep(20);                                  // let the feed paint before the synchronous parse
     const r=await this.importText(text,book.title,meta);
     this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
-    if(r)this.feedLine('done','Read fully · '+r.sentenceCount+' propositions — ready to chat');
+    if(r)this.feedLine('done','Read fully · '+(r.propCount!=null?r.propCount:r.sentenceCount)+' propositions — ready to chat');
   }
   ingest(url,title,text,via,image,parent,wikiLinks,meta){
     const doc=this.E.parseText(text,{coordSubjects:true});
+    const propCount=this.countPropositions(doc.sentences);
     // Keep the raw text on the page so an imported book can be re-rendered as a
     // readable book in the center (see _bookHtml / loadCenter's text: branch).
-    const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null,
+    const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,propCount,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null,
       author:(meta&&meta.author)||null,authorDates:(meta&&meta.authorDates)||null,published:(meta&&meta.published)||null};
     const pages=[...this.state.pages,page];this.rebuild(pages);
     this.setState(s=>({pages,rev:s.rev+1,selId:s.selId||this.topEntity()}));
     // Second reader: fold the LLM's SVO reading onto the same log, then re-project.
     if(this.state.llm && this.state.llmAvail && this.SVO) this.runSVO(page);
-    return {title,sentenceCount:doc.sentences.length,url};
+    return {title,sentenceCount:doc.sentences.length,propCount,url};
+  }
+  // PROPOSITIONS, not sentences. A proposition is a clause — a single predication —
+  // and the SVO reader already decomposes every sentence into clauses (the unit it
+  // bonds over). So the count the reader shows is the clause total: at least one per
+  // sentence, more wherever a sentence coordinates or subordinates ("he woke, and he
+  // crawled" is two). Falls back to the sentence count if the engine predates the
+  // clause segmenter export.
+  countPropositions(sentences){
+    const sents=sentences||[];
+    const seg=this.E&&this.E.segmentClauses;
+    if(!seg)return sents.length;
+    let n=0;for(const s of sents)n+=Math.max(1,seg(s).length);
+    return n;
   }
   // A researched page is RELEVANT only if it actually shares a specific referent with
   // the focal entity's PRE-research context (proper-noun set captured before reading).
@@ -2239,7 +2253,7 @@ class Component extends DCLogic {
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
   goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
-  processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+res.sentenceCount+' propositions');this._busy=false;this.setState({busy:false});});}
+  processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});});}
   toggleDetect(){this.setState(s=>({detect:!s.detect}));}
   canBack(){return !!(this._hist&&this._hpos>0);}
   canForward(){return !!(this._hist&&this._hpos<this._hist.length-1);}
@@ -2313,7 +2327,7 @@ class Component extends DCLogic {
       'html.eo-bm-on .eo-bm[data-eo-why]:not([data-eo-why=""])::before{content:"❖ " attr(data-eo-why);display:block;font:700 .58em/1.3 -apple-system,BlinkMacSystemFont,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--eo-acc);margin-bottom:.4em;}'+
       '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
       authorHtml+
-      '<div class="eo-byline">'+((p.sentences||[]).length)+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+(marks.length?' · '+marks.length+' marks':'')+' · read as a book</div>'+
+      '<div class="eo-byline">'+(p.propCount!=null?p.propCount:this.countPropositions(p.sentences))+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+(marks.length?' · '+marks.length+' marks':'')+' · read as a book</div>'+
       parts.join('\n')+'</div></body></html>';
     return {html,toc,bookmarks};
   }

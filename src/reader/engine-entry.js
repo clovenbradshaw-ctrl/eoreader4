@@ -12,8 +12,11 @@
 //                                       edits under src/ take effect with no rebuild
 //                                       (at the cost of many native-ESM fetches).
 //
-// Both expose the same three names; the UI cannot tell them apart.
+// Both expose the same names; the UI cannot tell them apart.
 export { parseText } from '../perceiver/parse/index.js';
+// The clause segmenter — the UI counts PROPOSITIONS (clauses), not sentences, for a
+// book's byline, so it needs the same per-clause decomposition parseRelations reads.
+export { segmentClauses } from '../perceiver/parse/clauses.js';
 export { projectGraph, DEFAULT_PROJECTION_RULES } from '../core/index.js';
 // Cross-source identity for the memory fold: nameless referent hashIds, with a name
 // forked into distinct referents where context defeats the default coreference.
