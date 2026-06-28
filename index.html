@@ -2069,6 +2069,62 @@ class Component extends DCLogic {
     const names=srcs.slice(0,2).map(titleOf).join(', '),more=srcs.length-2;
     return names+(more>0?(' and '+more+' more'):'')+' ('+srcs.length+' sources) · '+props;
   }
+  // Trim each line of a model reply (collapse runs of spaces/tabs, drop trailing space) but KEEP
+  // the newlines — so _md can still see lists and headings. norm() would flatten them all to spaces.
+  _cleanReply(s){return String(s||'').replace(/\r/g,'').split('\n').map(l=>l.replace(/[ \t]+/g,' ').replace(/\s+$/,'')).join('\n').replace(/\n{3,}/g,'\n\n').trim();}
+  // A research-style ask → the bare TOPIC to research, or null if this is an ordinary question.
+  // "research plato's symposium", "deep research X", "look into X", "investigate X", "/research X".
+  _researchIntent(q){const m=String(q||'').match(/^\s*(?:\/(?:deep(?:[\s-]?research)?|research)|deep\s+research|research|look\s+(?:into|up)|investigate|dig\s+into|find\s+out\s+about)\b[\s:,-]*(.+)$/i);
+    if(!m)return null;const t=this.norm(m[1]).replace(/^["'“]+|["'”?.]+$/g,'').trim();return t.length>=2?t:null;}
+  // Set the still-pending assistant bubble's text — used to show live gather progress before the
+  // model starts streaming its answer into the same bubble.
+  _setPending(id,text){this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text};return {...c,messages:m};})}),()=>this._scrollChat());}
+  // MULTIPLE PROMPT GENERATION — turn one concise topic into several distinct search queries, each
+  // opening a different angle (background, key ideas, structure, interpretation, criticism). The
+  // talker knows the shape of a topic, so it plans the angles; with no model the topic stands alone
+  // (the gather still searches it). The topic is always query 0. Deduped, capped at n.
+  async _planQueries(model,topic,n){
+    n=n||4;const out=[topic];
+    if(model&&this._ME&&this._ME.streamPhrase){
+      try{
+        const msgs=[{role:'system',content:'You plan web research. Given a topic, output '+(n-1)+' DISTINCT web-search queries that each open a different angle on it (background, key ideas, structure, interpretation, criticism, reception). KEEP the subject in every query so each stands alone. One query per line — just the keywords a search engine needs, no numbering, no quotes, no commentary.'},{role:'user',content:'Topic: '+topic+'\n\nQueries:'}];
+        const raw=await this._ME.streamPhrase(model,msgs,{maxTokens:96,temperature:0});
+        for(const line of String(raw||'').split('\n')){
+          const x=this.norm(line).replace(/^[-*\d.)\]]+\s*/,'').replace(/^(query|search)\s*:\s*/i,'').replace(/^["'`]+|["'`]+$/g,'').trim();
+          if(x&&x.length<=120&&!/^i (cannot|can'?t|am unable)/i.test(x)&&!out.some(o=>o.toLowerCase()===x.toLowerCase()))out.push(x);
+        }
+      }catch(e){}
+    }
+    return out.slice(0,n);
+  }
+  // THE WEB GATHER — plan angles, search each, and read the top pages of each into memory. Reuses the
+  // reader's own searchLinks (DuckDuckGo) + readURL (fetch → parse → ingest into the master doc and
+  // graph), so the answer that follows is grounded in real fetched sources and the entities panel
+  // fills in. Progress streams to the activity feed AND the pending chat bubble. Returns #pages read.
+  async _gatherWeb(topic,id,model){
+    this._feedEnt=null;this.feedSep('deep research · '+topic);
+    this._setPending(id,'🔬 Planning the research…');
+    const queries=await this._planQueries(model,topic,4);
+    this.feedLine('search','Researching “'+topic+'” from '+queries.length+' angle'+(queries.length!==1?'s':'')+': '+queries.map(x=>'“'+x+'”').join(', '));
+    const seen=new Set((this.state.pages||[]).map(p=>p.url));let read=0;
+    for(const query of queries){
+      this._setPending(id,'🔎 Searching: “'+query+'”…');
+      this.feedLine('search','Searching the web for “'+query+'”');
+      let links;try{links=await this.searchLinks(query,4);}catch(e){this.feedLine('warn','Search unavailable — '+e.message);continue;}
+      links=(links||[]).filter(u=>!seen.has(u)&&!seen.has('https://'+u));
+      let got=0;
+      for(let i=0;i<links.length&&got<2;i++){const url=links[i];seen.add(url);
+        this._setPending(id,'📄 Reading '+this.short(url)+'…');
+        this.feedLine('read','Reading '+this.short(url)+' …');
+        let res;try{res=await this.readURL(url,'REAFFERENCE',null);}catch(e){res=false;}
+        if(!res)continue;                       // readURL logged why (blocked / too little text)
+        got++;read++;this.feedLine('graph','Read “'+res.title+'”');
+      }
+    }
+    this.feedLine('done',read?('Read '+read+' new source'+(read!==1?'s':'')+' into memory. Writing it up…'):'Couldn’t read any new sources — paste a URL up top to read one directly.');
+    this._setPending(id,read?('✦ Read '+read+' source'+(read!==1?'s':'')+' — writing it up…'):'…');
+    return read;
+  }
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
@@ -2084,26 +2140,40 @@ class Component extends DCLogic {
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     // 1) clock questions — no model
     const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
-    // 2) the spans that surface for this question, scoped to the chat's sources
-    const ground=this.groundNotes(q,sources);
-    // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
+    // 2) DEEP RESEARCH — a research-style ask ("research X", "look into X", "/research X") goes to the
+    //    WEB first. It plans several search angles on the topic (multiple prompt generation), searches
+    //    each, and reads the top pages into memory; the answer below is then grounded in what it just
+    //    read instead of the model's own (often confabulated) memory. The model is loaded once here so
+    //    it can plan the angles AND write the answer; if it can't load, the gather still runs (search
+    //    needs no model) and the answer falls back to the structural reader.
+    const topic=this._researchIntent(q);
+    let researchModel=null;
+    if(topic){
+      try{researchModel=await this.ensureChatModel();}catch(e){researchModel=null;}
+      try{await this._gatherWeb(topic,id,researchModel);}catch(e){this.feedLine('warn','Research stopped — '+((e&&e.message)||e));}
+    }
+    // The question the answer is ABOUT: the bare topic when this was a research ask, else the message.
+    const qa=topic||q;
+    // 3) the spans that surface for this question, scoped to the chat's sources
+    const ground=this.groundNotes(qa,sources);
+    // 4) the model — the VOICE OF A READER grounded in those sources and their meaning
     //    graph, so it speaks from the document instead of as a blank-slate assistant.
     try{
-      const model=await this.ensureChatModel();
+      const model=researchModel||await this.ensureChatModel();
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
-          question:q, spans:ground.spans||[], graph:this.meaningGraph(sources),
+          question:qa, spans:ground.spans||[], graph:this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),
-          task:this._isSummaryQ(q)?'summary':'answer',
+          task:this._isSummaryQ(qa)?'summary':'answer',
           conversation:{pastTurns}, now:new Date(),
         });
       }else{
         // Nothing read yet — fall back to the plain assistant frame (chat works without a doc).
         const history=prev.slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
-        messages=this._ME.buildChatMessages({question:q,history,now:new Date()});
+        messages=this._ME.buildChatMessages({question:qa,history,now:new Date()});
       }
       // Stream the reply into the pending bubble token by token (model/stream.js).
       // streamPhrase drives the backend's onToken when it can decode incrementally
@@ -2113,19 +2183,22 @@ class Component extends DCLogic {
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
-      const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
+      // Keep the reply's LINE STRUCTURE — only `norm` (which collapses every newline into a space)
+      // would flatten the model's lists and headings into one run-on paragraph before _md ever sees
+      // them. _cleanReply trims each line but preserves the newlines _md needs to build <ol>/<ul>.
+      const text=this._cleanReply(raw)||this.answerQuestion(qa,sources).text||'(no answer)';
       // Only surface grounding when the question actually matched the read text. Weak
       // fallback context (intro lines) is NOT shown as a citation — instead we offer the
       // related docs (ranked) the reader has open. This keeps "linked" = genuinely relevant.
       const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
-      finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
+      finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(qa,sources)});
     }catch(e){
       // model unavailable — answer structurally from what's read, or say so plainly
-      const fb=this.answerQuestion(q,sources);
+      const fb=this.answerQuestion(qa,sources);
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
-      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(qa,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
       this.setState({modelStatus:''});
     }
   }
@@ -2189,7 +2262,9 @@ class Component extends DCLogic {
       const cites=passages.length?passages:sources;   // prefer passages; fall back to bare sources
       const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
         style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
-      const isMd=!isUser&&!m.pending&&!!m.text;   // render the model's markdown; user/pending stay plain
+      // Render the model's markdown LIVE — even while the bubble is still pending — so lists, bold
+      // and line breaks form as the answer streams in, not only once it finishes. User turns stay plain.
+      const isMd=!isUser&&!!m.text;
       const hasGround=!isUser&&!m.pending&&(cites.length>0||entities.length>0);
       const gKey=cur.id+':'+mi, gOn=!!gOpen[gKey];
       const gBits=[]; if(cites.length)gBits.push(cites.length+(passages.length?(' passage'+(cites.length!==1?'s':'')):(' source'+(cites.length!==1?'s':''))));
