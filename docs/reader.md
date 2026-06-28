@@ -20,10 +20,17 @@ What you can do:
   above the page: text size (A− / A+), line spacing (↕), column width (Narrow · Normal ·
   Wide), typeface (Serif / Sans) and paper theme (Light · Sepia · Night). Every choice
   applies *live* to the open book (no reload, so your place and the entity highlights
-  survive) and persists across sessions. A **Contents** menu lists the chapters detected
-  in the text and jumps to any of them, a slim progress bar + percentage tracks how far
+  survive) and persists across sessions. A slim progress bar + percentage tracks how far
   you've read, and your **place is remembered per book** — reopen a work and it scrolls
   back to where you left off.
+- **Structure read by the engine.** The **Contents** menu and the ⏮/⏭ section jumps come
+  from a best-guess of the document's structure that the engine makes from its *own
+  reading* — validated heading runs where they exist, and otherwise sections that **emerge**
+  where the entity field shifts and persists. It recovers chapters a keyword match misses
+  (untitled, multilingual) and refuses to invent them where there are none (a stray page
+  number or dateline is not a chapter). The same boundaries are the cursor's structural
+  stops, so you move through a book by section, not by scrolling. See
+  [`docs/structure.md`](structure.md).
 - **Chat — normal chat, grounded when it can be.** A model answers like a normal
   assistant (the old backends: Llama-3.2-3B over WebGPU by default, or Echo offline;
   pick in Settings). Clock questions ("what's the date?") are answered without any model;

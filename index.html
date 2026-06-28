@@ -348,6 +348,12 @@
               <button onclick="{{ reading.onTheme }}" title="Paper theme — Light · Sepia · Night" style="{{ reading.themeStyle }}">{{ reading.themeLabel }}</button>
               <span style="margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;color:var(--ink3);font-variant-numeric:tabular-nums;">{{ reading.progressPct }}%</span>
               <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
+                <span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;">
+                  <button onclick="{{ reading.onPrevSection }}" title="Previous section" style="{{ reading.btnStyle }}">⏮</button>
+                  <button onclick="{{ reading.onNextSection }}" title="Next section" style="{{ reading.btnStyle }}">⏭</button>
+                </span>
+              </sc-if>
+              <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
                 <div style="position:relative;flex:0 0 auto;">
                   <button onclick="{{ reading.onToggleTOC }}" title="Table of contents" style="{{ reading.tocStyle }}">☰ Contents</button>
                   <sc-if value="{{ reading.tocOpen }}" hint-placeholder-val="{{ false }}">
@@ -1432,15 +1438,73 @@ class Component extends DCLogic {
   _readKey(url){return 'eo_pos_'+(url||'');}
   loadReadPos(url){try{const v=localStorage.getItem(this._readKey(url));const f=v==null?0:parseFloat(v);return isFinite(f)?Math.max(0,Math.min(1,f)):0;}catch(e){return 0;}}
   saveReadPos(url,pct){try{localStorage.setItem(this._readKey(url),String(Math.max(0,Math.min(1,pct))));}catch(e){}}
-  // Detect a chapter/section heading: a short standalone paragraph that is either an
-  // explicit marker (Chapter/Part/Book/…), a bare roman/arabic numeral, or an all-caps
-  // line. Conservative — body prose never matches (too long / has lowercase + period).
-  _isChapterHead(s){if(!s)return null;s=s.trim();if(s.length>64||s.length<2)return null;
-    if(/^(chapter|chap\.?|part|book|canto|letter|act|scene|volume|stave|section|prologue|epilogue|introduction|preface|argument)\b/i.test(s))return s.replace(/\s+/g,' ');
-    if(/^[IVXLCDM]{1,6}\.?$/.test(s))return s.replace(/\.$/,'');
-    if(/^\d{1,3}\.?$/.test(s))return s.replace(/\.$/,'');
-    if(s.length<=44&&/[A-Z]{3,}/.test(s)&&!/[a-z]/.test(s)&&/^[A-Z0-9][A-Z0-9 ,.'’\-—:;!?()&]+$/.test(s)&&!/[.!?]$/.test(s))return s.replace(/\s+/g,' ');
+  // ── document structure: best-guess TOC via the engine's own reading ──────
+  // Headings alone are unreliable (see docs/structure.md): absent in many books,
+  // multilingual, and bare numerals collide with page numbers. So structure is GUESSED
+  // from two signals the engine arbitrates between:
+  //   1. Heading candidates — explicit markers / numerals / all-caps lines — kept only
+  //      when a keyword OR part of a consecutive run (I,II,III… / 1,2,3…). The run test
+  //      recovers a missed first member and rejects strays (42, MIX, a dateline).
+  //   2. The entity field — the entities the engine projects per paragraph. A real
+  //      boundary is where that field SHIFTS and the new field PERSISTS across a window
+  //      (a one-line blip can't fake it; both sides need real entity mass).
+  // Explicit runs win when present; otherwise sections EMERGE from field shifts — the
+  // category is the output of the reading, not its input. The same boundaries let the
+  // reading cursor move by structural unit.
+  _roman(r){const m={I:1,V:5,X:10,L:50,C:100,D:500,M:1000};let n=0;r=String(r).toUpperCase();for(let i=0;i<r.length;i++){const a=m[r[i]],b=m[r[i+1]];if(!a)return null;if(b&&a<b){n+=b-a;i++;}else n+=a;}return n;}
+  _headCandidate(s){s=this.norm(s);if(s.length>64||s.length<1)return null;
+    const kw=/^(chapter|chap\.?|part|book|canto|letter|act|scene|volume|stave|section|prologue|epilogue|introduction|preface|argument|chapitre|capitulo|capítulo|kapitel|глава)\b/i.test(s);
+    const rk=s.match(/(?:^|\s)([IVXLCDM]{1,7})\.?$/),ak=s.match(/(?:^|\s)(\d{1,3})\.?$/);
+    if(kw)return {label:s,kind:'kw',num:rk?this._roman(rk[1]):(ak?+ak[1]:null)};
+    if(/^[IVXLCDM]{1,7}\.?$/.test(s))return {label:s,kind:'roman',num:this._roman(s.replace(/\.$/,''))};
+    if(/^\d{1,3}\.?$/.test(s))return {label:s,kind:'num',num:+s.replace(/\.$/,'')};
+    if(s.length<=44&&/[A-Z]{3,}/.test(s)&&!/[a-z]/.test(s)&&/^[A-Z0-9][A-Z0-9 ,.'’\-—:;!?()&]+$/.test(s)&&!/[.!?]$/.test(s))return {label:s,kind:'caps',num:null};
     return null;}
+  // A short line with no terminal punctuation reads as a title — used to snap an emergent
+  // boundary onto the title line that introduces it.
+  _titleish(s){s=this.norm(s);return s.length>=2&&s.length<=52&&!/[.!?:;,]$/.test(s)&&s.split(' ').length<=9;}
+  _secLabel(ent,para){if(ent){try{const l=this.labelOf(ent);if(l)return '§ '+l;}catch(e){}return '§ '+ent;}return '§ '+this.norm(para).slice(0,40);}
+  // Entity set per paragraph, reusing the master projection (no re-parse): map each
+  // event's global sentence index back to this page, then to a paragraph by normalized
+  // char offsets, collapsing coref via the graph's representative.
+  _paraField(p,paras){
+    const sents=p.sentences||[],base=p.sentStart||0,sets=paras.map(()=>new Set());
+    if(!this.master||!sents.length)return sets;
+    const rep=id=>{try{return (this.graph&&this.graph.representative)?this.graph.representative(id):id;}catch(e){return id;}};
+    const joined=paras.join(' '),pr=[];{let c=0;for(const t of paras){pr.push([c,c+t.length]);c+=t.length+1;}}
+    const offs=[];{let cur=0;for(const s of sents){const q=this.norm(s),probe=q.slice(0,Math.min(28,q.length));let i=probe?joined.indexOf(probe,cur):-1;if(i<0)i=cur;offs.push(i);cur=Math.max(cur,i+q.length);}}
+    const paraOf=li=>{const o=offs[li];if(o==null)return Math.min(paras.length-1,Math.max(0,Math.round(li*paras.length/Math.max(1,sents.length))));for(let k=0;k<pr.length;k++)if(o>=pr[k][0]&&o<=pr[k][1])return k;return paras.length-1;};
+    for(const e of this.master.events){if(e.__page!==p.url||e.sentIdx==null)continue;const li=e.sentIdx-base;if(li<0||li>=sents.length)continue;const pk=paraOf(li);for(const x of [e.id,e.src,e.tgt].filter(Boolean))sets[pk].add(rep(x));}
+    return sets;}
+  // → [{paraIndex,label,kind:'heading'|'emergent'}] in reading order.
+  detectStructure(p,paras){
+    const sets=this._paraField(p,paras);
+    const cands=paras.map((t,i)=>{const c=this._headCandidate(t);return c?Object.assign(c,{i}):null;}).filter(Boolean);
+    const keep=new Set();
+    cands.forEach(c=>{if(c.kind==='kw')keep.add(c.i);});
+    for(const kind of ['roman','num']){const seq=cands.filter(c=>c.kind===kind&&c.num!=null);
+      for(let a=0;a<seq.length;a++){const run=[seq[a]];for(let b=a+1;b<seq.length;b++){if(seq[b].num===run[run.length-1].num+1)run.push(seq[b]);else break;}
+        if(run.length>=2){run.forEach(c=>keep.add(c.i));a+=run.length-1;}}}
+    const accepted=[...keep].sort((a,b)=>a-b);
+    if(accepted.length>=2)return accepted.map(i=>({paraIndex:i,label:this.norm(paras[i]).slice(0,72),kind:'heading'}));
+    // Emergent: window comparison so a single blip can't fake a boundary; both sides
+    // need ≥2 distinct entities (an essay with no named entities yields nothing).
+    const N=paras.length,W=Math.max(2,Math.round(N/24));
+    const win=(lo,hi)=>{const s=new Set();for(let k=Math.max(0,lo);k<Math.min(N,hi);k++)for(const e of sets[k])s.add(e);return s;};
+    const peaks=[];for(let i=1;i<N;i++){const L=win(i-W,i),R=win(i,i+W);if(L.size<2||R.size<2)continue;let x=0;for(const e of L)if(R.has(e))x++;const d=1-x/Math.sqrt(L.size*R.size);if(d>0.6)peaks.push({i,d});}
+    peaks.sort((a,b)=>b.d-a.d);
+    const minGap=Math.max(2,Math.round(N/40)),chosen=[];
+    for(const pk of peaks){if(chosen.every(k=>Math.abs(k-pk.i)>=minGap))chosen.push(pk.i);if(chosen.length>=40)break;}
+    if(!chosen.length)return [];
+    chosen.sort((a,b)=>a-b);
+    if(this._titleish(paras[0])&&chosen[0]>0)chosen.unshift(0);
+    const seen=new Set(),out=[];
+    for(const i of chosen){let anchor=i,label;
+      if(i>0&&this._titleish(paras[i-1])&&!this._headCandidate(paras[i-1])){anchor=i-1;label=this.norm(paras[i-1]).slice(0,72);}
+      else if(this._titleish(paras[i])){label=this.norm(paras[i]).slice(0,72);}
+      else {const nw=[...sets[i]].filter(e=>i>0&&!sets[i-1].has(e));label=this._secLabel(nw[0]||[...sets[i]][0],paras[i]);}
+      if(seen.has(anchor))continue;seen.add(anchor);out.push({paraIndex:anchor,label,kind:'emergent'});}
+    return out;}
   // Set up the open book iframe once: apply the reading CSS, restore the saved scroll
   // position, and track progress as the reader scrolls (throttled).
   _setupBook(d,ifr,url){if(!d||!d.defaultView)return;this.applyReadCSS(d,this.state.readPrefs);
@@ -1451,6 +1515,19 @@ class Component extends DCLogic {
       if(this._scrollT)return;this._scrollT=setTimeout(()=>{this._scrollT=null;const pct=this._lastPct;this.saveReadPos(url,pct);if(Math.abs((this.state.bookProgress||0)-pct)>=0.005)this.setState({bookProgress:pct});},150);};
     win.addEventListener('scroll',onScroll,{passive:true});}
   gotoChapter(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-14;try{win.scrollTo({top,behavior:'smooth'});}catch(e){win.scrollTo(0,top);}}this.setState({tocOpen:false});}
+  // Section anchors (their document tops), in reading order — the cursor's structural stops.
+  _sectionTops(){const d=this._bookDoc();if(!d||!d.defaultView)return [];const win=d.defaultView,out=[];
+    d.querySelectorAll('[id^="eo-ch-"]').forEach(el=>out.push(el.getBoundingClientRect().top+win.scrollY));
+    return out.sort((a,b)=>a-b);}
+  // Move the cursor by structural unit: from the section we're in now, step to the
+  // previous / next boundary (dir<0 back, dir>0 forward). Index-based so the landing
+  // offset can't make "next" re-find the section we just jumped to.
+  jumpSection(dir){const d=this._bookDoc();if(!d||!d.defaultView)return;const win=d.defaultView,tops=this._sectionTops();if(!tops.length)return;
+    const y=win.scrollY+20;let cur=-1;for(let i=0;i<tops.length;i++){if(tops[i]<=y)cur=i;else break;}
+    const ni=cur+(dir>0?1:-1);
+    if(dir>0){if(ni>=tops.length)return;}
+    else if(ni<0){if(win.scrollY>6){try{win.scrollTo({top:0,behavior:'smooth'});}catch(e){win.scrollTo(0,0);}}return;}
+    const target=Math.max(0,tops[ni]-14);try{win.scrollTo({top:target,behavior:'smooth'});}catch(e){win.scrollTo(0,target);}}
   toggleTOC(){this.setState(s=>({tocOpen:!s.tocOpen}));}
   toggleSettings(){this.setState(s=>({settingsOpen:!s.settingsOpen}));}
   closeSettings(){this.setState({settingsOpen:false});}
@@ -3252,14 +3329,19 @@ class Component extends DCLogic {
       const sents=(p.sentences||[]).map(s=>this.norm(s)).filter(Boolean);
       paras=[];for(let i=0;i<sents.length;i+=4)paras.push(sents.slice(i,i+4).join(' '));
     }
-    // Wrap chapter headings as anchored <h2> (for the table of contents); the very
-    // first body paragraph gets the drop cap.
+    // Best-guess structure (engine-driven). Each section's anchor paragraph becomes a
+    // navigable target; an explicit-heading or title-ish anchor renders as a heading,
+    // a prose anchor just gets an invisible id. The first body paragraph keeps the drop cap.
+    const sections=this.detectStructure(p,paras);
+    const secAt=new Map();sections.forEach((s,n)=>secAt.set(s.paraIndex,{s,n}));
     const toc=[],parts=[];let dropped=false;
-    for(const t of paras){
-      const head=this._isChapterHead(t);
-      if(head&&toc.length<400){const id='eo-ch-'+toc.length;toc.push({id,label:head});parts.push('<h2 class="eo-chap" id="'+id+'">'+esc(t)+'</h2>');}
-      else{parts.push('<p'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;}
-    }
+    paras.forEach((t,i)=>{
+      const hit=secAt.get(i);
+      if(hit){const id='eo-ch-'+hit.n;toc.push({id,label:this.norm(hit.s.label)});
+        if(hit.s.kind==='heading'||this._titleish(t)){parts.push('<h2 class="eo-chap'+(hit.s.kind==='emergent'?' eo-emergent':'')+'" id="'+id+'">'+esc(t)+'</h2>');return;}
+        parts.push('<p id="'+id+'"'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;return;}
+      parts.push('<p'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;
+    });
     const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
     const v=(n,d)=>'--eo-'+n+':'+d+';';
     const html='<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+
@@ -3270,6 +3352,7 @@ class Component extends DCLogic {
       'h1.eo-title{font:700 1.62em/1.25 var(--eo-ff);letter-spacing:-.01em;color:var(--eo-fg);margin:0 0 6px;}'+
       '.eo-byline{font:.72em/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--eo-fg2);margin:0 0 34px;border-bottom:1px solid var(--eo-rule);padding-bottom:18px;}'+
       'h2.eo-chap{font:700 1.18em/1.3 var(--eo-ff);color:var(--eo-fg);margin:2.3em 0 .9em;scroll-margin-top:16px;}'+
+      'h2.eo-emergent{font-weight:600;font-style:italic;color:var(--eo-fg2);padding-left:.7em;border-left:2px solid var(--eo-acc);}'+
       'p{margin:0 0 1.15em;}p.eo-first::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:var(--eo-acc);font-family:Georgia,serif;}'+
       '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
       '<div class="eo-byline">'+((p.sentences||[]).length)+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+' · read as a book</div>'+
@@ -3826,6 +3909,7 @@ class Component extends DCLogic {
         fontLabel:rp.font==='sans'?'Sans':'Serif',onFont:()=>this.toggleReadFont(),fontStyle:pill(rp.font==='sans'),
         themeLabel:rp.theme==='sepia'?'Sepia':(rp.theme==='dark'?'Night':'Light'),onTheme:()=>this.cycleReadTheme(),themeStyle:pill(rp.theme!=='light'),
         hasToc:toc.length>1,tocOpen:!!this.state.tocOpen,onToggleTOC:()=>this.toggleTOC(),tocStyle:pill(!!this.state.tocOpen),
+        onPrevSection:()=>this.jumpSection(-1),onNextSection:()=>this.jumpSection(1),
         toc:toc.map(c=>({label:c.label,onGo:()=>this.gotoChapter(c.id),
           rowStyle:'display:block;width:100%;text-align:left;padding:9px 13px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink2);font-size:12.5px;line-height:1.35;cursor:pointer;'})),
         progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
