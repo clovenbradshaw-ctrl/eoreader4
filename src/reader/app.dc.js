@@ -339,6 +339,8 @@ class Component extends DCLogic {
     }
     flush();return out.join('');
   }
+  // Collapse / expand the researched-source subtree under a parent source in the left tree.
+  toggleSrcCollapse(url){this.setState(s=>{const c={...(s.collapsedSrc||{})};c[url]=!c[url];return {collapsedSrc:c};});}
   // Lazily load the chat model (the old app's backends). Cached on the instance.
   async ensureChatModel(){
     const name=this.state.backend||'webllm';
@@ -2273,12 +2275,22 @@ class Component extends DCLogic {
     const allP=this.master.pages;
     const inSet=u=>!!(u&&allP.find(x=>x.url===u));
     const childrenOf=u=>pagesByRecency.filter(p=>p.parent===u);
+    const collapsed=this.state.collapsedSrc||{};
     const orderedP=[];const seenP=new Set();
-    const pushP=(p,depth)=>{if(seenP.has(p.url))return;seenP.add(p.url);orderedP.push({p,depth});childrenOf(p.url).forEach(c=>pushP(c,Math.min(depth+1,2)));};
+    const markSeen=p=>{if(seenP.has(p.url))return;seenP.add(p.url);childrenOf(p.url).forEach(markSeen);};
+    const pushP=(p,depth)=>{if(seenP.has(p.url))return;seenP.add(p.url);const kids=childrenOf(p.url);
+      orderedP.push({p,depth,kids:kids.length,collapsed:!!collapsed[p.url]});
+      // A collapsed parent hides its researched subtree — mark it seen so it can't resurface
+      // through the orphan-recovery pass below.
+      if(collapsed[p.url])kids.forEach(markSeen);
+      else kids.forEach(c=>pushP(c,Math.min(depth+1,2)));};
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
-    base.sources=orderedP.map(({p,depth})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=(bucket.get(p.url)||[]).length;
+    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=(bucket.get(p.url)||[]).length;
       return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
+        hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
+        onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
+        caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
         dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?8:9)+'px;font-weight:800;',
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
