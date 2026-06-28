@@ -2773,14 +2773,19 @@ class Component extends DCLogic {
   // ── interconnect: link every known entity inside the source text, wiki-style ──
   toggleLinkMode(){try{localStorage.setItem('eo_linkmode',this.state.linkMode?'0':'1');}catch(e){}this.setState(s=>({linkMode:!s.linkMode}));}
   // The referents salient to ONE source: every entity the parse folded out of that
-  // source's own sentences. A text offers only these as clickable, so a name that
-  // lights up does so in reference to THIS text — never because the same surface
-  // form names a heavier referent folded from some other source (the global link
-  // index collapses "Washington" the city onto "Washington" the person when one
-  // outweighs the other; that cross-source pull is what this gates). A name with no
-  // folded mention here stays plain. Cached by rev; returns null when the source
-  // carries no folded entities yet, so an unread page falls back to the global index
-  // rather than going dark.
+  // source's own sentences. The text is raw noumena; the reading — parse and fold —
+  // is what turns it into phenomena, so an entity is offered as clickable only where
+  // it was actually folded. A name that lights up does so in reference to THIS text,
+  // never because the same surface form names a heavier referent folded from some
+  // other source (the global link index collapses "Washington" the city onto
+  // "Washington" the person when one outweighs the other; that cross-source pull is
+  // what this gates).
+  //
+  // Returns null ONLY when there is no source to speak of (no url, no reading) —
+  // genuinely no scope, leave the global index alone. When a url IS given but nothing
+  // was folded from it, returns the EMPTY set: that source is unabsorbed noumena, so
+  // it offers nothing rather than borrowing the rest of the corpus's phenomena.
+  // Cached by rev.
   sourceEntities(url){
     if(!url||!this.graph||!this.master||!this.master.events)return null;
     if(this._srcEntsRev!==this.state.rev){
@@ -2792,7 +2797,7 @@ class Component extends DCLogic {
         for(const x of [e.id,e.src,e.tgt,e.from,e.to])if(x)set.add(rep(x));
       }
     }
-    return this._srcEnts.get(url)||null;
+    return this._srcEnts.get(url)||(this._noEnts||(this._noEnts=new Set()));
   }
   buildLinkIndex(){
     if(this._linkRe!==undefined&&this._linkRev===this.state.rev)return this._linkMap;
@@ -2840,7 +2845,7 @@ class Component extends DCLogic {
   }
   _linkify(text,srcUrl){
     const map=this.buildLinkIndex(),re=this._linkRe;if(!re)return text;
-    const local=this.sourceEntities(srcUrl);   // entities salient to THIS text, or null when unknown
+    const local=this.sourceEntities(srcUrl);   // entities folded from THIS text; empty if unabsorbed; null only with no source
     const cur=this.state.selId;re.lastIndex=0;
     const out=[];let last=0,m,k=0,n=0,seen=new Set();
     while((m=re.exec(text))&&n<80){n++;
