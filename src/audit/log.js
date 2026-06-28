@@ -44,6 +44,9 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
                          // engaged the gate and regenerated (turn/stages.js `revise`). The answer
                          // still ships — the gate regenerates toward an honest absence, not a substitution.
       revisions: null,   // superseded drafts from a confab rewrite, kept beside the answer (never erased)
+      arc: null,         // the arc's record (spec-the-arc §7): the section events and the
+                         // length-decision trace, when this record is a multi-section arc
+                         // rather than a single turn. Null on every turn — additive.
       step(name, data) {
         this.steps.push({
           name, t: Date.now() - this.startedAt, data: cloneShallow(data),
@@ -92,6 +95,7 @@ export const createAuditLog = ({ capacity = 300 } = {}) => {
         sources:    t.sources,
         gated:      t.gated,
         revisions:  t.revisions,
+        arc:        t.arc ?? null,
       };
       try {
         return JSON.stringify(record);
