@@ -630,11 +630,51 @@ class Component extends DCLogic {
       'extra please look looking dig digging investigate investigating explore exploring find finding read reading ' +
       'tell give show expand elaborate detail details info information context background topic subject thing things ' +
       'stuff something anything everything up into about around over same another other new newer next then now ' +
-      'me my mine us our ours your yours yourself them their it its').split(/\s+/));
+      'me my mine us our ours your yours yourself them their it its ' +
+      // DEICTIC doc-class nouns — "this book", "the author", "more about this page". Used as a bare
+      // reference to whatever is open, they name no fresh subject of their own; when one is the ONLY
+      // content word left, the turn is ABOUT the current document and the subject must come from it
+      // (else the walk literally searches "more about this book" and chases a namesake — the bug
+      // that pulled "More: A Memoir of Open Marriage" instead of the book actually being read).
+      'book books page pages article articles story stories author authors writer writers chapter chapters ' +
+      'text texts document documents documentation paper papers essay essays post posts piece pieces novel novels ' +
+      'poem poems passage passages section sections work works writing writings site sites website websites url urls ' +
+      'link links source sources doc docs entry entries report reports paragraph paragraphs').split(/\s+/));
     const words=String(t||'').toLowerCase().match(/[a-z][a-z']+/g)||[];
     if(!words.length)return true;
     const content=words.filter(w=>!this._metaWords.has(w)&&!this.STOP.has(w));
     return content.length===0;}
+  // Is this string a real subject worth searching, or a bare id / slug / filename ("pg5200",
+  // "doc12", "untitled-3") that would send the walk chasing nonsense? A usable subject needs at
+  // least one real word — alphabetic, vowel-bearing, length ≥ 3 — and isn't just an id+number.
+  _usableSubject(t){
+    t=String(t||'').trim();
+    if(t.length<3)return false;
+    if(/^(?:pg|doc|id|ref|file|page|untitled|chapter|ch|no|item)?[\s_-]*\d+$/i.test(t))return false;
+    const words=t.toLowerCase().match(/[a-z][a-z']{2,}/g)||[];
+    return words.some(w=>/[aeiouy]/.test(w));
+  }
+  // The subject of an open source, for a "more about this book" turn: its real title (+ author).
+  // Prefer a usable page title; an imported file is titled by its FILENAME ("pg5200"), which names
+  // no subject, so fall back to lifting the document's own "Title:" / "Author:" lines. Returns null
+  // when the source yields nothing searchable (the caller then tries the conversation / entities).
+  _docSubject(url){
+    const strip=s=>this.norm(String(s||''))
+      .replace(/\s*[-–—|·:]\s*(wikipedia|wikipedia,? the free encyclopedia|npr|bbc(?: news)?|cnn|reuters|the guardian|the new york times|al jazeera|associated press|ap news|pmc)\b.*$/i,'')
+      .replace(/[?.!]+$/,'').trim();
+    const pg=this.pageOf(url)||{};
+    let title=strip(pg.title);
+    if(!this._usableSubject(title)){
+      const tm=String(pg.text||'').match(/^\s*Title:\s*(.+)$/mi);
+      title=tm?strip(tm[1]):'';
+    }
+    if(!this._usableSubject(title))return null;
+    let author=this.norm(pg.author||'');
+    if(!author){const am=String(pg.text||'').match(/^\s*Author:\s*(.+)$/mi);if(am)author=strip(am[1]);}
+    const last=author?author.toLowerCase().split(/\s+/).pop():'';
+    if(author&&last&&!title.toLowerCase().includes(last))return this.truncLabel((title+' '+author).trim(),80);
+    return this.truncLabel(title,80);
+  }
   // The SUBJECT of the current chat, derived from context — what "do more research" should be
   // about. Priority: (1) the source(s) the chat is grounded in, by title — the strongest, most
   // stable signal of the subject; (2) the most recent user turn that actually named a topic (not a
@@ -644,9 +684,11 @@ class Component extends DCLogic {
     const clean=s=>this.norm(String(s||''))
       .replace(/\s*[-–—|·:]\s*(wikipedia|wikipedia,? the free encyclopedia|npr|bbc(?: news)?|cnn|reuters|the guardian|the new york times|al jazeera|associated press|ap news|pmc)\b.*$/i,'')
       .replace(/[?.!]+$/,'').trim();
-    // (1) the sources the chat is About → the first readable source title.
+    // (1) the sources the chat is About → the first source that yields a usable subject. A bare
+    // slug/filename title ("pg5200") is no subject; _docSubject lifts the real Title:/Author: from
+    // the document itself so "more about this book" researches the WORK, not the file name.
     const srcs=this.chatSourcesOf(cur);
-    for(const u of srcs){const t=clean((this.pageOf(u)||{}).title);if(t&&t.length>2)return this.truncLabel(t,80);}
+    for(const u of srcs){const t=this._docSubject(u);if(t)return t;}
     // (2) the most recent substantive user turn (skip commands and meta-research asks).
     const msgs=(cur&&cur.messages)||[];
     for(let i=msgs.length-1;i>=0;i--){const m=msgs[i];
@@ -688,6 +730,22 @@ class Component extends DCLogic {
     const chased=new Set(this._researchTerms(subject));
     const leads=this._leads(new Map(),this._profile(text),chased);
     return leads.slice(0,n||3).map(l=>l.term);}
+  // A BATTERY of distinct seed angles for a research turn — so the first pass fans out across
+  // several independent threads instead of chaining off ONE query (the "don't do it one shot" ask).
+  // For a continuation / "this book" turn the strongest angles are the salient threads the in-scope
+  // reading ALREADY raised (real entities/themes of the document, via the walk's own lead ranking);
+  // a few neutral facets fill out the breadth so even a bare one-line topic becomes several searches.
+  // Returns lead TERMS the walk appends to the anchor (never the subject's own words); capped to stay
+  // focused. The seed query (the subject itself) is added by the walk separately.
+  _researchBattery(subject,derived,sources){
+    const out=[],seen=new Set(this._researchTerms(subject));
+    const add=t=>{t=this.norm(String(t||'')).trim();const k=t.toLowerCase();if(t&&!seen.has(k)){seen.add(k);out.push(t);}};
+    // (1) the document's own salient threads — only when deepening read sources, so a fresh named
+    // topic never seeds from unrelated reading already in memory.
+    if(derived)for(const t of this._seedLeadsFromRead(subject,sources,4))add(t);
+    // (2) neutral facets — breadth for any subject, so it's a battery even with nothing read yet.
+    for(const f of ['overview','analysis','history','significance']){if(out.length>=5)break;add(f);}
+    return out.slice(0,5);}
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
   // everything read. Empty spans when nothing relevant has been read.
@@ -971,12 +1029,14 @@ class Component extends DCLogic {
     const cur=this.activeChatObj();
     const seed=this._researchSeed(q,cur);
     const topic=seed.topic, anchor=seed.anchor;
-    // For a continuation, also branch into the surprising threads already surfaced in what's been
-    // read — so "do more" finds new angles of the subject instead of re-fetching the same pages.
-    const extraSeeds=seed.derived?this._seedLeadsFromRead(topic,this.chatSourcesOf(cur),3):[];
+    // A BATTERY of distinct angles — not one shot. The salient threads the in-scope reading already
+    // raised (for a "this book" / continuation turn) plus a few facets, each its own seed query, so
+    // the walk explores several independent threads around the subject instead of chaining off one.
+    const extraSeeds=this._researchBattery(topic,seed.derived,this.chatSourcesOf(cur));
+    const angles=extraSeeds.map(t=>'“'+this._nextQuery(anchor,t)+'”').join(', ');
     const startText=seed.derived
-      ? ('Picking up this chat — researching “'+topic+'” more'+(extraSeeds.length?(', branching into '+extraSeeds.map(t=>'“'+t+'”').join(', ')):'')+'. I’ll follow what surprises me while it stays on topic.')
-      : ('Researching “'+topic+'” — I’ll follow what surprises me while it stays on topic.');
+      ? ('Picking up this chat — researching “'+topic+'”'+(angles?(' across '+angles):'')+'. I’ll follow what surprises me while it stays on topic.')
+      : ('Researching “'+topic+'”'+(angles?(' — also '+angles):'')+'. I’ll follow what surprises me while it stays on topic.');
     // Append the user turn + a pending assistant bubble carrying a live research trail.
     let id=this.state.activeChat;
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
@@ -1067,7 +1127,9 @@ class Component extends DCLogic {
     // subject so a "go deeper" research turn opens new angles instead of re-reading the same pages.
     const extra=(opts&&opts.extraSeeds)||[];
     for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
-    const maxHops=Math.min(6,4+extra.length);   // a few more hops when there are planned angles to cover
+    // BREADTH for the battery: at least a hop per seeded thread (the subject + each angle), plus a
+    // couple to follow the most surprising turns — so several distinct searches run, not one chain.
+    const maxHops=Math.min(8,frontier.length+2);
     while(hops.length<maxHops&&frontier.length){
       const node=frontier.shift();
       step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching the web for “'+node.query+'”'));
