@@ -30,6 +30,13 @@
           <option value="webllm" selected>Llama-3.2-3B</option>
         </optgroup>
       </select>
+      <!-- THE LENS PORT (spec-the-lens-port.md): steer the WebLLM decoder's logits through the
+           lens during generation — the surfer's relevance up-weighted, ungrounded names/numbers
+           suppressed by the void gate. Off by default; the golden path is byte-identical when off.
+           WebLLM only (the in-thread MLCEngine logit processor). -->
+      <label id="lens-toggle" class="lens-toggle" title="Lens port — steer generation through the lens (relevance + void gate). WebLLM only.">
+        <input type="checkbox" id="lens-port"> Lens
+      </label>
     </header>
     <main>
       <section id="doc-pane">
