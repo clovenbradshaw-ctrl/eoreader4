@@ -503,6 +503,33 @@ export const renderWebResult = (el, fetched) => {
     box.appendChild(det);
   }
 
+  // The CURIOSITY WALK trace — the hops the gather took, each with the surprise (in bits) that
+  // steered it (docs/curiosity-research.md). Collapsed by default; present only for a multi-hop
+  // research gather. Makes "it followed its curiosity" legible: which thread, how surprising, kept
+  // or dropped as a dead seam.
+  if (Array.isArray(fetched.research) && fetched.research.length) {
+    const det = document.createElement('details');
+    det.className = 'wr-hops';
+    const sum = document.createElement('summary');
+    const kept = fetched.research.filter(h => h.kept).length;
+    sum.textContent = `curiosity walk · ${fetched.research.length} hop${fetched.research.length > 1 ? 's' : ''}, ${kept} kept`;
+    det.appendChild(sum);
+    for (let i = 0; i < fetched.research.length; i++) {
+      const h = fetched.research[i];
+      const row = document.createElement('div');
+      row.className = 'wr-hop' + (h.kept ? '' : ' dead');
+      const lead = h.term ? ` → ${h.term}` : ' (seed)';
+      // surprise steered it (curiosity, in bits) and saliency leashed it; a dropped hop says why
+      // (strayed off the question, or an empty fetch).
+      const metrics = `${h.curiosity} bits` + (h.salience != null ? ` · salience ${h.salience}` : '');
+      const tail = h.kept ? (h.exhausted ? ' · on topic, nothing new' : '')
+                          : (h.reason === 'strayed' ? ' · strayed off topic' : ' · no results');
+      row.textContent = `${i + 1}.${lead} “${h.query}” · ${metrics}${tail}`;
+      det.appendChild(row);
+    }
+    box.appendChild(det);
+  }
+
   const sources = fetched.augmented?.sources || fetched.sources || [];
   for (const s of sources) {
     if (!s) continue;

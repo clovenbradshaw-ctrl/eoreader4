@@ -389,6 +389,19 @@ a.prop-source:hover { text-decoration: underline; }
   color: #cbd5e1; background: #15151a; border-left: 2px solid #6d5bd0;
   white-space: pre-wrap; word-break: break-word; overflow-x: auto;
 }
+/* The curiosity-walk hop trace (docs/curiosity-research.md) — the threads the gather followed,
+   each tagged with the surprise (bits) that steered it; a dead thread is dimmed. */
+.msg.assistant .wr-hops { margin: .3rem 0 .1rem; }
+.msg.assistant .wr-hops summary {
+  cursor: pointer; font-size: .7rem; color: #a78bfa; letter-spacing: .02em; user-select: none;
+}
+.msg.assistant .wr-hop {
+  margin: .25rem 0 0; padding: .15rem .5rem; font-size: .68rem; line-height: 1.45;
+  color: #cbd5e1; background: #15151a; border-left: 2px solid #6d5bd0;
+  word-break: break-word;
+}
+.msg.assistant .wr-hop.dead { color: #71717a; border-left-color: #3f3f46; }
+
 .msg.assistant .wr-source {
   display: flex; align-items: baseline; gap: .4rem; margin-top: .3rem; font-size: .72rem;
   color: #93c5fd; text-decoration: none; word-break: break-word;
