@@ -13,7 +13,11 @@ class Component extends DCLogic {
     this.SUGG=[];  // filled on mount by loadSuggestions(): a random Wikipedia page + random English books
     this.PALETTE=['#2563eb','#7c3aed','#0e7490','#b45309','#dc2626','#15803d','#be185d','#4f46e5','#0891b2','#9333ea'];
     this.THEMES=[{name:'EO Violet',hex:'#5b34d6'},{name:'Indigo',hex:'#4f46e5'},{name:'Royal',hex:'#2563eb'},{name:'Teal',hex:'#0d9488'},{name:'Forest',hex:'#15803d'},{name:'Magenta',hex:'#be185d'},{name:'Amber',hex:'#b45309'},{name:'Slate',hex:'#475569'}];
-    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');}catch(e){}
+    // ── e-book reading: paper themes + type families, applied to the book iframe ──
+    this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
+    this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
+    this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
+    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
@@ -46,6 +50,14 @@ class Component extends DCLogic {
       // a chosen book is fetched and READ FULLY before it joins the sources (and so can
       // be chatted with). gutenReading holds the id while a book is being read.
       gutenResults:null, gutenLoading:false, gutenQuery:'', gutenReading:null,
+      // E-book reading preferences (font size/spacing/width/paper theme/typeface),
+      // applied live to the book iframe and persisted. bookToc is the detected
+      // chapter list; bookProgress is the live read fraction (0–1).
+      readPrefs:Object.assign({},this._defaultRead,(savedRead&&typeof savedRead==='object')?savedRead:{}), bookToc:[], tocOpen:false, bookProgress:0,
+      // Auto-bookmarks: spots the reading flags as SURPRISING (connectivity + novelty).
+      // bookmarkMode shows them (in-book highlight + scrollbar markers); bookmarks holds
+      // the detected spots; bmRail holds their live scroll fractions for the marker rail.
+      bookmarkMode:(()=>{try{return localStorage.getItem('eo_marks')==='1';}catch(e){return false;}})(), bookmarks:[], bmRail:[],
       // Panel layout: swap the left (sources/chats) and right (entities) sides.
       swapped:(()=>{try{return localStorage.getItem('eo_swap')==='1';}catch(e){return false;}})(),
       // Chat model — like the old app. Loaded lazily on first chat; grounded in what
@@ -63,6 +75,198 @@ class Component extends DCLogic {
   setHoverPivot(v){try{localStorage.setItem('eo_hoverpivot',v);}catch(e){}this.setState({hoverPivot:v});}
   setClickAction(v){try{localStorage.setItem('eo_clickact',v);}catch(e){}this.setState({clickAction:v});}
   setHoverDelay(v){v=Math.max(150,Math.min(2000,+v||1100));try{localStorage.setItem('eo_hoverdelay',String(v));}catch(e){}this.setState({hoverDelay:v});}
+  // ── e-book reading preferences ────────────────────────────────────────
+  // Each setter persists, re-renders the toolbar, and applies the change LIVE to the
+  // open book iframe via CSS variables — no reload, so scroll position and the entity
+  // decoration both survive. _bookHtml seeds the same vars so a fresh open matches.
+  setReadPref(patch){const rp=Object.assign({},this.state.readPrefs,patch);try{localStorage.setItem('eo_readprefs',JSON.stringify(rp));}catch(e){}this.setState({readPrefs:rp});const d=this._bookDoc();if(d)this.applyReadCSS(d,rp);}
+  bumpFont(d){const rp=this.state.readPrefs;this.setReadPref({fs:Math.max(14,Math.min(30,(rp.fs||19)+d))});}
+  bumpLine(d){const rp=this.state.readPrefs;this.setReadPref({lh:Math.max(1.3,Math.min(2.2,Math.round(((rp.lh||1.7)+d)*10)/10))});}
+  cycleReadTheme(){const o=['light','sepia','dark'];const i=o.indexOf(this.state.readPrefs.theme||'light');this.setReadPref({theme:o[(i+1)%o.length]});}
+  cycleWidth(){const o=[600,720,860];const i=o.indexOf(this.state.readPrefs.w||720);this.setReadPref({w:o[(i+1)%o.length]});}
+  toggleReadFont(){this.setReadPref({font:(this.state.readPrefs.font==='sans')?'serif':'sans'});}
+  _bookDoc(){const ifr=document.querySelector('iframe[data-eo-center]');return (ifr&&ifr.contentDocument)?ifr.contentDocument:null;}
+  applyReadCSS(d,rp){rp=rp||this.state.readPrefs;const t=this.READ_THEMES[rp.theme]||this.READ_THEMES.light;const r=d.documentElement&&d.documentElement.style;if(!r)return;
+    r.setProperty('--eo-fs',(rp.fs||19)+'px');r.setProperty('--eo-lh',String(rp.lh||1.7));r.setProperty('--eo-maxw',(rp.w||720)+'px');
+    r.setProperty('--eo-ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif);
+    r.setProperty('--eo-bg',t.bg);r.setProperty('--eo-fg',t.fg);r.setProperty('--eo-fg2',t.fg2);r.setProperty('--eo-rule',t.rule);r.setProperty('--eo-acc',this.curAccent());
+    try{d.body.style.background=t.bg;}catch(e){}}
+  // Per-book reading position: a 0–1 scroll fraction, keyed by the source url.
+  _readKey(url){return 'eo_pos_'+(url||'');}
+  loadReadPos(url){try{const v=localStorage.getItem(this._readKey(url));const f=v==null?0:parseFloat(v);return isFinite(f)?Math.max(0,Math.min(1,f)):0;}catch(e){return 0;}}
+  saveReadPos(url,pct){try{localStorage.setItem(this._readKey(url),String(Math.max(0,Math.min(1,pct))));}catch(e){}}
+  // ── document structure: found emergently, not from a keyword list ─────────
+  // No vocabulary of "chapter"/"canto"/… is hardcoded (see docs/structure.md). A heading
+  // is discovered as a recurring line-FORM: detectStructure groups short non-sentence lines
+  // by their shape — a lead word + a numeral at a fixed position (`chapter|R@1`,
+  // `canto|R@2`), markdown depth, a decimal section number — then keeps a family only when
+  // its members (a) number their way through a run, (b) span the document, and (c) partition
+  // it regularly and sparsely. The marker word "canto" is never matched against a list; it
+  // is admitted because lines of that form recur and tile the text — the category is the
+  // output of the reading, not its input. When no form recurs, sections fall back to the
+  // engine's projected entity field. The same boundaries let the cursor move by section.
+  _roman(r){if(!/^[ivxlcdm]+$/i.test(r))return null;const m={I:1,V:5,X:10,L:50,C:100,D:500,M:1000};let n=0;r=String(r).toUpperCase();for(let i=0;i<r.length;i++){const a=m[r[i]],b=m[r[i+1]];if(b&&a<b){n+=b-a;i++;}else n+=a;}return n;}
+  _sentencey(t){return /[.!?]["')”]?$/.test(t)&&(t.match(/\b[a-z]{2,}\b/g)||[]).length>=2;}
+  // Classify a short line by FORM only. Returns {fam,kind,level,val,label} or null. The
+  // family key carries the lead word + numeral position so a real chapter line groups apart
+  // from a caption that merely mentions the word ("Heading to Chapter I. 1").
+  _lineForm(t){t=this.norm(t);if(t.length<1||t.length>72)return null;const words=t.split(/\s+/);if(words.length>9)return null;
+    const md=t.match(/^(#{1,6})\s+(\S.*)$/);if(md)return {fam:'md'+md[1].length,kind:'decl',level:md[1].length,label:md[2].replace(/\s*#+$/,'')};
+    if(this._sentencey(t))return null;
+    let idx=-1,cls=null,depth=1,val=null;
+    for(let k=0;k<words.length;k++){const w=words[k].replace(/^[^\w#]+|[^\w]+$/g,'');
+      if(k===0&&/^\d+(?:\.\d+)+$/.test(w)&&w.split('.').every(x=>+x<=400)){idx=k;cls='D';depth=w.split('.').length;break;}
+      if(/^\d{1,3}$/.test(w)){idx=k;cls='N';val=+w;break;}
+      const r=this._roman(w);if(r!=null){idx=k;cls='R';val=r;break;}}
+    if(idx>=0){const before=idx>0?words[idx-1].replace(/[^A-Za-z]/g,'').toLowerCase():'';
+      return cls==='D'?{fam:'dec',kind:'decl',level:depth,label:t}:{fam:before+'|'+cls+'@'+idx,kind:'num',level:1,val,label:t};}
+    const caps=/[A-Z]/.test(t)&&!/[a-z]/.test(t);
+    const titled=words.filter(w=>/^[“"(]?[A-Z]/.test(w)).length>=Math.max(1,Math.ceil(words.length*0.6));
+    if(caps)return {fam:'CAPS',kind:'shape',label:t};
+    if(titled)return {fam:'TITLE',kind:'shape',label:t};
+    return null;}
+  // A short line with no terminal punctuation reads as a title — used to snap an emergent
+  // boundary onto the title line that introduces it.
+  _titleish(s){s=this.norm(s);return s.length>=2&&s.length<=52&&!/[.!?:;,]$/.test(s)&&s.split(' ').length<=9;}
+  _secLabel(ent,para){if(ent){try{const l=this.labelOf(ent);if(l)return '§ '+l;}catch(e){}return '§ '+ent;}return '§ '+this.norm(para).slice(0,40);}
+  // ── auto-bookmarks: where the reading is SURPRISED ───────────────────────
+  // A spot is important when the entity field does something it couldn't predict —
+  // chiefly CONNECTIVITY SURPRISE: two entities that were each already established meet
+  // for the FIRST time (a collision of threads — a meeting, a letter, a reveal). Plus a
+  // lighter NOVELTY term (an important entity first appears). Both are read off the same
+  // per-paragraph projection the TOC uses; the salient paragraphs are those whose score
+  // stands well above the book's own background (mean + 1.2σ), spaced out and capped.
+  detectBookmarks(p,paras){
+    const N=paras.length;if(N<6)return [];
+    const sets=this._paraField(p,paras);
+    const total=new Map();sets.forEach(s=>s.forEach(e=>total.set(e,(total.get(e)||0)+1)));
+    const fw=e=>Math.log1p(total.get(e)||1);
+    const seen=new Map(),pairs=new Set(),score=new Array(N).fill(0),why=new Array(N).fill(null);
+    for(let i=0;i<N;i++){const cur=[...sets[i]];let nov=0,con=0,bestPair=null,bestNew=null;
+      for(const e of cur){if(!seen.has(e)){const w=fw(e);nov+=w;if(!bestNew||w>fw(bestNew))bestNew=e;}}
+      for(let a=0;a<cur.length;a++)for(let b=a+1;b<cur.length;b++){const x=cur[a],y=cur[b];
+        if((seen.get(x)||0)>=2&&(seen.get(y)||0)>=2){const key=x<y?x+''+y:y+''+x;
+          if(!pairs.has(key)){pairs.add(key);const w=Math.min(fw(x),fw(y));con+=w;if(!bestPair||w>bestPair.w)bestPair={x,y,w};}}}
+      score[i]=2*con+0.6*nov;
+      why[i]=(bestPair&&2*con>=0.6*nov)?{pair:[bestPair.x,bestPair.y]}:(bestNew?{enter:bestNew}:null);
+      for(const e of cur)seen.set(e,(seen.get(e)||0)+1);}
+    const mean=score.reduce((a,b)=>a+b,0)/N,sd=Math.sqrt(score.reduce((a,b)=>a+(b-mean)*(b-mean),0)/N)||1;
+    const thr=mean+1.2*sd,cand=[];for(let i=0;i<N;i++)if(score[i]>thr&&score[i]>0)cand.push({i,s:score[i],why:why[i]});
+    cand.sort((a,b)=>b.s-a.s);const gap=Math.max(3,Math.round(N/50)),pick=[];
+    for(const c of cand){if(pick.every(q=>Math.abs(q.i-c.i)>=gap))pick.push(c);if(pick.length>=12)break;}
+    pick.sort((a,b)=>a.i-b.i);
+    return pick.map(c=>({paraIndex:c.i,why:this._whyLabel(c.why)}));
+  }
+  // A reason worth showing only when it reads as proper, recurring names — the parse picks
+  // up archaic pronouns / common nouns, so gate on capitalization, length and recurrence.
+  _whyLabel(why){if(!why)return '';
+    const ok=id=>{let l;try{l=this.labelOf(id);}catch(e){l=id;}if(!l)return null;
+      const t=this.norm(l);if(t.length<3||!/^[A-Z]/.test(t)||this.STOP.has(t.toLowerCase()))return null;
+      const g=this.graph&&this.graph.entities.get(id);if(g&&(g.sightings||0)<2)return null;return t;};
+    if(why.pair){const a=ok(why.pair[0]),b=ok(why.pair[1]);return a&&b?(a+' · '+b):(a||b||'');}
+    if(why.enter){const a=ok(why.enter);return a?a:'';}
+    return '';}
+  toggleBookmarks(){const v=!this.state.bookmarkMode;try{localStorage.setItem('eo_marks',v?'1':'0');}catch(e){}
+    const d=this._bookDoc();if(d&&d.documentElement)d.documentElement.classList.toggle('eo-bm-on',v);
+    this.setState({bookmarkMode:v});}
+  gotoBookmark(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;
+    if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-Math.round(win.innerHeight*0.18);try{win.scrollTo({top:Math.max(0,top),behavior:'smooth'});}catch(e){win.scrollTo(0,Math.max(0,top));}}}
+  // Compute the live scroll fraction of each bookmarked element for the marker rail.
+  _bookmarkRail(d){if(!d)return [];const h=(d.documentElement.scrollHeight||d.body.scrollHeight||1);
+    return (this.state.bookmarks||[]).map(b=>{const el=d.getElementById(b.id);if(!el)return null;
+      return {frac:Math.max(0,Math.min(1,(el.offsetTop)/h)),id:b.id,why:b.why};}).filter(Boolean);}
+  // Entity set per paragraph, reusing the master projection (no re-parse): map each
+  // event's global sentence index back to this page, then to a paragraph by normalized
+  // char offsets, collapsing coref via the graph's representative.
+  _paraField(p,paras){
+    const sents=p.sentences||[],base=p.sentStart||0,sets=paras.map(()=>new Set());
+    if(!this.master||!sents.length)return sets;
+    const rep=id=>{try{return (this.graph&&this.graph.representative)?this.graph.representative(id):id;}catch(e){return id;}};
+    const joined=paras.join(' '),pr=[];{let c=0;for(const t of paras){pr.push([c,c+t.length]);c+=t.length+1;}}
+    const offs=[];{let cur=0;for(const s of sents){const q=this.norm(s),probe=q.slice(0,Math.min(28,q.length));let i=probe?joined.indexOf(probe,cur):-1;if(i<0)i=cur;offs.push(i);cur=Math.max(cur,i+q.length);}}
+    const paraOf=li=>{const o=offs[li];if(o==null)return Math.min(paras.length-1,Math.max(0,Math.round(li*paras.length/Math.max(1,sents.length))));for(let k=0;k<pr.length;k++)if(o>=pr[k][0]&&o<=pr[k][1])return k;return paras.length-1;};
+    for(const e of this.master.events){if(e.__page!==p.url||e.sentIdx==null)continue;const li=e.sentIdx-base;if(li<0||li>=sents.length)continue;const pk=paraOf(li);for(const x of [e.id,e.src,e.tgt].filter(Boolean))sets[pk].add(rep(x));}
+    return sets;}
+  // → [{paraIndex,label,kind:'heading'|'emergent',level}] in reading order.
+  detectStructure(p,paras){
+    const N=paras.length;
+    // 1) EMERGENT marker-form discovery — group short lines by their FORM, keep families
+    //    that recur, number through a run, span the doc, and tile it regularly & sparsely.
+    const cand=[];paras.forEach((t,i)=>{const f=this._lineForm(t);if(f)cand.push(Object.assign(f,{i}));});
+    const byFam=new Map();cand.forEach(c=>{if(!byFam.has(c.fam))byFam.set(c.fam,[]);byFam.get(c.fam).push(c);});
+    const fams=[];
+    for(const [fam,M] of byFam){const idxs=M.map(c=>c.i),n=idxs.length;
+      const coverage=n<2?0:(idxs[n-1]-idxs[0])/Math.max(1,N-1);
+      const gaps=[];for(let k=1;k<n;k++)gaps.push(idxs[k]-idxs[k-1]);
+      const mean=gaps.reduce((a,b)=>a+b,0)/(gaps.length||1);
+      const cov=gaps.length?Math.sqrt(gaps.reduce((a,b)=>a+(b-mean)*(b-mean),0)/gaps.length)/Math.max(1,mean):0;
+      const empty=/^\|[NR]@/.test(fam);
+      let gs=1;if(M[0].kind==='num'){const v=M.map(c=>c.val);let g=0;for(let k=1;k<v.length;k++){const s=v[k]-v[k-1];if(s===1||(s<0&&v[k]<=3))g++;}gs=v.length>1?g/(v.length-1):0;}
+      fams.push({fam,M,kind:M[0].kind,n,coverage,cov,density:n/N,empty,gs});}
+    // Numbered families: a recurring lead-form whose numerals run (consecutive or reset),
+    //   spanning the doc, regular, and SPARSE (a page-footer/glossary is too dense).
+    // Declared markup (markdown/decimal) is the author's own structure — honored.
+    let acc=fams.filter(f=>f.kind==='num'?(f.n>=3&&f.coverage>=0.55&&f.cov<=1.0&&f.density<=0.06&&f.gs>=(f.empty?0.8:0.7))
+      :f.kind==='decl'?(/^md/.test(f.fam)?f.n>=1:(f.n>=3&&f.coverage>=0.3&&f.cov<=1.6)):false);
+    // Shape-only families (titles/all-caps, no numbering) only as a last resort, strict —
+    // else a dictionary's example names or an anthology's titles would hallucinate a TOC.
+    if(!acc.length)acc=fams.filter(f=>f.kind==='shape'&&f.n>=3&&f.coverage>=0.6&&f.cov<=0.55&&f.density<=0.08);
+    if(acc.length){
+      const infs=acc.filter(f=>f.kind!=='decl').sort((a,b)=>a.density-b.density);const rank=new Map();infs.forEach((f,r)=>rank.set(f.fam,r+1));
+      const secs=[];for(const f of acc)for(const c of f.M){const level=f.kind==='decl'?(c.level||1):(rank.get(f.fam)||1);
+        secs.push({paraIndex:c.i,label:this.norm(c.label).slice(0,72),kind:'heading',level});}
+      secs.sort((a,b)=>a.paraIndex-b.paraIndex);const seen=new Set(),out=[];for(const s of secs){if(seen.has(s.paraIndex))continue;seen.add(s.paraIndex);out.push(s);}
+      return out;
+    }
+    // 2) FALLBACK — the engine's projected entity field. Sections emerge where the field
+    //    shifts and persists across a window; a contrast guard refuses uniformly-choppy
+    //    docs (glossaries/anthologies). This carries short heading-less texts; on long
+    //    books the field is too sparse, which is why form-discovery leads.
+    const sets=this._paraField(p,paras),W=Math.max(2,Math.round(N/24));
+    const win=(lo,hi)=>{const s=new Set();for(let k=Math.max(0,lo);k<Math.min(N,hi);k++)for(const e of sets[k])s.add(e);return s;};
+    const peaks=[];let valid=0,deep=0;
+    for(let i=1;i<N;i++){const L=win(i-W,i),R=win(i,i+W);if(L.size<2||R.size<2)continue;valid++;let x=0;for(const e of L)if(R.has(e))x++;const d=1-x/Math.sqrt(L.size*R.size);if(d>0.6){deep++;peaks.push({i,d});}}
+    if(valid>=8&&deep/valid>0.5)return [];                       // uniformly choppy → no structure
+    peaks.sort((a,b)=>b.d-a.d);
+    const minGap=Math.max(2,Math.round(N/40)),chosen=[];
+    for(const pk of peaks){if(chosen.every(k=>Math.abs(k-pk.i)>=minGap))chosen.push(pk.i);if(chosen.length>=40)break;}
+    if(!chosen.length)return [];
+    chosen.sort((a,b)=>a-b);
+    if(this._titleish(paras[0])&&chosen[0]>0)chosen.unshift(0);
+    const seen=new Set(),out=[];
+    for(const i of chosen){let anchor=i,label;
+      if(i>0&&this._titleish(paras[i-1])&&!this._lineForm(paras[i-1])){anchor=i-1;label=this.norm(paras[i-1]).slice(0,72);}
+      else if(this._titleish(paras[i])){label=this.norm(paras[i]).slice(0,72);}
+      else {const nw=[...sets[i]].filter(e=>i>0&&!sets[i-1].has(e));label=this._secLabel(nw[0]||[...sets[i]][0],paras[i]);}
+      if(seen.has(anchor))continue;seen.add(anchor);out.push({paraIndex:anchor,label,kind:'emergent',level:1});}
+    return out;}
+  // Set up the open book iframe once: apply the reading CSS, restore the saved scroll
+  // position, and track progress as the reader scrolls (throttled).
+  _setupBook(d,ifr,url){if(!d||!d.defaultView)return;this.applyReadCSS(d,this.state.readPrefs);
+    if(d.documentElement)d.documentElement.classList.toggle('eo-bm-on',!!this.state.bookmarkMode);
+    if(d.__eoBookUrl===url)return;d.__eoBookUrl=url;const win=d.defaultView;
+    // Once the book is laid out, read each bookmark's scroll fraction for the marker rail.
+    if((this.state.bookmarks||[]).length){let n=0;const railTick=()=>{if(d.__eoBookUrl!==url)return;const h=d.documentElement.scrollHeight||d.body.scrollHeight||0;if(h>win.innerHeight||n++>25){const r=this._bookmarkRail(d);if(r.length)this.setState({bmRail:r});}else setTimeout(railTick,70);};setTimeout(railTick,80);}
+    const pos=this.loadReadPos(url);
+    if(pos>0){let n=0;const tryScroll=()=>{if(d.__eoBookUrl!==url)return;const max=Math.max(1,(d.documentElement.scrollHeight||d.body.scrollHeight||0)-win.innerHeight);if(max>40||n++>25){win.scrollTo(0,pos*max);}else{setTimeout(tryScroll,60);}};setTimeout(tryScroll,60);}
+    const onScroll=()=>{const max=Math.max(1,(d.documentElement.scrollHeight||d.body.scrollHeight||0)-win.innerHeight);this._lastPct=Math.max(0,Math.min(1,win.scrollY/max));
+      if(this._scrollT)return;this._scrollT=setTimeout(()=>{this._scrollT=null;const pct=this._lastPct;this.saveReadPos(url,pct);if(Math.abs((this.state.bookProgress||0)-pct)>=0.005)this.setState({bookProgress:pct});},150);};
+    win.addEventListener('scroll',onScroll,{passive:true});}
+  gotoChapter(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-14;try{win.scrollTo({top,behavior:'smooth'});}catch(e){win.scrollTo(0,top);}}this.setState({tocOpen:false});}
+  // Section anchors (their document tops), in reading order — the cursor's structural stops.
+  _sectionTops(){const d=this._bookDoc();if(!d||!d.defaultView)return [];const win=d.defaultView,out=[];
+    d.querySelectorAll('[id^="eo-ch-"]').forEach(el=>out.push(el.getBoundingClientRect().top+win.scrollY));
+    return out.sort((a,b)=>a-b);}
+  // Move the cursor by structural unit: from the section we're in now, step to the
+  // previous / next boundary (dir<0 back, dir>0 forward). Index-based so the landing
+  // offset can't make "next" re-find the section we just jumped to.
+  jumpSection(dir){const d=this._bookDoc();if(!d||!d.defaultView)return;const win=d.defaultView,tops=this._sectionTops();if(!tops.length)return;
+    const y=win.scrollY+20;let cur=-1;for(let i=0;i<tops.length;i++){if(tops[i]<=y)cur=i;else break;}
+    const ni=cur+(dir>0?1:-1);
+    if(dir>0){if(ni>=tops.length)return;}
+    else if(ni<0){if(win.scrollY>6){try{win.scrollTo({top:0,behavior:'smooth'});}catch(e){win.scrollTo(0,0);}}return;}
+    const target=Math.max(0,tops[ni]-14);try{win.scrollTo({top:target,behavior:'smooth'});}catch(e){win.scrollTo(0,target);}}
+  toggleTOC(){this.setState(s=>({tocOpen:!s.tocOpen}));}
   toggleSettings(){this.setState(s=>({settingsOpen:!s.settingsOpen}));}
   closeSettings(){this.setState({settingsOpen:false});}
   toggleAudit(){const v=!this.state.auditMode;try{localStorage.setItem('eo_audit',v?'1':'0');}catch(e){}this.setState({auditMode:v});}
@@ -681,15 +885,23 @@ class Component extends DCLogic {
     let data;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
     catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
-    return this._gutenBooks(data).slice(0,12);
+    return this._gutenBooks(data).slice(0,16);
   }
   // Map a gutendex response to readable books — only those with a plain-text edition.
   _gutenBooks(data){
     return ((data&&data.results)||[]).map(b=>{
       const f=b.formats||{};
       const txt=f['text/plain; charset=utf-8']||f['text/plain; charset=us-ascii']||f['text/plain']||(Object.entries(f).find(([k,v])=>/text\/plain/i.test(k)&&!/\.zip$/i.test(v))||[])[1];
-      return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,downloads:b.download_count||0};
+      return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,
+        cover:f['image/jpeg']||null,downloads:b.download_count||0,subjects:b.subjects||[],bookshelves:b.bookshelves||[]};
     }).filter(b=>b.txtUrl);
+  }
+  // A few short, readable genre/topic tags from gutendex's verbose subject strings
+  // ("Adventure stories -- Fiction" → "Adventure stories").
+  _gutenTags(b){const seen=new Set(),out=[];
+    [].concat(b.subjects||[],b.bookshelves||[]).forEach(s=>{const t=String(s).split(' -- ')[0].trim();const k=t.toLowerCase();
+      if(t&&t.length<30&&!seen.has(k)){seen.add(k);out.push(t);}});
+    return out.slice(0,3);
   }
   // Strip Project Gutenberg's license header/footer so only the work is read.
   stripGutenberg(t){
@@ -1945,24 +2157,59 @@ class Component extends DCLogic {
       const sents=(p.sentences||[]).map(s=>this.norm(s)).filter(Boolean);
       paras=[];for(let i=0;i<sents.length;i+=4)paras.push(sents.slice(i,i+4).join(' '));
     }
-    const body=paras.map(t=>'<p>'+esc(t)+'</p>').join('\n');
-    const a=this.curAccent();
-    return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+
-      '<style>html,body{margin:0;background:#fff;}'+
-      'body{font:18px/1.72 Georgia,"Iowan Old Style","Times New Roman",serif;color:#23272e;}'+
-      '.eo-book{max-width:680px;margin:0 auto;padding:56px 30px 140px;}'+
-      'h1.eo-title{font:700 30px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-.01em;color:#14171c;margin:0 0 6px;}'+
-      '.eo-byline{font:13px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:#9aa1ab;margin:0 0 34px;border-bottom:1px solid #eef0f3;padding-bottom:18px;}'+
-      'p{margin:0 0 22px;}p:first-of-type::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:'+a+';font-family:Georgia,serif;}'+
+    // Best-guess structure (engine-driven). Each section's anchor paragraph becomes a
+    // navigable target; an explicit-heading or title-ish anchor renders as a heading,
+    // a prose anchor just gets an invisible id. The first body paragraph keeps the drop cap.
+    const sections=this.detectStructure(p,paras);
+    const secAt=new Map();sections.forEach((s,n)=>secAt.set(s.paraIndex,{s,n}));
+    // Surprise-flagged spots. A paragraph that's both a section anchor and a bookmark keeps
+    // its section id and just gains the eo-bm class (its section id is the jump target).
+    const marks=this.detectBookmarks(p,paras),bmAt=new Map();
+    marks.forEach((m,n)=>bmAt.set(m.paraIndex,{why:m.why,n}));
+    const bookmarks=[],toc=[],parts=[];let dropped=false;
+    paras.forEach((t,i)=>{
+      const hit=secAt.get(i),bm=bmAt.get(i);
+      const bmAttr=bm?' data-eo-why="'+esc(bm.why||'')+'"':'';
+      if(hit){const id='eo-ch-'+hit.n,lv=hit.s.level||1;toc.push({id,label:this.norm(hit.s.label),level:lv});
+        if(bm)bookmarks.push({id,why:bm.why,paraIndex:i});
+        // Markdown headings carry their #'s in the source line — show the clean title.
+        const disp=/^#{1,6}\s/.test(t)?t.replace(/^#{1,6}\s+/,'').replace(/\s*#+$/,''):t;
+        const ind=lv>1?' style="margin-left:'+((lv-1)*1.15)+'em"':'';
+        const cls='eo-chap'+(hit.s.kind==='emergent'?' eo-emergent':'')+(bm?' eo-bm':'');
+        if(hit.s.kind==='heading'||this._titleish(t)){parts.push('<h2 class="'+cls+'" id="'+id+'"'+ind+bmAttr+'>'+esc(disp)+'</h2>');return;}
+        parts.push('<p id="'+id+'" class="'+(dropped?'':'eo-first ')+(bm?'eo-bm':'')+'"'+bmAttr+'>'+esc(t)+'</p>');dropped=true;return;}
+      if(bm){const id='eo-bm-'+bm.n;bookmarks.push({id,why:bm.why,paraIndex:i});
+        parts.push('<p id="'+id+'" class="'+(dropped?'':'eo-first ')+'eo-bm"'+bmAttr+'>'+esc(t)+'</p>');dropped=true;return;}
+      parts.push('<p'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;
+    });
+    const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
+    const v=(n,d)=>'--eo-'+n+':'+d+';';
+    const htmlCls=this.state.bookmarkMode?' class="eo-bm-on"':'';
+    const html='<!doctype html><html'+htmlCls+'><head><meta charset="utf-8"><base target="_blank">'+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
+      'html,body{margin:0;background:var(--eo-bg);}'+
+      'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);transition:background .2s,color .2s;}'+
+      '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
+      'h1.eo-title{font:700 1.62em/1.25 var(--eo-ff);letter-spacing:-.01em;color:var(--eo-fg);margin:0 0 6px;}'+
+      '.eo-byline{font:.72em/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--eo-fg2);margin:0 0 34px;border-bottom:1px solid var(--eo-rule);padding-bottom:18px;}'+
+      'h2.eo-chap{font:700 1.18em/1.3 var(--eo-ff);color:var(--eo-fg);margin:2.3em 0 .9em;scroll-margin-top:16px;}'+
+      'h2.eo-emergent{font-weight:600;font-style:italic;color:var(--eo-fg2);padding-left:.7em;border-left:2px solid var(--eo-acc);}'+
+      'p{margin:0 0 1.15em;}p.eo-first::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:var(--eo-acc);font-family:Georgia,serif;}'+
+      // Bookmarks: inert until the reader turns the mode on (html.eo-bm-on), then the
+      // flagged passage lifts off the page with an accent wash + rule, and shows its "why".
+      '.eo-bm{scroll-margin-top:18px;border-radius:0 7px 7px 0;transition:background .2s,box-shadow .2s;}'+
+      'html.eo-bm-on .eo-bm{background:var(--eo-bmbg);box-shadow:inset 3px 0 0 var(--eo-acc);padding:.5em .8em;margin-left:-.8em;position:relative;}'+
+      'html.eo-bm-on .eo-bm[data-eo-why]:not([data-eo-why=""])::before{content:"❖ " attr(data-eo-why);display:block;font:700 .58em/1.3 -apple-system,BlinkMacSystemFont,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--eo-acc);margin-bottom:.4em;}'+
       '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
-      '<div class="eo-byline">Imported text · '+((p.sentences||[]).length)+' propositions · read as a book</div>'+
-      body+'</div></body></html>';
+      '<div class="eo-byline">'+((p.sentences||[]).length)+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+(marks.length?' · '+marks.length+' marks':'')+' · read as a book</div>'+
+      parts.join('\n')+'</div></body></html>';
+    return {html,toc,bookmarks};
   }
   loadCenter(url){
-    if(/^text:/i.test(url)){const p=this.pageOf(url);this.setState({pageDoc:p?this._bookHtml(p):null,pageLoading:false,pageErr:p?null:'Text not found'});return;}
-    if(!url){this.setState({pageDoc:null,pageLoading:false,pageErr:null});return;}
+    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
+    if(!url){this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
     if(this._pageUrl===url&&this.state.pageDoc)return;
-    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null});
+    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],tocOpen:false});
     fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
       if(this.state.viewUrl!==url)return;
       let doc=html;
@@ -2081,6 +2328,9 @@ class Component extends DCLogic {
   _frameOffset(){const ifr=document.querySelector('iframe[data-eo-center]');if(!ifr)return{x:0,y:0};const r=ifr.getBoundingClientRect();return{x:r.left,y:r.top};}
   decorateFrame(d,ifr){
     try{
+      // A book in the center is an e-book: apply reading prefs, restore position, track progress.
+      const _bookUrl=(this.state.viewUrl&&/^text:/i.test(this.state.viewUrl))?this.state.viewUrl:null;
+      if(_bookUrl){try{this._setupBook(d,ifr,_bookUrl);}catch(e){}}
       // styles — rebuilt each pass so accent + highlight mode apply live
       {let st=d.getElementById('__eo_style');if(!st){st=d.createElement('style');st.id='__eo_style';(d.head||d.body).appendChild(st);}
         const a=this.curAccent(),hl=this.state.highlightStyle;
@@ -2477,18 +2727,44 @@ class Component extends DCLogic {
 
     // Project Gutenberg search results take the center when present (and no chat open).
     base.gutenOn=!base.chatOn&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
+    const _gcount=(this.state.gutenResults||[]).length;
     base.guten={loading:!!this.state.gutenLoading,query:this.state.gutenQuery||'',
       hasResults:!!(this.state.gutenResults&&this.state.gutenResults.length),
       empty:!!(this.state.gutenResults&&!this.state.gutenResults.length),
+      countLabel:_gcount+' book'+(_gcount===1?'':'s'),
       onClear:()=>this.setState({gutenResults:null,gutenQuery:''}),
       results:(this.state.gutenResults||[]).map(b=>{const reading=this.state.gutenReading===b.id;
         return {title:b.title,author:b.author,downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
+          hasCover:!!b.cover,
+          coverStyle:'width:50px;height:74px;flex:0 0 auto;border-radius:5px;box-shadow:0 1px 4px rgba(20,24,30,.16);background:#eef0f3 center/cover no-repeat;'+(b.cover?'background-image:url(\''+String(b.cover).replace(/'/g,'%27')+'\');':''),
+          tags:this._gutenTags(b).map(t=>({label:t,style:'display:inline-flex;align-items:center;font-size:10px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap;'})),
           btnLabel:reading?'Reading…':'Read fully',onRead:()=>this.readGutenberg(b),
-          rowStyle:'display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--card);',
+          rowStyle:'display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--card);',
           btnStyle:'flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:'+(reading?'#9aa1ab':'var(--acc)')+';border:none;border-radius:9px;padding:8px 14px;cursor:'+(reading?'default':'pointer')+';'};})};
 
     const vu=this.state.viewUrl;
     base.askPageOn=!!vu&&!base.chatOn;   // the discoverable "Ask about this page" FAB
+    // E-book reading toolbar — only over a book (text:). Applies live to the iframe.
+    { const rp=this.state.readPrefs||this._defaultRead,toc=this.state.bookToc||[],isBook=!!(vu&&/^text:/i.test(vu));
+      const pill=on=>'display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 9px;border:1px solid var(--line2);background:'+(on?'var(--accbg)':'var(--app)')+';color:'+(on?'var(--acc)':'var(--ink2)')+';border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1;';
+      base.reading={isBook,
+        btnStyle:pill(false),
+        fsLabel:(rp.fs||19)+'px',onFontDown:()=>this.bumpFont(-1),onFontUp:()=>this.bumpFont(1),
+        onLineDown:()=>this.bumpLine(-0.1),onLineUp:()=>this.bumpLine(0.1),
+        widthLabel:(rp.w||720)<=600?'Narrow':((rp.w||720)>=860?'Wide':'Normal'),onWidth:()=>this.cycleWidth(),widthStyle:pill(false),
+        fontLabel:rp.font==='sans'?'Sans':'Serif',onFont:()=>this.toggleReadFont(),fontStyle:pill(rp.font==='sans'),
+        themeLabel:rp.theme==='sepia'?'Sepia':(rp.theme==='dark'?'Night':'Light'),onTheme:()=>this.cycleReadTheme(),themeStyle:pill(rp.theme!=='light'),
+        hasToc:toc.length>1,tocOpen:!!this.state.tocOpen,onToggleTOC:()=>this.toggleTOC(),tocStyle:pill(!!this.state.tocOpen),
+        onPrevSection:()=>this.jumpSection(-1),onNextSection:()=>this.jumpSection(1),
+        toc:toc.map(c=>({label:c.label,onGo:()=>this.gotoChapter(c.id),
+          rowStyle:'display:block;width:100%;text-align:left;padding:9px 13px 9px '+(13+((c.level||1)-1)*15)+'px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink'+((c.level||1)>1?'3':'2')+');font-size:12.5px;line-height:1.35;cursor:pointer;'})),
+        // Auto-bookmarks: a toggle + a marker rail down the page edge.
+        hasMarks:(this.state.bookmarks||[]).length>0,marksCount:(this.state.bookmarks||[]).length,
+        marksOn:!!this.state.bookmarkMode,onToggleMarks:()=>this.toggleBookmarks(),marksStyle:pill(!!this.state.bookmarkMode),
+        railOn:!!this.state.bookmarkMode&&(this.state.bmRail||[]).length>0,
+        marks:(this.state.bmRail||[]).map(m=>({top:(m.frac*100).toFixed(2)+'%',why:m.why||'Something important here',onGo:()=>this.gotoBookmark(m.id)})),
+        progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
+    }
     if(vu){
       base.showWeb=true;
       base.web={url:vu,host:/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu),loading:!!this.state.pageLoading&&!this.state.pageDoc,
