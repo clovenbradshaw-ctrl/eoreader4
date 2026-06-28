@@ -30,6 +30,7 @@ const safeJs = appJs.replace(/<\/script/gi, '<\\/script');
 // './src/…' would wrongly resolve relative to /vendor/.
 const resources = {
   eoEngine:    'src/reader/eoreader4-bundle.js',
+  eoModel:     'src/reader/model-entry.js',
   eoSvo:       'src/reader/svo-llm.js',
   eoPhase:     'src/reader/eo/phasepost.js',
   eoEmbed:     'src/reader/eo/embed.js',

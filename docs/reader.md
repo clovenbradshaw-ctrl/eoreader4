@@ -16,10 +16,16 @@ What you can do:
   book — drop-cap, serif, the author's paragraphs — entities clickable. A book is
   **read fully** (fetched, PG boilerplate stripped, parsed) before it becomes a source
   and can be chatted with.
-- **Chat, grounded** — a center chat answers from what you've read; every answer is
-  quoted from your sources and links the entities/sources it drew on (no LLM). Chats are
-  first-class: a "New chat" button and a Chats section live in the left panel, and any
-  source has a ✦ button to chat about just that source.
+- **Chat — normal chat, grounded when it can be.** A model answers like a normal
+  assistant (the old backends: Llama-3.2-3B over WebGPU by default, or Echo offline;
+  pick in Settings). Clock questions ("what's the date?") are answered without any model;
+  when you've read something relevant it's woven in as grounding and the answer links the
+  entities/sources it drew on. If no model loads, chat falls back to a structural answer
+  from your reading. Chats are first-class: a "New chat" button + a Chats section in the
+  left panel, and any source has a ✦ button to chat about just that source.
+- **The page stays the hero.** With a page or book open, chat rides as a right-hand
+  drawer over it (the page stays readable) — opened by the "✦ Ask about this page" button.
+  With nothing open, chat takes the center.
 - **Swap panels** — the ⇄ toolbar button swaps the sources/chats side and the entities
   side; the choice persists.
 
