@@ -135,12 +135,6 @@
             <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:8px;">Memory</div>
             <button onclick="{{ onOpenMem }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px;cursor:pointer;" style-hover="background:var(--card)">🗎 Open memory log</button>
             <div style="font-size:11px;color:var(--ink3);line-height:1.45;margin-top:6px;">Every source read into memory — revisit any, or mute it from the record.</div>
-            <div style="display:flex;gap:7px;margin-top:9px;">
-              <button onclick="{{ onExportMem }}" title="Download your full memory as a binary .eomem file" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)">⤓ Export</button>
-              <input type="file" data-eo-mem-import="" accept=".eomem,application/octet-stream" onchange="{{ onImportMemFile }}" style="display:none;">
-              <button onclick="{{ onImportMemClick }}" title="Restore memory from a binary .eomem file" style="flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:12px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)">⤒ Import</button>
-            </div>
-            <div style="font-size:11px;color:var(--ink3);line-height:1.45;margin-top:6px;">Save the whole record — sources, propositions and mutes — to one binary file, and load it back here or on another device.</div>
           </div>
         </sc-if>
       </div>
@@ -741,21 +735,6 @@
 
           <sc-if value="{{ panelProfile.lens.hasLenses }}" hint-placeholder-val="{{ false }}">
             <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:13px;">
-              <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
-                <sc-for list="{{ panelProfile.lens.grainTriad }}" as="g" hint-placeholder-count="3">
-                  <span style="{{ g.style }}">{{ g.name }}</span>
-                </sc-for>
-                <span style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-left:auto;white-space:nowrap;">{{ panelProfile.lens.grainSourceLabel }}</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
-                <span style="font-size:9.5px;color:var(--ink3);line-height:1.35;flex:1;min-width:0;">{{ panelProfile.lens.grainMeasureNote }}</span>
-                <sc-if value="{{ panelProfile.lens.canMeasure }}" hint-placeholder-val="{{ false }}">
-                  <button onclick="{{ panelProfile.lens.onMeasure }}" title="Embed each proposition and score it against the 27 cell centroids (loads a ~50MB MiniLM once)" style="flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:4px 9px;cursor:pointer;white-space:nowrap;" style-hover="background:var(--card)">◎ Measure</button>
-                </sc-if>
-                <sc-if value="{{ panelProfile.lens.measuring }}" hint-placeholder-val="{{ false }}">
-                  <span style="flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:600;color:var(--acc);white-space:nowrap;"><span style="width:11px;height:11px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ panelProfile.lens.measurePhaseLabel }}</span>
-                </sc-if>
-              </div>
               <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:3px;flex-wrap:wrap;">
                 <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">{{ panelProfile.lens.terrainName }}</span>
                 <span style="font-size:10.5px;color:var(--ink3);">{{ panelProfile.lens.terrainGloss }}</span>
@@ -809,9 +788,6 @@
                     <span style="flex:0 0 auto;width:3px;border-radius:2px;background:var(--accline);"></span>
                     <div style="font-size:13px;color:var(--ink);line-height:1.55;">{{ panelProfile.lens.reading }}</div>
                   </div>
-                  <sc-if value="{{ panelProfile.lens.hasMeasuredReading }}" hint-placeholder-val="{{ false }}">
-                    <div style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:3px 8px;margin-top:8px;">◎ {{ panelProfile.lens.measuredReading }}</div>
-                  </sc-if>
                   <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:9px;">
                     <sc-if value="{{ panelProfile.lens.hasAttrib }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;color:var(--ink3);">{{ panelProfile.lens.attrib }}</span></sc-if>
                     <sc-if value="{{ panelProfile.lens.hasCites }}" hint-placeholder-val="{{ false }}">
@@ -2008,71 +1984,6 @@ class Component extends DCLogic {
   setLens(l){this.setState({panelLens:l});}
   panelNodeHover(id,ev){clearTimeout(this._pivotT);this._hovEnt=id;const st={hoverEnt:id};const x=(ev&&ev.clientX!=null)?ev.clientX:null,y=(ev&&ev.clientY!=null)?ev.clientY:null;if(x!=null)st.hoverXY={x,y};this.setState(st);if(x!=null)this._startCardWatch(x,y);}
   panelNodeLeave(){this._stopCardWatch();this._hovEnt=null;this.setState({hoverEnt:null});}
-  // EO cube: a Lens is a SITE, not an act — Significance × Particular: one reading laid
-  // over one whole thing, leaving it whole (it does not segment — that would be SEG, an
-  // act). Its grain-siblings in the meaning domain are Atmosphere (Significance ×
-  // Condition) and Paradigm (Significance × Regularity). So the entity's interpretive
-  // terrain is named by the grain the record reads it at.
-  _entityGrain(id){
-    const c={Ground:0,Figure:0,Pattern:0};
-    for(const e of this.edgesOf(id)){const g=this.edgeGrain(e);if(g&&c[g]!=null)c[g]++;}
-    let best='Figure',bv=-1;for(const g of ['Figure','Ground','Pattern'])if(c[g]>bv){bv=c[g];best=g;}
-    return bv<=0?'Figure':best;
-  }
-  // ── the geometric reader: measure the interpretation grain, don't infer it ─────
-  // _entityGrain above COUNTS edge grains — a structural proxy. The real eoreader4
-  // reading EMBEDS each proposition and scores it against the 27 cell centroids
-  // (classify/phasepost.js), committing a band only above a margin floor. We read
-  // the Interpretation-domain terrains — Atmosphere (Ground) · Lens (Figure) ·
-  // Paradigm (Pattern) — off that measurement. Opt-in: it loads a ~50MB MiniLM the
-  // centroids were built in; until warmed (or if it can't load) the structural
-  // estimate stands, exactly as the engine holds at no-commit.
-  async _ensureClassifier(){
-    if(this._clsPromise) return this._clsPromise;
-    this._clsPromise=(async()=>{
-      try{
-        const __res=(typeof window!=='undefined'&&window.__resources)||{};
-        const [PP,EM]=await Promise.all([import(__res.eoPhase||'./eo/phasepost.js'),import(__res.eoEmbed||'./eo/embed.js')]);
-        const [cellsJson,centJson]=await Promise.all([
-          fetch(__res.eoCells||'./eo/phasepost-cells.json').then(r=>r.json()),
-          fetch(__res.eoCentroids||'./eo/centroids-27.json').then(r=>r.json())
-        ]);
-        this._embedder=EM.createMiniLMEmbedder();
-        return PP.createPhasepostClassifier({cells:cellsJson.CELLS,centroids:centJson,embedder:this._embedder});
-      }catch(e){ this._classifierErr=String((e&&e.message)||e); return null; }
-    })();
-    return this._clsPromise;
-  }
-  async measureGrain(id){
-    if(this.state.grainMeasuring)return;
-    const sp=this._spectralLenses(id);
-    let texts=(sp.lenses&&sp.lenses.length)?sp.lenses.map(o=>({k:o.repIdx,t:o.text}))
-      :this.subjectSentences(id).slice(0,8).map(i=>({k:i,t:this.master.sentences[i]}));
-    if(!texts.length)return;
-    const fail=(msg)=>this.setState(s=>({grainMeasuring:null,grainMeasure:{...(s.grainMeasure||{}),[id]:{live:false,error:msg}}}));
-    this.setState({grainMeasuring:{id,pct:0,phase:'load'}});
-    const cls=await this._ensureClassifier();
-    if(!cls){ fail(this._classifierErr||'reader unavailable'); return; }
-    try{
-      await this._embedder.warm((p)=>{ if(!p)return; const pct=p.progress!=null?Math.round(p.progress):(p.total?Math.round((p.loaded/p.total)*100):null);
-        this.setState(s=>(s.grainMeasuring&&s.grainMeasuring.id===id?{grainMeasuring:{id,pct:(pct==null?s.grainMeasuring.pct:pct),phase:'download'}}:null)); });
-    }catch(e){ fail('couldn’t load the meaning model'); return; }
-    this.setState(s=>(s.grainMeasuring&&s.grainMeasuring.id===id?{grainMeasuring:{id,pct:100,phase:'measure'}}:null));
-    const INTERP={Atmosphere:'Ground',Lens:'Figure',Paradigm:'Pattern'};
-    const tally={Atmosphere:0,Lens:0,Paradigm:0}; const perLens={};
-    for(const {k,t} of texts){
-      let pc; try{ pc=await cls.classify(this.clean(t)); }catch(e){ continue; }
-      if(!pc||!pc.live){ perLens[k]={live:false}; continue; }
-      let best=null;
-      for(const band of ['ground','figure','pattern']){ const r=pc[band];
-        if(r&&r.cell&&INTERP[r.site]){ tally[r.site]+=r.confidence; if(!best||r.confidence>best.confidence)best=r; } }
-      perLens[k]=best?{live:true,terrain:best.site,verb:best.fold_verb||null,tag:best.tag||null,conf:best.confidence}:{live:true,nocommit:true};
-    }
-    let gt=null,bv=-1; for(const tn of ['Lens','Atmosphere','Paradigm'])if(tally[tn]>bv){bv=tally[tn];gt=tn;}
-    const measured=bv>0?{live:true,terrain:gt,grain:INTERP[gt],conf:Math.round(bv*1000)/1000,lenses:perLens}
-      :{live:true,nocommit:true,lenses:perLens};
-    this.setState(s=>({grainMeasuring:null,grainMeasure:{...(s.grainMeasure||{}),[id]:measured}}));
-  }
   // The short take a reading reads INTO the entity — the predicate it lays over it.
   _readingLabel(id,i){
     const lab=this.labelOf(id),s=this.clean(this.master.sentences[i]);
@@ -2219,29 +2130,10 @@ class Component extends DCLogic {
   // Structure); a lens never segments — it lays a take over the whole.
   lensBlock(id,vu,ctxDef,ctxCites){
     const lab=this.labelOf(id),lens=this.state.panelLens||{t:'whole'};
-    const gm=(this.state.grainMeasure||{})[id]||null;
-    const gMeasuring=this.state.grainMeasuring&&this.state.grainMeasuring.id===id?this.state.grainMeasuring:null;
-    const measuredGrain=(gm&&gm.live&&!gm.nocommit)?gm.grain:null;
-    const grain=measuredGrain||this._entityGrain(id);
-    // eoreader4 reads an entity's INTERPRETATION at one of three grains (the cube's
-    // Significance row, Site face): Ground→Atmosphere (ambient tone over a field),
-    // Figure→Lens (a reading laid over one whole thing), Pattern→Paradigm (a
-    // frame-of-frames everything filters through). The panel speaks the grain the
-    // record actually reads this entity at — not a generic "takes".
-    const TERRAIN={
-      Figure:{name:'Lens',gloss:'how your sources read this one thing',unit:'lens',units:'lenses',more:'More lenses',
-        intro:'Your sources don’t all read '+lab+' the same way. Each chip below is one recurring lens — tap it to read the exact lines behind it; tap “Overview” for the combined picture.'},
-      Ground:{name:'Atmosphere',gloss:'the ambient tone your sources read this in',unit:'tone',units:'tones',more:'More tones',
-        intro:lab+' reads less as a fixed thing than as a condition your sources move through. Each chip below is one recurring tone — tap it to read the lines that set it; tap “Overview” for the combined air.'},
-      Pattern:{name:'Paradigm',gloss:'the frame your sources filter everything through',unit:'framing',units:'framings',more:'More framings',
-        intro:'Your sources keep '+lab+' as a frame they read other things through. Each chip below is one recurring framing — tap it to read the lines that cast it; tap “Overview” for the combined frame.'},
-    };
-    const terrain=TERRAIN[grain]||TERRAIN.Figure;
-    const grainTriad=[
-      {name:'Atmosphere',active:grain==='Ground',style:'font-size:9.5px;font-weight:700;letter-spacing:.02em;padding:2px 8px;border-radius:999px;white-space:nowrap;border:1px solid '+(grain==='Ground'?'var(--acc)':'var(--line2)')+';background:'+(grain==='Ground'?'var(--accbg)':'transparent')+';color:'+(grain==='Ground'?'var(--acc)':'var(--ink3)')+';'},
-      {name:'Lens',active:grain==='Figure',style:'font-size:9.5px;font-weight:700;letter-spacing:.02em;padding:2px 8px;border-radius:999px;white-space:nowrap;border:1px solid '+(grain==='Figure'?'var(--acc)':'var(--line2)')+';background:'+(grain==='Figure'?'var(--accbg)':'transparent')+';color:'+(grain==='Figure'?'var(--acc)':'var(--ink3)')+';'},
-      {name:'Paradigm',active:grain==='Pattern',style:'font-size:9.5px;font-weight:700;letter-spacing:.02em;padding:2px 8px;border-radius:999px;white-space:nowrap;border:1px solid '+(grain==='Pattern'?'var(--acc)':'var(--line2)')+';background:'+(grain==='Pattern'?'var(--accbg)':'transparent')+';color:'+(grain==='Pattern'?'var(--acc)':'var(--ink3)')+';'},
-    ];
+    // The distinct recurring takes your sources lay over this entity, surfaced by
+    // _spectralLenses below. Plain language — no interpretation-grain naming.
+    const terrain={name:'How it’s read',gloss:'the distinct takes your sources have on '+lab,unit:'take',
+      intro:'Your sources don’t all read '+lab+' the same way. Each chip below is one recurring take — tap it to read the exact lines behind it; tap “Overview” for the combined picture.'};
     const dot=(c)=>'width:6px;height:6px;border-radius:50%;flex:0 0 auto;background:'+c+';';
     const chipStyle=(active,fillPct)=>{const bg=active?'var(--accbg)':(fillPct!=null?('linear-gradient(90deg,var(--accbg) '+fillPct+'%,var(--card) '+fillPct+'%)'):'var(--card)');
       return 'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;border-radius:999px;padding:4px 10px;cursor:pointer;white-space:nowrap;border:1px solid '+(active?'var(--acc)':'var(--line2)')+';background:'+bg+';color:'+(active?'var(--acc)':'var(--ink2)')+';';};
@@ -2259,7 +2151,6 @@ class Component extends DCLogic {
     const npovLabel=sp.npov>=0.8?'Your sources spread evenly across these takes':(sp.npov>=0.55?'A few takes, with one leading':'Mostly one take');
     const dom=sp.lenses[0]?this._readingLabel(id,sp.lenses[0].repIdx):'';
     let framing='the combined picture',kindLabel='combined',reading='',cites=[],takeLabel='',attrib='',rankLabel='',contested=false,weightFill=0;
-    let measuredReading='',hasMeasuredReading=false;
     // The voice making the take — ALWAYS resolved. A take demonstrates subjectivity, so
     // it must be FROM somebody: the person/org cited inside the text if there is one,
     // otherwise the publisher itself (the editorial voice that asserted it).
@@ -2282,29 +2173,14 @@ class Component extends DCLogic {
         if(voiceCited){voiceMore='in '+this.voicePretty(repHost);}
         else if(_sh.length>1){voiceMore='\u00B7 also in '+(_sh.length-1)+' other source'+(_sh.length-1!==1?'s':'');}
         attrib='';
-        cites=this.citeChips(o.memberIdx.slice(0,6),{right:true});
-        // the geometric reader's measured cell for THIS lens, if it has run
-        const ml=gm&&gm.lenses&&gm.lenses[o.repIdx];
-        if(ml&&ml.live&&!ml.nocommit){const tArt=(ml.terrain==='Atmosphere'?'an Atmosphere':(ml.terrain==='Paradigm'?'a Paradigm':'a Lens'));measuredReading=(ml.verb||'reads')+' \u2014 measured as '+tArt+(ml.tag?(' \u00B7 '+ml.tag):'');hasMeasuredReading=true;}
-        else if(ml&&ml.live&&ml.nocommit){measuredReading='measured \u2014 held below the commit floor';hasMeasuredReading=true;}}
+        cites=this.citeChips(o.memberIdx.slice(0,6),{right:true});}
     } else { reading=ctxDef||'';cites=ctxCites||[];attrib='folded from every source'; }
-    const measuring=!!gMeasuring;
-    const measurePct=gMeasuring?(gMeasuring.pct||0):0;
-    const measurePhaseLabel=gMeasuring?(gMeasuring.phase==='download'?('Loading the meaning model \u2014 '+(gMeasuring.pct||0)+'%'):(gMeasuring.phase==='measure'?'Measuring against the 27 cells\u2026':'Waking the reader\u2026')):'';
-    const grainMeasured=!!measuredGrain;
-    const grainNoCommit=!!(gm&&gm.live&&gm.nocommit);
-    const grainError=(gm&&!gm.live)?(gm.error||'unavailable'):'';
-    const grainSourceLabel=grainMeasured?'measured':(grainNoCommit?'no-commit':(grainError?'estimate':'estimate'));
-    const grainMeasureNote=grainMeasured?('Measured against the 27 cell centroids (MiniLM)'+(gm.conf?(' \u00B7 confidence '+gm.conf):'')):(grainNoCommit?'Measured \u2014 no grain cleared the commit floor; structural estimate stands':(grainError?('Couldn\u2019t measure ('+grainError+') \u2014 structural estimate stands'):'Inferred from edge structure \u2014 not yet measured'));
     return {hasLenses,chips,
-      measuring,measurePct,measurePhaseLabel,canMeasure:hasLenses&&!measuring&&!grainMeasured,onMeasure:()=>this.measureGrain(id),
-      grainMeasured,grainNoCommit,grainSourceLabel,grainMeasureNote,hasGrainError:!!grainError,
-      measuredReading,hasMeasuredReading,
       gaugeFill:np,gaugeMarkerStyle:'position:absolute;top:-3.5px;left:'+np+'%;transform:translateX(-50%);width:11px;height:11px;border-radius:50%;border:2px solid var(--ink2);background:#fff;',
       npovLabel,npovDom:dom,hasDom:sp.npov<0.55&&!!dom,nLenses:sp.lenses.length,
       framing,kindLabel,contested,hasContested:contested,takeLabel,hasTake:!!takeLabel,rankLabel,hasRank:!!rankLabel,
       hasWeightBar:weightFill>0,weightBarStyle:'height:4px;border-radius:2px;background:var(--acc);width:'+Math.max(4,weightFill)+'%;',
-      terrainName:terrain.name,terrainGloss:terrain.gloss,terrainIntro:terrain.intro,moreLabel:terrain.more,grainTriad,
+      terrainName:terrain.name,terrainGloss:terrain.gloss,terrainIntro:terrain.intro,
       hasReading:!!reading,reading:reading||'',attrib,hasAttrib:!!attrib,
       showCombinedHeader:!!reading&&!hasVoice,
       voiceName,voicePre,voicePost,voiceInit,voiceAvStyle,voiceCited,hasVoicePre:!!voicePre,hasVoicePost:!!voicePost,voiceMore,hasVoiceMore:!!voiceMore,hasVoice,
@@ -2756,72 +2632,6 @@ class Component extends DCLogic {
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);document.body.style.cursor='col-resize';document.body.style.userSelect='none';}
   onResizeReset(){this.setState({panelW:380});}
   toggleSwap(){const v=!this.state.swapped;try{localStorage.setItem('eo_swap',v?'1':'0');}catch(e){}this.setState({swapped:v});}
-  // ── memory export / import: the full record as a single binary file ────────────
-  // The whole memory — every source read in (its text, the logged events/propositions,
-  // sentences and provenance) plus the muted set — packed into one ".eomem" blob:
-  //   bytes 0-3  magic "EOMM"
-  //   byte  4    format version (1)
-  //   byte  5    flags (bit0 = gzip-compressed payload)
-  //   bytes 6+   payload — UTF-8 JSON, gzip-compressed when the browser supports it.
-  // The runtime-only _doc handle is dropped (it's rebuilt from the events on load).
-  async _gzip(u8){ if(typeof CompressionStream==='undefined')return null;
-    try{const cs=new CompressionStream('gzip');const w=cs.writable.getWriter();w.write(u8);w.close();return new Uint8Array(await new Response(cs.readable).arrayBuffer());}catch(e){return null;} }
-  async _gunzip(u8){ const ds=new DecompressionStream('gzip');const w=ds.writable.getWriter();w.write(u8);w.close();return new Uint8Array(await new Response(ds.readable).arrayBuffer()); }
-  _memPage(p){return {url:p.url,title:p.title,text:p.text||'',events:p.events||[],sentences:p.sentences||[],ts:p.ts,via:p.via,image:p.image||null,parent:p.parent||null,wikiLinks:p.wikiLinks||null,svo:p.svo||0};}
-  async exportMemory(){
-    try{
-      const pages=this.state.pages.map(p=>this._memPage(p));
-      if(!pages.length&&!this._muted.size){this.feedLine('warn','Nothing in memory to export yet.');return;}
-      const payload={v:1,app:'eoreader4',exportedAt:Date.now(),pages,muted:[...this._muted]};
-      const json=new TextEncoder().encode(JSON.stringify(payload));
-      let body=json,flags=0;
-      const gz=await this._gzip(json);
-      if(gz&&gz.length<json.length){body=gz;flags=1;}
-      const out=new Uint8Array(6+body.length);
-      out[0]=0x45;out[1]=0x4F;out[2]=0x4D;out[3]=0x4D;out[4]=1;out[5]=flags;out.set(body,6);
-      const stamp=new Date().toISOString().slice(0,10).replace(/-/g,'');
-      const name='eo-memory-'+stamp+'.eomem';
-      const url=URL.createObjectURL(new Blob([out],{type:'application/octet-stream'}));
-      const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url),2000);
-      const kb=Math.max(1,Math.round(out.length/1024));
-      this.feedSep('exported memory');
-      this.feedLine('done','Exported '+pages.length+' source'+(pages.length!==1?'s':'')+' ('+kb+' KB) to '+name+'.');
-    }catch(e){this.feedLine('warn','Could not export memory — '+((e&&e.message)||e));}
-  }
-  onImportMemClick(){const i=document.querySelector('input[data-eo-mem-import]');if(i)i.click();}
-  onImportMemFile(ev){
-    const f=ev&&ev.target&&ev.target.files&&ev.target.files[0];if(!f)return;
-    const fr=new FileReader();
-    fr.onload=()=>{this.importMemoryBytes(new Uint8Array(fr.result));if(ev.target)ev.target.value='';};
-    fr.onerror=()=>{this.feedLine('warn','Could not read that file.');if(ev.target)ev.target.value='';};
-    fr.readAsArrayBuffer(f);
-  }
-  // Restore from a .eomem file. Additive by URL — sources already in memory are kept,
-  // new ones are folded in and the graph re-projected; muted sources stay muted.
-  async importMemoryBytes(buf){
-    try{
-      if(!buf||buf.length<6||buf[0]!==0x45||buf[1]!==0x4F||buf[2]!==0x4D||buf[3]!==0x4D)throw new Error('not an EO memory (.eomem) file');
-      const ver=buf[4],flags=buf[5];
-      if(ver!==1)throw new Error('unsupported file version '+ver);
-      let body=buf.subarray(6);
-      if(flags&1)body=await this._gunzip(body);
-      const payload=JSON.parse(new TextDecoder().decode(body));
-      const incoming=Array.isArray(payload.pages)?payload.pages:[];
-      if(!incoming.length&&!(Array.isArray(payload.muted)&&payload.muted.length))throw new Error('file has no memory in it');
-      if(Array.isArray(payload.muted)&&payload.muted.length){for(const u of payload.muted)this._muted.add(u);try{localStorage.setItem('eo_muted',JSON.stringify([...this._muted]));}catch(e){}}
-      const have=new Set(this.state.pages.map(p=>p.url));
-      const add=[];
-      for(const p of incoming){if(!p||!p.url||have.has(p.url))continue;have.add(p.url);
-        add.push({url:p.url,title:p.title||this.short(p.url),text:p.text||'',events:Array.isArray(p.events)?p.events:[],sentences:Array.isArray(p.sentences)?p.sentences:[],ts:p.ts||Date.now(),via:p.via||'read',image:p.image||null,parent:p.parent||null,wikiLinks:p.wikiLinks||null,svo:p.svo||0});}
-      this.feedSep('imported memory');
-      if(!add.length){this.rebuild(this.state.pages);this.setState(s=>({rev:s.rev+1,settingsOpen:false}));this.feedLine('done','Imported memory — every source was already here.');return;}
-      const pages=[...this.state.pages,...add];
-      this.rebuild(pages);
-      this.setState(s=>({pages,rev:s.rev+1,settingsOpen:false,selId:s.selId||this.topEntity()}));
-      this.feedLine('done','Imported memory — added '+add.length+' source'+(add.length!==1?'s':'')+'.');
-    }catch(e){this.feedLine('warn','Could not import memory — '+((e&&e.message)||e));}
-  }
   // ── memory log: every source read into memory, with totals ────────────────────
   memoryLog(){
     if(!this.master)return {rows:[],hasRows:false,statLine:'',empty:true};
@@ -3435,7 +3245,6 @@ class Component extends DCLogic {
       url:this.state.url,onUrlInput:e=>this.onUrlInput(e),onUrlKey:e=>this.onUrlKey(e),onReadUrl:()=>this.doReadUrl(),
       onBack:()=>this.goBack(),onForward:()=>this.goForward(),onReloadTop:()=>this.forceUpdate(),onNewTab:()=>this.newTab(),
       onImportClick:()=>this.onImportClick(),onImportFile:e=>this.onImportFile(e),
-      onExportMem:()=>this.exportMemory(),onImportMemClick:()=>this.onImportMemClick(),onImportMemFile:e=>this.onImportMemFile(e),
       onToggleDetect:()=>this.toggleDetect(),detect:this.state.detect,showWeb:false,web:null,srcCtxOn:false,
       detectDesc:this.state.detect?'On — every page you open is read into memory.':'Off — pages open without being read. Turn on to build memory.',
       detectSwitch:'flex:0 0 auto;width:34px;height:20px;border-radius:11px;padding:2px;transition:background .15s;background:'+(this.state.detect?'var(--acc)':'#cfd3da')+';',

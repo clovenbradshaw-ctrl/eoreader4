@@ -722,21 +722,6 @@
 
           <sc-if value="{{ panelProfile.lens.hasLenses }}" hint-placeholder-val="{{ false }}">
             <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:13px;">
-              <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">
-                <sc-for list="{{ panelProfile.lens.grainTriad }}" as="g" hint-placeholder-count="3">
-                  <span style="{{ g.style }}">{{ g.name }}</span>
-                </sc-for>
-                <span style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-left:auto;white-space:nowrap;">{{ panelProfile.lens.grainSourceLabel }}</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;">
-                <span style="font-size:9.5px;color:var(--ink3);line-height:1.35;flex:1;min-width:0;">{{ panelProfile.lens.grainMeasureNote }}</span>
-                <sc-if value="{{ panelProfile.lens.canMeasure }}" hint-placeholder-val="{{ false }}">
-                  <button onclick="{{ panelProfile.lens.onMeasure }}" title="Embed each proposition and score it against the 27 cell centroids (loads a ~50MB MiniLM once)" style="flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:4px 9px;cursor:pointer;white-space:nowrap;" style-hover="background:var(--card)">◎ Measure</button>
-                </sc-if>
-                <sc-if value="{{ panelProfile.lens.measuring }}" hint-placeholder-val="{{ false }}">
-                  <span style="flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:600;color:var(--acc);white-space:nowrap;"><span style="width:11px;height:11px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ panelProfile.lens.measurePhaseLabel }}</span>
-                </sc-if>
-              </div>
               <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:3px;flex-wrap:wrap;">
                 <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">{{ panelProfile.lens.terrainName }}</span>
                 <span style="font-size:10.5px;color:var(--ink3);">{{ panelProfile.lens.terrainGloss }}</span>
@@ -790,9 +775,6 @@
                     <span style="flex:0 0 auto;width:3px;border-radius:2px;background:var(--accline);"></span>
                     <div style="font-size:13px;color:var(--ink);line-height:1.55;">{{ panelProfile.lens.reading }}</div>
                   </div>
-                  <sc-if value="{{ panelProfile.lens.hasMeasuredReading }}" hint-placeholder-val="{{ false }}">
-                    <div style="display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:3px 8px;margin-top:8px;">◎ {{ panelProfile.lens.measuredReading }}</div>
-                  </sc-if>
                   <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:9px;">
                     <sc-if value="{{ panelProfile.lens.hasAttrib }}" hint-placeholder-val="{{ false }}"><span style="font-size:9.5px;color:var(--ink3);">{{ panelProfile.lens.attrib }}</span></sc-if>
                     <sc-if value="{{ panelProfile.lens.hasCites }}" hint-placeholder-val="{{ false }}">
