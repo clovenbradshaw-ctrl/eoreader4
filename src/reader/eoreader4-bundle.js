@@ -3860,5 +3860,6 @@ export {
   parseText,
   projectGraph,
   projectionStats,
-  referentMap
+  referentMap,
+  segmentClauses
 };
