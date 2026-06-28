@@ -336,6 +336,10 @@ class Component extends DCLogic {
   }
 
   norm(s){return (s||'').replace(/\s+/g,' ').trim();}
+  // Like norm, but PRESERVES line structure — for the model's markdown chat replies, where
+  // newlines carry paragraph/list breaks that _md turns into block tags. Collapses only
+  // horizontal whitespace, trims each line, and caps blank runs at one (paragraph) gap.
+  normMd(s){return String(s||'').replace(/\r\n?/g,'\n').replace(/[^\S\n]+/g,' ').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n').trim();}
   short(u){try{return new URL(u).hostname.replace(/^www\./,'');}catch(e){return String(u).slice(0,30);}}
   // Humanize a publisher host into a readable VOICE name — "en.wikipedia.org" → "Wikipedia".
   // A take is subjective: it has to be FROM somebody. When no person/org is cited inside
@@ -745,7 +749,7 @@ class Component extends DCLogic {
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
-      const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
+      const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       // Only surface grounding when the question actually matched the read text. Weak
       // fallback context (intro lines) is NOT shown as a citation — instead we offer the
       // related docs (ranked) the reader has open. This keeps "linked" = genuinely relevant.
