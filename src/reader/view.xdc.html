@@ -275,12 +275,12 @@
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
                       <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
+                      <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+                      <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                       <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                        <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
                         <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
                           <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                         </sc-if>
-                        <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                       </sc-if>
                     </div>
                   </sc-if>
@@ -301,7 +301,7 @@
               <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
             </sc-if>
             <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
-              <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">✦ Research</button>
+              <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
               <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -808,12 +808,12 @@
                 <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.groundStyle }}">
                     <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
+                    <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+                    <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                     <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                      <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
                       <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
                         <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                       </sc-if>
-                      <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                     </sc-if>
                   </div>
                 </sc-if>
@@ -834,7 +834,7 @@
             <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
           </sc-if>
           <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
-            <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">✦ Research</button>
+            <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
             <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">

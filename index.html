@@ -291,12 +291,12 @@
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
                       <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
+                      <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+                      <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                       <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                        <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
                         <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
                           <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                         </sc-if>
-                        <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                       </sc-if>
                     </div>
                   </sc-if>
@@ -317,7 +317,7 @@
               <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
             </sc-if>
             <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
-              <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">✦ Research</button>
+              <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
               <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -824,12 +824,12 @@
                 <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.groundStyle }}">
                     <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
+                    <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+                    <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                     <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                      <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
                       <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
                         <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                       </sc-if>
-                      <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                     </sc-if>
                   </div>
                 </sc-if>
@@ -850,7 +850,7 @@
             <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
           </sc-if>
           <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
-            <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">✦ Research</button>
+            <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
             <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -1447,7 +1447,7 @@ class Component extends DCLogic {
     this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
     this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
     this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
-    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');}catch(e){}
+    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null,savedWebBrain=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');savedWebBrain=localStorage.getItem('eo_webbrain');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
@@ -1466,6 +1466,11 @@ class Component extends DCLogic {
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
       hoverCite:null, liveResearch:{on:false},
+      // WEB AS BRAIN — on by default. A 3B chat model knows little, so by default a question it
+      // can't ground in what's already been read+folded sends the engine to the web first (fetch,
+      // fold, then answer from the new reading) instead of letting the model guess. Turning it off
+      // (the composer toggle) makes the chat answer ONLY from what you've read — no web at all.
+      webBrain:(savedWebBrain!=='0'),
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
       // Temporal cursor on the entity summary. Keyed by entity id → a fraction in
       // [0,1] of the way through that entity's attested record. Undefined means the
@@ -2060,11 +2065,51 @@ class Component extends DCLogic {
       'extra please look looking dig digging investigate investigating explore exploring find finding read reading ' +
       'tell give show expand elaborate detail details info information context background topic subject thing things ' +
       'stuff something anything everything up into about around over same another other new newer next then now ' +
-      'me my mine us our ours your yours yourself them their it its').split(/\s+/));
+      'me my mine us our ours your yours yourself them their it its ' +
+      // DEICTIC doc-class nouns — "this book", "the author", "more about this page". Used as a bare
+      // reference to whatever is open, they name no fresh subject of their own; when one is the ONLY
+      // content word left, the turn is ABOUT the current document and the subject must come from it
+      // (else the walk literally searches "more about this book" and chases a namesake — the bug
+      // that pulled "More: A Memoir of Open Marriage" instead of the book actually being read).
+      'book books page pages article articles story stories author authors writer writers chapter chapters ' +
+      'text texts document documents documentation paper papers essay essays post posts piece pieces novel novels ' +
+      'poem poems passage passages section sections work works writing writings site sites website websites url urls ' +
+      'link links source sources doc docs entry entries report reports paragraph paragraphs').split(/\s+/));
     const words=String(t||'').toLowerCase().match(/[a-z][a-z']+/g)||[];
     if(!words.length)return true;
     const content=words.filter(w=>!this._metaWords.has(w)&&!this.STOP.has(w));
     return content.length===0;}
+  // Is this string a real subject worth searching, or a bare id / slug / filename ("pg5200",
+  // "doc12", "untitled-3") that would send the walk chasing nonsense? A usable subject needs at
+  // least one real word — alphabetic, vowel-bearing, length ≥ 3 — and isn't just an id+number.
+  _usableSubject(t){
+    t=String(t||'').trim();
+    if(t.length<3)return false;
+    if(/^(?:pg|doc|id|ref|file|page|untitled|chapter|ch|no|item)?[\s_-]*\d+$/i.test(t))return false;
+    const words=t.toLowerCase().match(/[a-z][a-z']{2,}/g)||[];
+    return words.some(w=>/[aeiouy]/.test(w));
+  }
+  // The subject of an open source, for a "more about this book" turn: its real title (+ author).
+  // Prefer a usable page title; an imported file is titled by its FILENAME ("pg5200"), which names
+  // no subject, so fall back to lifting the document's own "Title:" / "Author:" lines. Returns null
+  // when the source yields nothing searchable (the caller then tries the conversation / entities).
+  _docSubject(url){
+    const strip=s=>this.norm(String(s||''))
+      .replace(/\s*[-–—|·:]\s*(wikipedia|wikipedia,? the free encyclopedia|npr|bbc(?: news)?|cnn|reuters|the guardian|the new york times|al jazeera|associated press|ap news|pmc)\b.*$/i,'')
+      .replace(/[?.!]+$/,'').trim();
+    const pg=this.pageOf(url)||{};
+    let title=strip(pg.title);
+    if(!this._usableSubject(title)){
+      const tm=String(pg.text||'').match(/^\s*Title:\s*(.+)$/mi);
+      title=tm?strip(tm[1]):'';
+    }
+    if(!this._usableSubject(title))return null;
+    let author=this.norm(pg.author||'');
+    if(!author){const am=String(pg.text||'').match(/^\s*Author:\s*(.+)$/mi);if(am)author=strip(am[1]);}
+    const last=author?author.toLowerCase().split(/\s+/).pop():'';
+    if(author&&last&&!title.toLowerCase().includes(last))return this.truncLabel((title+' '+author).trim(),80);
+    return this.truncLabel(title,80);
+  }
   // The SUBJECT of the current chat, derived from context — what "do more research" should be
   // about. Priority: (1) the source(s) the chat is grounded in, by title — the strongest, most
   // stable signal of the subject; (2) the most recent user turn that actually named a topic (not a
@@ -2074,9 +2119,11 @@ class Component extends DCLogic {
     const clean=s=>this.norm(String(s||''))
       .replace(/\s*[-–—|·:]\s*(wikipedia|wikipedia,? the free encyclopedia|npr|bbc(?: news)?|cnn|reuters|the guardian|the new york times|al jazeera|associated press|ap news|pmc)\b.*$/i,'')
       .replace(/[?.!]+$/,'').trim();
-    // (1) the sources the chat is About → the first readable source title.
+    // (1) the sources the chat is About → the first source that yields a usable subject. A bare
+    // slug/filename title ("pg5200") is no subject; _docSubject lifts the real Title:/Author: from
+    // the document itself so "more about this book" researches the WORK, not the file name.
     const srcs=this.chatSourcesOf(cur);
-    for(const u of srcs){const t=clean((this.pageOf(u)||{}).title);if(t&&t.length>2)return this.truncLabel(t,80);}
+    for(const u of srcs){const t=this._docSubject(u);if(t)return t;}
     // (2) the most recent substantive user turn (skip commands and meta-research asks).
     const msgs=(cur&&cur.messages)||[];
     for(let i=msgs.length-1;i>=0;i--){const m=msgs[i];
@@ -2118,6 +2165,22 @@ class Component extends DCLogic {
     const chased=new Set(this._researchTerms(subject));
     const leads=this._leads(new Map(),this._profile(text),chased);
     return leads.slice(0,n||3).map(l=>l.term);}
+  // A BATTERY of distinct seed angles for a research turn — so the first pass fans out across
+  // several independent threads instead of chaining off ONE query (the "don't do it one shot" ask).
+  // For a continuation / "this book" turn the strongest angles are the salient threads the in-scope
+  // reading ALREADY raised (real entities/themes of the document, via the walk's own lead ranking);
+  // a few neutral facets fill out the breadth so even a bare one-line topic becomes several searches.
+  // Returns lead TERMS the walk appends to the anchor (never the subject's own words); capped to stay
+  // focused. The seed query (the subject itself) is added by the walk separately.
+  _researchBattery(subject,derived,sources){
+    const out=[],seen=new Set(this._researchTerms(subject));
+    const add=t=>{t=this.norm(String(t||'')).trim();const k=t.toLowerCase();if(t&&!seen.has(k)){seen.add(k);out.push(t);}};
+    // (1) the document's own salient threads — only when deepening read sources, so a fresh named
+    // topic never seeds from unrelated reading already in memory.
+    if(derived)for(const t of this._seedLeadsFromRead(subject,sources,4))add(t);
+    // (2) neutral facets — breadth for any subject, so it's a battery even with nothing read yet.
+    for(const f of ['overview','analysis','history','significance']){if(out.length>=5)break;add(f);}
+    return out.slice(0,5);}
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
   // everything read. Empty spans when nothing relevant has been read.
@@ -2315,16 +2378,30 @@ class Component extends DCLogic {
     const names=srcs.slice(0,2).map(titleOf).join(', '),more=srcs.length-2;
     return names+(more>0?(' and '+more+' more'):'')+' ('+srcs.length+' sources) · '+props;
   }
+  // WEB AS BRAIN — should THIS turn go read the web (then answer grounded) instead of answering
+  // straight from the 3B model? The default is yes whenever the model would otherwise be guessing:
+  // the web is on, it isn't a clock question, and the turn either explicitly asks to research
+  // ("research X", "more about this book") OR names a real subject the in-scope READING doesn't
+  // already cover. A summary of the open doc, a bare greeting, or a turn already grounded in folded
+  // sources is answered offline. Turning the web off makes this always false → pure offline chat.
+  _shouldWeb(q,sources){
+    if(this.state.webBrain===false)return false;            // web turned off → never touch it
+    if(this.mechanicalAnswer(q))return false;               // a clock question answers itself
+    if(this._researchIntent(q)||this._isMetaResearch(q))return true;   // asked for research / "more"
+    if(this._isSummaryQ(q))return false;                    // "summarize this" → from the doc you have
+    // A bare pleasantry / acknowledgement names no subject — don't go research "thanks".
+    if(/^(?:thanks?|thank you|thx|ty|ok|okay|k|cool|nice|great|awesome|got it|sounds good|sure|yep|yes|no|yeah|nope|lol|haha|hi|hey|hello|yo|sup|np|no problem|cheers|bye|goodbye|good (?:morning|night))[\s.!?]*$/i.test(q))return false;
+    if(!this._researchTerms(q).length)return false;         // nothing contentful to chase
+    return !this.groundNotes(q,sources).relevant;           // not covered by matched reading → go read
+  }
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
-    // RESEARCH MODE — a way of asking, not a separate screen (docs/curiosity-research.md).
-    // When the composer's research toggle is on, or the message itself asks to research
-    // ("research dolphins", "look into X", "dig into Y"), the turn doesn't just answer from
-    // what's already read — it goes and CHASES the topic through fresh sources, following
-    // what surprises it while it stays on the question, then answers grounded in what it found.
-    // A clock question ("what's the date") still short-circuits, even with the toggle on.
-    if((this.state.researchMode||this._researchIntent(q))&&!this.mechanicalAnswer(q))return this.chatResearch(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
+    // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
+    // a question it can't ground in what's been read+folded sends the engine to the web first — it
+    // fetches, FOLDS every page into memory (chatResearch → the curiosity walk → readURL→ingest),
+    // then answers grounded in the new reading. Raw text only counts once it's parsed and folded.
+    if(this._shouldWeb(q,sources))return this.chatResearch(q);
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // append the user turn + a pending assistant bubble
     let id=this.state.activeChat;
@@ -2393,6 +2470,9 @@ class Component extends DCLogic {
   // leashed); reads every kept page into memory; folds them into what the chat is About; and
   // finally answers, grounded in everything it gathered. One thread per hop, never a fan-out.
   toggleResearchMode(){this.setState(s=>({researchMode:!s.researchMode}));}
+  // The web on/off switch (the composer toggle). On is the default; off means the chat answers only
+  // from what you've already read, never reaching for the internet. Persisted so the choice sticks.
+  toggleWebBrain(){this.setState(s=>{const on=!(s.webBrain!==false);try{localStorage.setItem('eo_webbrain',on?'1':'0');}catch(e){}return {webBrain:on};});}
   async chatResearch(q){
     if(this._busy)return;
     // The SUBJECT to chase — named outright when the message carries its own topic, or DERIVED
@@ -2401,12 +2481,14 @@ class Component extends DCLogic {
     const cur=this.activeChatObj();
     const seed=this._researchSeed(q,cur);
     const topic=seed.topic, anchor=seed.anchor;
-    // For a continuation, also branch into the surprising threads already surfaced in what's been
-    // read — so "do more" finds new angles of the subject instead of re-fetching the same pages.
-    const extraSeeds=seed.derived?this._seedLeadsFromRead(topic,this.chatSourcesOf(cur),3):[];
+    // A BATTERY of distinct angles — not one shot. The salient threads the in-scope reading already
+    // raised (for a "this book" / continuation turn) plus a few facets, each its own seed query, so
+    // the walk explores several independent threads around the subject instead of chaining off one.
+    const extraSeeds=this._researchBattery(topic,seed.derived,this.chatSourcesOf(cur));
+    const angles=extraSeeds.map(t=>'“'+this._nextQuery(anchor,t)+'”').join(', ');
     const startText=seed.derived
-      ? ('Picking up this chat — researching “'+topic+'” more'+(extraSeeds.length?(', branching into '+extraSeeds.map(t=>'“'+t+'”').join(', ')):'')+'. I’ll follow what surprises me while it stays on topic.')
-      : ('Researching “'+topic+'” — I’ll follow what surprises me while it stays on topic.');
+      ? ('Picking up this chat — researching “'+topic+'”'+(angles?(' across '+angles):'')+'. I’ll follow what surprises me while it stays on topic.')
+      : ('Researching “'+topic+'”'+(angles?(' — also '+angles):'')+'. I’ll follow what surprises me while it stays on topic.');
     // Append the user turn + a pending assistant bubble carrying a live research trail.
     let id=this.state.activeChat;
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
@@ -2497,7 +2579,9 @@ class Component extends DCLogic {
     // subject so a "go deeper" research turn opens new angles instead of re-reading the same pages.
     const extra=(opts&&opts.extraSeeds)||[];
     for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
-    const maxHops=Math.min(6,4+extra.length);   // a few more hops when there are planned angles to cover
+    // BREADTH for the battery: at least a hop per seeded thread (the subject + each angle), plus a
+    // couple to follow the most surprising turns — so several distinct searches run, not one chain.
+    const maxHops=Math.min(8,frontier.length+2);
     while(hops.length<maxHops&&frontier.length){
       const node=frontier.shift();
       step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching the web for “'+node.query+'”'));
@@ -4653,10 +4737,11 @@ class Component extends DCLogic {
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
       chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
       onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
-      onToggleResearchMode:()=>this.toggleResearchMode(),researchModeOn:!!this.state.researchMode,
-      researchModeTitle:this.state.researchMode?'Research mode is on — the next message will go search and read fresh sources before answering. Click to turn off.':'Turn on research mode — your next message becomes a topic to chase through fresh sources, following what surprises me while it stays on topic.',
-      researchModeHint:this.state.researchMode?'Your message becomes a topic I’ll chase through fresh sources.':'Off — answers come from what you’ve already read.',
-      researchModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.researchMode?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
+      onToggleResearchMode:()=>this.toggleWebBrain(),researchModeOn:this.state.webBrain!==false,
+      webBtnLabel:this.state.webBrain!==false?'✦ Web on':'✦ Web off',
+      researchModeTitle:this.state.webBrain!==false?'Web is on — when your own reading doesn’t cover a question I go read the internet, fold it into memory, and answer grounded in what I found. Click to turn the web off.':'Web is off — answers come only from what you’ve read, nothing from the internet. Click to let me read the web when your reading doesn’t cover a question.',
+      researchModeHint:this.state.webBrain!==false?'I’ll read the web when your own reading doesn’t cover it.':'Off — answering only from what you’ve read.',
+      researchModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       backend:this.state.backend||'webllm',
       backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},{v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
