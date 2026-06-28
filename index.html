@@ -29,6 +29,12 @@
     @keyframes eopop{from{transform:translateY(5px);opacity:0}to{transform:translateY(0);opacity:1}}
     @keyframes eoswap{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
     @keyframes eoflow{0%{transform:translateX(-110%)}100%{transform:translateX(420%)}}
+    /* Center-stage file-ingestion animation. One calm focal piece, not a tab-flood. */
+    @keyframes eofade{from{opacity:0}to{opacity:1}}
+    @keyframes eoingest{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+    @media (prefers-reduced-motion: reduce){
+      .eo-ingest,.eo-ingest *{animation-duration:.001ms!important;animation-iteration-count:1!important;}
+    }
     /* "Ask about this page" FAB — collapsed to a small, faded ✦ icon by default; expands to the full pill on hover/focus. */
     .eo-askfab{opacity:.6;padding:9px;border-radius:50%;transition:opacity .18s ease,padding .2s ease,border-radius .2s ease;}
     .eo-askfab:hover,.eo-askfab:focus-visible{opacity:1;padding:9px 16px 9px 13px;border-radius:22px;}
@@ -1425,6 +1431,34 @@
     </div>
   </sc-if>
 
+  <sc-if value="{{ ingest.active }}" hint-placeholder-val="{{ false }}">
+    <div class="eo-ingest" style="{{ ingest.overlayStyle }}">
+      <div style="{{ ingest.cardStyle }}">
+        <div style="position:relative;width:104px;height:104px;margin:0 auto 18px;">
+          <div style="{{ ingest.ringStyle }}{{ ingest.ringSpinStyle }}"></div>
+          <div style="{{ ingest.glyphStyle }}">{{ ingest.glyph }}</div>
+        </div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);margin-bottom:6px;">{{ ingest.pctLabel }}</div>
+        <div style="font-size:16px;font-weight:700;letter-spacing:-.01em;line-height:1.3;color:var(--ink);max-width:300px;margin:0 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ ingest.title }}</div>
+        <sc-if value="{{ ingest.sub }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:11.5px;color:var(--ink3);margin-top:3px;">{{ ingest.sub }}</div>
+        </sc-if>
+        <div style="display:flex;align-items:center;justify-content:center;gap:0;margin:20px 6px 14px;">
+          <sc-for list="{{ ingest.steps }}" as="st" hint-placeholder-count="3">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:7px;flex:0 0 auto;">
+              <div style="{{ st.dotStyle }}">{{ st.mark }}</div>
+              <div style="{{ st.labelStyle }}">{{ st.label }}</div>
+            </div>
+            <sc-if value="{{ st.showBar }}" hint-placeholder-val="{{ true }}">
+              <div style="{{ st.barStyle }}align-self:flex-start;margin-top:12px;"></div>
+            </sc-if>
+          </sc-for>
+        </div>
+        <div style="font-size:12.5px;color:{{ ingest.detailColor }};line-height:1.45;min-height:18px;">{{ ingest.detail }}</div>
+      </div>
+    </div>
+  </sc-if>
+
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;seedUrl&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#2563eb&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
@@ -1462,6 +1496,7 @@ class Component extends DCLogic {
       llm:true, llmAvail:false, svoBusy:false, svoStatus:'', pasteOpen:false, pasteText:'',
       srcWide:false, srcTab:'page', srcDoc:null, srcLoading:false, srcErr:null, linkMode:savedLink==='0'?false:true, linkChoice:null,
       viewUrl:null, detect:true, pageDoc:null, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
+      ingest:null,
       accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false,
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
@@ -1974,22 +2009,141 @@ class Component extends DCLogic {
   }
   // Import a book / text file: read it, then NAVIGATE the center to it so it opens
   // as a readable book (loadCenter's text: branch) with its entities clickable.
-  async importText(text,title,meta){
-    const r=await this.readText(text,title,meta);
-    if(!r||!r.url){this.feedLine('warn','Could not import that text.');return false;}
+  //
+  // Big files used to freeze the tab on one synchronous parse with no feedback. Now
+  // the work runs as a phased pipeline — parse, then graph-fold — with a paint yielded
+  // between each so the CENTER-STAGE ingest animation can show which step is running.
+  // It can't make a monolithic parse non-blocking, but it bounds each freeze and gives
+  // the user one calm focal animation instead of a flood of feed lines.
+  async importText(text,title,meta,srcMeta){
+    text=String(text||'').trim();
+    if(!this.E){this.feedLine('warn','Could not import that text.');return false;}
+    if(text.length<60){this._ingestFail('Too little text to read.');return false;}
+    // Open the center stage (or move it past any file-read phase already showing).
+    this._ingestSet({phase:'parse',pct:.06,detail:'Reading the sentences…',
+      title:(srcMeta&&srcMeta.title)||title||'your text',sub:(srcMeta&&srcMeta.sub)||this._charLabel(text)});
+    await this._paint();await this._paint();   // let the phase render before the parse blocks
+    let parsed;
+    try{parsed=this._parseDoc(text);}catch(e){this._ingestFail('Could not read that text — '+(e&&e.message||e));return false;}
+    this._ingestSet({phase:'graph',pct:.62,detail:'Folding '+parsed.propCount+' propositions into the graph…'});
+    await this._paint();await this._paint();   // and again before the graph projection blocks
+    const url='text:'+(Date.now().toString(36));
+    const ttl=title||('Pasted text · '+text.slice(0,40).replace(/\s+/g,' ').trim()+'…');
+    let r;
+    try{r=this._foldPage(url,ttl,text,parsed.doc,parsed.propCount,'paste',null,null,null,meta);}
+    catch(e){this._ingestFail('Could not import that text — '+(e&&e.message||e));return false;}
+    if(!r||!r.url){this._ingestFail('Could not import that text.');return false;}
     this._srcUrl=null;this._pushLoc({t:'web',url:r.url});
     this.setState(s=>({viewUrl:r.url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));
     this.loadCenter(r.url);
     this.feedSep('imported a book');this.feedLine('read','Read “'+r.title+'” · '+(r.propCount!=null?r.propCount:r.sentenceCount)+' propositions');
+    this._ingestSet({phase:'done',pct:1,detail:r.propCount+' propositions · ready to read'});
+    await this.sleep(720);this._ingestClear();   // hold the "ready" beat, then fade out
     return r;
   }
   onImportClick(){const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
-  onImportFile(ev){
+  async onImportFile(ev){
     const f=ev&&ev.target&&ev.target.files&&ev.target.files[0];if(!f)return;
-    const fr=new FileReader();
-    fr.onload=()=>{this.importText(String(fr.result||''),f.name.replace(/\.(txt|md|markdown|text)$/i,''));if(ev.target)ev.target.value='';};
-    fr.onerror=()=>{this.feedLine('warn','Could not read that file.');};
-    fr.readAsText(f);
+    if(ev.target)ev.target.value='';
+    const title=f.name.replace(/\.(txt|md|markdown|text)$/i,'');
+    // Phase 1 — read the file off disk, streaming byte progress to the center stage.
+    this._ingestSet({phase:'read',pct:0,detail:'Reading the file…',intakeLabel:'Read file',title,sub:f.name+' · '+this._fmtSize(f.size)});
+    await this._paint();
+    let text;
+    try{text=await this._readFileText(f,p=>this._ingestSet({phase:'read',pct:p}));}
+    catch(e){this._ingestFail('Could not read that file.');return;}
+    // Phases 2-3 — parse + graph-fold, with the same center stage carried through.
+    await this.importText(text,title,null,{title,sub:f.name+' · '+this._fmtSize(f.size)});
+  }
+  // Read a File as text, reporting 0..1 byte progress (FileReader is already off the
+  // main thread — only the parse that follows blocks).
+  _readFileText(file,onProgress){
+    return new Promise((resolve,reject)=>{
+      const fr=new FileReader();
+      fr.onprogress=e=>{if(onProgress&&e.lengthComputable&&e.total)onProgress(Math.max(0,Math.min(.99,e.loaded/e.total)));};
+      fr.onload=()=>{if(onProgress)onProgress(1);resolve(String(fr.result||''));};
+      fr.onerror=()=>reject(fr.error||new Error('read failed'));
+      fr.readAsText(file);
+    });
+  }
+  // ── Center-stage ingest animation — state plumbing ───────────────────────────
+  // One focal overlay drives the whole import. _ingestSet merges a patch; the view
+  // (ingestVals) turns state.ingest into the phased animation. Kept deliberately
+  // small so a big file shows a calm, clear process — not a tab-flooding cascade.
+  _ingestSet(patch){this.setState(s=>({ingest:{active:true,leaving:false,...(s.ingest||{}),...patch}}));}
+  _ingestFail(msg){this.feedLine('warn',msg);this._ingestSet({phase:'error',detail:msg});setTimeout(()=>this._ingestClear(),2600);}
+  _ingestClear(){this.setState(s=>(s.ingest?{ingest:{...s.ingest,leaving:true}}:{}));setTimeout(()=>this.setState({ingest:null}),420);}
+  _paint(){return new Promise(r=>{const raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame:(f=>setTimeout(f,16));raf(()=>raf(r));});}
+  _fmtSize(b){b=+b||0;if(b<1024)return b+' B';if(b<1048576)return (b/1024).toFixed(b<10240?1:0)+' KB';return (b/1048576).toFixed(1)+' MB';}
+  _charLabel(t){const n=(t||'').length;return n>=1000?Math.round(n/1000)+'k characters':n+' characters';}
+  // The center-stage ingest animation, as render data. Turns state.ingest into a single
+  // calm focal piece: a progress ring, a 3-stage pipeline, and a status line — no feed
+  // spam. Returns {active:false} when nothing is ingesting so the overlay sc-if is off.
+  ingestVals(){
+    const ig=this.state.ingest;
+    if(!ig||!ig.active)return {active:false,steps:[]};
+    const acc=this.curAccent();
+    const err=ig.phase==='error';
+    const done=ig.phase==='done';
+    let frac;
+    switch(ig.phase){
+      case 'fetch':frac=.10;break;
+      case 'read':frac=.04+(ig.pct||0)*.18;break;
+      case 'parse':frac=.34;break;
+      case 'graph':frac=.74;break;
+      case 'done':frac=1;break;
+      default:frac=err?(ig.pct||.3):0;
+    }
+    const pct=Math.round(Math.max(0,Math.min(1,frac))*100);
+    // Stage map: intake (fetch/read) → parse → graph. "done" completes all three.
+    const stageOf={fetch:0,read:0,parse:1,graph:2,done:3};
+    const cur=err?-1:(stageOf[ig.phase]!=null?stageOf[ig.phase]:0);
+    const defs=[{label:ig.intakeLabel||'Read'},{label:'Parse'},{label:'Graph'}];
+    const steps=defs.map((d,i)=>{
+      const st=err?'todo':(i<cur?'done':(i===cur?'active':'todo'));
+      const isLast=i===defs.length-1;
+      const ringCol=st==='todo'?'var(--line2)':acc;
+      const fill=st==='done'?acc:(st==='active'?'transparent':'transparent');
+      const txtCol=st==='active'?'var(--ink)':(st==='done'?acc:'var(--ink3)');
+      return {
+        label:d.label,
+        done:st==='done',active:st==='active',
+        mark:st==='done'?'✓':(i+1),
+        dotStyle:'width:26px;height:26px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;'
+          +'border:2px solid '+ringCol+';background:'+fill+';color:'+(st==='done'?'#fff':(st==='active'?acc:'var(--ink3)'))+';'
+          +(st==='active'?'box-shadow:0 0 0 4px '+this.hexA(acc,.14)+';':''),
+        labelStyle:'font-size:11px;font-weight:'+(st==='active'?'700':'600')+';color:'+txtCol+';white-space:nowrap;'
+          +(st==='active'?'animation:eopulse 1.6s ease-in-out infinite;':''),
+        barStyle:'flex:1;height:2px;border-radius:2px;background:'+(i<cur?acc:'var(--line2)')+';min-width:14px;',
+        showBar:!isLast
+      };
+    });
+    return {
+      active:true,leaving:!!ig.leaving,error:err,done,
+      title:ig.title||'Ingesting',sub:ig.sub||'',
+      detail:err?(ig.detail||'Something went wrong'):(ig.detail||''),
+      pct,pctLabel:done?'Ready':(pct+'%'),
+      // Conic-gradient ring: filled portion in accent, the rest a faint track.
+      ringStyle:'width:104px;height:104px;border-radius:50%;flex:0 0 auto;'
+        +'background:conic-gradient('+ (err?'#dc2626':acc) +' '+(pct*3.6)+'deg, var(--line2) 0);'
+        +'-webkit-mask:radial-gradient(circle 38px at 50% 50%,transparent 98%,#000 100%);'
+        +'mask:radial-gradient(circle 38px at 50% 50%,transparent 98%,#000 100%);'
+        +'transition:background .35s ease;',
+      ringSpinStyle:'',
+      detailColor:err?'#dc2626':'var(--ink2)',
+      glyph:err?'!':(done?'✓':'✦'),
+      glyphStyle:'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:'+(done||err?'34px':'30px')+';font-weight:'+(done||err?'400':'700')+';color:'+(err?'#dc2626':acc)+';'
+        +(!err&&!done?'animation:eopulse 1.8s ease-in-out infinite;':''),
+      steps,
+      // The soft backdrop — translucent, not an opaque takeover, so the tab never feels
+      // hijacked. Fades on leave.
+      overlayStyle:'position:fixed;inset:0;z-index:58;display:flex;align-items:center;justify-content:center;padding:28px;'
+        +'background:'+this.hexA(acc,.06)+';backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);'
+        +(ig.leaving?'opacity:0;animation:eofade .4s ease reverse forwards;':'animation:eofade .25s ease;'),
+      cardStyle:'width:380px;max-width:100%;background:var(--card);border:1px solid var(--line);border-radius:20px;'
+        +'box-shadow:0 24px 70px rgba(20,24,30,.22);padding:30px 28px 26px;text-align:center;'
+        +(ig.leaving?'':'animation:eoingest .4s cubic-bezier(.2,.7,.3,1);')
+    };
   }
   // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
   // Each chat is a thread that answers from the read sentences/graph. A chat can be
@@ -2805,21 +2959,32 @@ class Component extends DCLogic {
     if(this.state.gutenReading)return;
     this.setState({gutenReading:book.id});
     this.feedSep('Project Gutenberg');this.feedLine('read','Fetching “'+book.title+'”…');
+    this._ingestSet({phase:'fetch',pct:.0,detail:'Fetching from Project Gutenberg…',intakeLabel:'Fetch',title:book.title,sub:(book.author?book.author+' · ':'')+'Project Gutenberg'});
+    await this._paint();
     let text;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(book.txtUrl));if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
-    catch(e){this.feedLine('warn','Could not fetch the book — '+(e&&e.message||e));this.setState({gutenReading:null});return;}
+    catch(e){this.feedLine('warn','Could not fetch the book — '+(e&&e.message||e));this._ingestFail('Could not fetch the book — '+(e&&e.message||e));this.setState({gutenReading:null});return;}
     const meta=this.bookMeta(book,text);                   // read title/author/date from the raw header
     text=this.stripGutenberg(text);
-    if(text.length<200){this.feedLine('warn','That edition had too little readable text.');this.setState({gutenReading:null});return;}
+    if(text.length<200){this.feedLine('warn','That edition had too little readable text.');this._ingestFail('That edition had too little readable text.');this.setState({gutenReading:null});return;}
     this.feedLine('read','Reading “'+book.title+'” fully — '+Math.round(text.length/1000)+'k chars…');
-    await this.sleep(20);                                  // let the feed paint before the synchronous parse
-    const r=await this.importText(text,book.title,meta);
+    const r=await this.importText(text,book.title,meta,{title:book.title,sub:(book.author?book.author+' · ':'')+this._charLabel(text)});
     this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
     if(r)this.feedLine('done','Read fully · '+(r.propCount!=null?r.propCount:r.sentenceCount)+' propositions — ready to chat');
   }
   ingest(url,title,text,via,image,parent,wikiLinks,meta){
+    const {doc,propCount}=this._parseDoc(text);
+    return this._foldPage(url,title,text,doc,propCount,via,image,parent,wikiLinks,meta);
+  }
+  // The two halves of an ingest, split so the animated path (importText) can yield a
+  // paint between them — parse and graph-fold are each one blocking burst; surfacing
+  // the phase label before each keeps the center stage honest about what's running.
+  _parseDoc(text){
     const doc=this.E.parseText(text,{coordSubjects:true});
     const propCount=this.countPropositions(doc.sentences);
+    return {doc,propCount};
+  }
+  _foldPage(url,title,text,doc,propCount,via,image,parent,wikiLinks,meta){
     // Keep the raw text on the page so an imported book can be re-rendered as a
     // readable book in the center (see _bookHtml / loadCenter's text: branch).
     const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,propCount,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null,
@@ -4584,6 +4749,7 @@ class Component extends DCLogic {
     const _acc=this.curAccent();
     const base={accentVar:_acc,accbgVar:this.mixWhite(_acc,.90),acclineVar:this.mixWhite(_acc,.70),
       settingsOpen:this.state.settingsOpen,onToggleSettings:()=>this.toggleSettings(),onCloseSettings:()=>this.closeSettings(),
+      ingest:this.ingestVals(),
       memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
       memTab:this.state.memTab||'sources',memTabSources:(this.state.memTab||'sources')==='sources',memTabLog:this.state.memTab==='log',
       onMemSources:()=>this.setState({memTab:'sources'}),onMemLog:()=>this.setState({memTab:'log'}),
