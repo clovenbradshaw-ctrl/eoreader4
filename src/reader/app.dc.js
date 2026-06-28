@@ -33,6 +33,11 @@ class Component extends DCLogic {
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
       hoverCite:null, liveResearch:{on:false},
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
+      // Temporal cursor on the entity summary. Keyed by entity id → a fraction in
+      // [0,1] of the way through that entity's attested record. Undefined means the
+      // latest (right edge); dragging left rewinds the summary to what the record
+      // said about the entity earlier in the reading.
+      entCursor:{},
       // Chat — first-class alongside sources. Each chat is a thread grounded in what
       // has been read; answers are built from the read graph/sentences (no LLM; an
       // LLM refines them only if window.claude is present). Chats live in the left panel.
@@ -346,7 +351,10 @@ class Component extends DCLogic {
   groundNotes(q,sources){const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
     const a=this.answerQuestion(q,scope);
     const span=i=>({text:this.norm(this.master.sentences[i]),score:1,i,u:this.master.sentenceSource[i]});
-    if(a.refs&&a.refs.length)return {spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[]};
+    // `relevant` = the question actually matched read text (keyword overlap). Only relevant
+    // spans are shown as linked grounding; the fallback below still feeds the model context
+    // but is NOT surfaced as a citation (it isn't really "where the answer came from").
+    if(a.refs&&a.refs.length)return {spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[],relevant:true};
     // No keyword match (e.g. "what is this about?", "summarize this book") — fall back to the
     // opening lines of the source(s) in scope (or the page being viewed) so the model speaks
     // from the actual text instead of answering as a blank-slate assistant.
@@ -354,9 +362,29 @@ class Component extends DCLogic {
     if(this.master&&this.master.sentences.length&&(scope.length||this.state.viewUrl)){
       const idxs=[],used=new Set();
       for(let i=0;i<this.master.sentences.length&&idxs.length<8;i++){const u=this.master.sentenceSource[i];if(!inScope(u))continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(this._proseOk(low)){idxs.push(i);used.add(u);}}
-      if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used]};
+      if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
     }
-    return {spans:[],entities:a.entities||[],sources:[]};}
+    return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
+  // Other read documents OUTSIDE the chat's scope, ranked by how well they match the
+  // question (content-word overlap). The "related" set offered alongside an answer —
+  // especially when the in-scope sources didn't ground it well. Empty if nothing else
+  // read matches. Ranked desc; the UI shows only the top few by default.
+  relatedDocs(q,sources){
+    if(!this.master||!this.master.sentences.length)return [];
+    const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    const qwords=q.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
+    if(!qwords.length)return [];
+    const byUrl={};
+    for(let i=0;i<this.master.sentences.length;i++){
+      const u=this.master.sentenceSource[i];if(!u||scope.includes(u))continue;
+      const low=this.norm(this.master.sentences[i]).toLowerCase();if(!this._proseOk(low))continue;
+      let v=0;for(const w of qwords)if(low.includes(w))v++;
+      if(v>0)byUrl[u]=(byUrl[u]||0)+v;
+    }
+    return Object.keys(byUrl)
+      .map(u=>({url:u,score:byUrl[u],title:this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),28)}))
+      .sort((a,b)=>b.score-a.score).slice(0,8);
+  }
   // ── The meaning graph, serialized as EOT triples for the talker ───────────
   // What the reading MEANS, folded into typed relations: "A -> B : rel" for a
   // relationship, "A : fact" for a property. This is the structure buildGroundedMessages
@@ -398,6 +426,10 @@ class Component extends DCLogic {
     const inline=s=>esc(s)
       .replace(/`([^`]+)`/g,(m,c)=>'<code style="background:rgba(0,0,0,.07);border-radius:4px;padding:1px 4px;font-size:.92em;">'+c+'</code>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);">$1</a>')
+      // Auto-link bare site URLs so every site mentioned in chat is clickable. Runs after
+      // the markdown-link rule; the leading [\s(]/^ guard skips URLs already inside an
+      // href="…" (preceded by a quote) so we never double-wrap a link.
+      .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);word-break:break-all;">$2</a>')
       .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
     const lines=String(src||'').replace(/\r/g,'').split('\n');
@@ -494,16 +526,18 @@ class Component extends DCLogic {
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
       const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
-      // Surface the verbatim spans the model leaned on as clickable grounding (collapsed
-      // by default in the UI). This is the mechanical "where did this come from" trail.
-      const passages=(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i}));
-      finish({text,entities:ground.entities,sources:ground.sources,passages});
+      // Only surface grounding when the question actually matched the read text. Weak
+      // fallback context (intro lines) is NOT shown as a citation — instead we offer the
+      // related docs (ranked) the reader has open. This keeps "linked" = genuinely relevant.
+      const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
+      finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
     }catch(e){
       // model unavailable — answer structurally from what's read, or say so plainly
       const fb=this.answerQuestion(q,sources);
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
-      const passages=(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i}));
-      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:fb.sources,passages,modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      const relevant=!!(fb.refs&&fb.refs.length);
+      const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
       this.setState({modelStatus:''});
     }
   }
@@ -572,6 +606,13 @@ class Component extends DCLogic {
       const gKey=cur.id+':'+mi, gOn=!!gOpen[gKey];
       const gBits=[]; if(cites.length)gBits.push(cites.length+(passages.length?(' passage'+(cites.length!==1?'s':'')):(' source'+(cites.length!==1?'s':''))));
       if(entities.length)gBits.push(entities.length+' entit'+(entities.length!==1?'ies':'y'));
+      // Related docs — other read sources ranked by relevancy. Default to the top 3; a
+      // "+N more" reveals the rest. Offered alongside an answer (and instead of weak
+      // grounding when the in-scope sources didn't actually match the question).
+      const relAll=(m.related||[]).map(r=>({label:r.title,title:r.url,onOpen:()=>this.goWeb(r.url),
+        chipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'}));
+      const relKey=cur.id+':'+mi+':rel', relOn=!!gOpen[relKey];
+      const related=relOn?relAll:relAll.slice(0,3);
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
       return {isUser,pending:!!m.pending,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
@@ -580,6 +621,12 @@ class Component extends DCLogic {
         groundLabel:'Grounded in '+gBits.join(' · '),groundCaret:gOn?'▾':'▸',
         groundStyle:'max-width:80%;margin-top:7px;',
         groundHeadStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);background:transparent;border:none;padding:2px 0;cursor:pointer;',
+        related,hasRelated:relAll.length>0,relatedHasMore:relAll.length>3,
+        onToggleRelated:()=>this.toggleGround(relKey),
+        relatedMoreLabel:relOn?'Show fewer':('+'+(relAll.length-3)+' more'),
+        relatedStyle:'max-width:80%;margin-top:7px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;',
+        relatedHeadStyle:'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:1px;',
+        relatedMoreStyle:'font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
         hasNote:!!m.modelNote,note:m.modelNote||'',
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
         bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
@@ -1216,6 +1263,30 @@ class Component extends DCLogic {
   subjectSentences(id){const s=new Set();for(const e of this.graph.edges){if(e.from===id&&e.to!==e.from&&e.sentIdx!=null&&!this.isURLish(this.labelOf(e.to)))s.add(e.sentIdx);}return [...s].sort((a,b)=>a-b);}
   // ── the one written sentence ─────────────────────────────────────
   summaryFallback(texts){ if(!texts||!texts.length)return null; return texts.slice(0,2).map(t=>this.norm(t)).join(' ').slice(0,320); }
+  // ── temporal cursor over an entity's attested record ───────────────
+  // The summary is stitched from the propositions the entity is the SUBJECT of,
+  // in reading order. Those propositions are spread across the time of the text —
+  // each one a moment the record had something to say. The cursor walks that
+  // sequence: at position k we know only the first k attested propositions, so the
+  // summary reads as it would have "as of" that point. k = N (the right edge, the
+  // default) is the whole record and reproduces the untimed summary exactly.
+  entTimeline(id){
+    const att=this.subjectSentences(id).filter(i=>this.bandOf(i)==='eva').sort((a,b)=>a-b);
+    return {att, N:att.length};
+  }
+  // Resolve the stored fraction into an integer count k ∈ [1..N] (at least one
+  // proposition once the cursor is shown — k=0 has nothing to say). Undefined → N.
+  entCursorK(id,N){
+    if(N<=0)return 0;
+    const f=this.state.entCursor&&this.state.entCursor[id];
+    if(f==null)return N;
+    return Math.max(1,Math.min(N,Math.round(f*N)));
+  }
+  setEntCursor(id,k){
+    const {N}=this.entTimeline(id); if(N<=0)return;
+    const f=Math.max(0,Math.min(1,(+k||0)/N));
+    this.setState(s=>({entCursor:{...(s.entCursor||{}),[id]:f}}));
+  }
   // Strip inline reference markers ([13], [74], [1][2], [citation needed], [a]) from
   // text we DISPLAY — never from the sentence we match/scroll against in the live page.
   stripRefs(s){return this.norm(String(s||'').replace(/\s*\[(?:\d+(?:[\u2013-]\d+)?|citation needed|note \d+|[a-z])\]/gi,'')).replace(/\s+([,.;:!?])/g,'$1');}
@@ -1570,7 +1641,15 @@ class Component extends DCLogic {
   _applyLoc(loc){if(!loc)return;if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}else{this.setState(s=>({selId:loc.id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));}}
   selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
   _scrollPanelTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-panel-scroll');if(a)a.scrollTop=0;});}
-  clickEntity(id){if(this._gzMoved)return;const cur=this.state.panelSel;if(cur&&cur!==id)this._panelStack.push(cur);this.setState({panelSel:id,rightOpen:true,panelLens:null,gz:{k:1,x:0,y:0}});this._highlightFirst(id);this._scrollPanelTop();}
+  clickEntity(id){if(this._gzMoved)return;const cur=this.state.panelSel;if(cur&&cur!==id)this._panelStack.push(cur);
+    const patch={panelSel:id,rightOpen:true,panelLens:null,gz:{k:1,x:0,y:0}};
+    // Show the entity without losing the chat or the source. On a phone that means jumping
+    // to the entity pane (otherwise nothing would appear). On desktop, when a chat is open,
+    // free up width by collapsing the sources rail so source · chat · entity all fit — the
+    // "double panel" beside the document.
+    if(this.phone())patch.pane='spine';
+    else if(this.activeChatObj())patch.leftOpen=false;
+    this.setState(patch);this._highlightFirst(id);this._scrollPanelTop();}
   closePanelSel(){this._panelStack=[];this.setState({panelSel:null});}
   panelBack(){if(this._panelStack&&this._panelStack.length){const prev=this._panelStack.pop();this.setState({panelSel:prev,panelLens:null,gz:{k:1,x:0,y:0}});if(this._highlightFirst)this._highlightFirst(prev);this._scrollPanelTop();}else this.closePanelSel();}
   // ── source toggles: mute a source so it stops feeding the record, re-project live ──
@@ -2479,17 +2558,39 @@ class Component extends DCLogic {
     const realAliases=aliasCands.filter(a=>this.trueAlias(lab,a));
     const facets=aliasCands.filter(a=>!this.trueAlias(lab,a));
     const aliases=realAliases.slice(0,8).map(a=>({a,style:'display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:6px;color:var(--ink2);border:1px solid var(--line2);'}));
+    const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
     const subjIdx=this.subjectSentences(sel),subjSet=new Set(subjIdx),apprIdx=mentions.filter(i=>!subjSet.has(i));
-    const attestedTexts=subjIdx.filter(i=>this.bandOf(i)==='eva').map(i=>this.master.sentences[i]);
+    const attIdx=subjIdx.filter(i=>this.bandOf(i)==='eva').sort((a,b)=>a-b);
+    const attestedTexts=attIdx.map(i=>this.master.sentences[i]);
+    // ── temporal cursor over the attested record ──────────────────────────
+    // With two or more attested propositions there is a timeline to walk: k of
+    // them, in reading order, are "in view". The summary is stitched from those,
+    // so the cursor slides the summary back and forth through the time of the
+    // text. k = N (the right edge, the default) is the whole record and the
+    // stitch is byte-identical to the untimed summary.
+    const attN=attIdx.length, cursorOn=attN>=2, curK=this.entCursorK(sel,attN);
+    const scopedTexts=cursorOn?attestedTexts.slice(0,curK):attestedTexts;
     const cachedSum=this.state.summaries&&this.state.summaries[sel],sumSig=this.summarySig(sel),autoOn=false;
     let summaryText=null,sumModel=false,wikiBacked=false,wikiUrl=null,wikiTitle=null,wikiConf=false,srcComposed=false;
-    if(cachedSum&&cachedSum.sig===sumSig){summaryText=cachedSum.text;sumModel=!!cachedSum.model;}
-    else { summaryText=this.summaryFallback(attestedTexts); if(attestedTexts.length)setTimeout(()=>this.ensureSummary(sel,attestedTexts),0); }
+    if(cachedSum&&cachedSum.sig===sumSig&&!cursorOn){summaryText=cachedSum.text;sumModel=!!cachedSum.model;}
+    else { summaryText=this.summaryFallback(scopedTexts); if(attestedTexts.length)setTimeout(()=>this.ensureSummary(sel,attestedTexts),0); }
     if(!summaryText){const w=this.wikiDef(sel);
       if(w&&w.text&&!w.none&&w.confirmed){summaryText=w.text;wikiBacked=true;wikiUrl=w.url;wikiTitle=w.title;wikiConf=true;}
       else{const gist=this.sourceGist(sel);if(gist){summaryText=gist;srcComposed=true;}
         if(!w&&(this.looksProperNoun(lab)||this.isGenericConcept(sel)))this.ensureWiki(sel);}}
-    const synthN=attestedTexts.length;
+    const synthN=cursorOn?curK:attestedTexts.length;
+    // The cursor only rides the attested stitch — a wiki/gist summary has no
+    // in-text timeline to walk, so it is left untimed.
+    let cursorView={on:false};
+    if(cursorOn&&!wikiBacked&&!srcComposed){
+      const here=attIdx[curK-1],u=this.master.sentenceSource[here],p=this.pageOf(u),when=p&&p.ts?fmtDate(p.ts):'';
+      cursorView={on:true,k:curK,n:attN,pct:Math.max(4,Math.round(curK/attN*100)),
+        label:'as of proposition '+curK+' of '+attN,
+        atLatest:curK>=attN,notLatest:curK<attN,when:when,hasWhen:!!when,host:this.short(u),
+        whenLabel:when?('read '+when):'',
+        onMove:ev=>{const v=ev&&ev.target?+ev.target.value:attN;this.setEntCursor(sel,v);},
+        onLatest:()=>this.setEntCursor(sel,attN)};
+    }
     base.hasSel=true;base.showPrompt=false;base.autoOn=autoOn;
     if(this.state.panelSel&&g.entities.has(this.state.panelSel)){
       base.panelProfileOn=true;base.panelListOn=false;
@@ -2500,6 +2601,7 @@ class Component extends DCLogic {
       summaryStyle:summaryText?'':'color:var(--ink3);font-style:italic;',
       synthMark:wikiBacked?('✦ Wikipedia · '+wikiTitle+' — matched to your graph'):(srcComposed?'✦ composed from your sources — not yet an attested definition':(summaryText?('✦ stitched verbatim from '+synthN+' attested proposition'+(synthN!==1?'s':'')+' — every line traced below'):'✦ nothing attested to summarize yet — only appearances')),
       wikiBacked:wikiBacked,wikiUrl:wikiUrl,wikiTitle:wikiTitle,
+      cursor:cursorView,hasCursor:cursorView.on,
       av:this.initials(lab),avStyle:this.avatar(lab,46),avStyleSm:this.avatar(lab,24),meta:{sightings:e.sightings||mentions.length}};
     base.aliases=aliases;
 
@@ -2512,7 +2614,6 @@ class Component extends DCLogic {
     // Each register a distinct marker: reports (documented), asserts (intent/claim),
     // names (in passing). Glyph + color + label, kept visibly apart.
     const REGV={eva:{verb:'reports',fg:'#1d4ed8',bg:'#e8eefc',gl:'\u25A0'},def:{verb:'asserts',fg:'#b45309',bg:'#fbf0db',gl:'\u25C6'},held:{verb:'names',fg:'#6b7280',bg:'#eef0f3',gl:'\u25CB'}};
-    const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
     const fpRows=subjIdx.map(i=>{const b=this.bandOf(i),u=this.master.sentenceSource[i],p=this.pageOf(u),R=REGV[b]||REGV.held,ch=this.chip(u,active===u);
       return {sortw:b==='eva'?0:(b==='def'?1:2),verb:R.verb,glyph:R.gl,
         regStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:'+R.fg+';background:'+R.bg+';border-radius:5px;padding:2px 8px;flex:0 0 auto;',
