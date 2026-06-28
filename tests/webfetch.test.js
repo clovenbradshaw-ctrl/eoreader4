@@ -49,6 +49,22 @@ test('htmlToText strips tags and decodes entities', () => {
   assert.equal(htmlToText('<h1>Title</h1><p>A &amp; B.</p><script>x()</script>'), 'Title\nA & B.');
 });
 
+test('htmlToText keeps block structure — heading, paragraphs, and list items never weld together', () => {
+  // The reader/surfer downstream depends on headings and list items landing on their own line
+  // (perceiver/parse/sentences.js welds a heading onto the next sentence when they share one).
+  const html = '<article><h2>History</h2><p>First paragraph.</p>' +
+    '<ul><li>Alpha</li><li>Beta</li></ul><p>Second paragraph.</p></article>';
+  const lines = htmlToText(html).split('\n').filter(Boolean);
+  assert.deepEqual(lines, ['History', 'First paragraph.', 'Alpha', 'Beta', 'Second paragraph.']);
+});
+
+test('htmlToText reads a table row by row instead of welding every cell into one line', () => {
+  const html = '<table><tr><td>Year</td><td>Title</td></tr>' +
+    '<tr><td>2013</td><td>Fruitvale Station</td></tr></table>';
+  const lines = htmlToText(html).split('\n').filter(Boolean);
+  assert.deepEqual(lines, ['Year Title', '2013 Fruitvale Station']);
+});
+
 test('the client builds the proxy URL as ?url=<encoded> and returns the body', async () => {
   let seen = null;
   const fetchImpl = async (u) => { seen = u; return { ok: true, status: 200, text: async () => 'BODY' }; };
