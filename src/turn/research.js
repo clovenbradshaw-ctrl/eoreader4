@@ -75,13 +75,37 @@ export const foldInto = (prior, arrival, gamma = 0.8) => {
   return next;
 };
 
+// plausibleLead(term) → is this a real word worth a SEARCH, or an OCR / markup artifact?
+//
+// Surprise rewards novelty, and the most novel "word" on a scanned or badly-extracted page is
+// often garbage — "rn1", "0f", "c0mpany", "vvss", a hyphenation crumb. Such a token has never been
+// seen, so it tops `bayesBy` (maximal KL) and would become the next query — the walk chasing
+// nonsense. This rejects the artifact SHAPES so a junk token is never chased: a digit wedged
+// between letters (l1ne, v0te), a letter→digit→letter splice, a vowelless run (rn, thc), a long
+// consonant smear, a triple-repeated character (vvv). Deliberately CONSERVATIVE — a normal word, a
+// name, a digits-at-end token (covid19, mp3) all pass; only artifact shapes are dropped. It is a
+// best-effort efficiency valve, not the safety guarantee: the saliency leash is what ensures a
+// garbled page can never ground the answer (its near-zero overlap with the topic frame strays it).
+const VOWEL = /[aeiouy]/;
+export const plausibleLead = (term) => {
+  const t = String(term || '').toLowerCase();
+  if (t.length < 3) return false;                  // too short to be a distinctive lead
+  if (!VOWEL.test(t)) return false;                // no vowel at all: rn, thc, vvss
+  if (/[a-z]\d[a-z]/.test(t)) return false;        // letter-digit-letter splice: c0mpany, v0te
+  if (/[a-z]\d/.test(t) && /\d[a-z]/.test(t)) return false;  // digit wedged inside letters: l1ne, rn1e
+  if (/(.)\1\1/.test(t)) return false;             // a triple-repeated char: vvv, sss — a smear, not a word
+  if (/[^aeiouy\d'’-]{6,}/.test(t)) return false;  // 6+ consonants in a row: an OCR smudge
+  return true;
+};
+
 // leadsFrom(by, { seen, max }) → the surprising terms worth a hop, ranked by how much belief
-// moved toward them, with the ones already chased (or already in a prior query) dropped. This is
-// the anti-shotgun valve at the term level: of everything a page surfaced, only the few HEAVIEST
-// surprises become candidate threads, never the long tail.
+// moved toward them, with the ones already chased (or already in a prior query) — and the OCR /
+// markup artifacts (plausibleLead) — dropped. This is the anti-shotgun valve at the term level: of
+// everything a page surfaced, only the few HEAVIEST *real* surprises become candidate threads,
+// never the long tail and never the scanning noise that surprise alone would rank at the very top.
 export const leadsFrom = (by, { seen = new Set(), max = 4 } = {}) =>
   Object.entries(by || {})
-    .filter(([term, w]) => w > 0 && !seen.has(term))
+    .filter(([term, w]) => w > 0 && !seen.has(term) && plausibleLead(term))
     .sort((a, b) => b[1] - a[1])
     .slice(0, max)
     .map(([term, weight]) => ({ term, weight }));

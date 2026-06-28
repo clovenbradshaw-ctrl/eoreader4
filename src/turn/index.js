@@ -7,4 +7,4 @@ export { loadShapeLibrary, buildShapeLibrary, parseExemplars } from './shape.js'
 export { proposeWebSearch, searchAnnouncement, COST_NOTICE } from './propose.js';
 export { runTurnWithWeb, runWebFollowup, verifyAgainstWeb, formulateSearchQuery } from './web.js';
 export { runCuriousResearch, runTurnWithResearch, researchAnnouncement,
-         curiosityOf, profileOf, foldInto, leadsFrom, nextQuery, researchTerms } from './research.js';
+         curiosityOf, profileOf, foldInto, leadsFrom, plausibleLead, nextQuery, researchTerms } from './research.js';

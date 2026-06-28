@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  researchTerms, profileOf, curiosityOf, foldInto, leadsFrom, nextQuery,
+  researchTerms, profileOf, curiosityOf, foldInto, leadsFrom, plausibleLead, nextQuery,
   runCuriousResearch, runTurnWithResearch, researchAnnouncement,
 } from '../src/turn/research.js';
 import { admitWebSource } from '../src/ingest/websource.js';
@@ -48,6 +48,47 @@ test('foldInto γ-decays incumbents and deposits the arrival (the running knowle
 test('leadsFrom ranks by belief moved and drops already-seen leads', () => {
   const leads = leadsFrom({ coogler: 0.4, carter: 0.1, revival: 0.9 }, { seen: new Set(['revival']), max: 2 });
   assert.deepEqual(leads.map(l => l.term), ['coogler', 'carter'], 'heaviest first, seen "revival" dropped');
+});
+
+// ── OCR / artifact resistance: surprise ranks junk first, the walk must not chase it ──
+
+test('plausibleLead rejects OCR / markup artifacts but keeps real words and names', () => {
+  // real content passes
+  for (const t of ['coogler', 'wakanda', 'revival', 'vibranium', 'covid19', "o'brien"])
+    assert.ok(plausibleLead(t), `${t} should be a plausible lead`);
+  // OCR / scanning artifacts are rejected
+  for (const t of ['rn1', '0f', 'c0mpany', 'l1ne', 'v0te', 'thc', 'rn', 'vvv', 'sssss', 'strngth'])
+    assert.ok(!plausibleLead(t), `${t} should be rejected as an artifact`);
+});
+
+test('a maximally-surprising OCR token never becomes a lead, even ranked first by KL', () => {
+  // bayesBy would put the never-seen artifact "c0mpany" at the very top (maximal novelty); the real
+  // term "coogler" sits below it. The artifact must still be filtered out, not chased.
+  const leads = leadsFrom({ 'c0mpany': 0.9, 'rn1': 0.8, 'coogler': 0.3 }, { max: 4 });
+  assert.deepEqual(leads.map(l => l.term), ['coogler'], 'only the real word survives, despite ranking last');
+});
+
+test('an on-topic page sprinkled with OCR junk still grounds, but the junk is not chased', async () => {
+  const queries = [];
+  const search = async (q) => {
+    queries.push(q.toLowerCase());
+    if (q.toLowerCase() === 'x-files revival')
+      // a real page about the revival, but the scan introduced garbage tokens (high surprise!)
+      return [{ doc: webDoc('The X-Files revival, directed by Coogler, rn1 vvss c0mpany 0f the network.') }];
+    return [{ doc: webDoc('X-Files revival Coogler network coverage of the revival.') }];
+  };
+  const out = await runCuriousResearch('X-Files revival', { search, maxHops: 3, curiosityFloor: 0.02, k: 1 });
+  assert.ok(out.docs.length >= 1, 'the on-topic page (with its few artifacts) still grounds the answer');
+  assert.ok(!queries.some(q => /rn1|vvss|c0mpany|0f/.test(q)), 'no OCR artifact was ever searched');
+  assert.ok(out.hops.every(h => (h.leads || []).every(t => plausibleLead(t))), 'every chased lead is a real word');
+});
+
+test('a mostly-garbage page strays on saliency — junk can never become the answer ground', async () => {
+  const search = async (q) => q.toLowerCase() === 'x-files revival'
+    ? [{ doc: webDoc('The X-Files revival is a series.') }]                                   // seed: on topic
+    : [{ doc: webDoc('rn1 vvss c0mpany 0f l1ne thc qx zw scanned garbage artifact noise') }]; // a junk page
+  const out = await runCuriousResearch('X-Files revival', { search, maxHops: 4, salienceRatio: 0.34, strayPatience: 1, k: 1 });
+  assert.ok(out.docs.every(d => !/garbage|vvss/.test(d.text || '')), 'the garbage page never reached the ground');
 });
 
 test('nextQuery keeps the thread coherent — the lead rides WITH the anchor, never bare', () => {

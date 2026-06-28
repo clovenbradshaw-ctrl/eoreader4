@@ -116,6 +116,28 @@ the answer in tangential pages. The loop is the opposite on every axis:
 The seed is always kept as the answer's ground, floor or not — it is the question's own footing,
 not a lead.
 
+## Surprise's failure mode — and why OCR garbage doesn't lead the walk astray
+
+Surprise rewards novelty, so its sharpest failure mode is **the most novel "word" on a page being
+garbage** — an OCR crumb (`rn1`, `c0mpany`, `0f`), a markup smear, a hyphenation artifact. Such a
+token has never been seen, so it tops `bayesBy` (maximal KL) and would, naïvely, become the very
+next query. Two layers stop that:
+
+1. **The saliency leash is the guarantee.** A garbled page shares almost nothing with the topic
+   frame — and its garbage even *inflates the denominator* of the Born cosine (more distinct tokens
+   → lower overlap), so it scores *lower* saliency, not higher. A mostly-garbage page therefore
+   **strays** and is dropped: it can never ground the answer, and a junk *thread* dies on the next
+   hop (the page it fetches has ~0 saliency too). The blast radius is bounded by `strayPatience`.
+2. **A shape filter is the efficiency valve.** `plausibleLead(term)` rejects the artifact *shapes*
+   before they can be chased — a digit wedged inside letters (`l1ne`, `v0te`), a vowelless run
+   (`rn`, `thc`), a triple-repeat (`vvv`), a long consonant smear. So an on-topic page with a few
+   scanning artifacts still grounds the answer, but the artifacts never become the next query.
+   Conservative by construction: real words, names, and digits-at-end tokens (`covid19`) all pass.
+
+The filter is best-effort (it can't catch a garbled token that happens to be word-shaped); the
+leash is the actual safety property. Together: junk cannot become the answer's ground, and obvious
+junk cannot even cost a hop.
+
 ## The orchestrator and the app wiring
 
 `runTurnWithResearch(args, { search, runTurnImpl, maxHops, … })` is the inverted-flow entry: gather
