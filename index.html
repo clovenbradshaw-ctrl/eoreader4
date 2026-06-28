@@ -1336,7 +1336,12 @@ class Component extends DCLogic {
     if((ctype&&/text\/plain/i.test(ctype))||!looksHtml){ return this.extractPlain(raw); }
     const doc=new DOMParser().parseFromString(raw,'text/html');
     let image=this._ogImage(doc); if(image&&url){try{image=new URL(image,url).href;}catch(e){}}
-    doc.querySelectorAll('script,style,nav,footer,header,aside,noscript,form').forEach(n=>n.remove());
+    doc.querySelectorAll('script,style,nav,footer,header,aside,noscript,form,iframe,svg,button,textarea,label,select,template').forEach(n=>n.remove());
+    // Newsroom chrome by class/id: audio-player embeds, newsletter sign-ups, share/social
+    // bars, "related stories" rails. These leak markup ("Embed <iframe …>") and boilerplate
+    // ("Download Embed Embed", "Stay up to date with our newsletter") into the read text.
+    doc.querySelectorAll('[class],[id]').forEach(n=>{const k=((n.getAttribute('class')||'')+' '+(n.getAttribute('id')||'')).toLowerCase();
+      if(/(^|[-_ ])(embed|newsletter|subscribe|share|social|related|promo|advert|paywall|player|disqus|comments?)([-_ ]|$)/.test(k))n.remove();});
     const title=this.norm((doc.querySelector('title')||{}).textContent||'')||'(untitled)';
     const main=doc.querySelector('main,article,[role=main]')||doc.body||doc.documentElement;
     // The page's own hyperlinks are ground truth: each <a> to a Wikipedia article tells
@@ -1351,8 +1356,8 @@ class Component extends DCLogic {
       const t=this.norm(a.textContent||'').toLowerCase();
       if(t.length>=2&&t.length<=60&&!wikiLinks[t])wikiLinks[t]=base;
     });
-    const blocks=[...main.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,dd,td,figcaption')].map(n=>this._decruft(this.norm(n.textContent).replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim())).filter(t=>t.length>2&&!this._isCreditOnly(t));
-    if(blocks.length<2){ const body=this.norm(main.textContent||''); if(body.length>=120) return {title,text:this.paras(body).slice(0,60000),image,wikiLinks}; }
+    const blocks=[...main.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,dd,td,figcaption')].map(n=>this._chromify(this._decruft(this.norm(n.textContent).replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim()))).filter(t=>t.length>2&&!this._isCreditOnly(t));
+    if(blocks.length<2){ const body=this._chromify(this.norm(main.textContent||'')); if(body.length>=120) return {title,text:this.paras(body).slice(0,60000),image,wikiLinks}; }
     return {title,text:[...new Set(blocks)].join('\n').slice(0,60000),image,wikiLinks};
   }
   // Strip newsroom photo chrome that otherwise gets read as prose and poisons the
@@ -1367,8 +1372,21 @@ class Component extends DCLogic {
   _isCreditOnly(t){
     if(!t)return true;
     if(/^(?:hide caption|toggle caption|enlarge this image|advertisement|sponsored content?)\b/i.test(t))return true;
+    if(/^(?:download|embed|transcript|listen|loading|play|pause|share|subscribe|sign up|sign in|log in|newsletter|advertisement|read more|see all)\b[\s.\u00B7|-]*$/i.test(t))return true;
     if(t.length<60&&/^[A-Z][A-Za-z.'\u00C0-\u024F-]+(?:\s+[A-Z][A-Za-z.'\u00C0-\u024F-]+){0,3}\s*\/\s*(?:Getty|AP|Reuters|AFP|NPR|EPA|Bloomberg)/.test(t))return true;
     return false;
+  }
+  // Reader-mode cleanup for an extracted block: drop any HTML markup that leaked in as
+  // literal text (audio-player <iframe> snippets shown for copying), strip reference and
+  // edit markers ([21], [citation needed], [edit]) and the "Download Embed Embed"/"Embed"
+  // audio chrome, and collapse whitespace. Prose is left intact.
+  _chromify(t){
+    if(!t)return '';
+    t=String(t).replace(/<[^>]*>/g,' ');                                  // leaked HTML tags
+    t=t.replace(/\[(?:\d+|citation needed|edit|note \d+|\?)\]/gi,'');     // wiki refs / [edit]
+    t=t.replace(/\bDownload\s+Embed\b[\s\S]{0,400}?\bTranscript\b/gi,' '); // NPR audio-player chrome block
+    t=t.replace(/\bDownload\s+Embed(?:\s+Embed)?\b/gi,' ').replace(/\bEmbed\s+Embed\b/gi,' ');
+    return this.norm(t);
   }
   _ogImage(doc){
     const sel=['meta[property="og:image:secure_url"]','meta[property="og:image"]','meta[name="og:image"]','meta[name="twitter:image"]','meta[property="twitter:image"]','meta[name="twitter:image:src"]','link[rel="image_src"]'];
@@ -1385,7 +1403,7 @@ class Component extends DCLogic {
     const sm=t.match(/\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG[^\n]*\*\*\*/i); if(sm)t=t.slice(sm.index+sm[0].length);
     const em=t.match(/\*\*\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG[^\n]*\*\*\*/i); if(em)t=t.slice(0,em.index);
     if(!title){ const fl=t.split('\n').map(s=>this.norm(s)).find(s=>s.length>2); title=fl?this.truncLabel(fl,60):'(untitled text)'; }
-    return {title,text:this.paras(t).slice(0,60000),image:null};
+    return {title,text:this.paras(t).replace(/<[^>]*>/g,' ').replace(/\[(?:\d+|citation needed|edit)\]/gi,'').slice(0,60000),image:null};
   }
   paras(t){ return String(t||'').split(/\n\s*\n/).map(p=>this.norm(p.replace(/\n/g,' '))).filter(p=>p.length>2).join('\n'); }
   async fetchPage(url){const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));if(!r.ok)throw new Error('HTTP '+r.status);const html=await r.text();if(html.trim().length<60)throw new Error('empty page');if(/<title>\s*(?:just a moment|attention required|access denied|verify you are human|are you a robot|enable javascript|please wait\b|checking your browser)/i.test(html))throw new Error('blocked by anti-bot check');return this.extract(html,r.headers.get('content-type')||'',url);}
