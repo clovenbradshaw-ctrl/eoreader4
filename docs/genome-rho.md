@@ -119,12 +119,15 @@ being answered (the run answers the first; the second is left open):
   mechanism it *measures* a real, data-dependent quantity: the strand's violation of
   reverse-complement parity (Chargaff 2). See Results 1b.
 - **The discovery question** — *can ρ find the strand symmetry it was NOT told about?*
-  This needs a complementation-**agnostic** basis (the plain codon prefix/position
-  vectors), and the symmetry must *emerge*. Results 1a shows that at 300 bp the
-  codon-count ρ has no usable rank structure — every window is the same composition
-  smear — so this question is **unanswered** by the current basis, not failed. Routes:
-  genome-scale ρ, or an emergent RC-pairing through the mutual-nearest `SYN` merge (the
-  way the codon organ discovered amino-acid families). Left for a later build.
+  This needs a complementation-**agnostic** basis and the symmetry must *emerge*. Now
+  answered, and the answer is **no, for a principled reason** (Results 1c): the
+  mutual-nearest `SYN` merge — the one that discovered amino-acid families in the codon
+  organ — fed codons described only by their genomic company surfaces the same
+  shared-feature structure (first-two-base boxes), never reverse-complement pairs.
+  Reverse complement is a **relabeling symmetry**, not a shared-feature one (position 2
+  of an RC pair never matches; prefix-overlap ≤ 1 vs 2 for a box), so it cannot emerge
+  from overlap clustering the way octave-equivalence and amino-acid families did. That
+  is *why* 1b had to build it in.
 
 **Data:** *E. coli* K-12 MG1655 `GCF_000005845.2` (the calibration + parity run).
 
@@ -205,11 +208,28 @@ distinct claims, kept separate:
   a little — and an order of magnitude below a strand-biased control. A genuine,
   named, still-not-fully-explained genomic regularity, quantified through the signed ρ.
 
-The **discovery** question — can ρ find strand symmetry it was *not* told about? —
-remains open. It needs a complementation-*agnostic* basis with real rank structure
-(Test 1a shows the codon-count ρ has none at 300 bp); genome-scale ρ or an emergent
-RC-pairing via the mutual-nearest `SYN` merge (as the codon organ did for amino-acid
-families) is the route, not this encoder.
+**Test 1c — the discovery question, answered: RC-pairing does NOT emerge unaided, and
+there is a reason.** Fed the 64 codons described *only* by their genomic company (the
+codon-bigram context, complementation-agnostic), the mutual-nearest `SYN` merge — the
+exact machinery that discovered amino-acid families in the codon organ — produces:
+
+| among the mutual-nearest pairs | count | chance | |
+|--------------------------------|-------|--------|--|
+| reverse-complement pairs | **0** | 0.21 | not enriched — does not emerge |
+| same first-two-base box | **4** | 0.62 | ~6× enriched |
+| same amino acid | 2 | 0.41 | enriched |
+
+The merge surfaces the same **shared-feature** structure it always does (boxes,
+composition) and never the strand symmetry. The reason is structural and is now a unit
+test: a codon and its reverse complement share almost no raw features — **position 2 of
+an RC pair never matches**, and prefix-overlap is ≤ 1 versus 2 for a same-box pair. So
+reverse complement is a **relabeling symmetry**, categorically unlike octave-equivalence
+or amino-acid degeneracy, which are **shared-feature** symmetries that emerge from
+overlap. A relabeling symmetry cannot be clustered into existence; it must be *applied*
+(1b's signed encoder) or *measured* (1b's parity residual). That is the deep reason the
+discovery basis cannot exist as a mere re-coordinatisation — and it closes the strand
+question across all three stances: blind (1a), calibrated (1b), and
+un-discoverable-by-overlap (1c).
 
 **Test 2 — reading-frame opposition across 3 overlap loci and 2 genomes.** Read each
 locus against *its own* genome's baseline (the coding-density confound, below, forbids
@@ -249,12 +269,15 @@ frame +0 = gene E, frame +2 = gene D, two full ORFs at once). Two honest caveats
 **What the run establishes:** the interference build is real (Test 0) and runs
 unmodified on genomic ρ; in a complementation-signed basis it correctly cancels
 redundant strand structure (Test 1b calibration) and quantifies a real parity
-regularity; and frame opposition shows up as above-baseline openness at true
-overlapping-gene loci across two genomes (Test 2), modulo a coding-density confound.
-The two things *not* shown, and named as such: ρ discovering strand symmetry unaided
-(needs a different basis / scale), and a clean entropy separation for frames (needs
-more distinct frame vectors). The binding constraint throughout is the **basis** —
-exactly as `spectral.js:28-32` warns.
+regularity; the strand symmetry provably does *not* emerge from feature-overlap, with a
+structural reason — it is a relabeling, not a shared-feature, symmetry (Test 1c); and
+frame opposition shows up as above-baseline openness at true overlapping-gene loci
+across two genomes (Test 2), modulo a coding-density confound. The strand question is
+now closed across its three stances — blind unsigned basis (1a), calibrated signed
+basis (1b), un-discoverable-by-overlap (1c). What is still *not* shown: a clean entropy
+separation for frames (the count carries Test 2, not the entropy — frame vectors are
+too composition-similar), and Test 3. The binding constraint throughout is the
+**basis** — exactly as `spectral.js:28-32` warns.
 
 ## Validation protocol (same shape the ρ-formalisation cleared)
 

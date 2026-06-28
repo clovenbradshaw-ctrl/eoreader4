@@ -142,6 +142,33 @@ export const complementSignedReadings = (seq, { basis = 'prefix' } = {}) => {
   return { codons, canons, vectors, signs };
 };
 
+// ── distributional context basis (Test 1c, the discovery probe) ─────────────────
+//
+// The 64 codon types, each represented ONLY by the company it keeps in the genome —
+// the normalised distribution of the codon that follows it and the codon that precedes
+// it (a codon-bigram context, 128-dim). Complementation-AGNOSTIC: nothing about reverse
+// complement is supplied. Feeding these to the mutual-nearest SYN merge asks the
+// discovery question — does a codon pair with its reverse complement unprompted? It does
+// not: RC shares almost no raw features (position 2 of an RC pair never matches), so it
+// is a RELABELING symmetry, invisible to feature-overlap clustering — which instead
+// surfaces the shared-feature structure (first-two-base boxes), as in the codon organ.
+export const ALL_DNA_CODONS = BASES.flatMap((a) => BASES.flatMap((b) => BASES.map((c) => a + b + c)));
+
+export const codonContextVectors = (seq) => {
+  const idx = Object.fromEntries(ALL_DNA_CODONS.map((c, i) => [c, i]));
+  const next = ALL_DNA_CODONS.map(() => new Array(64).fill(0));
+  const prev = ALL_DNA_CODONS.map(() => new Array(64).fill(0));
+  const stream = codonsOf(seq, 0);
+  for (let i = 0; i < stream.length - 1; i++) {
+    const a = idx[stream[i]], b = idx[stream[i + 1]];
+    if (a == null || b == null) continue;
+    next[a][b]++; prev[b][a]++;
+  }
+  const unit = (v) => { let s = 0; for (const x of v) s += x * x; s = Math.sqrt(s) || 1; return v.map((x) => x / s); };
+  const vectors = ALL_DNA_CODONS.map((_, i) => [...unit(next[i]), ...unit(prev[i])]);
+  return { codons: ALL_DNA_CODONS, vectors };
+};
+
 // All six reading frames of a window (3 forward + 3 on the reverse complement), each as
 // a (vector, salience) pair — the units of the reading-frame ρ (Test 2).
 export const sixFrameReadings = (seq, { basis = 'prefix' } = {}) => {

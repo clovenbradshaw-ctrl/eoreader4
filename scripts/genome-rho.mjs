@@ -7,10 +7,14 @@
 
 import { readFileSync } from 'node:fs';
 import { buildDensity, eigenLenses, vonNeumann } from '../src/core/index.js';
+import { mutualNearestPairs } from '../src/perceiver/index.js';
 import {
   parseFasta, reverseComplement, codonReadings, complementSignedReadings,
-  sixFrameReadings,
+  sixFrameReadings, codonContextVectors,
 } from '../src/organs/in/locus.js';
+
+// Standard code (DNA), for scoring discovered pairs only — never fed to the merge.
+const AA = { TTT:'F',TTC:'F',TTA:'L',TTG:'L',CTT:'L',CTC:'L',CTA:'L',CTG:'L',ATT:'I',ATC:'I',ATA:'I',ATG:'M',GTT:'V',GTC:'V',GTA:'V',GTG:'V',TCT:'S',TCC:'S',TCA:'S',TCG:'S',CCT:'P',CCC:'P',CCA:'P',CCG:'P',ACT:'T',ACC:'T',ACA:'T',ACG:'T',GCT:'A',GCC:'A',GCA:'A',GCG:'A',TAT:'Y',TAC:'Y',TAA:'*',TAG:'*',CAT:'H',CAC:'H',CAA:'Q',CAG:'Q',AAT:'N',AAC:'N',AAA:'K',AAG:'K',GAT:'D',GAC:'D',GAA:'E',GAG:'E',TGT:'C',TGC:'C',TGA:'*',TGG:'W',CGT:'R',CGC:'R',CGA:'R',CGG:'R',AGT:'S',AGC:'S',AGA:'R',AGG:'R',GGT:'G',GGC:'G',GGA:'G',GGG:'G' };
 
 const ROOT = new URL('../data/genome/', import.meta.url);
 const load = (f) => parseFasta(readFileSync(new URL(f, ROOT), 'utf8'));
@@ -102,6 +106,38 @@ const test1b = () => {
 };
 
 // ════════════════════════════════════════════════════════════════════════════
+// TEST 1c — the DISCOVERY question: does RC-pairing emerge UNAIDED? (No.)
+//   Feed the mutual-nearest SYN merge codons described only by their genomic company
+//   (codon-bigram context, complementation-agnostic). The merge that found amino-acid
+//   families in the codon organ here surfaces the SAME shared-feature structure
+//   (first-two-base boxes) — and NOT reverse-complement pairs, because RC shares almost
+//   no raw features. Strand symmetry is a relabeling symmetry, not a clustering one.
+// ════════════════════════════════════════════════════════════════════════════
+const test1c = () => {
+  const seq = load('ecoli_mg1655_1-300k.fasta');
+  const { codons, vectors } = codonContextVectors(seq);
+  const cos = (u, v) => { let d = 0; for (let i = 0; i < u.length; i++) d += u[i] * v[i]; return d; };
+  // inject a cosine ranker into the engine's mutual-nearest SYN machinery
+  const doc = { units: codons, spectrumQuery: (i) => `${i}` };
+  const retrieve = (_d, q, k) => { const i = +q; return codons.map((_, j) => ({ idx: j, score: cos(vectors[i], vectors[j]) })).sort((a, b) => b.score - a.score).slice(0, k); };
+  const pairs = mutualNearestPairs(doc, { retrieve });
+  const isRC = (p) => reverseComplement(codons[p.i]) === codons[p.j];
+  const sameBox = (p) => codons[p.i].slice(0, 2) === codons[p.j].slice(0, 2);
+  const sameAA = (p) => AA[codons[p.i]] === AA[codons[p.j]];
+  const n = pairs.length;
+  const rc = pairs.filter(isRC).length, box = pairs.filter(sameBox).length, aa = pairs.filter(sameAA).length;
+  console.log('═══ TEST 1c · does reverse-complement pairing EMERGE unaided? ═══');
+  console.log(`  ${n} mutual-nearest pairs from complementation-agnostic codon context:`);
+  console.log(`    reverse-complement pairs: ${rc}   (chance ${round(n / 63, 2)})   → ${rc <= n / 63 ? 'NOT enriched — does not emerge' : 'enriched'}`);
+  console.log(`    same first-two-base box:  ${box}   (chance ${round(n * 3 / 63, 2)})   → ${round(box / Math.max(1e-9, n * 3 / 63), 1)}× enriched`);
+  console.log(`    same amino acid:          ${aa}   (chance ${round(n * 2 / 63, 2)})`);
+  console.log('  → the merge surfaces SHARED-FEATURE structure (boxes), not the relabeling');
+  console.log('    symmetry. RC pairs share almost no features (position 2 never matches), so');
+  console.log('    strand symmetry CANNOT emerge from overlap — it must be applied (1b) or');
+  console.log('    measured (1b parity). Octave/amino-acid equivalence emerged; RC cannot.\n');
+};
+
+// ════════════════════════════════════════════════════════════════════════════
 // TEST 2 — reading-frame opposition across MULTIPLE overlap loci and TWO genomes.
 //   An overlapping-gene window holds two ORFs at once → more open frames / higher ρ
 //   entropy than its genome's baseline; a single-coding window does not. Because a
@@ -155,6 +191,7 @@ const test2 = () => {
 test0();
 test1a();
 test1b();
+test1c();
 test2();
 console.log('═══ TEST 3 · selection vs. accessibility ═══');
 console.log('  Specced (docs/genome-rho.md) but gated: needs an external genomic LM and a');

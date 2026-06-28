@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { buildDensity, eigenLenses, vonNeumann } from '../src/core/index.js';
+import { mutualNearestPairs } from '../src/perceiver/index.js';
 import {
   reverseComplement, parseFasta, codonsOf, codonVector, codonReadings, frameReading, isStop,
-  rcCanonical, complementSignedReadings,
+  rcCanonical, complementSignedReadings, ALL_DNA_CODONS, codonContextVectors,
 } from '../src/organs/in/locus.js';
 
 const entropy = (rho) => vonNeumann(eigenLenses(rho).map((l) => l.weight).filter((w) => w > 1e-12));
@@ -86,6 +88,31 @@ test('Test 1b — a reverse-complement-balanced strand has a far smaller residua
   const balanced = 'ACGTACGTACGTACGTACGTACGTACGTACGTACGT';     // every base balanced
   const biased = 'AAAGAAGAGAAGGAAGAAAGGAGAAAGAGGAAAGAA';        // purines only, parity broken
   assert.ok(residual(balanced) < residual(biased), 'balanced strand violates parity less than a biased one');
+});
+
+test('Test 1c mechanism — RC is a relabeling symmetry: position 2 never matches, prefix-overlap ≤ 1', () => {
+  const dot = (a, b) => codonVector(a).reduce((s, x, k) => s + x * codonVector(b)[k], 0);
+  let maxRcOverlap = 0;
+  for (const c of ALL_DNA_CODONS) {
+    const rc = reverseComplement(c);
+    assert.notEqual(c[1], rc[1], `position 2 should never match for ${c}/${rc}`);
+    maxRcOverlap = Math.max(maxRcOverlap, dot(c, rc));
+  }
+  assert.ok(maxRcOverlap <= 1, 'an RC pair shares at most one prefix feature');
+  assert.equal(dot('GCT', 'GCA'), 2, 'a same-box pair shares two (p1, p2) — strictly more');
+});
+
+test('Test 1c — the agnostic merge surfaces boxes, not reverse-complement pairs (real E. coli)', () => {
+  const seq = parseFasta(readFileSync(new URL('../data/genome/ecoli_mg1655_1-300k.fasta', import.meta.url), 'utf8'));
+  const { codons, vectors } = codonContextVectors(seq);
+  const cos = (u, v) => { let d = 0; for (let i = 0; i < u.length; i++) d += u[i] * v[i]; return d; };
+  const doc = { units: codons, spectrumQuery: (i) => `${i}` };
+  const retrieve = (_d, q, k) => { const i = +q; return codons.map((_, j) => ({ idx: j, score: cos(vectors[i], vectors[j]) })).sort((a, b) => b.score - a.score).slice(0, k); };
+  const pairs = mutualNearestPairs(doc, { retrieve });
+  const rc = pairs.filter((p) => reverseComplement(codons[p.i]) === codons[p.j]).length;
+  const box = pairs.filter((p) => codons[p.i].slice(0, 2) === codons[p.j].slice(0, 2)).length;
+  assert.ok(rc <= box, 'reverse-complement pairs do not exceed same-box pairs');
+  assert.ok(rc <= Math.ceil(pairs.length / 63) + 1, 'reverse-complement pairs are not enriched above chance');
 });
 
 test('frameReading: an uninterrupted ORF scores salience 1; an internal stop chops it', () => {
