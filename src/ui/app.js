@@ -11,7 +11,8 @@
 //      thinking is visible while the turn is in flight.
 
 import { ingestText }       from '../organs/in/index.js';
-import { runTurn, runWebFollowup, formulateSearchQuery, searchAnnouncement, loadShapeLibrary } from '../turn/index.js';
+import { runTurn, runWebFollowup, formulateSearchQuery, searchAnnouncement, loadShapeLibrary,
+         runCuriousResearch, researchAnnouncement } from '../turn/index.js';
 import { createWebClient, searchAndAdmit, createRawStore } from '../ingest/index.js';
 import { createSpeculativeWeb } from './prefetch.js';
 import { createAuditLog }   from '../audit/index.js';
@@ -74,6 +75,8 @@ const STATE = {
                          //   eoreader.voice; never overrides the NUL-on-VOID lock; god-names stay in the audit.
   webSearch: 'auto',     // FIXED to AUTO — the web is the tool's memory, so every turn searches up front and
                          //   answers grounded in what it gathered. Not a per-message option (no web chip).
+  researchHops: 4,       // the curiosity walk's hop budget (docs/curiosity-research.md): the max number of
+                         //   hops the auto gather follows its own surprise before it must answer.
   transparency: true,    // the per-claim source view: every proposition traced to its source (or marked
                          //   unsupported). Default ON; the toggle beneath each answer persists the choice.
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
@@ -576,6 +579,7 @@ const runQuery = async (question) => {
   // run for the user (auto). This replaces the old native window.confirm popup that fired
   // mid-turn, before the answer was even shown.
   const webMode = STATE.webSearch || 'off';
+  const RESEARCH_HOPS = STATE.researchHops || 4;
 
   // INVERTED FLOW (auto): search the web FIRST, fold the results into the turn's scope, and let
   // the model answer from the surfer's reading of [web + documents + memory] in ONE grounded
@@ -587,16 +591,22 @@ const runQuery = async (question) => {
     setThinkingNote(thinking, '🌐 searching the web…');
     try {
       const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history });
-      // Say WHAT is being looked up before the (slow) fetch, so the pre-answer wait reads as
-      // purposeful activity (docs/web-search.md). Auto searches up front, before any proposal
-      // exists, so the announcement is the neutral "let me look that up" over the formulated query.
-      if (q) setThinkingNote(thinking, `🔎 Looking this up: “${q}”…`);
-      const admitted = await searchAndAdmit(q, { client: webClientOf(), rawStore: rawStoreOf(), kind: 'auto', fetchPages: true, k: 4 });
-      const webDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
+      // CURIOSITY-GUIDED gather (docs/curiosity-research.md): instead of one query and four results,
+      // run a multi-hop WALK that follows the engine's own surprise — each hop expands the single most
+      // SURPRISING thread the last pages opened (a new figure, a new place), up to a max number of
+      // hops, and STOPS when surprise dries up. It is the active-inference loop, not a shotgun fan-out.
+      if (q) setThinkingNote(thinking, `🔎 ${researchAnnouncement(q, { maxHops: RESEARCH_HOPS }) || `Looking this up: “${q}”…`}`);
+      const walk = await runCuriousResearch(q, {
+        search: (query, opts) => searchAndAdmit(query, { client: webClientOf(), rawStore: rawStoreOf(), ...opts }),
+        anchor: q, maxHops: RESEARCH_HOPS, k: 3,
+        searchOpts: { kind: 'auto', fetchPages: true },
+        onHop: (h) => setThinkingNote(thinking, `🔎 hop ${h.index}/${RESEARCH_HOPS}: “${h.query}”${h.curiosity != null ? ` · curiosity ${h.curiosity} bits` : ''}…`),
+      });
+      const webDocs = walk.docs;
       if (webDocs.length) {
         turnArgs.docs = [...selectedDocs, ...webDocs];   // web joins the grounding scope, beside any loaded docs
         turnArgs.groundGraph = true;                     // feed the talker the MEANING GRAPH of what was gathered
-        webGather = { query: q, docs: webDocs };
+        webGather = { query: q, docs: webDocs, research: walk.hops };
       }
     } catch { /* network/search failed — fall through to the ungrounded turn */ }
     setThinkingNote(thinking, '');
@@ -683,6 +693,7 @@ const runQuery = async (question) => {
   if (CHAT_VERBOSE && webGather && (result.route || result.turn?.route) !== 'error') {
     renderWebResult(thinking, {
       query: webGather.query, results: webGather.docs.length, grounded: true,
+      research: webGather.research || null,   // the curiosity-walk hop trace, surfaced collapsed
       sources: webGather.docs.map(d => ({
         docId: d.docId, title: d.web?.title || '', url: d.web?.url || d.web?.final_url || '',
         fetched_at: d.web?.fetched_at || null,
