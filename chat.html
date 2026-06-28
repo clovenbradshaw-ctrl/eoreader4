@@ -75,7 +75,19 @@
         <div id="idle-view" hidden></div>
       </section>
       <section id="chat-pane">
-        <h2>Chat</h2>
+        <h2>Chat
+          <span class="spacer"></span>
+          <!-- Export the whole window. Two flavours: TEXT ONLY (the clean
+               transcript) and FULL AUDIT (every answer with its prompting and
+               surfing laid out readably). The menu is wired in app.js. -->
+          <span class="chat-export" id="chat-export">
+            <button type="button" class="small" id="export-chat" aria-haspopup="true" aria-expanded="false" disabled>Export ▾</button>
+            <div class="chat-export-menu" id="export-chat-menu" hidden role="menu">
+              <button type="button" role="menuitem" data-mode="text">Text only</button>
+              <button type="button" role="menuitem" data-mode="full">Full audit (prompts &amp; surfing)</button>
+            </div>
+          </span>
+        </h2>
         <div id="messages"></div>
         <div id="doc-chips" class="doc-chips" hidden></div>
         <form id="composer">

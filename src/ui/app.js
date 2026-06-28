@@ -34,6 +34,7 @@ import { mountFeed } from './feed-view.js';
 import { mountPredict } from './predict-view.js';
 import { mountIdle } from './idle-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
+import { exportChat } from './chat-export.js';
 
 // CHATBOT SURFACE. The chat pane is a bare chatbot — a thinking indicator and
 // the answer, nothing else. The full per-turn record (the trace, the verbatim
@@ -120,6 +121,9 @@ const els = {
   send:      document.getElementById('send'),
   auditView: document.getElementById('audit-view'),
   exportBtn: document.getElementById('export-audit'),
+  exportChatWrap: document.getElementById('chat-export'),
+  exportChatBtn:  document.getElementById('export-chat'),
+  exportChatMenu: document.getElementById('export-chat-menu'),
   backend:   document.getElementById('backend'),
   docChips:  document.getElementById('doc-chips'),
   lensPort:  document.getElementById('lens-port'),
@@ -1054,6 +1058,42 @@ STATE.audit.subscribe((turn) => {
 });
 els.exportBtn.addEventListener('click', () => exportAudit(STATE.audit));
 renderEmptyAudit(els.auditView);
+
+// Export the chat window — a small two-item menu in the Chat pane header. "Text
+// only" hands back the clean transcript; "Full audit" hands back every answer
+// with its prompting and surfing. Both download a Markdown file. The button
+// enables once there is something to export (a turn, or a forked-in transcript).
+if (els.exportChatBtn && els.exportChatMenu) {
+  const closeMenu = () => {
+    els.exportChatMenu.hidden = true;
+    els.exportChatBtn.setAttribute('aria-expanded', 'false');
+  };
+  els.exportChatBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = els.exportChatMenu.hidden;
+    els.exportChatMenu.hidden = !open;
+    els.exportChatBtn.setAttribute('aria-expanded', String(open));
+  });
+  els.exportChatMenu.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-mode]');
+    if (!b) return;
+    const ok = exportChat(b.dataset.mode, { history: STATE.history, turns: STATE.audit.turns });
+    setStatus(ok
+      ? (b.dataset.mode === 'full' ? 'exported chat — full audit (.md)' : 'exported chat — transcript (.md)')
+      : 'nothing to export yet');
+    closeMenu();
+  });
+  // Click-away and Escape dismiss the menu.
+  document.addEventListener('click', (e) => { if (!els.exportChatWrap?.contains?.(e.target)) closeMenu(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
+}
+// Enable the chat-export button once anything is in the window — a recorded turn
+// or a transcript a fork seeded in.
+const refreshExportChat = () => {
+  if (els.exportChatBtn) els.exportChatBtn.disabled = !(STATE.history.length || STATE.audit.turns.length);
+};
+STATE.audit.subscribe(refreshExportChat);
+refreshExportChat();
 
 // Document tabs.
 els.docTabs.addEventListener('click', (e) => {
