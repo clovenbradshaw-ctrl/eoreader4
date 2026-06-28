@@ -1173,7 +1173,7 @@ class Component extends DCLogic {
     return lab+' \u2014 '+pred+'.';}
   // Trim to <= max chars but never mid-sentence: keep whole sentences, else cut on a
   // word boundary with an ellipsis. No more "...decreasing their abilit".
-  endOnBoundary(s,max){s=this.norm(s);max=max||320;if(s.length<=max)return s;const cut=s.slice(0,max);const m=cut.match(/^[\s\S]*[.!?](?=\s|$)/);if(m&&m[0].length>=Math.min(70,max*0.45))return m[0].trim();return cut.replace(/\s+\S*$/,'').replace(/[\s,;:]+$/,'').trim()+'\u2026';}
+  endOnBoundary(s,max){s=this.norm(String(s||'').replace(/<[^>]*>/g,' ').replace(/\[(?:\d+|citation needed|edit)\]/gi,''));max=max||320;if(s.length<=max)return s;const cut=s.slice(0,max);const m=cut.match(/^[\s\S]*[.!?](?=\s|$)/);if(m&&m[0].length>=Math.min(70,max*0.45))return m[0].trim();return cut.replace(/\s+\S*$/,'').replace(/[\s,;:]+$/,'').trim()+'\u2026';}
   // The strongest attested definition the engine isolated for this entity: a DEF
   // (assert/define) event's predicate. Earliest/cleanest wins — the intro defines.
   bestDef(id,onlyUrl){
@@ -2029,8 +2029,24 @@ class Component extends DCLogic {
     clearTimeout(this._cardT);
     const delay=(this.state.hoverPivot==='hover')?90:340;
     this._cardT=setTimeout(()=>{const p=this._pendHover;if(!p||this._hovEnt!==p.id)return;
-      this.setState({hoverEnt:p.id,hoverHref:p.href,hoverXY:{x:p.x,y:p.y}});
-      this._startCardWatch(p.x,p.y);},delay);
+      this.setState({hoverEnt:p.id,hoverHref:p.href,hoverXY:{x:p.x,y:p.y},hoverWiki:null});
+      this._startCardWatch(p.x,p.y);
+      // Run ahead one layer: if the entity links out, prefetch the linked article and
+      // show what's relevant right in the hover card (no navigation needed).
+      if(p.href)this._fetchHoverWiki(p.href);},delay);
+  }
+  // Prefetch a linked Wikipedia article's summary for the hover card (cached per title).
+  async _fetchHoverWiki(href){
+    const m=String(href||'').match(/\/wiki\/([^#?:]+)$/);if(!m)return;
+    const title=decodeURIComponent(m[1]).replace(/_/g,' ');
+    this._wikiPrev=this._wikiPrev||{};
+    if(this._wikiPrev[title]){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:this._wikiPrev[title].title,extract:this.endOnBoundary(this._wikiPrev[title].extract,260),loading:false}});return;}
+    this.setState({hoverWiki:{href,title,extract:'',loading:true}});
+    try{const d=await this._wikiSummary(title);
+      const full=this.norm(d.extract||'');
+      this._wikiPrev[title]={title:d.title||title,extract:full,desc:d.description||'',loading:false};
+      if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:d.title||title,extract:this.endOnBoundary(full,260),loading:false}});
+    }catch(e){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title,extract:'',loading:false,err:true}});}
   }
   // Anti-stick: once the card is up, watch the real pointer. The instant it leaves both
   // the card (with a small bridge) and a radius around the word that opened it, drop it.
@@ -2048,7 +2064,7 @@ class Component extends DCLogic {
     window.addEventListener('mousemove',this._cardWatch,true);
   }
   _stopCardWatch(){if(this._cardWatch){window.removeEventListener('mousemove',this._cardWatch,true);this._cardWatch=null;}}
-  _hideCardNow(){this._stopCardWatch();clearTimeout(this._cardT);clearTimeout(this._hovT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;if(this.state.hoverEnt!=null)this.setState({hoverEnt:null,hoverHref:null});}
+  _hideCardNow(){this._stopCardWatch();clearTimeout(this._cardT);clearTimeout(this._hovT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;if(this.state.hoverEnt!=null)this.setState({hoverEnt:null,hoverHref:null,hoverWiki:null});}
   // A hyperlink that ISN'T a folded entity (e.g. "Proceedings of the National Academy
   // of Sciences") still has a referent — its Wikipedia article. Dwelling on it pivots
   // the panel to a lightweight preview of that article, with a way to read it in.
@@ -2072,7 +2088,7 @@ class Component extends DCLogic {
     }catch(e){if(this.state.previewWiki&&this.state.previewWiki.href===href)this.setState({previewWiki:{title,href,loading:false,extract:'',err:true}});}
   }
   closePreview(){clearTimeout(this._prevT);this._prevHref=null;if(this.state.previewWiki)this.setState({previewWiki:null});}
-  entLeave(){clearTimeout(this._cardT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;clearTimeout(this._hovT);this._hovT=setTimeout(()=>{this._stopCardWatch();this.setState({hoverEnt:null,hoverHref:null});},220);}
+  entLeave(){clearTimeout(this._cardT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;clearTimeout(this._hovT);this._hovT=setTimeout(()=>{this._stopCardWatch();this.setState({hoverEnt:null,hoverHref:null,hoverWiki:null});},220);}
   keepHover(){clearTimeout(this._hovT);}
   hoverProfile(){const id=this.state.hoverEnt;clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(id==null)return;this.clickEntity(id);}
   hoverLink(){const u=this.state.hoverHref;clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(u){try{this.goWeb(u);}catch(e){}}}
@@ -2081,7 +2097,9 @@ class Component extends DCLogic {
     const hb={eva:0,def:0,held:0};hm.forEach(i=>hb[this.bandOf(i)]++);const ht=hb.eva+hb.def+hb.held||1;let l2,c2;if(hb.eva/ht>=.45){l2='well attested';c2='#1d4ed8';}else if(hb.def/ht>=.4){l2='mostly asserted';c2='#b45309';}else{l2='mostly mentioned';c2='#6b7280';}
     const vw=(typeof window!=='undefined'&&window.innerWidth)||960,x=Math.min(this.state.hoverXY.x+6,vw-290),y=this.state.hoverXY.y+18;
     const heHref=this.state.hoverHref;
-    base.hoverCardOn=true;base.hoverCard={name:hl,av:this.initials(hl),avStyle:this.avatar(hl,34),onEnter:()=>this.keepHover(),onLeave:()=>this.entLeave(),onProfile:()=>{this._stopCardWatch();clearTimeout(this._hovT);clearTimeout(this._pivotT);this.setState({hoverEnt:null,hoverHref:null});this.clickEntity(he);},hasLink:!!this.state.hoverHref,noLink:!this.state.hoverHref,linkHost:this.short(this.state.hoverHref||''),onLink:()=>{this._stopCardWatch();clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(heHref){try{this.goWeb(heHref);}catch(e){}}},stat:(g.entities.get(he).sightings||hm.length)+'× · '+hn.length+' links · '+hs.length+' sources',gist:this.norm(this.master.sentences[g.entities.get(he).firstSeen]||this.master.sentences[hm[0]]||'').slice(0,150),est:l2,estStyle:'color:'+c2+';font-weight:600;',segs:[[hb.eva,'#1d4ed8'],[hb.def,'#b45309'],[hb.held,'#6b7280']].filter(([n])=>n>0).map(([n,c])=>({style:'width:'+(n/ht*100)+'%;background:'+c+';display:block;'})),wrap:'position:fixed;left:'+x+'px;top:'+y+'px;width:270px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:13px 14px;z-index:30;animation:eopop .12s ease-out;'};}
+    const hw=this.state.hoverWiki,hasPre=!!(heHref&&hw&&hw.href===heHref&&(hw.loading||hw.extract));
+    base.hoverCardOn=true;base.hoverCard={name:hl,
+      hasPrefetch:hasPre,prefetchTitle:hasPre?(hw.title||''):'',prefetchLoading:!!(hasPre&&hw.loading&&!hw.extract),prefetchText:hasPre?(hw.extract||''):'',av:this.initials(hl),avStyle:this.avatar(hl,34),onEnter:()=>this.keepHover(),onLeave:()=>this.entLeave(),onProfile:()=>{this._stopCardWatch();clearTimeout(this._hovT);clearTimeout(this._pivotT);this.setState({hoverEnt:null,hoverHref:null});this.clickEntity(he);},hasLink:!!this.state.hoverHref,noLink:!this.state.hoverHref,linkHost:this.short(this.state.hoverHref||''),onLink:()=>{this._stopCardWatch();clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(heHref){try{this.goWeb(heHref);}catch(e){}}},stat:(g.entities.get(he).sightings||hm.length)+'× · '+hn.length+' links · '+hs.length+' sources',gist:this.norm(this.master.sentences[g.entities.get(he).firstSeen]||this.master.sentences[hm[0]]||'').slice(0,150),est:l2,estStyle:'color:'+c2+';font-weight:600;',segs:[[hb.eva,'#1d4ed8'],[hb.def,'#b45309'],[hb.held,'#6b7280']].filter(([n])=>n>0).map(([n,c])=>({style:'width:'+(n/ht*100)+'%;background:'+c+';display:block;'})),wrap:'position:fixed;left:'+x+'px;top:'+y+'px;width:270px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:13px 14px;z-index:30;animation:eopop .12s ease-out;'};}
 
   async research(focalId,modeOverride){
     const id=focalId||this.state.selId; if(this._busy||!id)return;const focal=this.labelOf(id);this._feedEnt=id;
@@ -2262,7 +2280,7 @@ class Component extends DCLogic {
     base.onSortUpdated=()=>this.setState({sortMode:'updated'});base.onSortTop=()=>this.setState({sortMode:'mentions'});base.onSortAz=()=>this.setState({sortMode:'name'});
 
     if(!ready||!g||this.state.pages.length===0){
-      if(!vu&&!base.chatOn&&!base.gutenOn){
+      if(!vu&&!base.chatInMain&&!base.gutenOn){
         base.showPrompt=true;
         base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Read a URL — or find a book':'Loading the reading engine…');
         base.promptBody=this.state.engineErr?String(this.state.engineErr):'Paste a page URL to read it here, type a title or author to find a book on Project Gutenberg, or use 📄 to import your own. Every entity is read into the graph on the right — then ask about it in a chat.';
