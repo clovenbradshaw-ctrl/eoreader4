@@ -9,20 +9,27 @@ renders the fetched page as a page (iframe), and decorates it with clickable ent
 
 What you can do:
 
-- **Read a website as a website, then as a book** — paste a URL; while EO is still reading
+- **Read a website two ways — and switch any time.** Paste a URL; while EO is still reading
   it the fetched page renders live in the center (sandboxed iframe) with its known names
-  highlighted and clickable. Once the read finishes, the page folds into the **same book
-  view every other source gets** — drop-cap prose, the engine's table of contents, and the
-  passages the reading flagged as important. Only a URL you haven't read yet (browsing
-  ahead of the reading) stays a raw live page, because it has no parsed propositions yet
-  to draw a contents or find its surprises from.
+  highlighted and clickable. Once the read finishes, a **Reader / Page** toggle rides in the
+  toolbar and **both renderings carry the same contents nav and flagged passages**:
+  - **Reader** (the default) is the stripped book view every source gets — drop-cap prose,
+    the engine's table of contents, the flagged passages, with all ads, chrome and other
+    distractions gone (only the extracted article remains).
+  - **Page** is the site's *own* layout, kept intact, with the same contents nav built from
+    its headings and the same flagged passages highlighted in place over it.
+
+  The choice persists, so every page afterwards opens the way you prefer. Only a URL you
+  haven't read yet (browsing ahead of the reading) stays a plain live page, because it has
+  no parsed propositions yet to draw a contents or find its surprises from.
 - **Read a book as a book** — import a `.txt`/`.md` file (📄) or search **Project
   Gutenberg** (type a title/author in the search bar). The work renders as a readable
   book — drop-cap, serif, the author's paragraphs — entities clickable. A book is
   **read fully** (fetched, PG boilerplate stripped, parsed) before it becomes a source
   and can be chatted with. Search results show cover art, genre tags and download counts.
   The same book treatment — the table of contents and the auto-flagged passages below —
-  applies to **every read document**, web pages included, not just Gutenberg books.
+  applies to **every read document**, web pages included (in either the Reader or Page
+  rendering above), not just Gutenberg books.
 - **Reading controls, like a real e-reader.** With a book open, a reading toolbar rides
   above the page: text size (A− / A+), line spacing (↕), column width (Narrow · Normal ·
   Wide), typeface (Serif / Sans) and paper theme (Light · Sepia · Night). Every choice
