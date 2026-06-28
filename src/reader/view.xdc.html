@@ -201,11 +201,36 @@
       </sc-if>
       <sc-if value="{{ chatOn }}" hint-placeholder-val="{{ false }}">
         <div style="{{ chat.shellStyle }}">
-          <div style="flex:0 0 auto;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--card);display:flex;align-items:center;gap:10px;">
-            <div style="width:26px;height:26px;border-radius:7px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto;">✦</div>
-            <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
-              <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">grounded in {{ chat.scopeLabel }}</div></div>
-            <button onclick="{{ onCloseChat }}" title="Close chat" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
+          <div style="flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--card);">
+            <div style="padding:10px 22px 8px;display:flex;align-items:center;gap:10px;">
+              <div style="width:26px;height:26px;border-radius:7px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto;">✦</div>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
+                <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Chatting about your sources — grounded in what was read</div></div>
+              <button onclick="{{ onCloseChat }}" title="Close chat" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
+            </div>
+            <div style="padding:0 18px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;">
+              <span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:2px;">About</span>
+              <sc-for list="{{ chat.about }}" as="ab" hint-placeholder-count="1">
+                <span style="{{ ab.chipStyle }}"><span onclick="{{ ab.onOpen }}" title="Open this source" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ab.label }}</span><button onclick="{{ ab.onRemove }}" title="Remove from this chat" style="{{ ab.xStyle }}" style-hover="background:var(--accline)">✕</button></span>
+              </sc-for>
+              <sc-if value="{{ chat.aboutEmpty }}" hint-placeholder-val="{{ false }}">
+                <span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:3px 9px;">Everything you’ve read</span>
+              </sc-if>
+              <button onclick="{{ chat.onToggleAdd }}" title="Add a source to chat with" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px dashed var(--line2);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">+ Add source</button>
+              <sc-if value="{{ chat.addOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;top:100%;left:18px;right:18px;z-index:30;margin-top:4px;background:var(--card);border:1px solid var(--line2);border-radius:11px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:6px;max-height:260px;overflow-y:auto;">
+                  <sc-for list="{{ chat.addable }}" as="ad" hint-placeholder-count="0">
+                    <div onclick="{{ ad.onAdd }}" style="{{ ad.rowStyle }}" style-hover="background:var(--accbg)">
+                      <span style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">{{ ad.label }}</span>
+                      <span style="font-size:10.5px;color:var(--ink3);">{{ ad.host }}</span>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ chat.noAddable }}" hint-placeholder-val="{{ true }}">
+                    <div style="padding:12px 11px;font-size:11.5px;color:var(--ink3);line-height:1.5;">{{ chat.addEmptyMsg }}</div>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
           </div>
           <div id="eo-chat-scroll" style="flex:1;overflow-y:auto;padding:24px 22px;min-height:0;">
             <div style="max-width:720px;margin:0 auto;">
