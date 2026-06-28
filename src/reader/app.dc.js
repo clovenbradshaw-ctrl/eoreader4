@@ -10,7 +10,7 @@ class Component extends DCLogic {
     // Common adjectives / nouns that frequently OPEN a sentence or title and so get a
     // stray capital ("Soft coral…", "Deep reefs…"). Used only with the positional test.
     this.COMMON_OPENER=new Set('soft hard new old great small large big high low good bad deep shallow light dark long short full empty open close closed free real true false main key top best worst early late recent modern ancient warm cold hot cool dry wet rich poor strong weak fast slow young many most other several various such few more less same different general common special major minor local global natural human social public private red blue green white black grey gray brown clear bright wide narrow thick thin heavy soft northern southern eastern western central upper lower inner outer first second third final next last whole half single double total active passive primary secondary'.split(' '));
-    this.SUGG=[{label:'Great Barrier Reef (Wikipedia)',url:'https://en.wikipedia.org/wiki/Great_Barrier_Reef'},{label:'Coral reef',url:'https://en.wikipedia.org/wiki/Coral_reef'},{label:'Coral bleaching',url:'https://en.wikipedia.org/wiki/Coral_bleaching'}];
+    this.SUGG=[];  // filled on mount by loadSuggestions(): a random Wikipedia page + random English books
     this.PALETTE=['#2563eb','#7c3aed','#0e7490','#b45309','#dc2626','#15803d','#be185d','#4f46e5','#0891b2','#9333ea'];
     this.THEMES=[{name:'EO Violet',hex:'#5b34d6'},{name:'Indigo',hex:'#4f46e5'},{name:'Royal',hex:'#2563eb'},{name:'Teal',hex:'#0d9488'},{name:'Forest',hex:'#15803d'},{name:'Magenta',hex:'#be185d'},{name:'Amber',hex:'#b45309'},{name:'Slate',hex:'#475569'}];
     let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');}catch(e){}
@@ -68,9 +68,43 @@ class Component extends DCLogic {
     try{ this.SVO=await import(__res.eoSvo||'./svo-llm.js'); }catch(e){ this.SVO=null; }
     const llmAvail=!!(this.SVO && typeof window!=='undefined' && window.claude && typeof window.claude.complete==='function');
     this.setState({ready:true, llmAvail, llm:llmAvail});
-    // start empty — no sample data preloaded; read URLs on demand
+    // Start the chat model downloading immediately so it's ready by the time the first
+    // question is asked (progress is throttled in ensureChatModel to keep typing smooth).
+    if(this.state.backend!=='echo') this.ensureChatModel().catch(()=>{});
+    // An explicit seed URL reads on load; otherwise we stay empty and just OFFER a random
+    // Wikipedia page + a few random English books as suggestions (loaded only when clicked).
     const seed=(this.props&&this.props.seedUrl);
     if(seed) this.readURL(seed,'read');
+    else this.loadSuggestions();
+  }
+  // ── Default suggestions: a random Wikipedia page + a few random English books ──
+  // Nothing is read on load — the start screen stays empty (like before, with the
+  // Great Barrier Reef suggestion), only now the suggestions are RANDOM: one Wikipedia
+  // article and a few English Project Gutenberg books, each loaded only when clicked.
+  async loadSuggestions(){
+    const sugg=[];
+    try{
+      const j=await this._wikiJSON('https://en.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=1&format=json&origin=*');
+      const r=j&&j.query&&j.query.random&&j.query.random[0];
+      if(r&&r.title){
+        const url='https://en.wikipedia.org/wiki/'+encodeURIComponent(String(r.title).replace(/ /g,'_'));
+        sugg.push({label:r.title+' (Wikipedia)',url});
+      }
+    }catch(e){}
+    try{(await this.randomBooks(3)).forEach(b=>sugg.push({label:b.title+' — '+b.author,book:b}));}catch(e){}
+    if(sugg.length){this.SUGG=sugg;this.setState(s=>({rev:s.rev+1}));}
+  }
+  // Fetch a handful of random ENGLISH Gutenberg books (no reading) for the suggestions.
+  // A random page of the catalog gives variety; we shuffle and keep the first N with text.
+  async randomBooks(n){
+    n=n||3;
+    const page=1+Math.floor(Math.random()*40);
+    let data;
+    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://gutendex.com/books/?languages=en&page='+page));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    catch(e){return [];}
+    const books=this._gutenBooks(data);
+    for(let i=books.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=books[i];books[i]=books[j];books[j]=t;}
+    return books.slice(0,n);
   }
 
   norm(s){return (s||'').replace(/\s+/g,' ').trim();}
@@ -112,7 +146,12 @@ class Component extends DCLogic {
     if((ctype&&/text\/plain/i.test(ctype))||!looksHtml){ return this.extractPlain(raw); }
     const doc=new DOMParser().parseFromString(raw,'text/html');
     let image=this._ogImage(doc); if(image&&url){try{image=new URL(image,url).href;}catch(e){}}
-    doc.querySelectorAll('script,style,nav,footer,header,aside,noscript,form').forEach(n=>n.remove());
+    doc.querySelectorAll('script,style,nav,footer,header,aside,noscript,form,iframe,svg,button,textarea,label,select,template').forEach(n=>n.remove());
+    // Newsroom chrome by class/id: audio-player embeds, newsletter sign-ups, share/social
+    // bars, "related stories" rails. These leak markup ("Embed <iframe …>") and boilerplate
+    // ("Download Embed Embed", "Stay up to date with our newsletter") into the read text.
+    doc.querySelectorAll('[class],[id]').forEach(n=>{const k=((n.getAttribute('class')||'')+' '+(n.getAttribute('id')||'')).toLowerCase();
+      if(/(^|[-_ ])(embed|newsletter|subscribe|share|social|related|promo|advert|paywall|player|disqus|comments?)([-_ ]|$)/.test(k))n.remove();});
     const title=this.norm((doc.querySelector('title')||{}).textContent||'')||'(untitled)';
     const main=doc.querySelector('main,article,[role=main]')||doc.body||doc.documentElement;
     // The page's own hyperlinks are ground truth: each <a> to a Wikipedia article tells
@@ -127,8 +166,8 @@ class Component extends DCLogic {
       const t=this.norm(a.textContent||'').toLowerCase();
       if(t.length>=2&&t.length<=60&&!wikiLinks[t])wikiLinks[t]=base;
     });
-    const blocks=[...main.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,dd,td,figcaption')].map(n=>this._decruft(this.norm(n.textContent).replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim())).filter(t=>t.length>2&&!this._isCreditOnly(t));
-    if(blocks.length<2){ const body=this.norm(main.textContent||''); if(body.length>=120) return {title,text:this.paras(body).slice(0,60000),image,wikiLinks}; }
+    const blocks=[...main.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,dd,td,figcaption')].map(n=>this._chromify(this._decruft(this.norm(n.textContent).replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim()))).filter(t=>t.length>2&&!this._isCreditOnly(t));
+    if(blocks.length<2){ const body=this._chromify(this.norm(main.textContent||'')); if(body.length>=120) return {title,text:this.paras(body).slice(0,60000),image,wikiLinks}; }
     return {title,text:[...new Set(blocks)].join('\n').slice(0,60000),image,wikiLinks};
   }
   // Strip newsroom photo chrome that otherwise gets read as prose and poisons the
@@ -143,8 +182,21 @@ class Component extends DCLogic {
   _isCreditOnly(t){
     if(!t)return true;
     if(/^(?:hide caption|toggle caption|enlarge this image|advertisement|sponsored content?)\b/i.test(t))return true;
+    if(/^(?:download|embed|transcript|listen|loading|play|pause|share|subscribe|sign up|sign in|log in|newsletter|advertisement|read more|see all)\b[\s.\u00B7|-]*$/i.test(t))return true;
     if(t.length<60&&/^[A-Z][A-Za-z.'\u00C0-\u024F-]+(?:\s+[A-Z][A-Za-z.'\u00C0-\u024F-]+){0,3}\s*\/\s*(?:Getty|AP|Reuters|AFP|NPR|EPA|Bloomberg)/.test(t))return true;
     return false;
+  }
+  // Reader-mode cleanup for an extracted block: drop any HTML markup that leaked in as
+  // literal text (audio-player <iframe> snippets shown for copying), strip reference and
+  // edit markers ([21], [citation needed], [edit]) and the "Download Embed Embed"/"Embed"
+  // audio chrome, and collapse whitespace. Prose is left intact.
+  _chromify(t){
+    if(!t)return '';
+    t=String(t).replace(/<[^>]*>/g,' ');                                  // leaked HTML tags
+    t=t.replace(/\[(?:\d+|citation needed|edit|note \d+|\?)\]/gi,'');     // wiki refs / [edit]
+    t=t.replace(/\bDownload\s+Embed\b[\s\S]{0,400}?\bTranscript\b/gi,' '); // NPR audio-player chrome block
+    t=t.replace(/\bDownload\s+Embed(?:\s+Embed)?\b/gi,' ').replace(/\bEmbed\s+Embed\b/gi,' ');
+    return this.norm(t);
   }
   _ogImage(doc){
     const sel=['meta[property="og:image:secure_url"]','meta[property="og:image"]','meta[name="og:image"]','meta[name="twitter:image"]','meta[property="twitter:image"]','meta[name="twitter:image:src"]','link[rel="image_src"]'];
@@ -161,7 +213,7 @@ class Component extends DCLogic {
     const sm=t.match(/\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG[^\n]*\*\*\*/i); if(sm)t=t.slice(sm.index+sm[0].length);
     const em=t.match(/\*\*\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG[^\n]*\*\*\*/i); if(em)t=t.slice(0,em.index);
     if(!title){ const fl=t.split('\n').map(s=>this.norm(s)).find(s=>s.length>2); title=fl?this.truncLabel(fl,60):'(untitled text)'; }
-    return {title,text:this.paras(t).slice(0,60000),image:null};
+    return {title,text:this.paras(t).replace(/<[^>]*>/g,' ').replace(/\[(?:\d+|citation needed|edit)\]/gi,'').slice(0,60000),image:null};
   }
   paras(t){ return String(t||'').split(/\n\s*\n/).map(p=>this.norm(p.replace(/\n/g,' '))).filter(p=>p.length>2).join('\n'); }
   async fetchPage(url){const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));if(!r.ok)throw new Error('HTTP '+r.status);const html=await r.text();if(html.trim().length<60)throw new Error('empty page');if(/<title>\s*(?:just a moment|attention required|access denied|verify you are human|are you a robot|enable javascript|please wait\b|checking your browser)/i.test(html))throw new Error('blocked by anti-bot check');return this.extract(html,r.headers.get('content-type')||'',url);}
@@ -254,8 +306,41 @@ class Component extends DCLogic {
   // The read context for a question, as notes the model can lean on (and the source
   // chips/entities to show). Empty when nothing relevant has been read.
   groundNotes(q,scope){const a=this.answerQuestion(q,scope);
-    if(!a.refs||!a.refs.length)return {notes:'',entities:a.entities||[],sources:[]};
-    return {notes:'From what you have read:\n'+a.refs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:a.sources||[]};}
+    if(a.refs&&a.refs.length)return {notes:'From what you have read:\n'+a.refs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:a.sources||[]};
+    // No keyword match (e.g. "what is this about?", "explain this page") — fall back to the
+    // opening lines of the source in scope (or the page being viewed) so the model speaks
+    // from the actual text instead of answering as a blank-slate assistant.
+    const src=scope||this.state.viewUrl;
+    if(src&&this.master&&this.master.sentences.length){
+      const idxs=[];for(let i=0;i<this.master.sentences.length&&idxs.length<8;i++){if(this.master.sentenceSource[i]!==src)continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(this._proseOk(low))idxs.push(i);}
+      if(idxs.length)return {notes:'From what you have read:\n'+idxs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:[src]};
+    }
+    return {notes:'',entities:a.entities||[],sources:[]};}
+  // Minimal, SAFE markdown → HTML for chat answers (the model replies in markdown:
+  // **bold**, lists, `code`, links). Everything is HTML-escaped FIRST, then only a fixed
+  // set of tags is emitted, so nothing the model writes can inject raw markup.
+  _md(src){
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const inline=s=>esc(s)
+      .replace(/`([^`]+)`/g,(m,c)=>'<code style="background:rgba(0,0,0,.07);border-radius:4px;padding:1px 4px;font-size:.92em;">'+c+'</code>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);">$1</a>')
+      .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
+    const lines=String(src||'').replace(/\r/g,'').split('\n');
+    const out=[];let list=null;
+    const flush=()=>{if(list){out.push('<'+list.tag+' style="margin:6px 0;padding-left:20px;">'+list.items.join('')+'</'+list.tag+'>');list=null;}};
+    for(const raw of lines){
+      const line=raw.trim();let m;
+      if(!line){flush();continue;}
+      if(m=line.match(/^(#{1,6})\s+(.*)$/)){flush();out.push('<div style="font-weight:700;margin:9px 0 2px;">'+inline(m[2])+'</div>');continue;}
+      if(m=line.match(/^[-*]\s+(.*)$/)){if(!list||list.tag!=='ul'){flush();list={tag:'ul',items:[]};}list.items.push('<li>'+inline(m[1])+'</li>');continue;}
+      if(m=line.match(/^\d+\.\s+(.*)$/)){if(!list||list.tag!=='ol'){flush();list={tag:'ol',items:[]};}list.items.push('<li>'+inline(m[1])+'</li>');continue;}
+      flush();out.push('<p style="margin:6px 0;">'+inline(line)+'</p>');
+    }
+    flush();return out.join('');
+  }
+  // Collapse / expand the researched-source subtree under a parent source in the left tree.
+  toggleSrcCollapse(url){this.setState(s=>{const c={...(s.collapsedSrc||{})};c[url]=!c[url];return {collapsedSrc:c};});}
   // Lazily load the chat model (the old app's backends). Cached on the instance.
   async ensureChatModel(){
     const name=this.state.backend||'webllm';
@@ -263,7 +348,13 @@ class Component extends DCLogic {
     if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
     const model=this._ME.createModel(name);
     this.setState({modelStatus:name+' · loading…'});
-    await model.load(p=>{const pct=Math.round((p&&p.pct||0)*100);this.setState({modelStatus:name+' · '+((p&&p.phase)||'loading')+(pct?(' '+pct+'%'):'')});});
+    // Throttle progress to ~3/sec: the load fires this callback many times a second, and a
+    // full re-render on each one makes typing in the chat box stutter while the model loads.
+    let lastTick=0,lastPct=-1;
+    await model.load(p=>{const pct=Math.round((p&&p.pct||0)*100);const now=Date.now();
+      if(pct===lastPct||(now-lastTick<300&&pct<100))return;
+      lastTick=now;lastPct=pct;
+      this.setState({modelStatus:name+' · '+((p&&p.phase)||'loading')+(pct?(' '+pct+'%'):'')});});
     this._chatModel=model;this.setState({modelStatus:''});
     return model;
   }
@@ -339,7 +430,8 @@ class Component extends DCLogic {
       const sources=(m.sources||[]).map(u=>({label:/^text:/i.test(u)?(this.truncLabel(((this.pageOf(u)||{}).title)||'text',20)):this.short(u),onOpen:()=>this.goWeb(u)}));
       const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
         style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
-      return {isUser,pending:!!m.pending,text:m.pending?'…':m.text,
+      const isMd=!isUser&&!m.pending&&!!m.text;   // render the model's markdown; user/pending stay plain
+      return {isUser,pending:!!m.pending,text:m.pending?'…':m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
         sources,hasSources:sources.length>0,entities,hasEntities:entities.length>0,
         hasNote:!!m.modelNote,note:m.modelNote||'',
@@ -365,11 +457,15 @@ class Component extends DCLogic {
     let data;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
     catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
-    return (data.results||[]).map(b=>{
+    return this._gutenBooks(data).slice(0,12);
+  }
+  // Map a gutendex response to readable books — only those with a plain-text edition.
+  _gutenBooks(data){
+    return ((data&&data.results)||[]).map(b=>{
       const f=b.formats||{};
       const txt=f['text/plain; charset=utf-8']||f['text/plain; charset=us-ascii']||f['text/plain']||(Object.entries(f).find(([k,v])=>/text\/plain/i.test(k)&&!/\.zip$/i.test(v))||[])[1];
       return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,downloads:b.download_count||0};
-    }).filter(b=>b.txtUrl).slice(0,12);
+    }).filter(b=>b.txtUrl);
   }
   // Strip Project Gutenberg's license header/footer so only the work is read.
   stripGutenberg(t){
@@ -1647,7 +1743,8 @@ class Component extends DCLogic {
       askIdle:!researching&&!this._busy,
       askSub:'I won\u2019t add sources on my own \u2014 choose how to look.',
       onAskBreadth:()=>{this.setState({mode:'breadth'});this.research(id,'breadth');},
-      onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');}};
+      onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');},
+      onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
   goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+res.sentenceCount+' propositions');this._busy=false;this.setState({busy:false});});}
@@ -2148,7 +2245,7 @@ class Component extends DCLogic {
         base.showPrompt=true;
         base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Read a URL — or find a book':'Loading the reading engine…');
         base.promptBody=this.state.engineErr?String(this.state.engineErr):'Paste a page URL to read it here, type a title or author to find a book on Project Gutenberg, or use 📄 to import your own. Every entity is read into the graph on the right — then ask about it in a chat.';
-        base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);}}));
+        base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
         base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
       }
       return base;
@@ -2178,12 +2275,22 @@ class Component extends DCLogic {
     const allP=this.master.pages;
     const inSet=u=>!!(u&&allP.find(x=>x.url===u));
     const childrenOf=u=>pagesByRecency.filter(p=>p.parent===u);
+    const collapsed=this.state.collapsedSrc||{};
     const orderedP=[];const seenP=new Set();
-    const pushP=(p,depth)=>{if(seenP.has(p.url))return;seenP.add(p.url);orderedP.push({p,depth});childrenOf(p.url).forEach(c=>pushP(c,Math.min(depth+1,2)));};
+    const markSeen=p=>{if(seenP.has(p.url))return;seenP.add(p.url);childrenOf(p.url).forEach(markSeen);};
+    const pushP=(p,depth)=>{if(seenP.has(p.url))return;seenP.add(p.url);const kids=childrenOf(p.url);
+      orderedP.push({p,depth,kids:kids.length,collapsed:!!collapsed[p.url]});
+      // A collapsed parent hides its researched subtree — mark it seen so it can't resurface
+      // through the orphan-recovery pass below.
+      if(collapsed[p.url])kids.forEach(markSeen);
+      else kids.forEach(c=>pushP(c,Math.min(depth+1,2)));};
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
-    base.sources=orderedP.map(({p,depth})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=(bucket.get(p.url)||[]).length;
+    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=(bucket.get(p.url)||[]).length;
       return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
+        hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
+        onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
+        caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
         dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?8:9)+'px;font-weight:800;',
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
@@ -2323,6 +2430,7 @@ class Component extends DCLogic {
       :(srcs.length?('I won’t add sources on my own — '+srcs.length+' read so far. Widen out, or dig in.'):'I won’t add sources on my own — choose how to look.');
     base.onAskBreadth=()=>{this.setState({mode:'breadth'});this.research(sel,'breadth');};
     base.onAskDepth=()=>{this.setState({mode:'depth'});this.research(sel,'depth');};
+    base.onAskResearch=()=>{this.research(sel,this.state.mode||'breadth');};
 
     // ── audit mode: integral fold vs. Wikipedia, + raw graph contents ───
     base.auditOn=this.state.auditMode;
@@ -2390,7 +2498,7 @@ class Component extends DCLogic {
     // research controls
     const md=this.state.mode,segOn='font-size:12px;font-weight:600;color:var(--acc);background:var(--card);border:none;border-radius:7px;padding:6px 12px;box-shadow:0 1px 2px rgba(0,0,0,.06);',segOff='font-size:12px;font-weight:500;color:var(--ink2);background:transparent;border:none;border-radius:7px;padding:6px 12px;',busy=this.state.busy;
     base.breadthStyle=md==='breadth'?segOn:segOff;base.depthStyle=md==='depth'?segOn:segOff;base.onBreadth=()=>this.setState({mode:'breadth'});base.onDepth=()=>this.setState({mode:'depth'});
-    base.modeHint=(busy?'Working…':(md==='breadth'?'Breadth — searches and reads a few sources widely.':'Depth — reads one source and follows the thread.'))+(this.state.direction.trim()&&!busy?'  ·  aimed at “'+this.state.direction.trim()+'”':'');
+    base.modeHint=(busy?'Working…':'Research — searches and reads more sources.')+(this.state.direction.trim()&&!busy?'  ·  aimed at “'+this.state.direction.trim()+'”':'');
     base.onResearch=()=>this.research();base.researchLabel=busy?'Researching…':'Research';base.researchGlyph=busy?'◐':'✦';base.researchIcon='display:inline-block;margin-right:7px;'+(busy?'animation:eospin .9s linear infinite;':'');
     base.researchStyle='display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:#fff;background:'+(busy?'#7ea3e8':'var(--acc)')+';border:none;border-radius:9px;padding:9px 16px;box-shadow:0 1px 2px rgba(37,99,235,.3);'+(busy?'cursor:default;':'');
     const FEED={search:{i:'⌕',c:'#2563eb'},found:{i:'≣',c:'#2563eb'},read:{i:'▤',c:'#b45309'},graph:{i:'＋',c:'#15803d'},done:{i:'✓',c:'#1b1f24'},warn:{i:'!',c:'#dc2626'}};

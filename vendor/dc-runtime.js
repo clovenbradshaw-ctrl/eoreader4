@@ -452,6 +452,7 @@
     const tag = el.tagName.toLowerCase();
     if (tag === "sc-for") return walkFor(el, host);
     if (tag === "sc-if") return walkIf(el, host);
+    if (tag === "sc-html") return walkHtml(el, host);
     if (tag === "x-import") return walkXImport(el, host);
     if (tag === "sc-helmet") return host.helmet(el);
     if (tag === "dc-import") return walkComponent(el, host);
@@ -539,6 +540,19 @@
           );
         })
       );
+    };
+  }
+  function walkHtml(el, host) {
+    const valGet = compileAttr(el.getAttribute("value") || "");
+    const styleRaw = el.getAttribute("style");
+    const styleGet = styleRaw != null ? compileAttr(styleRaw) : null;
+    return (vals, ctx, key) => {
+      const v = valGet(vals);
+      const props = { key, dangerouslySetInnerHTML: { __html: v == null ? "" : String(v) } };
+      let s = styleGet ? styleGet(vals) : null;
+      if (typeof s === "string") s = cssToObj(s);
+      if (s) props.style = s;
+      return h("div", props);
     };
   }
   function walkIf(el, host) {
