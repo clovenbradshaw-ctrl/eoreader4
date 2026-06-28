@@ -1264,9 +1264,11 @@ class Component extends DCLogic {
     try{ this.SVO=await import(__res.eoSvo||'./svo-llm.js'); }catch(e){ this.SVO=null; }
     const llmAvail=!!(this.SVO && typeof window!=='undefined' && window.claude && typeof window.claude.complete==='function');
     this.setState({ready:true, llmAvail, llm:llmAvail});
-    // start empty — no sample data preloaded; read URLs on demand
+    // An explicit seed URL wins; otherwise default to a random Wikipedia page plus a
+    // handful of random Project Gutenberg books so the reader opens with something live.
     const seed=(this.props&&this.props.seedUrl);
     if(seed) this.readURL(seed,'read');
+    else this.loadDefaults();
   }
 
   norm(s){return (s||'').replace(/\s+/g,' ').trim();}
@@ -1561,11 +1563,15 @@ class Component extends DCLogic {
     let data;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
     catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
-    return (data.results||[]).map(b=>{
+    return this._gutenBooks(data).slice(0,12);
+  }
+  // Map a gutendex response to readable books — only those with a plain-text edition.
+  _gutenBooks(data){
+    return ((data&&data.results)||[]).map(b=>{
       const f=b.formats||{};
       const txt=f['text/plain; charset=utf-8']||f['text/plain; charset=us-ascii']||f['text/plain']||(Object.entries(f).find(([k,v])=>/text\/plain/i.test(k)&&!/\.zip$/i.test(v))||[])[1];
       return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,downloads:b.download_count||0};
-    }).filter(b=>b.txtUrl).slice(0,12);
+    }).filter(b=>b.txtUrl);
   }
   // Strip Project Gutenberg's license header/footer so only the work is read.
   stripGutenberg(t){
@@ -1597,6 +1603,68 @@ class Component extends DCLogic {
     const r=await this.importText(text,book.title+' — '+book.author);
     this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
     if(r)this.feedLine('done','Read fully · '+r.sentenceCount+' propositions — ready to chat');
+  }
+  // ── Defaults: a random Wikipedia page + a few random Gutenberg books ───────
+  // With nothing read yet, seed the reader so the graph and sources aren't empty.
+  // The Wikipedia page opens in the center; the books join as background sources.
+  async loadDefaults(){
+    try{ await this.randomWiki(); }catch(e){}
+    try{ await this.loadRandomBooks(3); }catch(e){}
+  }
+  // Open a random Wikipedia article (namespace 0) in the center, reading it into the
+  // graph. Random articles are often stubs, so retry a few times for a substantial one.
+  async randomWiki(){
+    this.feedSep('a random Wikipedia page');
+    for(let attempt=0;attempt<5;attempt++){
+      let title=null;
+      try{
+        const j=await this._wikiJSON('https://en.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=1&format=json&origin=*');
+        const r=j&&j.query&&j.query.random&&j.query.random[0];
+        title=r&&r.title;
+      }catch(e){}
+      if(!title)continue;
+      const url='https://en.wikipedia.org/wiki/'+encodeURIComponent(String(title).replace(/ /g,'_'));
+      this.feedLine('read','Opening “'+title+'”…');
+      const res=await this.readURL(url,'read');
+      if(res){
+        // Show the now-read page in the center without re-fetching it.
+        this._srcUrl=null;this._pushLoc({t:'web',url});
+        this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));
+        this.loadCenter(url);
+        this.feedLine('read','Read “'+res.title+'” · '+res.sentenceCount+' propositions');
+        return res;
+      }
+    }
+    this.feedLine('warn','Could not load a random Wikipedia page.');
+    return false;
+  }
+  // Read N random Gutenberg books fully as background sources (no center takeover).
+  // A random page of the catalog gives variety; we shuffle and keep the first N with text.
+  async loadRandomBooks(n){
+    n=n||3;
+    const page=1+Math.floor(Math.random()*40);
+    let data;
+    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://gutendex.com/books/?page='+page));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    catch(e){this.feedLine('warn','Could not load random books — '+(e&&e.message||e));return;}
+    const books=this._gutenBooks(data);
+    for(let i=books.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=books[i];books[i]=books[j];books[j]=t;}
+    const pick=books.slice(0,n);
+    if(!pick.length){this.feedLine('warn','No readable books in that batch.');return;}
+    this.feedSep('random Project Gutenberg books');
+    for(const b of pick){await this._readBookSource(b);}
+  }
+  // Fetch → strip → read a book fully as a source, WITHOUT navigating the center to it.
+  async _readBookSource(book){
+    this.feedLine('read','Fetching “'+book.title+'”…');
+    let text;
+    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(book.txtUrl));if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
+    catch(e){this.feedLine('warn','Could not fetch “'+book.title+'” — '+(e&&e.message||e));return false;}
+    text=this.stripGutenberg(text);
+    if(text.length<200){this.feedLine('warn','“'+book.title+'” had too little readable text.');return false;}
+    await this.sleep(20);                                  // let the feed paint before the synchronous parse
+    const r=await this.readText(text,book.title+' — '+book.author);
+    if(r)this.feedLine('done','Read “'+book.title+'” · '+r.sentenceCount+' propositions');
+    return r;
   }
   ingest(url,title,text,via,image,parent,wikiLinks){
     const doc=this.E.parseText(text,{coordSubjects:true});
