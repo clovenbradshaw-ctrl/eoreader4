@@ -2817,14 +2817,42 @@ class Component extends DCLogic {
       parts.join('\n')+'</div></body></html>';
     return {html,toc,bookmarks};
   }
+  // Is a fetched body plain text rather than HTML? Trusts an explicit content-type,
+  // else sniffs the head for any block-level tag — the same test extract() uses on the
+  // memory side (mirrors ingest/plaintext.js).
+  _isPlainText(ctype,body){const ct=String(ctype||'');if(/text\/plain/i.test(ct))return true;if(/text\/html|application\/xhtml|application\/xml|\+xml/i.test(ct))return false;const head=String(body||'').slice(0,3000);return !/<\s*(!doctype|html|body|article|main|div|p|h[1-6]|table|section|span)\b/i.test(head);}
+  // Render a plain-text (.txt / Project Gutenberg / pasted) body as readable, themed
+  // HTML — blank-line paragraphs become <p>, a no-blank-line body is kept verbatim in a
+  // pre-wrap block. Without this a .txt dropped into the iframe as HTML collapses every
+  // newline to a space and the whole document reflows into one run-on blob.
+  _plainTextDoc(raw,url){
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const t=String(raw||'').replace(/\r\n?/g,'\n');
+    const blocks=t.split(/\n[ \t]*\n+/).map(b=>b.replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,' ').trim()).filter(Boolean);
+    const parts=blocks.length>1?blocks.map(p=>'<p>'+esc(p)+'</p>'):['<pre class="eo-raw">'+esc(t.replace(/[ \t]+$/gm,'').trim())+'</pre>'];
+    const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
+    const v=(n,d)=>'--eo-'+n+':'+d+';';
+    const baseTag=url?'<base href="'+esc(url)+'" target="_blank"><meta name="referrer" content="no-referrer">':'';
+    return '<!doctype html><html><head><meta charset="utf-8">'+baseTag+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('acc',a)+'}'+
+      'html,body{margin:0;background:var(--eo-bg);}'+
+      'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);}'+
+      '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
+      'p{margin:0 0 1.15em;}'+
+      '.eo-raw{white-space:pre-wrap;word-break:break-word;font:inherit;margin:0;}'+
+      '</style></head><body><div class="eo-book">'+parts.join('\n')+'</div></body></html>';
+  }
   loadCenter(url){
     if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
     if(!url){this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
     if(this._pageUrl===url&&this.state.pageDoc)return;
     this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],tocOpen:false});
-    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
+    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
       if(this.state.viewUrl!==url)return;
-      let doc=html;
+      // A plain-text body has no markup — render its paragraphs explicitly, else the
+      // iframe collapses every newline and the page reads as one run-on blob.
+      if(this._isPlainText(ctype,text)){this.setState({pageDoc:this._plainTextDoc(text,url),bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
+      let doc=text;
       // Neutralize anything that would navigate the frame away (which turns it
       // cross-origin and breaks entity decoration): scripts, no-JS refreshes,
       // meta refreshes. Stray links open in a new tab via <base target>.
@@ -2866,11 +2894,13 @@ class Component extends DCLogic {
     if(!url||/^text:/i.test(url)){this.setState({srcDoc:null,srcLoading:false,srcErr:null});return;}
     if(this._embedUrl===url&&this.state.srcDoc)return;
     this._embedUrl=url; this.setState({srcLoading:true,srcDoc:null,srcErr:null});
-    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
+    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
       if(this.state.openSrc!==url)return;
+      // A plain-text source renders as paragraphs, not raw-as-HTML (which collapses it).
+      if(this._isPlainText(ctype,text)){this.setState({srcDoc:this._plainTextDoc(text,url),srcLoading:false,srcErr:null});return;}
       let origin=url; try{origin=new URL(url).origin+'/';}catch(e){}
       const baseTag='<base href="'+origin+'"><meta name="referrer" content="no-referrer">';
-      let doc=String(html||'');
+      let doc=String(text||'');
       if(/<head[^>]*>/i.test(doc)) doc=doc.replace(/<head([^>]*)>/i,'<head$1>'+baseTag);
       else if(/<html[^>]*>/i.test(doc)) doc=doc.replace(/<html([^>]*)>/i,'<html$1><head>'+baseTag+'</head>');
       else doc=baseTag+doc;
