@@ -285,13 +285,28 @@ class Component extends DCLogic {
   newChat(scopeUrl){
     const id=this.chatId();
     const title=scopeUrl?(((this.pageOf(scopeUrl)||{}).title)||this.short(scopeUrl)):'New chat';
-    this.setState(s=>({chats:[{id,title,scope:scopeUrl||null,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:''}));
+    // A chat is ABOUT a set of sources. One to start (the source you opened it from),
+    // and you can add more to chat across them; an empty set ranges over everything read.
+    const sources=scopeUrl?[scopeUrl]:[];
+    this.setState(s=>({chats:[{id,title,sources,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false}));
     return id;
   }
+  // The sources a chat is ABOUT, as a URL list. Empty → it ranges over everything read.
+  // Tolerates the older single-`scope` shape so an in-flight chat keeps working.
+  chatSourcesOf(c){return c?(Array.isArray(c.sources)?c.sources:(c.scope?[c.scope]:[])):[];}
+  // Fold another read source into the active chat so it can be chatted with alongside
+  // the rest. Adding the first source narrows an "everything read" chat to "about this".
+  addChatSource(url){if(!url)return;this.setState(s=>({chatAddOpen:false,chats:s.chats.map(c=>{
+    if(c.id!==s.activeChat)return c;const src=this.chatSourcesOf(c);if(src.includes(url))return c;
+    const sources=[...src,url];const title=(c.messages&&c.messages.length)?c.title:(((this.pageOf(sources[0])||{}).title)||this.short(sources[0]));
+    return {...c,sources,title};})}));}
+  removeChatSource(url){this.setState(s=>({chats:s.chats.map(c=>{
+    if(c.id!==s.activeChat)return c;return {...c,sources:this.chatSourcesOf(c).filter(u=>u!==url)};})}));}
+  toggleChatAdd(){this.setState(s=>({chatAddOpen:!s.chatAddOpen}));}
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
-  openChat(id){this.setState({activeChat:id,hoverEnt:null});}
-  closeChat(){this.setState({activeChat:null});}
+  openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false});}
+  closeChat(){this.setState({activeChat:null,chatAddOpen:false});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
   _scrollChat(){requestAnimationFrame(()=>{const a=document.getElementById('eo-chat-scroll');if(a)a.scrollTop=a.scrollHeight;});}
@@ -303,19 +318,56 @@ class Component extends DCLogic {
     if(/\b(what'?s? (the )?time|what time is it|current time)\b/.test(low))
       return 'It is '+new Date().toLocaleTimeString()+'.';
     return null;}
-  // The read context for a question, as notes the model can lean on (and the source
-  // chips/entities to show). Empty when nothing relevant has been read.
-  groundNotes(q,scope){const a=this.answerQuestion(q,scope);
-    if(a.refs&&a.refs.length)return {notes:'From what you have read:\n'+a.refs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:a.sources||[]};
-    // No keyword match (e.g. "what is this about?", "explain this page") — fall back to the
-    // opening lines of the source in scope (or the page being viewed) so the model speaks
+  // The read context for a question, as the verbatim spans the model leans on (plus the
+  // source chips/entities to show). `sources` is the chat's source set — empty ranges over
+  // everything read. Empty spans when nothing relevant has been read.
+  groundNotes(q,sources){const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    const a=this.answerQuestion(q,scope);
+    const span=i=>({text:this.norm(this.master.sentences[i]),score:1});
+    if(a.refs&&a.refs.length)return {spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[]};
+    // No keyword match (e.g. "what is this about?", "summarize this book") — fall back to the
+    // opening lines of the source(s) in scope (or the page being viewed) so the model speaks
     // from the actual text instead of answering as a blank-slate assistant.
-    const src=scope||this.state.viewUrl;
-    if(src&&this.master&&this.master.sentences.length){
-      const idxs=[];for(let i=0;i<this.master.sentences.length&&idxs.length<8;i++){if(this.master.sentenceSource[i]!==src)continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(this._proseOk(low))idxs.push(i);}
-      if(idxs.length)return {notes:'From what you have read:\n'+idxs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:[src]};
+    const inScope=scope.length?(u=>scope.includes(u)):(u=>u===this.state.viewUrl);
+    if(this.master&&this.master.sentences.length&&(scope.length||this.state.viewUrl)){
+      const idxs=[],used=new Set();
+      for(let i=0;i<this.master.sentences.length&&idxs.length<8;i++){const u=this.master.sentenceSource[i];if(!inScope(u))continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(this._proseOk(low)){idxs.push(i);used.add(u);}}
+      if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used]};
     }
-    return {notes:'',entities:a.entities||[],sources:[]};}
+    return {spans:[],entities:a.entities||[],sources:[]};}
+  // ── The meaning graph, serialized as EOT triples for the talker ───────────
+  // What the reading MEANS, folded into typed relations: "A -> B : rel" for a
+  // relationship, "A : fact" for a property. This is the structure buildGroundedMessages
+  // reinstates (its `graph` slot) so the chat reasons over the meaning of what was read,
+  // not just the raw lines. Scoped to the chat's sources; ranges over all when empty.
+  meaningGraph(sources,{maxEntities=18,maxEdges=44,perEntity=4}={}){
+    if(!this.graph)return '';
+    const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    const inScope=id=>!scope.length||this.mentionsOf(id).some(i=>scope.includes(this.master.sentenceSource[i]));
+    const ents=[...this.graph.entities.values()].filter(e=>this.showable(e.id)&&inScope(e.id));
+    ents.sort((a,b)=>this.weightOf(b)-this.weightOf(a));
+    const top=ents.slice(0,maxEntities),topSet=new Set(top.map(e=>e.id));
+    const lines=[],seen=new Set();
+    for(const e of top){
+      if(lines.length>=maxEdges)break;
+      const a=this.labelOf(e.id);let n=0;
+      for(const nb of this.neighbors(e.id)){
+        if(n>=perEntity||lines.length>=maxEdges)break;
+        if(scope.length&&!topSet.has(nb.id))continue;          // keep the graph within scope
+        const rel=(nb.vias&&nb.vias.find(v=>v&&v.length<24))||(nb.vias&&nb.vias[0]);if(!rel)continue;
+        const b=this.labelOf(nb.id),key=[a,b].sort().join('|')+'|'+rel;if(seen.has(key))continue;seen.add(key);
+        lines.push(a+' -> '+b+' : '+this.norm(rel));n++;
+      }
+    }
+    // Properties — a defining predicate for the most central entities ("A : fact").
+    for(const e of top.slice(0,8)){
+      const def=this.bestDef(e.id,null);if(!def||!def.pred)continue;
+      const pred=this.norm(def.pred).replace(/[.;,]+$/,'');if(!pred)continue;
+      const key='prop|'+e.id;if(seen.has(key))continue;seen.add(key);
+      lines.push(this.labelOf(e.id)+' : '+pred);
+    }
+    return lines.join('\n');
+  }
   // Minimal, SAFE markdown → HTML for chat answers (the model replies in markdown:
   // **bold**, lists, `code`, links). Everything is HTML-escaped FIRST, then only a fixed
   // set of tags is emitted, so nothing the model writes can inject raw markup.
@@ -358,14 +410,31 @@ class Component extends DCLogic {
     this._chatModel=model;this.setState({modelStatus:''});
     return model;
   }
+  // A summary-shaped question — "summarize this", "what's it about", "give me the gist".
+  // Routes the grounded prompt to its summary task (the faithfulness guard), so a
+  // "summarize this book" turn draws the lines together instead of restating one.
+  _isSummaryQ(q){return /\b(summar(y|ise|ize)|overview|recap|gist|tl;?dr|in short|what(?:'s| is| are)?\s+(?:this|it|the (?:book|text|story|source|document))\s+about|what happens)\b/i.test(String(q||''));}
+  // The orientation line for a grounded chat — names WHAT the chat is about so the model
+  // is never confused about its subject (the "I don't see a book provided" failure). This
+  // is the reader-chat surface, where being clear about the source is the whole point.
+  chatOrientation(srcs){
+    const titleOf=u=>this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),60);
+    const all=(this.master&&this.master.sentences)||[];
+    const count=srcs.length?all.filter((_,i)=>srcs.includes(this.master.sentenceSource[i])).length:all.length;
+    const props=count+' proposition'+(count!==1?'s':'')+' read';
+    if(!srcs.length){const n=(this.master&&this.master.pages.length)||0;return 'everything you have read'+(n?(' across '+n+' source'+(n!==1?'s':'')):'')+' · '+props;}
+    if(srcs.length===1)return titleOf(srcs[0])+' · '+props;
+    const names=srcs.slice(0,2).map(titleOf).join(', '),more=srcs.length-2;
+    return names+(more>0?(' and '+more+' more'):'')+' ('+srcs.length+' sources) · '+props;
+  }
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
-    const cur=this.activeChatObj();const scope=cur?cur.scope:null;
+    const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // append the user turn + a pending assistant bubble
     let id=this.state.activeChat;
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
-      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),scope:null,messages:[],ts:Date.now()},...chats];idx=0;}
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
       chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true}]};
       return {chats,activeChat:id,chatInput:''};});
@@ -373,19 +442,33 @@ class Component extends DCLogic {
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     // 1) clock questions — no model
     const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
-    // 2) grounded notes from what's been read
-    const ground=this.groundNotes(q,scope);
-    // 3) the model — normal chat, leaning on the notes when present
+    // 2) the spans that surface for this question, scoped to the chat's sources
+    const ground=this.groundNotes(q,sources);
+    // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
+    //    graph, so it speaks from the document instead of as a blank-slate assistant.
     try{
       const model=await this.ensureChatModel();
-      const history=prev.slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
-      const messages=this._ME.buildChatMessages({question:q,history,notes:ground.notes,now:new Date()});
+      const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
+      let messages;
+      if(grounded){
+        const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
+        messages=this._ME.buildGroundedMessages({
+          question:q, spans:ground.spans||[], graph:this.meaningGraph(sources),
+          orientation:this.chatOrientation(sources),
+          task:this._isSummaryQ(q)?'summary':'answer',
+          conversation:{pastTurns}, now:new Date(),
+        });
+      }else{
+        // Nothing read yet — fall back to the plain assistant frame (chat works without a doc).
+        const history=prev.slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
+        messages=this._ME.buildChatMessages({question:q,history,now:new Date()});
+      }
       const raw=await model.phrase(messages,{maxTokens:512,temperature:0.4});
-      const text=this.norm(raw)||(ground.notes?this.answerQuestion(q,scope).text:'(no answer)');
+      const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       finish({text,entities:ground.entities,sources:ground.sources});
     }catch(e){
       // model unavailable — answer structurally from what's read, or say so plainly
-      const fb=this.answerQuestion(q,scope);
+      const fb=this.answerQuestion(q,sources);
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
       finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:fb.sources,modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
       this.setState({modelStatus:''});
@@ -396,9 +479,10 @@ class Component extends DCLogic {
   answerQuestion(q,scope){
     if(!this.master||!this.master.sentences.length)
       return {text:'I haven’t read anything yet. Read a URL or import a book — it has to be read fully — then ask.',refs:[],entities:[],sources:[]};
+    const scopes=(Array.isArray(scope)?scope:(scope?[scope]:[]));
     const qwords=q.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
     if(!qwords.length) return {text:'Ask about a name, place, or idea from what you’ve read.',refs:[],entities:[],sources:[]};
-    const inScope=i=>!scope||this.master.sentenceSource[i]===scope;
+    const inScope=i=>!scopes.length||scopes.includes(this.master.sentenceSource[i]);
     const ents=[];
     if(this.graph)for(const e of this.graph.entities.values()){if(!this.showable(e.id))continue;const lab=this.labelOf(e.id).toLowerCase();if(qwords.some(w=>lab===w||(lab.length>3&&lab.includes(w))||(w.length>3&&w.includes(lab))))ents.push(e.id);}
     const scored=[];
@@ -415,8 +499,10 @@ class Component extends DCLogic {
   chatVals(base){
     base.chats=(this.state.chats||[]).map(c=>{
       const active=c.id===this.state.activeChat;
+      const ss=this.chatSourcesOf(c);
+      const scopeSub=ss.length?(ss.length===1?this.truncLabel(((this.pageOf(ss[0])||{}).title)||'a source',22):ss.length+' sources'):'all sources';
       return {id:c.id,title:this.truncLabel(c.title||'New chat',32),
-        sub:(c.scope?(this.truncLabel(((this.pageOf(c.scope)||{}).title)||'a source',22)):'all sources')+' · '+Math.ceil(c.messages.length/2)+' Q',
+        sub:scopeSub+' · '+Math.ceil(c.messages.length/2)+' Q',
         active,onOpen:()=>this.openChat(c.id),
         rowStyle:'display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;margin-bottom:3px;cursor:pointer;border:1px solid '+(active?'var(--accline)':'transparent')+';background:'+(active?'var(--accbg)':'transparent')+';'};
     });
@@ -441,13 +527,28 @@ class Component extends DCLogic {
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
     });
+    // What this chat is ABOUT — one chip per source, removable, plus the sources you can
+    // still add. An empty set is shown as the "everything you've read" chip (not removable).
+    const ss=this.chatSourcesOf(cur);
+    const titleOf=u=>this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),26);
+    const aboutChips=ss.map(u=>({label:titleOf(u),url:u,onOpen:()=>this.goWeb(u),
+      onRemove:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.removeChatSource(u);},
+      chipStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:3px 4px 3px 9px;max-width:200px;',
+      xStyle:'border:none;background:transparent;color:var(--acc);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;border-radius:4px;'}));
+    const pages=(this.master&&this.master.pages)||[];
+    const addable=pages.filter(p=>!ss.includes(p.url)).map(p=>({label:this.truncLabel(p.title||this.short(p.url),34),host:this.short(p.url),
+      onAdd:()=>this.addChatSource(p.url),
+      rowStyle:'display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 11px;border-radius:8px;cursor:pointer;'}));
     base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,
-      scopeLabel:cur.scope?(this.truncLabel(((this.pageOf(cur.scope)||{}).title)||this.short(cur.scope),36)):'everything read',
+      scopeLabel:ss.length?(ss.length===1?titleOf(ss[0]):(ss.length+' sources')):'everything you have read',
+      about:aboutChips,hasAbout:aboutChips.length>0,aboutEmpty:aboutChips.length===0,
+      addOpen:!!this.state.chatAddOpen,addable,hasAddable:addable.length>0,noAddable:addable.length===0,onToggleAdd:()=>this.toggleChatAdd(),
+      addEmptyMsg:pages.length?'All your sources are already in this chat.':'Read a URL or import a book to add a source.',
       messages:msgs,empty:msgs.length===0,modelStatus:this.state.modelStatus||'',hasStatus:!!this.state.modelStatus,
       shellStyle:drawer
         ? 'position:absolute;top:0;right:0;bottom:0;width:min(440px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
         : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);',
-      placeholder:cur.scope?('Ask about “'+this.truncLabel(((this.pageOf(cur.scope)||{}).title)||'this source',24)+'”…'):'Ask anything…'};
+      placeholder:ss.length?('Ask about '+(ss.length===1?('“'+titleOf(ss[0])+'”'):('these '+ss.length+' sources'))+'…'):'Ask about everything you’ve read…'};
   }
   // ── Project Gutenberg — a source of sources ──────────────────────────────
   // Search the catalog (gutendex), fetched through the same proxy. Returns books

@@ -5,6 +5,6 @@
 // grounded panel — a model is only loaded when you actually chat, and chat falls
 // back to a structural answer if no model is available.
 export { createModel } from '../model/interface.js';
-export { buildChatMessages } from '../model/prompt.js';
+export { buildChatMessages, buildGroundedMessages } from '../model/prompt.js';
 import '../model/echo.js';
 import '../model/webllm.js';
