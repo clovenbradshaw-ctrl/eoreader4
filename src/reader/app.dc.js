@@ -18,7 +18,7 @@ class Component extends DCLogic {
     this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
     this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
     this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
-    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null,savedWebBrain=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');savedWebBrain=localStorage.getItem('eo_webbrain');}catch(e){}
+    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null,savedWebBrain=null,savedViewMode=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');savedWebBrain=localStorage.getItem('eo_webbrain');savedViewMode=localStorage.getItem('eo_viewmode');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
@@ -32,7 +32,12 @@ class Component extends DCLogic {
       hoverSrc:null, pinSrc:null, openSrc:null, mode:'breadth', direction:'', hoverEnt:null, hoverHref:null, hoverXY:{x:0,y:0}, rev:0, sortMode:'updated',
       llm:true, llmAvail:false, svoBusy:false, svoStatus:'', pasteOpen:false, pasteText:'',
       srcWide:false, srcTab:'page', srcDoc:null, srcLoading:false, srcErr:null, linkMode:savedLink==='0'?false:true, linkChoice:null,
-      viewUrl:null, detect:true, pageDoc:null, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
+      viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
+      // How a READ source renders in the center: 'reader' is the stripped book view (clean
+      // prose, chrome/ads gone, engine TOC + flagged passages); 'native' is the real fetched
+      // page with its own layout, given the same contents nav + highlighted passages on top.
+      // A toolbar toggle flips it; an UNread URL always shows native (no prose to strip yet).
+      viewMode:(savedViewMode==='native'?'native':'reader'),
       accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false,
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
@@ -272,6 +277,69 @@ class Component extends DCLogic {
     const onScroll=()=>{const max=Math.max(1,(d.documentElement.scrollHeight||d.body.scrollHeight||0)-win.innerHeight);this._lastPct=Math.max(0,Math.min(1,win.scrollY/max));
       if(this._scrollT)return;this._scrollT=setTimeout(()=>{this._scrollT=null;const pct=this._lastPct;this.saveReadPos(url,pct);if(Math.abs((this.state.bookProgress||0)-pct)>=0.005)this.setState({bookProgress:pct});},150);};
     win.addEventListener('scroll',onScroll,{passive:true});}
+  // ── native page: the reading layer laid over the REAL page ────────────────
+  // Same contents nav + flagged passages the book view gets, but built against the live
+  // DOM instead of a re-rendered book: headings become the TOC, the engine's flagged
+  // passages are matched onto the page's own blocks and highlighted in place.
+  _setupNative(d,ifr,url){if(!d||!d.defaultView||!d.body)return;const win=d.defaultView;
+    // Re-synced every pass: the ❖ reveal class, and the highlight CSS (so a live accent
+    // change repaints the marks, matching how the entity styles are rebuilt each pass).
+    if(d.documentElement)d.documentElement.classList.toggle('eo-bm-on',!!this.state.bookmarkMode);
+    this._injectMarkCSS(d);
+    if(d.__eoNativeUrl===url)return;
+    // Defer until the body actually has content (scripts were stripped; layout may lag).
+    let n=0;const build=()=>{
+      if(this.state.viewUrl!==url||this.state.bookView)return;        // navigated away / switched to reader
+      const ifr2=document.querySelector('iframe[data-eo-center]'),dd=ifr2&&ifr2.contentDocument;
+      if(!dd||dd!==d)return;                                          // the doc was swapped under us
+      if((!d.body||d.body.childNodes.length<3)&&n++<25){setTimeout(build,90);return;}
+      d.__eoNativeUrl=url;
+      const toc=this._nativeTOC(d),marks=this._nativeMarks(d,url);
+      this.setState({bookToc:toc,bookmarks:marks,bmRail:[]});
+      this._trackNativeScroll(d,url);
+    };
+    setTimeout(build,60);}
+  // The flagged-passage styles the book HTML carries inline — a live page has none, so
+  // inject them (keyed to the live accent). Inert until html.eo-bm-on (the ❖ toggle).
+  _injectMarkCSS(d){let st=d.getElementById('__eo_marks');if(!st){st=d.createElement('style');st.id='__eo_marks';(d.head||d.documentElement).appendChild(st);}
+    const a=this.curAccent();
+    st.textContent='.eo-bm{scroll-margin-top:18px;border-radius:0 6px 6px 0;transition:background .2s,box-shadow .2s;}'+
+      'html.eo-bm-on .eo-bm{background:'+this.hexA(a,.12)+';box-shadow:inset 3px 0 0 '+a+';padding:.45em .75em;}'+
+      'html.eo-bm-on .eo-bm[data-eo-why]:not([data-eo-why=""])::before{content:"\\2756 " attr(data-eo-why);display:block;font:700 .62em/1.3 -apple-system,BlinkMacSystemFont,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:'+a+';margin-bottom:.35em;}';}
+  // Build the contents from the page's OWN headings: skip chrome, dedupe, give each an
+  // eo-ch- id so the existing Contents menu + ⏮/⏭ section jumps drive the native page too.
+  _nativeTOC(d){const out=[],seen=new Set();let n=0;
+    d.querySelectorAll('h1,h2,h3,h4').forEach(h=>{
+      if(h.closest('nav,header,footer,aside'))return;
+      const label=this.norm(h.textContent||'');if(label.length<2||label.length>90)return;
+      const key=label.toLowerCase();if(seen.has(key))return;seen.add(key);
+      const lv=Math.min(3,Math.max(1,(+h.tagName.slice(1)||1)));
+      const id='eo-ch-'+n;h.id=id;out.push({id,label,level:lv});n++;});
+    return (out.length>=2&&out.length<=80)?out:[];}
+  // Lay the engine's flagged passages onto the live DOM: for each, find the first unused
+  // content block whose text contains the passage's opening, tag it eo-bm + its "why".
+  // A passage that finds no confident match is skipped — better absent than mislocated.
+  _nativeMarks(d,url){const p=this.pageOf(url);if(!p)return [];
+    const flags=this._pageFlags(p);if(!flags.length)return [];
+    const norm=s=>this.norm(String(s||'')).toLowerCase();
+    const blocks=[...d.querySelectorAll('p,li,blockquote,h1,h2,h3,h4,td,dd')].filter(el=>!el.closest('nav,header,footer,aside')&&(el.textContent||'').trim().length>=24);
+    const used=new Set(),marks=[];let n=0;
+    for(const f of flags){const probe=norm(f.text).slice(0,40);if(probe.length<24)continue;
+      let hit=null;for(const el of blocks){if(used.has(el))continue;if(norm(el.textContent).indexOf(probe)>=0){hit=el;break;}}
+      if(!hit)continue;used.add(hit);
+      if(!hit.id)hit.id='eo-bm-'+n;hit.classList.add('eo-bm');if(f.why)hit.setAttribute('data-eo-why',f.why);
+      marks.push({id:hit.id,why:f.why,paraIndex:n});n++;}
+    return marks;}
+  // Progress + the marker rail for the native page (the book path's _setupBook tail, minus
+  // the e-reader CSS, which doesn't apply to a page rendered in its own styles).
+  _trackNativeScroll(d,url){if(!d||!d.defaultView)return;const win=d.defaultView;
+    if(d.__eoNativeScroll===url)return;d.__eoNativeScroll=url;
+    if((this.state.bookmarks||[]).length){let n=0;const railTick=()=>{if(d.__eoNativeScroll!==url||this.state.viewUrl!==url)return;const h=d.documentElement.scrollHeight||d.body.scrollHeight||0;if(h>win.innerHeight||n++>25){const r=this._bookmarkRail(d);if(r.length)this.setState({bmRail:r});}else setTimeout(railTick,80);};setTimeout(railTick,90);}
+    const pos=this.loadReadPos(url);
+    if(pos>0){let n=0;const tryScroll=()=>{if(d.__eoNativeScroll!==url)return;const max=Math.max(1,(d.documentElement.scrollHeight||d.body.scrollHeight||0)-win.innerHeight);if(max>40||n++>25){win.scrollTo(0,pos*max);}else setTimeout(tryScroll,70);};setTimeout(tryScroll,70);}
+    const onScroll=()=>{const max=Math.max(1,(d.documentElement.scrollHeight||d.body.scrollHeight||0)-win.innerHeight);this._lastPct=Math.max(0,Math.min(1,win.scrollY/max));
+      if(this._scrollT)return;this._scrollT=setTimeout(()=>{this._scrollT=null;const pct=this._lastPct;this.saveReadPos(url,pct);if(Math.abs((this.state.bookProgress||0)-pct)>=0.005)this.setState({bookProgress:pct});},150);};
+    win.addEventListener('scroll',onScroll,{passive:true});}
   gotoChapter(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-14;try{win.scrollTo({top,behavior:'smooth'});}catch(e){win.scrollTo(0,top);}}this.setState({tocOpen:false});}
   // Section anchors (their document tops), in reading order — the cursor's structural stops.
   _sectionTops(){const d=this._bookDoc();if(!d||!d.defaultView)return [];const win=d.defaultView,out=[];
@@ -287,6 +355,14 @@ class Component extends DCLogic {
     else if(ni<0){if(win.scrollY>6){try{win.scrollTo({top:0,behavior:'smooth'});}catch(e){win.scrollTo(0,0);}}return;}
     const target=Math.max(0,tops[ni]-14);try{win.scrollTo({top:target,behavior:'smooth'});}catch(e){win.scrollTo(0,target);}}
   toggleTOC(){this.setState(s=>({tocOpen:!s.tocOpen}));}
+  // Flip how a read source renders — stripped READER book vs the NATIVE page — and
+  // re-render the open view in the new mode. The choice is a persisted preference, so
+  // every page you open afterwards honors it. _pageUrl is cleared so loadCenter doesn't
+  // short-circuit on the page it already has up.
+  toggleViewMode(){const mode=this.state.viewMode==='native'?'reader':'native';
+    try{localStorage.setItem('eo_viewmode',mode);}catch(e){}
+    this._pageUrl=null;
+    this.setState({viewMode:mode,tocOpen:false},()=>{if(this.state.viewUrl&&!/^text:/i.test(this.state.viewUrl))this.loadCenter(this.state.viewUrl);});}
   toggleSettings(){this.setState(s=>({settingsOpen:!s.settingsOpen}));}
   closeSettings(){this.setState({settingsOpen:false});}
   toggleAudit(){const v=!this.state.auditMode;try{localStorage.setItem('eo_audit',v?'1':'0');}catch(e){}this.setState({auditMode:v});}
@@ -2152,7 +2228,7 @@ class Component extends DCLogic {
   showOverview(){this.setState({panelMode:'overview'});}
   sourcesOf(id){return [...new Set(this.mentionsOf(id).map(i=>this.master.sentenceSource[i]).filter(Boolean))];}
   neighbors(id){const agg=new Map();for(const e of this.edgesOf(id)){const o=e.from===id?e.to:e.from;if(this.isURLish(this.labelOf(o))||!this.showable(o))continue;const c=agg.get(o)||{w:0,vias:new Set(),sent:null,grain:null,llm:false};c.w+=((e.weight!=null?e.weight:1)||0)+1e-4;const via=e.relType||e.via||e.kind;if(!this.junkRel(via))c.vias.add(via);if(c.sent==null)c.sent=e.sentIdx;if(!c.grain)c.grain=this.edgeGrain(e);if(this.edgeReader(e)==='svo-llm')c.llm=true;agg.set(o,c);}return [...agg].map(([o,v])=>({id:o,w:v.w,vias:[...v.vias],sent:v.sent,grain:v.grain,llm:v.llm})).sort((a,b)=>b.w-a.w);}
-  pageOf(url){return this.master.pages.find(p=>p.url===url);}
+  pageOf(url){return (this.master&&this.master.pages)?this.master.pages.find(p=>p.url===url):undefined;}
   // ── subject-not-mention selection ──────────────────────────────────
   // A profile stitches propositions the entity is the SUBJECT of — what the record
   // says ABOUT it — not every sentence its name turns up in. The graph already records
@@ -2838,7 +2914,11 @@ class Component extends DCLogic {
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
   goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
-  processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});});}
+  processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});
+    // Now that the page is read it has propositions — re-render the open view in the
+    // chosen mode (reader book, or the native page with its contents + flagged passages),
+    // swapping out the raw live page it was first shown as while reading.
+    if(res&&res.url&&this.state.viewUrl===res.url)this.loadCenter(res.url);});}
   toggleDetect(){this.setState(s=>({detect:!s.detect}));}
   canBack(){return !!(this._hist&&this._hpos>0);}
   canForward(){return !!(this._hist&&this._hpos<this._hist.length-1);}
@@ -2854,13 +2934,24 @@ class Component extends DCLogic {
   // paragraphs (blank-line separated) are kept; if the text has no such structure
   // we group sentences into readable paragraphs. Rendered into the SAME sandboxed
   // iframe the web view uses, so decorateFrame() makes every known entity clickable.
-  _bookHtml(p){
-    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // The reading paragraphs of a page: the author's own blank-line blocks, or — for a
+  // body with no such structure — sentences grouped into readable runs. Shared by the
+  // book renderer and the native overlay so both flag the SAME passages.
+  _pageParas(p){
     let paras=String(p.text||'').split(/\n\s*\n+/).map(s=>this.norm(s)).filter(s=>s.length);
     if(paras.length<=1){
       const sents=(p.sentences||[]).map(s=>this.norm(s)).filter(Boolean);
       paras=[];for(let i=0;i<sents.length;i+=4)paras.push(sents.slice(i,i+4).join(' '));
     }
+    return paras;
+  }
+  // The page's flagged passages as {text,why} — the same surprise read the book view
+  // marks, returned as strings so they can be located in a live DOM for the native view.
+  _pageFlags(p){const paras=this._pageParas(p);
+    return this.detectBookmarks(p,paras).map(m=>({text:paras[m.paraIndex]||'',why:m.why||''})).filter(f=>f.text.length>=24);}
+  _bookHtml(p){
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let paras=this._pageParas(p);
     // Best-guess structure (engine-driven). Each section's anchor paragraph becomes a
     // navigable target; an explicit-heading or title-ish anchor renders as a heading,
     // a prose anchor just gets an invisible id. The first body paragraph keeps the drop cap.
@@ -2916,6 +3007,15 @@ class Component extends DCLogic {
       parts.join('\n')+'</div></body></html>';
     return {html,toc,bookmarks};
   }
+  // Render a source as a readable BOOK — drop-cap prose, an engine-found table of
+  // contents, and the passages the reading flagged as important. This is the same
+  // treatment Project Gutenberg books get, now given to EVERY document we've actually
+  // read: an imported text, a book, OR a web page. The only thing that still loads as a
+  // raw live page is a URL we haven't read yet (browsing ahead of the reading), which
+  // has no parsed propositions to draw a contents or find its surprises from.
+  _renderBook(url,p){const b=this._bookHtml(p);this._pageUrl=url;
+    this.setState({bookView:true,pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}
+  _bookReady(p){return !!(p&&(this.norm(p.text||'').length>=60||(p.sentences&&p.sentences.length)));}
   // Is a fetched body plain text rather than HTML? Trusts an explicit content-type,
   // else sniffs the head for any block-level tag — the same test extract() uses on the
   // memory side (mirrors ingest/plaintext.js).
@@ -2942,15 +3042,21 @@ class Component extends DCLogic {
       '</style></head><body><div class="eo-book">'+parts.join('\n')+'</div></body></html>';
   }
   loadCenter(url){
-    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
-    if(!url){this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
-    if(this._pageUrl===url&&this.state.pageDoc)return;
-    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],tocOpen:false});
+    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){this._renderBook(url,p);}else{this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
+    if(!url){this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
+    // A web page we've read can render two ways (the toolbar toggle picks). READER —
+    // the stripped book view, TOC + flagged passages over the cleaned prose. NATIVE —
+    // the real page below, with the same contents nav + highlighted passages laid on it
+    // (built in decorateFrame once the live DOM is in). An unread URL has no prose yet,
+    // so it always loads native until the read finishes (processPage re-renders it).
+    const read=this.pageOf(url);if(this._bookReady(read)&&this.state.viewMode!=='native'){this._renderBook(url,read);return;}
+    if(this._pageUrl===url&&this.state.pageDoc&&!this.state.bookView)return;
+    this._pageUrl=url;this.setState({bookView:false,pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false});
     fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
-      if(this.state.viewUrl!==url)return;
+      if(this.state.viewUrl!==url||this.state.bookView)return;
       // A plain-text body has no markup — render its paragraphs explicitly, else the
       // iframe collapses every newline and the page reads as one run-on blob.
-      if(this._isPlainText(ctype,text)){this.setState({pageDoc:this._plainTextDoc(text,url),bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
+      if(this._isPlainText(ctype,text)){this.setState({bookView:false,pageDoc:this._plainTextDoc(text,url),bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
       let doc=text;
       // Neutralize anything that would navigate the frame away (which turns it
       // cross-origin and breaks entity decoration): scripts, no-JS refreshes,
@@ -3125,8 +3231,14 @@ class Component extends DCLogic {
   decorateFrame(d,ifr){
     try{
       // A book in the center is an e-book: apply reading prefs, restore position, track progress.
-      const _bookUrl=(this.state.viewUrl&&/^text:/i.test(this.state.viewUrl))?this.state.viewUrl:null;
+      // Any read source renders this way now — imported text, a Gutenberg book, or a web page.
+      const _bookUrl=(this.state.viewUrl&&this.state.bookView)?this.state.viewUrl:null;
       if(_bookUrl){try{this._setupBook(d,ifr,_bookUrl);}catch(e){}}
+      // A NATIVE read page gets the same reading layer laid over its own layout: a contents
+      // nav from its headings, the engine's flagged passages highlighted in place, plus
+      // progress + the marker rail. Only once the page has been read (it has the prose).
+      const _natUrl=(this.state.viewUrl&&!this.state.bookView&&!/^text:/i.test(this.state.viewUrl)&&this._bookReady(this.pageOf(this.state.viewUrl)))?this.state.viewUrl:null;
+      if(_natUrl){try{this._setupNative(d,ifr,_natUrl);}catch(e){}}
       // styles — rebuilt each pass so accent + highlight mode apply live
       {let st=d.getElementById('__eo_style');if(!st){st=d.createElement('style');st.id='__eo_style';(d.head||d.body).appendChild(st);}
         const a=this.curAccent(),hl=this.state.highlightStyle;
@@ -3594,10 +3706,20 @@ class Component extends DCLogic {
 
     const vu=this.state.viewUrl;
     base.askPageOn=!!vu&&!base.chatOn;   // the discoverable "Ask about this page" FAB
-    // E-book reading toolbar — only over a book (text:). Applies live to the iframe.
-    { const rp=this.state.readPrefs||this._defaultRead,toc=this.state.bookToc||[],isBook=!!(vu&&/^text:/i.test(vu));
+    // Reading toolbar. Over a stripped book (isBook) it carries the full e-reader typography
+    // controls; over a NATIVE read page it carries just the contents nav, flagged passages,
+    // and the Reader/Page mode toggle. Both render the same Contents + ❖ marks.
+    { const rp=this.state.readPrefs||this._defaultRead,toc=this.state.bookToc||[],isBook=!!(vu&&this.state.bookView);
+      const isWebUrl=!!(vu&&!/^text:/i.test(vu));
+      const canToggleMode=isWebUrl&&this._bookReady(this.pageOf(vu));   // both renderings available once read
+      const nativeNow=isWebUrl&&!this.state.bookView;                   // the live page is what's showing
       const pill=on=>'display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 9px;border:1px solid var(--line2);background:'+(on?'var(--accbg)':'var(--app)')+';color:'+(on?'var(--acc)':'var(--ink2)')+';border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1;';
       base.reading={isBook,
+        show:isBook||canToggleMode,
+        canToggleMode,modeNative:nativeNow,
+        modeLabel:nativeNow?'Reader':'Page',
+        modeTitle:nativeNow?'Reading the live page with its own layout. Switch to the reader view — clean prose, no ads or chrome.':'Reading the stripped reader view. Switch to the live page with its own layout, contents and highlights laid on top.',
+        onToggleMode:()=>this.toggleViewMode(),modeStyle:pill(false),
         btnStyle:pill(false),
         fsLabel:(rp.fs||19)+'px',onFontDown:()=>this.bumpFont(-1),onFontUp:()=>this.bumpFont(1),
         onLineDown:()=>this.bumpLine(-0.1),onLineUp:()=>this.bumpLine(0.1),
