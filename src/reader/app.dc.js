@@ -3166,6 +3166,15 @@ class Component extends DCLogic {
     ents.sort(cmp);
     const primaryOf=new Map();
     ents.forEach(e=>{const m=srcTally.get(e.id);let best=null,bc=-1;if(m)for(const [u,c] of m){if(c>bc){bc=c;best=u;}}primaryOf.set(e.id,best);});
+    // Per-source entity COUNT for the source-row subtitle ("· N entities") — the number of
+    // showable entities that actually APPEAR (are mentioned) in that source, NOT the number
+    // "homed" to it by primaryOf. Cross-source coreference folds a name shared by two sources
+    // (a re-read of the same book, or an article overlapping a book) onto one referent; the
+    // homed bucket then gives all those entities to a single source, leaving the other showing
+    // ~0 even though the full text plainly carries them. Counting by mention restores each
+    // source's true coverage — both copies of one book report their entities, not one-or-none.
+    const entInSrc=new Map();this.master.pages.forEach(p=>entInSrc.set(p.url,0));
+    ents.forEach(e=>{const m=srcTally.get(e.id);if(!m)return;for(const u of m.keys())if(entInSrc.has(u))entInSrc.set(u,entInSrc.get(u)+1);});
     const pagesByRecency=[...this.master.pages].sort((a,b)=>b.ts-a.ts);
     const bucket=new Map();pagesByRecency.forEach(p=>bucket.set(p.url,[]));
     const fallback=pagesByRecency.length?pagesByRecency[0].url:null;
@@ -3190,7 +3199,7 @@ class Component extends DCLogic {
       else kids.forEach(c=>pushP(c,Math.min(depth+1,2)));};
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
-    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=(bucket.get(p.url)||[]).length;
+    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=entInSrc.get(p.url)||0;
       return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
         hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
         onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
