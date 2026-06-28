@@ -107,7 +107,7 @@ const PIPELINE = [
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
 // for its meaning-distance verdicts; threaded through like `embedder`, optional, and
 // degrading honestly to the embedder-free symbolic algebra when absent.
-export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, inquire = false, horizon = null, cast = null, reread = false, witnessSource = null, shapeLibrary = null, groundGraph = false, now = null, lensPort = false, voicePref = null }) => {
+export const runTurn = async ({ question, doc, docs, model, embedder, geometricEmbedder, classifier, adjacency, centroids, auditLog, onStep, history = [], grounding = 'auto', stream = false, onToken = null, alpha, mindSpans = null, inquire = false, horizon = null, cast = null, reread = false, witnessSource = null, shapeLibrary = null, groundGraph = false, now = null, lensPort = false, voicePref = null, signal = null }) => {
   // Ground against a SELECTED SET of documents when one is given: several parsed docs
   // are folded into one composite doc (organs/in/composite.js) the pipeline reads as a
   // single document — referents stay distinct per source unless cross-doc SYN'd. A
@@ -152,7 +152,10 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // retrieves from to confirm an interpretation: when the grounding doc is the model's own
   // notes (reafference) and the answer rests only on them, the engine fetches the source spans
   // on the claim's figures and re-checks. Null → no seeking, byte-identical.
-  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, inquire, horizon, cast, reread, witnessSource, shapeLibrary, groundGraph, now, lensPort, voicePref };
+  // `signal` is the turn's AbortSignal (the Stop button). Threaded into ctx so the `llm`
+  // stage can hand it to the backend, which halts the decode and returns the partial answer;
+  // an aborted `llm` then short-circuits the remaining stages. Null on a default turn.
+  const ctx0      = { question, doc: groundingDoc, model, embedder, geometricEmbedder, classifier, adjacency, centroids, history, grounding, stream, onToken, alpha, mindSpans, inquire, horizon, cast, reread, witnessSource, shapeLibrary, groundGraph, now, lensPort, voicePref, signal };
 
   // The answer is FORMED at `bind` and only ANNOTATED after it (factcheck, revise,
   // veto, settle). Those annotation stages must never discard an answer the model
@@ -243,6 +246,9 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
       bound: ctx.bound || [],
       verdicts: ctx.factcheck?.edgeVerdicts || [],
       route: ctx.route || 'grounded', grounding, turn,
+      // The user stopped this turn mid-decode (the Stop button): the answer is the partial
+      // text, and the UI marks it as stopped rather than committing it to the session fold.
+      stopped: ctx.stopped || false,
     };
   } catch (err) {
     turn.step('error', { message: String(err?.message || err) });

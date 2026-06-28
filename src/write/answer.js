@@ -48,7 +48,7 @@ import { mountPersonality, bandToCell, bandOfCell } from './voice.js';
 // no plan resolves (the caller falls back to a single phrase(), non-breaking by
 // construction).
 export const streamAnswer = async ({
-  doc, surf, model, focus = [], onToken, budget, orientation = '', alpha, lens = null,
+  doc, surf, model, focus = [], onToken, budget, orientation = '', alpha, lens = null, signal = null,
 } = {}) => {
   if (!doc || !surf || !model) return null;
 
@@ -66,6 +66,9 @@ export const streamAnswer = async ({
   let pending = null;                 // a forward correction the last seam carried (§3c)
 
   for (let i = 0; i < plan.length; i++) {
+    // CANCELLATION (the Stop button): the user stopped between beats — return the draft so far
+    // rather than decoding more grounded sentences.
+    if (signal?.aborted) break;
     const cell = plan[i];
     // The frame conditions the SURFACE only — posture, a plain-words target, budget.
     // It never touches the edge or the band; those are the resolver's and the
@@ -99,7 +102,7 @@ export const streamAnswer = async ({
       const personality = mountPersonality({ cell: cellAddr, weights: { act: 1, grain: 1 }, banks: lens.banks, budget: lens.budget ?? 6, dialMul: lens.dialMul }).bias;
       beatLens = { ...lens, personality, lambda: personality.size ? 1 : 0 };
     }
-    const raw = await streamPhrase(model, cursor.input, { maxTokens: cursor.budget, onToken, lens: beatLens });
+    const raw = await streamPhrase(model, cursor.input, { maxTokens: cursor.budget, onToken, lens: beatLens, signal });
     const beat = raw.trim();
     draft += beat;
 

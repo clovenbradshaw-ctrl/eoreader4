@@ -114,19 +114,23 @@ registerBackend('wllama', (opts = {}) => {
       // UI sees the beat form left to right (§3a). wllama hands the running text on
       // each new token; we emit the delta. Absent `onToken`, createCompletion still
       // samples the whole reply and returns it — byte-identical to before.
+      // CANCELLATION (the Stop button): an optional AbortSignal halts generation. wllama
+      // hands each token callback an abortSignal controller — call its abort() to stop the
+      // decode; the running text it already streamed is returned as the partial answer.
+      const signal = opts.signal || null;
+      if (signal?.aborted) return '';
       const onToken = typeof opts.onToken === 'function' ? opts.onToken : null;
       let last = '';
       const out = await inst.createCompletion(toPrompt(messages), {
         nPredict: opts.maxTokens ?? 256,
         sampling: { temp: opts.temperature ?? 0.7 },
-        ...(onToken ? {
-          onNewToken: (_tok, _piece, currentText) => {
-            const text = String(currentText ?? '');
-            const delta = text.startsWith(last) ? text.slice(last.length) : text;
-            last = text;
-            if (delta) onToken(delta);
-          },
-        } : {}),
+        onNewToken: (_tok, _piece, currentText, optsCb) => {
+          const text = String(currentText ?? '');
+          const delta = text.startsWith(last) ? text.slice(last.length) : text;
+          last = text;
+          if (delta && onToken) onToken(delta);
+          if (signal?.aborted) optsCb?.abortSignal?.();   // user stopped — halt the decode
+        },
       });
       return String(out || '').trim();
     },

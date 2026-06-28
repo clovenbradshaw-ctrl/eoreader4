@@ -73,6 +73,12 @@ registerBackend('webllm', (opts = {}) => {
     },
     async phrase(messages, opts = {}) {
       if (!engine) throw new Error('webllm: not loaded');
+      // CANCELLATION (the Stop button): an optional AbortSignal lets the caller halt
+      // generation. Already aborted before we start ⇒ draw nothing. Mid-stream we ask
+      // the engine to interruptGenerate() and return whatever decoded so far, so the
+      // user keeps the partial answer rather than losing the whole beat.
+      const signal = opts.signal || null;
+      if (signal?.aborted) return '';
       // Arm or disarm the lens port for this generation. When the turn hands a `lens` config
       // (lensPort on, doc+surf in hand) the stack steers; otherwise it is the identity, so the
       // golden phrase()+veto path is byte-identical. web-llm calls resetState per completion.
@@ -89,16 +95,24 @@ registerBackend('webllm', (opts = {}) => {
       // callback is handed.
       const onToken = typeof opts.onToken === 'function' ? opts.onToken : null;
       if (onToken) {
+        // Halt the in-flight decode the moment the caller aborts — web-llm ends the
+        // streaming iterator on interruptGenerate().
+        const onAbort = () => { try { engine.interruptGenerate(); } catch { /* engine gone — the break below still stops us */ } };
+        if (signal) signal.addEventListener('abort', onAbort, { once: true });
         try {
           const chunks = await engine.chat.completions.create({ ...params, stream: true });
           let text = '';
           for await (const chunk of chunks) {
             const piece = chunk.choices?.[0]?.delta?.content || '';
             if (piece) { text += piece; onToken(piece); }
+            if (signal?.aborted) break;
           }
+          if (signal?.aborted) return text.trim();   // user stopped — keep the partial answer
           if (text.trim()) return text.trim();
         } catch { /* a streaming hiccup degrades to the plain draw below — the answer still lands */ }
+        finally { if (signal) signal.removeEventListener('abort', onAbort); }
       }
+      if (signal?.aborted) return '';
       const out = await engine.chat.completions.create(params);
       return out.choices?.[0]?.message?.content?.trim() || '';
     },

@@ -123,6 +123,12 @@ const makeOnnx = ({ id, modelId, format, minPredict = 0 }) =>
       },
       async phrase(messages, opts = {}) {
         if (!pipe) throw new Error(`${id}: not loaded`);
+        // CANCELLATION (the Stop button): an optional AbortSignal halts generation. Pleias
+        // draws whole (no streamer), so we can only honour an abort that landed before the
+        // draw; a chat model streams, so we throw out of the streamer callback to stop the
+        // decode and return whatever tokens arrived.
+        const signal = opts.signal || null;
+        if (signal?.aborted) return '';
         // Pleias spends tokens on its reasoning scaffold before the answer, so give
         // the grounded format a floor under the task's max_tokens (as pleias.js does).
         // A short utility call passes opts.minPredict: 0 to opt out and stay fast.
@@ -140,14 +146,24 @@ const makeOnnx = ({ id, modelId, format, minPredict = 0 }) =>
         // only at the end, so a live stream would surface the scaffold; they draw and
         // the cleaned answer is emitted whole by the loop's draw-then-emit fallback.
         const onToken = typeof opts.onToken === 'function' ? opts.onToken : null;
+        let streamed = '';   // accumulated so an abort can return the partial answer
         if (onToken && format === 'chat' && Streamer && pipe.tokenizer) {
           gen.streamer = new Streamer(pipe.tokenizer, {
             skip_prompt: true, skip_special_tokens: true,
-            callback_function: (t) => { if (t) onToken(t); },
+            callback_function: (t) => {
+              if (t) { streamed += t; onToken(t); }
+              // Stop the decode loop by throwing out of the callback when the user aborts.
+              if (signal?.aborted) throw new DOMException('stopped', 'AbortError');
+            },
           });
         }
-        const out = await pipe(buildOnnxInput(format, messages), gen);
-        return readOnnxOutput(format, out);
+        try {
+          const out = await pipe(buildOnnxInput(format, messages), gen);
+          return readOnnxOutput(format, out);
+        } catch (err) {
+          if (signal?.aborted) return streamed.trim();   // user stopped — keep the partial answer
+          throw err;
+        }
       },
     };
   });

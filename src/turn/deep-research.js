@@ -147,6 +147,7 @@ export const runDeepResearch = async (seed, {
   searchOpts = {},
   onPlan = null,
   onHop = null,
+  signal = null,          // an AbortSignal (the Stop button): stop the walk between hops, keeping what it gathered
 } = {}) => {
   const q0 = String(seed || '').trim();
   const empty = { docs: [], sources: [], hops: [], facets: [], frontier: [], prior: new Map(), topic: new Map() };
@@ -194,6 +195,7 @@ export const runDeepResearch = async (seed, {
 
   let stray = 0;
   while (hops.length < maxHops && frontier.length) {
+    if (signal?.aborted) break;   // the user stopped — return the pages gathered so far
     const node = popBest();
     const key = normalizeQuery(node.query);
     if (visited.has(key)) continue;
