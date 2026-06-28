@@ -15,7 +15,31 @@ What you can do:
   Gutenberg** (type a title/author in the search bar). The work renders as a readable
   book — drop-cap, serif, the author's paragraphs — entities clickable. A book is
   **read fully** (fetched, PG boilerplate stripped, parsed) before it becomes a source
-  and can be chatted with.
+  and can be chatted with. Search results show cover art, genre tags and download counts.
+- **Reading controls, like a real e-reader.** With a book open, a reading toolbar rides
+  above the page: text size (A− / A+), line spacing (↕), column width (Narrow · Normal ·
+  Wide), typeface (Serif / Sans) and paper theme (Light · Sepia · Night). Every choice
+  applies *live* to the open book (no reload, so your place and the entity highlights
+  survive) and persists across sessions. A slim progress bar + percentage tracks how far
+  you've read, and your **place is remembered per book** — reopen a work and it scrolls
+  back to where you left off.
+- **Bookmarks the reading places itself.** A **❖** toggle turns on auto-bookmarks — spots
+  the reading flags as *important* because something surprising happens there: chiefly
+  **connectivity surprise** (two entities that were each already established meet for the
+  first time — a collision of threads) plus a lighter novelty term. When the mode is on the
+  flagged passages lift off the page (an accent wash + rule, captioned with the colliding
+  entities), and little **markers ride the right edge** of the page at each spot — click one
+  to jump there. The spots are whatever stands well above the book's *own* background of
+  surprise, so a calm book gets few and a turbulent one gets more. See
+  [`docs/structure.md`](structure.md#bookmarks).
+- **Structure read by the engine.** The **Contents** menu and the ⏮/⏭ section jumps come
+  from a best-guess of the document's structure that the engine makes from its *own
+  reading* — validated heading runs where they exist, and otherwise sections that **emerge**
+  where the entity field shifts and persists. It recovers chapters a keyword match misses
+  (untitled, multilingual) and refuses to invent them where there are none (a stray page
+  number or dateline is not a chapter). The same boundaries are the cursor's structural
+  stops, so you move through a book by section, not by scrolling. See
+  [`docs/structure.md`](structure.md).
 - **Chat — normal chat, grounded when it can be.** A model answers like a normal
   assistant (the old backends: Llama-3.2-3B over WebGPU by default, or Echo offline;
   pick in Settings). Clock questions ("what's the date?") are answered without any model;
