@@ -2772,6 +2772,33 @@ class Component extends DCLogic {
   }
   // ── interconnect: link every known entity inside the source text, wiki-style ──
   toggleLinkMode(){try{localStorage.setItem('eo_linkmode',this.state.linkMode?'0':'1');}catch(e){}this.setState(s=>({linkMode:!s.linkMode}));}
+  // The referents salient to ONE source: every entity the parse folded out of that
+  // source's own sentences. The text is raw noumena; the reading — parse and fold —
+  // is what turns it into phenomena, so an entity is offered as clickable only where
+  // it was actually folded. A name that lights up does so in reference to THIS text,
+  // never because the same surface form names a heavier referent folded from some
+  // other source (the global link index collapses "Washington" the city onto
+  // "Washington" the person when one outweighs the other; that cross-source pull is
+  // what this gates).
+  //
+  // Returns null ONLY when there is no source to speak of (no url, no reading) —
+  // genuinely no scope, leave the global index alone. When a url IS given but nothing
+  // was folded from it, returns the EMPTY set: that source is unabsorbed noumena, so
+  // it offers nothing rather than borrowing the rest of the corpus's phenomena.
+  // Cached by rev.
+  sourceEntities(url){
+    if(!url||!this.graph||!this.master||!this.master.events)return null;
+    if(this._srcEntsRev!==this.state.rev){
+      this._srcEnts=new Map();this._srcEntsRev=this.state.rev;
+      const rep=x=>{try{return this.graph.representative(x);}catch(e){return x;}};
+      for(const e of this.master.events){
+        if(e.sentIdx==null)continue;const u=this.master.sentenceSource[e.sentIdx];if(!u)continue;
+        let set=this._srcEnts.get(u);if(!set){set=new Set();this._srcEnts.set(u,set);}
+        for(const x of [e.id,e.src,e.tgt,e.from,e.to])if(x)set.add(rep(x));
+      }
+    }
+    return this._srcEnts.get(url)||(this._noEnts||(this._noEnts=new Set()));
+  }
   buildLinkIndex(){
     if(this._linkRe!==undefined&&this._linkRev===this.state.rev)return this._linkMap;
     const map=new Map(),labels=[];
@@ -2818,11 +2845,14 @@ class Component extends DCLogic {
   }
   _linkify(text,srcUrl){
     const map=this.buildLinkIndex(),re=this._linkRe;if(!re)return text;
+    const local=this.sourceEntities(srcUrl);   // entities folded from THIS text; empty if unabsorbed; null only with no source
     const cur=this.state.selId;re.lastIndex=0;
     const out=[];let last=0,m,k=0,n=0,seen=new Set();
     while((m=re.exec(text))&&n<80){n++;
       const id=map.get(m[0].toLowerCase());
-      if(id==null||id===cur||seen.has(id))continue; seen.add(id);
+      if(id==null||id===cur||seen.has(id))continue;
+      if(local&&!local.has(id))continue;          // a name folded only from other sources stays plain
+      seen.add(id);
       if(m.index>last)out.push(text.slice(last,m.index));
       out.push(React.createElement('span',{key:'lk'+(k++),
         style:{color:'var(--acc)',cursor:'pointer',borderBottom:'1px dotted var(--accline)'},
@@ -2873,6 +2903,7 @@ class Component extends DCLogic {
       // unbind/strip if linkMode off
       if(!this.state.linkMode){d.querySelectorAll('[data-eo-ent]').forEach(s=>{const t=d.createTextNode(s.textContent);s.parentNode.replaceChild(t,s);});d.querySelectorAll('a[data-eo-wiki]').forEach(a=>{a.classList.remove('eo-ent-link');a.removeAttribute('data-eo-wiki');});return;}
       const map=this.buildLinkIndex(),re=this._linkRe;if(!re)return;
+      const local=this.sourceEntities(this.state.viewUrl);   // offer only entities salient to the open source
       this._frameIds=this._frameIds||[];
       const walker=d.createTreeWalker(d.body,NodeFilter.SHOW_TEXT,{acceptNode:n=>{
         if(!n.nodeValue||!n.nodeValue.trim()||n.nodeValue.length<3)return NodeFilter.FILTER_REJECT;
@@ -2892,6 +2923,7 @@ class Component extends DCLogic {
         const href=(aEl&&aEl.getAttribute&&aEl.getAttribute('href'))?aEl.href:null;
         while((m=re.exec(text))){
           const id=map.get(m[0].toLowerCase());if(id==null)continue;
+          if(local&&!local.has(id))continue;          // skip names folded only from other sources
           frags=frags||[];if(m.index>last)frags.push(d.createTextNode(text.slice(last,m.index)));
           const span=d.createElement('span');const idx=this._frameIds.push(id)-1;
           span.setAttribute('data-eo-ent',String(idx));span.className=href?'eo-ent-link':'eo-ent';
@@ -2915,7 +2947,8 @@ class Component extends DCLogic {
         // never a fragment inside it. "Proceedings of the National Academy of Sciences"
         // must not pivot to the "National Academy" fragment (wrong content); it stays a
         // navigate-only wiki link pointing at its own article.
-        const id=map.get(txt.toLowerCase());
+        let id=map.get(txt.toLowerCase());
+        if(local&&id!=null&&!local.has(id))id=null;  // a profile is offered only when the entity is salient here
         a.classList.add('eo-ent-link');a.setAttribute('data-eo-wiki','1');a.setAttribute('data-eo-href',a.href);
         if(id!=null)a.setAttribute('data-eo-ent',String(this._frameIds.push(id)-1));
       });}catch(e){}
