@@ -78,6 +78,30 @@ It remains a *best guess*: it finds real structure a regex cannot (untitled, mul
 markdown, decimal) by discovering the marker form, and it refuses to invent structure where a
 document has none — but unusual formatting can still fool it.
 
+## Bookmarks — where the reading is surprised
+
+Separate from the TOC, `detectBookmarks(p, paras)` flags the passages the reading finds
+*important*. The signal is **surprise**, read off the same per-paragraph entity field:
+
+- **Connectivity surprise** (primary): two entities that were each already *established*
+  (seen ≥ 2× before) meet for the **first time** in a paragraph — a collision of threads (a
+  meeting, a letter, a reveal). Scored by the lesser of the two entities' weights, summed
+  over the newly-formed pairs.
+- **Novelty** (secondary): an important entity makes its first appearance.
+
+A paragraph is bookmarked when its score stands well above the book's **own** background
+(mean + 1.2σ), spaced apart and capped (~12), so a calm text gets few and a turbulent one
+more. On *Metamorphosis* this lands on the transformation's aftermath, the family turning on
+Gregor ("Leave my home. Now!"), and the departure after his death; on *Pride & Prejudice*,
+the Netherfield ball, the Pemberley turn, Lydia's elopement, the pivotal letters. It is
+strongest on **narrative** — on a dictionary or a how-to (no plot) it marks the
+entity-dense entries instead, which is honest but less meaningful. The "why" caption is shown
+only when both colliding entities read as proper, recurring names (the parse otherwise picks
+up archaic pronouns).
+
+The reader's **❖** toggle highlights these in the page and drops clickable **markers on the
+right-edge rail** at each spot's scroll fraction.
+
 ## The same boundaries move the cursor
 
 Every section anchor (`id="eo-ch-N"`) is a structural stop. The reader's ⏮/⏭ controls

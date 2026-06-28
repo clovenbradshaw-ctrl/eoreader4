@@ -320,7 +320,7 @@
         </div>
       </sc-if>
       <sc-if value="{{ showWeb }}" hint-placeholder-val="{{ false }}">
-        <div style="height:100%;display:flex;flex-direction:column;min-height:0;background:#fff;">
+        <div style="position:relative;height:100%;display:flex;flex-direction:column;min-height:0;background:#fff;">
           <sc-if value="{{ reading.isBook }}" hint-placeholder-val="{{ false }}">
             <div style="position:relative;flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 14px 9px;background:var(--card);border-bottom:1px solid var(--line);">
               <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Reading</span>
@@ -342,6 +342,9 @@
                   <button onclick="{{ reading.onPrevSection }}" title="Previous section" style="{{ reading.btnStyle }}">⏮</button>
                   <button onclick="{{ reading.onNextSection }}" title="Next section" style="{{ reading.btnStyle }}">⏭</button>
                 </span>
+              </sc-if>
+              <sc-if value="{{ reading.hasMarks }}" hint-placeholder-val="{{ false }}">
+                <button onclick="{{ reading.onToggleMarks }}" title="Highlight the moments the reading flagged as important" style="{{ reading.marksStyle }}">❖ {{ reading.marksCount }}</button>
               </sc-if>
               <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
                 <div style="position:relative;flex:0 0 auto;">
@@ -370,6 +373,13 @@
           </sc-if>
           <sc-if value="{{ web.hasDoc }}" hint-placeholder-val="{{ false }}">
             <iframe data-eo-center="" srcdoc="{{ web.doc }}" sandbox="allow-same-origin allow-popups" referrerpolicy="no-referrer" style="flex:1;width:100%;border:none;display:block;background:#fff;min-height:0;"></iframe>
+          </sc-if>
+          <sc-if value="{{ reading.railOn }}" hint-placeholder-val="{{ false }}">
+            <div class="eo-rail" style="position:absolute;top:48px;right:4px;bottom:10px;width:18px;z-index:14;pointer-events:none;">
+              <sc-for list="{{ reading.marks }}" as="mk" hint-placeholder-count="0">
+                <div class="eo-tick" onclick="{{ mk.onGo }}" title="{{ mk.why }}" style="position:absolute;top:{{ mk.top }};right:0;width:13px;height:4px;border-radius:3px;background:var(--acc);box-shadow:0 0 0 1.5px rgba(255,255,255,.85);cursor:pointer;pointer-events:auto;transition:width .12s,height .12s;" style-hover="width:22px;height:7px"></div>
+              </sc-for>
+            </div>
           </sc-if>
         </div>
       </sc-if>

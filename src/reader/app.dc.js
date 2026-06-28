@@ -54,6 +54,10 @@ class Component extends DCLogic {
       // applied live to the book iframe and persisted. bookToc is the detected
       // chapter list; bookProgress is the live read fraction (0–1).
       readPrefs:Object.assign({},this._defaultRead,(savedRead&&typeof savedRead==='object')?savedRead:{}), bookToc:[], tocOpen:false, bookProgress:0,
+      // Auto-bookmarks: spots the reading flags as SURPRISING (connectivity + novelty).
+      // bookmarkMode shows them (in-book highlight + scrollbar markers); bookmarks holds
+      // the detected spots; bmRail holds their live scroll fractions for the marker rail.
+      bookmarkMode:(()=>{try{return localStorage.getItem('eo_marks')==='1';}catch(e){return false;}})(), bookmarks:[], bmRail:[],
       // Panel layout: swap the left (sources/chats) and right (entities) sides.
       swapped:(()=>{try{return localStorage.getItem('eo_swap')==='1';}catch(e){return false;}})(),
       // Chat model — like the old app. Loaded lazily on first chat; grounded in what
@@ -125,6 +129,52 @@ class Component extends DCLogic {
   // boundary onto the title line that introduces it.
   _titleish(s){s=this.norm(s);return s.length>=2&&s.length<=52&&!/[.!?:;,]$/.test(s)&&s.split(' ').length<=9;}
   _secLabel(ent,para){if(ent){try{const l=this.labelOf(ent);if(l)return '§ '+l;}catch(e){}return '§ '+ent;}return '§ '+this.norm(para).slice(0,40);}
+  // ── auto-bookmarks: where the reading is SURPRISED ───────────────────────
+  // A spot is important when the entity field does something it couldn't predict —
+  // chiefly CONNECTIVITY SURPRISE: two entities that were each already established meet
+  // for the FIRST time (a collision of threads — a meeting, a letter, a reveal). Plus a
+  // lighter NOVELTY term (an important entity first appears). Both are read off the same
+  // per-paragraph projection the TOC uses; the salient paragraphs are those whose score
+  // stands well above the book's own background (mean + 1.2σ), spaced out and capped.
+  detectBookmarks(p,paras){
+    const N=paras.length;if(N<6)return [];
+    const sets=this._paraField(p,paras);
+    const total=new Map();sets.forEach(s=>s.forEach(e=>total.set(e,(total.get(e)||0)+1)));
+    const fw=e=>Math.log1p(total.get(e)||1);
+    const seen=new Map(),pairs=new Set(),score=new Array(N).fill(0),why=new Array(N).fill(null);
+    for(let i=0;i<N;i++){const cur=[...sets[i]];let nov=0,con=0,bestPair=null,bestNew=null;
+      for(const e of cur){if(!seen.has(e)){const w=fw(e);nov+=w;if(!bestNew||w>fw(bestNew))bestNew=e;}}
+      for(let a=0;a<cur.length;a++)for(let b=a+1;b<cur.length;b++){const x=cur[a],y=cur[b];
+        if((seen.get(x)||0)>=2&&(seen.get(y)||0)>=2){const key=x<y?x+''+y:y+''+x;
+          if(!pairs.has(key)){pairs.add(key);const w=Math.min(fw(x),fw(y));con+=w;if(!bestPair||w>bestPair.w)bestPair={x,y,w};}}}
+      score[i]=2*con+0.6*nov;
+      why[i]=(bestPair&&2*con>=0.6*nov)?{pair:[bestPair.x,bestPair.y]}:(bestNew?{enter:bestNew}:null);
+      for(const e of cur)seen.set(e,(seen.get(e)||0)+1);}
+    const mean=score.reduce((a,b)=>a+b,0)/N,sd=Math.sqrt(score.reduce((a,b)=>a+(b-mean)*(b-mean),0)/N)||1;
+    const thr=mean+1.2*sd,cand=[];for(let i=0;i<N;i++)if(score[i]>thr&&score[i]>0)cand.push({i,s:score[i],why:why[i]});
+    cand.sort((a,b)=>b.s-a.s);const gap=Math.max(3,Math.round(N/50)),pick=[];
+    for(const c of cand){if(pick.every(q=>Math.abs(q.i-c.i)>=gap))pick.push(c);if(pick.length>=12)break;}
+    pick.sort((a,b)=>a.i-b.i);
+    return pick.map(c=>({paraIndex:c.i,why:this._whyLabel(c.why)}));
+  }
+  // A reason worth showing only when it reads as proper, recurring names — the parse picks
+  // up archaic pronouns / common nouns, so gate on capitalization, length and recurrence.
+  _whyLabel(why){if(!why)return '';
+    const ok=id=>{let l;try{l=this.labelOf(id);}catch(e){l=id;}if(!l)return null;
+      const t=this.norm(l);if(t.length<3||!/^[A-Z]/.test(t)||this.STOP.has(t.toLowerCase()))return null;
+      const g=this.graph&&this.graph.entities.get(id);if(g&&(g.sightings||0)<2)return null;return t;};
+    if(why.pair){const a=ok(why.pair[0]),b=ok(why.pair[1]);return a&&b?(a+' · '+b):(a||b||'');}
+    if(why.enter){const a=ok(why.enter);return a?a:'';}
+    return '';}
+  toggleBookmarks(){const v=!this.state.bookmarkMode;try{localStorage.setItem('eo_marks',v?'1':'0');}catch(e){}
+    const d=this._bookDoc();if(d&&d.documentElement)d.documentElement.classList.toggle('eo-bm-on',v);
+    this.setState({bookmarkMode:v});}
+  gotoBookmark(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;
+    if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-Math.round(win.innerHeight*0.18);try{win.scrollTo({top:Math.max(0,top),behavior:'smooth'});}catch(e){win.scrollTo(0,Math.max(0,top));}}}
+  // Compute the live scroll fraction of each bookmarked element for the marker rail.
+  _bookmarkRail(d){if(!d)return [];const h=(d.documentElement.scrollHeight||d.body.scrollHeight||1);
+    return (this.state.bookmarks||[]).map(b=>{const el=d.getElementById(b.id);if(!el)return null;
+      return {frac:Math.max(0,Math.min(1,(el.offsetTop)/h)),id:b.id,why:b.why};}).filter(Boolean);}
   // Entity set per paragraph, reusing the master projection (no re-parse): map each
   // event's global sentence index back to this page, then to a paragraph by normalized
   // char offsets, collapsing coref via the graph's representative.
@@ -193,7 +243,10 @@ class Component extends DCLogic {
   // Set up the open book iframe once: apply the reading CSS, restore the saved scroll
   // position, and track progress as the reader scrolls (throttled).
   _setupBook(d,ifr,url){if(!d||!d.defaultView)return;this.applyReadCSS(d,this.state.readPrefs);
+    if(d.documentElement)d.documentElement.classList.toggle('eo-bm-on',!!this.state.bookmarkMode);
     if(d.__eoBookUrl===url)return;d.__eoBookUrl=url;const win=d.defaultView;
+    // Once the book is laid out, read each bookmark's scroll fraction for the marker rail.
+    if((this.state.bookmarks||[]).length){let n=0;const railTick=()=>{if(d.__eoBookUrl!==url)return;const h=d.documentElement.scrollHeight||d.body.scrollHeight||0;if(h>win.innerHeight||n++>25){const r=this._bookmarkRail(d);if(r.length)this.setState({bmRail:r});}else setTimeout(railTick,70);};setTimeout(railTick,80);}
     const pos=this.loadReadPos(url);
     if(pos>0){let n=0;const tryScroll=()=>{if(d.__eoBookUrl!==url)return;const max=Math.max(1,(d.documentElement.scrollHeight||d.body.scrollHeight||0)-win.innerHeight);if(max>40||n++>25){win.scrollTo(0,pos*max);}else{setTimeout(tryScroll,60);}};setTimeout(tryScroll,60);}
     const onScroll=()=>{const max=Math.max(1,(d.documentElement.scrollHeight||d.body.scrollHeight||0)-win.innerHeight);this._lastPct=Math.max(0,Math.min(1,win.scrollY/max));
@@ -2093,21 +2146,31 @@ class Component extends DCLogic {
     // a prose anchor just gets an invisible id. The first body paragraph keeps the drop cap.
     const sections=this.detectStructure(p,paras);
     const secAt=new Map();sections.forEach((s,n)=>secAt.set(s.paraIndex,{s,n}));
-    const toc=[],parts=[];let dropped=false;
+    // Surprise-flagged spots. A paragraph that's both a section anchor and a bookmark keeps
+    // its section id and just gains the eo-bm class (its section id is the jump target).
+    const marks=this.detectBookmarks(p,paras),bmAt=new Map();
+    marks.forEach((m,n)=>bmAt.set(m.paraIndex,{why:m.why,n}));
+    const bookmarks=[],toc=[],parts=[];let dropped=false;
     paras.forEach((t,i)=>{
-      const hit=secAt.get(i);
+      const hit=secAt.get(i),bm=bmAt.get(i);
+      const bmAttr=bm?' data-eo-why="'+esc(bm.why||'')+'"':'';
       if(hit){const id='eo-ch-'+hit.n,lv=hit.s.level||1;toc.push({id,label:this.norm(hit.s.label),level:lv});
+        if(bm)bookmarks.push({id,why:bm.why,paraIndex:i});
         // Markdown headings carry their #'s in the source line — show the clean title.
         const disp=/^#{1,6}\s/.test(t)?t.replace(/^#{1,6}\s+/,'').replace(/\s*#+$/,''):t;
         const ind=lv>1?' style="margin-left:'+((lv-1)*1.15)+'em"':'';
-        if(hit.s.kind==='heading'||this._titleish(t)){parts.push('<h2 class="eo-chap'+(hit.s.kind==='emergent'?' eo-emergent':'')+'" id="'+id+'"'+ind+'>'+esc(disp)+'</h2>');return;}
-        parts.push('<p id="'+id+'"'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;return;}
+        const cls='eo-chap'+(hit.s.kind==='emergent'?' eo-emergent':'')+(bm?' eo-bm':'');
+        if(hit.s.kind==='heading'||this._titleish(t)){parts.push('<h2 class="'+cls+'" id="'+id+'"'+ind+bmAttr+'>'+esc(disp)+'</h2>');return;}
+        parts.push('<p id="'+id+'" class="'+(dropped?'':'eo-first ')+(bm?'eo-bm':'')+'"'+bmAttr+'>'+esc(t)+'</p>');dropped=true;return;}
+      if(bm){const id='eo-bm-'+bm.n;bookmarks.push({id,why:bm.why,paraIndex:i});
+        parts.push('<p id="'+id+'" class="'+(dropped?'':'eo-first ')+'eo-bm"'+bmAttr+'>'+esc(t)+'</p>');dropped=true;return;}
       parts.push('<p'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;
     });
     const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
     const v=(n,d)=>'--eo-'+n+':'+d+';';
-    const html='<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+
-      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+'}'+
+    const htmlCls=this.state.bookmarkMode?' class="eo-bm-on"':'';
+    const html='<!doctype html><html'+htmlCls+'><head><meta charset="utf-8"><base target="_blank">'+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
       'html,body{margin:0;background:var(--eo-bg);}'+
       'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);transition:background .2s,color .2s;}'+
       '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
@@ -2116,14 +2179,19 @@ class Component extends DCLogic {
       'h2.eo-chap{font:700 1.18em/1.3 var(--eo-ff);color:var(--eo-fg);margin:2.3em 0 .9em;scroll-margin-top:16px;}'+
       'h2.eo-emergent{font-weight:600;font-style:italic;color:var(--eo-fg2);padding-left:.7em;border-left:2px solid var(--eo-acc);}'+
       'p{margin:0 0 1.15em;}p.eo-first::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:var(--eo-acc);font-family:Georgia,serif;}'+
+      // Bookmarks: inert until the reader turns the mode on (html.eo-bm-on), then the
+      // flagged passage lifts off the page with an accent wash + rule, and shows its "why".
+      '.eo-bm{scroll-margin-top:18px;border-radius:0 7px 7px 0;transition:background .2s,box-shadow .2s;}'+
+      'html.eo-bm-on .eo-bm{background:var(--eo-bmbg);box-shadow:inset 3px 0 0 var(--eo-acc);padding:.5em .8em;margin-left:-.8em;position:relative;}'+
+      'html.eo-bm-on .eo-bm[data-eo-why]:not([data-eo-why=""])::before{content:"❖ " attr(data-eo-why);display:block;font:700 .58em/1.3 -apple-system,BlinkMacSystemFont,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--eo-acc);margin-bottom:.4em;}'+
       '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
-      '<div class="eo-byline">'+((p.sentences||[]).length)+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+' · read as a book</div>'+
+      '<div class="eo-byline">'+((p.sentences||[]).length)+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+(marks.length?' · '+marks.length+' marks':'')+' · read as a book</div>'+
       parts.join('\n')+'</div></body></html>';
-    return {html,toc};
+    return {html,toc,bookmarks};
   }
   loadCenter(url){
-    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
-    if(!url){this.setState({pageDoc:null,bookToc:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
+    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
+    if(!url){this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
     if(this._pageUrl===url&&this.state.pageDoc)return;
     this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],tocOpen:false});
     fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
@@ -2674,6 +2742,11 @@ class Component extends DCLogic {
         onPrevSection:()=>this.jumpSection(-1),onNextSection:()=>this.jumpSection(1),
         toc:toc.map(c=>({label:c.label,onGo:()=>this.gotoChapter(c.id),
           rowStyle:'display:block;width:100%;text-align:left;padding:9px 13px 9px '+(13+((c.level||1)-1)*15)+'px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink'+((c.level||1)>1?'3':'2')+');font-size:12.5px;line-height:1.35;cursor:pointer;'})),
+        // Auto-bookmarks: a toggle + a marker rail down the page edge.
+        hasMarks:(this.state.bookmarks||[]).length>0,marksCount:(this.state.bookmarks||[]).length,
+        marksOn:!!this.state.bookmarkMode,onToggleMarks:()=>this.toggleBookmarks(),marksStyle:pill(!!this.state.bookmarkMode),
+        railOn:!!this.state.bookmarkMode&&(this.state.bmRail||[]).length>0,
+        marks:(this.state.bmRail||[]).map(m=>({top:(m.frac*100).toFixed(2)+'%',why:m.why||'Something important here',onGo:()=>this.gotoBookmark(m.id)})),
         progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
     }
     if(vu){

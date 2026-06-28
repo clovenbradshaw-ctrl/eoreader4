@@ -23,6 +23,15 @@ What you can do:
   survive) and persists across sessions. A slim progress bar + percentage tracks how far
   you've read, and your **place is remembered per book** — reopen a work and it scrolls
   back to where you left off.
+- **Bookmarks the reading places itself.** A **❖** toggle turns on auto-bookmarks — spots
+  the reading flags as *important* because something surprising happens there: chiefly
+  **connectivity surprise** (two entities that were each already established meet for the
+  first time — a collision of threads) plus a lighter novelty term. When the mode is on the
+  flagged passages lift off the page (an accent wash + rule, captioned with the colliding
+  entities), and little **markers ride the right edge** of the page at each spot — click one
+  to jump there. The spots are whatever stands well above the book's *own* background of
+  surprise, so a calm book gets few and a turbulent one gets more. See
+  [`docs/structure.md`](structure.md#bookmarks).
 - **Structure read by the engine.** The **Contents** menu and the ⏮/⏭ section jumps come
   from a best-guess of the document's structure that the engine makes from its *own
   reading* — validated heading runs where they exist, and otherwise sections that **emerge**
