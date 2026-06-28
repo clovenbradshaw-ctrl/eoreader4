@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f5f6f8">
-<title>EO Reader</title>
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>EO Reader</title>
 <script src="vendor/react.production.min.js"></script>
 <script src="vendor/react-dom.production.min.js"></script>
 <script>(function(){var R={"eoEngine":"src/reader/eoreader4-bundle.js","eoModel":"src/reader/model-entry.js","eoSvo":"src/reader/svo-llm.js","eoPhase":"src/reader/eo/phasepost.js","eoEmbed":"src/reader/eo/embed.js","eoCells":"src/reader/eo/phasepost-cells.json","eoCentroids":"src/reader/eo/centroids-27.json"},b=document.baseURI,o={};for(var k in R)o[k]=new URL(R[k],b).href;window.__resources=o;})();</script>
@@ -1461,7 +1461,7 @@ class Component extends DCLogic {
       hoverSrc:null, pinSrc:null, openSrc:null, mode:'breadth', direction:'', hoverEnt:null, hoverHref:null, hoverXY:{x:0,y:0}, rev:0, sortMode:'updated',
       llm:true, llmAvail:false, svoBusy:false, svoStatus:'', pasteOpen:false, pasteText:'',
       srcWide:false, srcTab:'page', srcDoc:null, srcLoading:false, srcErr:null, linkMode:savedLink==='0'?false:true, linkChoice:null,
-      viewUrl:null, detect:true, pageDoc:null, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
+      viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
       accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false,
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
@@ -3483,7 +3483,7 @@ class Component extends DCLogic {
   showOverview(){this.setState({panelMode:'overview'});}
   sourcesOf(id){return [...new Set(this.mentionsOf(id).map(i=>this.master.sentenceSource[i]).filter(Boolean))];}
   neighbors(id){const agg=new Map();for(const e of this.edgesOf(id)){const o=e.from===id?e.to:e.from;if(this.isURLish(this.labelOf(o))||!this.showable(o))continue;const c=agg.get(o)||{w:0,vias:new Set(),sent:null,grain:null,llm:false};c.w+=((e.weight!=null?e.weight:1)||0)+1e-4;const via=e.relType||e.via||e.kind;if(!this.junkRel(via))c.vias.add(via);if(c.sent==null)c.sent=e.sentIdx;if(!c.grain)c.grain=this.edgeGrain(e);if(this.edgeReader(e)==='svo-llm')c.llm=true;agg.set(o,c);}return [...agg].map(([o,v])=>({id:o,w:v.w,vias:[...v.vias],sent:v.sent,grain:v.grain,llm:v.llm})).sort((a,b)=>b.w-a.w);}
-  pageOf(url){return this.master.pages.find(p=>p.url===url);}
+  pageOf(url){return (this.master&&this.master.pages)?this.master.pages.find(p=>p.url===url):undefined;}
   // ── subject-not-mention selection ──────────────────────────────────
   // A profile stitches propositions the entity is the SUBJECT of — what the record
   // says ABOUT it — not every sentence its name turns up in. The graph already records
@@ -4146,7 +4146,10 @@ class Component extends DCLogic {
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
   goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
-  processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});});}
+  processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});
+    // Now that the page is read it has propositions — re-render the open view as a book
+    // (TOC + flagged passages), swapping out the raw live page it was first shown as.
+    if(res&&res.url&&this.state.viewUrl===res.url)this.loadCenter(res.url);});}
   toggleDetect(){this.setState(s=>({detect:!s.detect}));}
   canBack(){return !!(this._hist&&this._hpos>0);}
   canForward(){return !!(this._hist&&this._hpos<this._hist.length-1);}
@@ -4224,13 +4227,24 @@ class Component extends DCLogic {
       parts.join('\n')+'</div></body></html>';
     return {html,toc,bookmarks};
   }
+  // Render a source as a readable BOOK — drop-cap prose, an engine-found table of
+  // contents, and the passages the reading flagged as important. This is the same
+  // treatment Project Gutenberg books get, now given to EVERY document we've actually
+  // read: an imported text, a book, OR a web page. The only thing that still loads as a
+  // raw live page is a URL we haven't read yet (browsing ahead of the reading), which
+  // has no parsed propositions to draw a contents or find its surprises from.
+  _renderBook(url,p){const b=this._bookHtml(p);this._pageUrl=url;
+    this.setState({bookView:true,pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}
+  _bookReady(p){return !!(p&&(this.norm(p.text||'').length>=60||(p.sentences&&p.sentences.length)));}
   loadCenter(url){
-    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
-    if(!url){this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
-    if(this._pageUrl===url&&this.state.pageDoc)return;
-    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],tocOpen:false});
+    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){this._renderBook(url,p);}else{this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
+    if(!url){this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
+    // A web page we've read folds into the same book view — TOC + flagged passages and all.
+    const read=this.pageOf(url);if(this._bookReady(read)){this._renderBook(url,read);return;}
+    if(this._pageUrl===url&&this.state.pageDoc&&!this.state.bookView)return;
+    this._pageUrl=url;this.setState({bookView:false,pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],bookmarks:[],tocOpen:false});
     fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
-      if(this.state.viewUrl!==url)return;
+      if(this.state.viewUrl!==url||this.state.bookView)return;
       let doc=html;
       // Neutralize anything that would navigate the frame away (which turns it
       // cross-origin and breaks entity decoration): scripts, no-JS refreshes,
@@ -4403,7 +4417,8 @@ class Component extends DCLogic {
   decorateFrame(d,ifr){
     try{
       // A book in the center is an e-book: apply reading prefs, restore position, track progress.
-      const _bookUrl=(this.state.viewUrl&&/^text:/i.test(this.state.viewUrl))?this.state.viewUrl:null;
+      // Any read source renders this way now — imported text, a Gutenberg book, or a web page.
+      const _bookUrl=(this.state.viewUrl&&this.state.bookView)?this.state.viewUrl:null;
       if(_bookUrl){try{this._setupBook(d,ifr,_bookUrl);}catch(e){}}
       // styles — rebuilt each pass so accent + highlight mode apply live
       {let st=d.getElementById('__eo_style');if(!st){st=d.createElement('style');st.id='__eo_style';(d.head||d.body).appendChild(st);}
@@ -4867,7 +4882,7 @@ class Component extends DCLogic {
     const vu=this.state.viewUrl;
     base.askPageOn=!!vu&&!base.chatOn;   // the discoverable "Ask about this page" FAB
     // E-book reading toolbar — only over a book (text:). Applies live to the iframe.
-    { const rp=this.state.readPrefs||this._defaultRead,toc=this.state.bookToc||[],isBook=!!(vu&&/^text:/i.test(vu));
+    { const rp=this.state.readPrefs||this._defaultRead,toc=this.state.bookToc||[],isBook=!!(vu&&this.state.bookView);
       const pill=on=>'display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 9px;border:1px solid var(--line2);background:'+(on?'var(--accbg)':'var(--app)')+';color:'+(on?'var(--acc)':'var(--ink2)')+';border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1;';
       base.reading={isBook,
         btnStyle:pill(false),
