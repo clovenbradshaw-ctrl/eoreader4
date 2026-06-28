@@ -29,7 +29,7 @@ import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
 import { buildConceptTokenMap } from '../write/concept-tokens.js';
-import { mountPersonality, defaultPantheonBank, defaultStanceBanks, defaultSiteBank, stanceFamily, resolveOverlap } from '../write/voice.js';
+import { mountPersonality, defaultPantheonBank, defaultStanceBanks, defaultSiteBank, stanceFamily, resolveOverlap, dialMultipliers } from '../write/voice.js';
 
 // Weave the mind's recalled lines into the prompt as labelled BACKGROUND — only when
 // the user has the Mind chip in weave mode (ctx.mindSpans present). The memory is
@@ -1022,8 +1022,9 @@ const buildLens = (ctx) => {
     ? { act: 'NUL', mode: stanceFamily(st.stance), grain, locked: true }   // NUL-on-VOID governance lock
     : { act: st.op || null, mode: stanceFamily(st.stance), grain };
   const w = Number.isFinite(st.firmness) ? st.firmness : 1;
+  const dialMul = dialMultipliers(ctx.voicePref);   // the plain-language standing preference (Track E)
   const { bias: personality, mounted } = mountPersonality({
-    cell, weights: { act: w, mode: w, grain: w, tilt: 1 }, banks: lensBanks(), budget: 6,
+    cell, weights: { act: w, mode: w, grain: w, tilt: 1 }, banks: lensBanks(), budget: 6, dialMul,
   });
 
   return {
@@ -1033,8 +1034,9 @@ const buildLens = (ctx) => {
     mounted,                                           // the mounted-set, for the Given-Log
     mu: 2, lambda: personality.size ? 1 : 0, alpha: ctx.alpha ?? 0.05,
     // The streaming answer loop mounts the BAND cartridge per beat (existence/structure/
-    // significance) from each cell's provenance, so it needs the banks + the standing grain.
-    banks: lensBanks(), budget: 6, grain, locked: !!ctx.voidMeasure,
+    // significance) from each cell's provenance, so it needs the banks + the standing grain +
+    // the dial (the per-beat mount applies the same plain-language preference).
+    banks: lensBanks(), budget: 6, grain, locked: !!ctx.voidMeasure, dialMul,
   };
 };
 

@@ -69,6 +69,9 @@ const STATE = {
   lensPort:  false,      // THE LENS PORT (spec-the-lens-port.md): bias the WebLLM decoder's logits through
                          //   the lens during generation. OFF by default → golden phrase()+veto path is
                          //   byte-identical; a settings toggle persists the choice under eoreader.lensPort.
+  voicePref: {},         // THE DIAL (spec-the-pantheon.md, Track E): a plain-language standing voice
+                         //   preference (terse/cautious/concrete) layered over auto-mount. Persisted under
+                         //   eoreader.voice; never overrides the NUL-on-VOID lock; god-names stay in the audit.
   webSearch: 'auto',     // FIXED to AUTO — the web is the tool's memory, so every turn searches up front and
                          //   answers grounded in what it gathered. Not a per-message option (no web chip).
   transparency: true,    // the per-claim source view: every proposition traced to its source (or marked
@@ -110,6 +113,9 @@ const els = {
   backend:   document.getElementById('backend'),
   docChips:  document.getElementById('doc-chips'),
   lensPort:  document.getElementById('lens-port'),
+  voiceTerse:    document.getElementById('voice-terse'),
+  voiceCautious: document.getElementById('voice-cautious'),
+  voiceConcrete: document.getElementById('voice-concrete'),
 };
 
 const setStatus = (s) => { els.status.textContent = s; };
@@ -544,6 +550,7 @@ const runQuery = async (question) => {
     inquire:  STATE.inquire,    // self-directed inquiry — read another pass on the open question (the chip)
     lensPort: STATE.lensPort,   // THE LENS PORT (spec-the-lens-port.md): steer the decoder's logits through
                                 //   the lens — relevance + the void gate during generation (the toggle below)
+    voicePref: STATE.voicePref, // THE DIAL (spec-the-pantheon.md): the plain-language voice preference
 
     onStep:   (name, ctx, data) => {
       updateThinking(thinking, name, data, ctx, { verbose: CHAT_VERBOSE });
@@ -805,6 +812,23 @@ if (els.lensPort) {
   els.lensPort.addEventListener('change', () => {
     STATE.lensPort = els.lensPort.checked;
     try { localStorage.setItem('eoreader.lensPort', STATE.lensPort ? '1' : '0'); } catch { /* ignore */ }
+  });
+}
+
+// THE DIAL (spec-the-pantheon.md, Track E): the plain-language voice preference, layered over
+// auto-mount. Three plain toggles — never god-names. Restore the saved choice, reflect it, persist
+// on change. Effect is only audible once the cartridges are baked; the preference is held regardless.
+try {
+  const raw = localStorage.getItem('eoreader.voice');
+  if (raw) STATE.voicePref = { ...STATE.voicePref, ...JSON.parse(raw) };
+} catch { /* default (none) stands */ }
+const voiceEls = { terse: els.voiceTerse, cautious: els.voiceCautious, concrete: els.voiceConcrete };
+for (const [key, el] of Object.entries(voiceEls)) {
+  if (!el) continue;
+  el.checked = !!STATE.voicePref[key];
+  el.addEventListener('change', () => {
+    STATE.voicePref = { ...STATE.voicePref, [key]: el.checked };
+    try { localStorage.setItem('eoreader.voice', JSON.stringify(STATE.voicePref)); } catch { /* ignore */ }
   });
 }
 

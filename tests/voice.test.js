@@ -5,7 +5,7 @@ import {
   personalityDirection, projectPersonality, loadVoiceCartridge, cartridgeBias,
   PANTHEON, loadPantheon, mountPersonality, capNorm, orthogonality, defaultPantheonBank,
   STANCE, SITE_GRAIN, loadStanceBanks, stanceFamily, resolveOverlap,
-  BAND_CELLS, bandToCell, bandOfCell,
+  BAND_CELLS, bandToCell, bandOfCell, DIAL, dialMultipliers,
 } from '../src/write/voice.js';
 
 // Personality is the Horizon's DEPARTURE from σ projected to tokens. The load-bearing claim is
@@ -159,4 +159,32 @@ test('band-mounted register separates the three levels (with baked vectors)', ()
   assert.ok(reg('existence').has(10) && !reg('existence').has(30), 'existence ⇒ Thoth, not Apollo');
   assert.ok(reg('structure').has(20) && reg('structure').has(21), 'structure ⇒ Harmonia + Pattern grain');
   assert.ok(reg('significance').has(30) && reg('significance').has(31), 'significance ⇒ Apollo + Themis');
+});
+
+// ── THE DIAL (Track E) ───────────────────────────────────────────────────────────────────
+test('dialMultipliers — plain prefs combine into per-cartridge weight factors', () => {
+  assert.equal(dialMultipliers(null).size, 0);
+  const m = dialMultipliers({ terse: true, cautious: true });
+  assert.equal(m.get('act:DEF'), DIAL.terse['act:DEF']);              // terse boosts Thoth
+  assert.ok(Math.abs(m.get('act:SIG') - DIAL.terse['act:SIG'] * DIAL.cautious['act:SIG']) < 1e-9, 'overlapping factors multiply');
+  assert.deepEqual(dialMultipliers(['concrete']).get('grain:Ground'), DIAL.concrete['grain:Ground']);
+});
+
+test('the dial scales the mounted weight as a standing preference', () => {
+  const bank = loadPantheon({ gods: { DEF: { tokens: { '5': 4 } } } });
+  const base = mountPersonality({ cell: { act: 'DEF' }, weights: { act: 1 }, bank, budget: 1e9 }).bias.get(5);
+  const terse = mountPersonality({ cell: { act: 'DEF' }, weights: { act: 1 }, bank, budget: 1e9, dialMul: dialMultipliers({ terse: true }) }).bias.get(5);
+  assert.ok(terse > base, 'terse dials Thoth up');
+});
+
+test('the dial can never override the NUL-on-VOID lock', () => {
+  // A dial that would damp NUL must be ignored on a locked coordinate — you cannot dial abstention
+  // into a confident register (the governance lock).
+  const bank = loadPantheon({ gods: { NUL: { tokens: { '3': 2 } } } });
+  const dialMul = new Map([['act:NUL', 0.1]]);
+  const nodial = mountPersonality({ cell: { act: 'NUL', locked: true }, weights: { act: 1 }, bank, budget: 1e9 }).bias.get(3);
+  const locked = mountPersonality({ cell: { act: 'NUL', locked: true }, weights: { act: 1 }, bank, budget: 1e9, dialMul }).bias.get(3);
+  const open = mountPersonality({ cell: { act: 'NUL' }, weights: { act: 1 }, bank, budget: 1e9, dialMul }).bias.get(3);
+  assert.equal(locked, nodial, 'the lock ignores the dial');
+  assert.ok(open < locked, 'an unlocked coordinate would have been damped');
 });

@@ -96,7 +96,7 @@ export const streamAnswer = async ({
     if (lens?.banks) {
       band = lens.locked ? 'absence' : bandOfCell(cell);
       const cellAddr = { ...bandToCell(band), grain: band === 'structure' ? 'Pattern' : lens.grain || null, locked: lens.locked };
-      const personality = mountPersonality({ cell: cellAddr, weights: { act: 1, grain: 1 }, banks: lens.banks, budget: lens.budget ?? 6 }).bias;
+      const personality = mountPersonality({ cell: cellAddr, weights: { act: 1, grain: 1 }, banks: lens.banks, budget: lens.budget ?? 6, dialMul: lens.dialMul }).bias;
       beatLens = { ...lens, personality, lambda: personality.size ? 1 : 0 };
     }
     const raw = await streamPhrase(model, cursor.input, { maxTokens: cursor.budget, onToken, lens: beatLens });

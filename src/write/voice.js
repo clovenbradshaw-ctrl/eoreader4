@@ -175,7 +175,7 @@ export const capNorm = (map, budget) => {
 // { act, mode, resolution, grain }; the legacy `bank` is an alias for the Act bank alone. Returns
 // the λ contribution and the mounted-set for the Given-Log.
 const MOUNT_AXES = ['act', 'mode', 'resolution', 'grain'];
-export const mountPersonality = ({ cell = {}, weights = {}, banks = null, bank = null, tilt = null, budget = 6 } = {}) => {
+export const mountPersonality = ({ cell = {}, weights = {}, banks = null, bank = null, tilt = null, budget = 6, dialMul = null } = {}) => {
   const B = banks || (bank ? { act: bank } : {});
   const acc = new Map();
   const mounted = [];
@@ -188,9 +188,14 @@ export const mountPersonality = ({ cell = {}, weights = {}, banks = null, bank =
     for (const key of keys) {
       if (!b.has(key)) continue;
       const e = b.get(key);
-      const w = (Number.isFinite(weights[axis]) ? weights[axis] : 1) * e.cap;   // Born weight × risk cap
+      // The plain-language dial (Track E) scales a cartridge's weight as a STANDING preference — but
+      // a LOCKED coordinate (NUL-on-VOID) ignores it: you cannot dial abstention into a confident
+      // register. The dial never names a god; it only nudges the mix the field already chose.
+      const locked = axis === 'act' && !!cell.locked;
+      const dm = (dialMul && !locked) ? (dialMul.get(`${axis}:${key}`) ?? 1) : 1;
+      const w = (Number.isFinite(weights[axis]) ? weights[axis] : 1) * e.cap * dm;   // Born weight × risk cap × dial
       add(e.bias, w);
-      mounted.push({ axis, key, god: e.god || e.label || key, weight: round(w), locked: axis === 'act' && !!cell.locked });
+      mounted.push({ axis, key, god: e.god || e.label || key, weight: round(w), locked });
     }
   }
   if (tilt && tilt.size) { add(tilt, Number.isFinite(weights.tilt) ? weights.tilt : 1); mounted.push({ axis: 'tilt', weight: round(weights.tilt ?? 1) }); }
@@ -272,6 +277,32 @@ export const resolveOverlap = (actBank, stanceBanks, { threshold = 0.6 } = {}) =
   const collapsed = Math.abs(cos) > threshold;
   if (collapsed) stanceBanks.resolution.delete('defeat');   // unbaked rather than double-counted
   return { collapsed, cos: round(cos) };
+};
+
+// ── THE DIAL (Track E): a plain-language standing preference over auto-mount ──────────────
+// The gods are not a character-select screen — voice tracks what the field is doing, so the
+// default is invisible. The dial is an OPTIONAL override layered on top, in plain language ("more
+// terse", "more cautious", "stay concrete"), the way λ and μ already trade off. The god-names are
+// the AUDIT vocabulary, never the control surface. Each preference is a set of per-cartridge weight
+// multipliers (keyed "axis:key"); a locked coordinate (NUL-on-VOID) ignores the dial entirely.
+export const DIAL = Object.freeze({
+  terse:    { 'act:DEF': 1.6, 'act:SIG': 0.6, 'act:CON': 0.7 },   // Thoth up, ornament down
+  cautious: { 'act:EVA': 1.6, 'act:SIG': 0.6 },                   // Themis up, damp the over-read
+  concrete: { 'grain:Ground': 0.4, 'grain:Pattern': 0.4 },        // never drift abstract (μ carries Figure)
+});
+
+// dialMultipliers(prefs) → Map<"axis:key", factor>. `prefs` is the user's standing choice, either an
+// array of active keys or a flag object { terse:true, ... }. Overlapping factors multiply.
+export const dialMultipliers = (prefs) => {
+  const out = new Map();
+  if (!prefs) return out;
+  const active = Array.isArray(prefs) ? prefs : Object.keys(prefs).filter(k => prefs[k]);
+  for (const p of active) {
+    const m = DIAL[p];
+    if (!m) continue;
+    for (const [k, f] of Object.entries(m)) out.set(k, (out.get(k) ?? 1) * f);
+  }
+  return out;
 };
 
 // ── BAND → CARTRIDGE: make the epistemic status audible in the prose ──────────────────────

@@ -36,6 +36,10 @@ header button.small { font-size: .75rem; padding: .15rem .5rem; margin-left: .5r
   font-size: .8rem; color: #a1a1aa; cursor: pointer; user-select: none;
 }
 .lens-toggle input { accent-color: #6ee7b7; margin: 0; }
+/* The dial (spec-the-pantheon.md, Track E) — plain-language voice preference, layered over auto-mount. */
+.voice-dial { display: inline-flex; align-items: center; gap: .55rem; font-size: .78rem; color: #a1a1aa; }
+.voice-dial label { display: inline-flex; align-items: center; gap: .25rem; cursor: pointer; user-select: none; }
+.voice-dial input { accent-color: #6ee7b7; margin: 0; }
 
 main {
   flex: 1;
