@@ -138,8 +138,28 @@ section h2 {
   line-height: 1.5;
   font-size: .9rem;
 }
+.msg { position: relative; }
 .msg.user { background: #1d2030; align-self: flex-end; }
 .msg.assistant { background: #18181b; align-self: flex-start; }
+
+/* Per-message actions — copy · reply/quote · fork. Quiet until the message is
+   hovered or focused, so the chat stays spare; always shown on touch. */
+.msg-actions {
+  display: flex; gap: .3rem; margin-top: .5rem;
+  opacity: 0; transition: opacity .12s ease;
+}
+.msg:hover .msg-actions,
+.msg:focus-within .msg-actions { opacity: 1; }
+.msg.user .msg-actions { justify-content: flex-end; }
+.msg-action {
+  font-size: .72rem; line-height: 1; padding: .22rem .45rem;
+  color: #71717a; background: transparent;
+  border: 1px solid #2a2a31; border-radius: 6px; cursor: pointer;
+  white-space: nowrap;
+}
+.msg-action:hover { color: #d4d4d8; border-color: #3f3f46; background: #1f1f23; }
+.msg-action.done { color: #6ee7b7; border-color: #065f46; background: #07241c; }
+@media (hover: none) { .msg-actions { opacity: 1; } }
 .msg .meta {
   font-size: .7rem;
   color: #71717a;
