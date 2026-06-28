@@ -320,6 +320,7 @@
             </sc-if>
             <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
               <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
+              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
               <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -854,6 +855,7 @@
           </sc-if>
           <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
             <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
+              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
             <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -1464,6 +1466,7 @@ class Component extends DCLogic {
   constructor(props){
     super(props);
     this.PROXY='https://n8n.intelechia.com/webhook';
+    this.MAX_PASSAGE=600;   // a real prose sentence rarely exceeds this; beyond it is a list/table/directory segmentation artifact, never a passage to quote
     this.STOP=new Set('the a an of to in on at for and or but with by from as is are was were be been being this that these those it its their his her our your they we you i he she him them us me year years some most many few what who whom which when where how why than then so if not no nor only also just very more less new over under into out up down off above below'.split(' '));
     this.MONTHS=new Set('january february march april may june july august september october november december jan feb mar apr jun jul aug sept sep oct nov dec'.split(' '));
     this.DOW=new Set('monday tuesday wednesday thursday friday saturday sunday mon tue tues wed thu thur thurs fri sat sun'.split(' '));
@@ -1503,6 +1506,10 @@ class Component extends DCLogic {
       // fold, then answer from the new reading) instead of letting the model guess. Turning it off
       // (the composer toggle) makes the chat answer ONLY from what you've read — no web at all.
       webBrain:(savedWebBrain!=='0'),
+      // HOW MUCH research — the arc's coverage policy, surfaced. shallow takes the strongest
+      // answer; deep covers the subject from several angles; obsessive exhausts the threads.
+      // It scales the battery size, the hop budget, pages-per-thread, and leash patience.
+      researchDepth:(()=>{try{return localStorage.getItem('eo_depth')||'deep';}catch(e){return 'deep';}})(),
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
       // Temporal cursor on the entity summary. Keyed by entity id → a fraction in
       // [0,1] of the way through that entity's attested record. Undefined means the
@@ -2328,16 +2335,17 @@ class Component extends DCLogic {
     const add=t=>{t=this.norm(String(t||'')).trim();const k=t.toLowerCase();if(t&&!seen.has(k)){seen.add(k);out.push(t);}};
     // (1) the document's own salient threads — only when deepening read sources, so a fresh named
     // topic never seeds from unrelated reading already in memory.
+    const cap=this._depthCfg().facets;   // shallow 2 · deep 4 · obsessive 6 — how wide the battery
     if(derived)for(const t of this._seedLeadsFromRead(subject,sources,4))add(t);
     // (2) neutral facets — breadth for any subject, so it's a battery even with nothing read yet.
-    for(const f of ['overview','analysis','history','significance']){if(out.length>=5)break;add(f);}
-    return out.slice(0,5);}
+    for(const f of ['overview','analysis','history','significance','criticism','examples']){if(out.length>=cap)break;add(f);}
+    return out.slice(0,cap);}
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
   // everything read. Empty spans when nothing relevant has been read.
   groundNotes(q,sources){const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
     const a=this.answerQuestion(q,scope);
-    const span=i=>({text:this.norm(this.master.sentences[i]),score:1,i,u:this.master.sentenceSource[i]});
+    const span=i=>({text:this._clipPassage(this.norm(this.master.sentences[i])),score:1,i,u:this.master.sentenceSource[i]});
     // `relevant` = the question actually matched read text (keyword overlap). Only relevant
     // spans are shown as linked grounding; the fallback below still feeds the model context
     // but is NOT surfaced as a citation (it isn't really "where the answer came from").
@@ -2624,6 +2632,14 @@ class Component extends DCLogic {
   // The web on/off switch (the composer toggle). On is the default; off means the chat answers only
   // from what you've already read, never reaching for the internet. Persisted so the choice sticks.
   toggleWebBrain(){this.setState(s=>{const on=!(s.webBrain!==false);try{localStorage.setItem('eo_webbrain',on?'1':'0');}catch(e){}return {webBrain:on};});}
+  // The research-depth policy (shallow / deep / obsessive) → concrete walk knobs. This is the
+  // arc's coverage cut: how wide the battery, how many hops, how many pages per thread, and how
+  // patiently the leash tolerates a dry thread before stopping.
+  _depthCfg(){const d=this.state.researchDepth||'deep';
+    if(d==='shallow')  return {key:'shallow',  facets:2, maxHops:3,  want:1, wantSeed:1, patience:2};
+    if(d==='obsessive')return {key:'obsessive',facets:6, maxHops:14, want:2, wantSeed:3, patience:5};
+    return                    {key:'deep',     facets:4, maxHops:8,  want:1, wantSeed:2, patience:3};}
+  cycleResearchDepth(){const order=['shallow','deep','obsessive'];this.setState(s=>{const i=order.indexOf(s.researchDepth||'deep');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_depth',next);}catch(e){}return {researchDepth:next};});}
   async chatResearch(q){
     if(this._busy)return;
     // The SUBJECT to chase — named outright when the message carries its own topic, or DERIVED
@@ -2676,7 +2692,19 @@ class Component extends DCLogic {
   // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
   // UNION the sources just gathered — passed in explicitly because the addChatSource setStates
   // above may not have flushed yet, and the new pages must be in scope for this answer.
+  // An ask for a LONG, multi-part piece — the opt-in trigger for the arc. Length is never the
+  // target (that fights the model's grounded prior); the request only opts INTO the multi-section
+  // shape. How long the answer actually runs is set by how much bindable evidence there is.
+  _longformIntent(q){return /\b(essays?|treatise|report|deep[\s-]?dive|comprehensive(?:ly)?|in[\s-]?depth|at length|long[\s-]?form|thorough(?:ly)?|detailed|\d{3,}\s*words?|write\s+(?:me\s+)?(?:a|an)\b[^.?!]*\b(?:essay|report|overview|account|piece|article|guide|breakdown))\b/i.test(String(q||''));}
   async _answerInto(id,q,gathered){
+    // OPT-IN LONGFORM (the arc, in the reader's own primitives): SEG the gathered evidence into one
+    // section per source (a fold), CON each grounded ONLY in that source's spans (re-prompt per
+    // fold), EVA each fold for new coverage and NUL when it would only re-cite, then assemble. Any
+    // other ask — or thin supply — takes the ordinary single answer. Length stays EMERGENT.
+    if(this._longformIntent(q))return this._longformArc(id,q,gathered);
+    return this._answerSingle(id,q,gathered);
+  }
+  async _answerSingle(id,q,gathered){
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const cur=this.state.chats.find(c=>c.id===id);
@@ -2710,6 +2738,68 @@ class Component extends DCLogic {
       this.setState({modelStatus:''});
     }
   }
+  // THE ARC, in the reader's own primitives — multi-section grounded longform (spec-the-arc).
+  // The document is a fold of its events; the turn a fold of its stages; the ARC a fold of a
+  // section plan. Here the plan's sections are the SOURCES the chat has gathered/read: one
+  // grounded section per source, re-prompted at that fold, appended while it adds coverage.
+  //   SEG  rank the in-scope sources by how much they bear on the question → the section plan.
+  //   CON  generate each section grounded ONLY in that source's spans (a re-prompt per fold).
+  //   EVA  does this fold add NEW coverage (terms not already covered)? …
+  //   NUL  …if it would only re-cite, skip it. Saturation, not a token target, sets the length.
+  // Degrades to the single answer when supply is thin (<2 groundable sources) or anything throws.
+  async _longformArc(id,q,gathered){
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    const cur=this.state.chats.find(c=>c.id===id);
+    const had=this.chatSourcesOf(cur);
+    const scope=had.length?[...new Set([...had,...(gathered||[])])]:[];
+    const urls=scope.length?scope:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
+    // SEG — the section plan: each in-scope source that actually bears on the question, ranked.
+    const plan=[];
+    for(const u of urls){
+      const g=this.groundNotes(q,[u]);
+      const spans=(g.spans||[]).filter(s=>s.text&&s.text.length>24);
+      if(g.relevant&&spans.length)plan.push({url:u,title:this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),70),
+        spans:spans.slice(0,6),entities:g.entities||[],score:spans.reduce((a,s)=>a+(s.score||0),0)});
+    }
+    plan.sort((a,b)=>b.score-a.score);
+    if(plan.length<2)return this._answerSingle(id,q,gathered);   // not enough supply for a multi-section piece
+    let model=null;try{model=await this.ensureChatModel();}catch(e){model=null;}
+    const MAXSEC=6,NOVELTY=0.2;
+    const covered=new Set(),parts=[],allEnts=new Set(),allSrcs=new Set(),allPass=[];
+    let acc='',raf=0;
+    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+    for(const sec of plan){
+      if(parts.length>=MAXSEC)break;
+      // EVA → NUL: a fold whose terms are already covered would only re-cite — skip it.
+      const terms=new Set(sec.spans.flatMap(s=>this._researchTerms(s.text)));
+      const fresh=[...terms].filter(t=>!covered.has(t));
+      if(parts.length&&terms.size&&fresh.length/terms.size<NOVELTY)continue;
+      // CON — generate this section grounded ONLY in this source's spans.
+      const header='## '+sec.title;
+      acc=(parts.join('\n\n')+(parts.length?'\n\n':'')+header+'\n\n');paint();
+      let body='';
+      if(model){
+        try{
+          const msgs=this._ME.buildGroundedMessages({question:q,spans:sec.spans,graph:this.meaningGraph([sec.url]),
+            orientation:this.chatOrientation([sec.url]),task:'answer',conversation:{pastTurns:[]},now:new Date()});
+          const base=acc;
+          const onToken=(piece)=>{const t=String(piece||'');if(!t)return;acc=base+t;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+          body=this.normMd(await this._ME.streamPhrase(model,msgs,{maxTokens:384,temperature:0.4,onToken}));
+        }catch(e){body='';}
+      }
+      if(!body)body=sec.spans.slice(0,3).map(s=>this._clipPassage(s.text)).join(' ');   // structural fallback, bounded
+      parts.push(header+'\n\n'+body);
+      for(const t of terms)covered.add(t);
+      for(const e of sec.entities)allEnts.add(e);
+      allSrcs.add(sec.url);
+      for(const s of sec.spans.slice(0,2))allPass.push({text:s.text,u:s.u,i:s.i});
+      acc=parts.join('\n\n');paint();
+    }
+    if(!parts.length)return this._answerSingle(id,q,gathered);
+    finish({text:parts.join('\n\n'),entities:[...allEnts].slice(0,8),sources:[...allSrcs],
+      passages:allPass.slice(0,12),groundKind:'matched',related:this.relatedDocs(q,scope)});
+  }
   // The curiosity walk, in the reader's own primitives (searchLinks / readURL / the graph).
   // CURIOSITY steers (chase the most surprising new term), COMPETENCY leashes (only follow
   // threads that stay salient to the question; set aside pages that drift). One thread per
@@ -2725,14 +2815,15 @@ class Component extends DCLogic {
     // dominate, enriched once by the first page actually read, then frozen.
     const topic=new Map();for(const t of this._researchTerms(anchor))topic.set(t,(topic.get(t)||0)+3);
     let baseline=0,topicFrozen=false,stray=0;
+    const cfg=this._depthCfg();                 // shallow / deep / obsessive → the walk's reach
     const frontier=[{query:seed,term:null}];   // FIFO of one-thread-deep leads; the seed leads
     // EXTRA SEEDS — surprising threads already surfaced in what's been read, chased alongside the
     // subject so a "go deeper" research turn opens new angles instead of re-reading the same pages.
     const extra=(opts&&opts.extraSeeds)||[];
     for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
-    // BREADTH for the battery: at least a hop per seeded thread (the subject + each angle), plus a
-    // couple to follow the most surprising turns — so several distinct searches run, not one chain.
-    const maxHops=Math.min(8,frontier.length+2);
+    // BREADTH × DEPTH: the policy caps the hops — shallow stops at the strongest answer, obsessive
+    // exhausts the threads — but never fewer than the seeded battery so every planned angle runs.
+    const maxHops=Math.max(frontier.length,Math.min(cfg.maxHops,frontier.length+(cfg.key==='obsessive'?8:2)));
     while(hops.length<maxHops&&frontier.length){
       const node=frontier.shift();
       step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching the web for “'+node.query+'”'));
@@ -2740,10 +2831,10 @@ class Component extends DCLogic {
       // A single provider hiccup must not end the whole walk — searchLinks already falls back from
       // DuckDuckGo to Wikipedia; if even that fails, treat the thread as dry and try the next one
       // (two dry threads in a row ends it), so an extra-seed thread can still find sources.
-      try{links=await this.searchLinks(node.query,6);}catch(e){step('warn','Search unavailable on that thread — '+((e&&e.message)||e));if(++stray>=2)break;continue;}
+      try{links=await this.searchLinks(node.query,6);}catch(e){step('warn','Search unavailable on that thread — '+((e&&e.message)||e));hops.push({query:node.query,term:node.term,got:0,next:null,error:String((e&&e.message)||e)});if(++stray>=cfg.patience)break;continue;}
       links=(links||[]).filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u));
-      if(!links.length){step('warn','No fresh sources on that thread.');if(++stray>=2)break;continue;}
-      const want=node.term?1:2;let got=0,attempts=0;const keptText=[];
+      if(!links.length){step('warn','No fresh sources on that thread.');hops.push({query:node.query,term:node.term,got:0,next:null,empty:true});if(++stray>=cfg.patience)break;continue;}
+      const want=node.term?cfg.want:cfg.wantSeed;let got=0,attempts=0;const keptText=[];
       for(let i=0;i<links.length&&got<want&&attempts<5;i++){
         const url=links[i];attempts++;
         step('read','Reading '+this.short(url)+' …');
@@ -2769,7 +2860,7 @@ class Component extends DCLogic {
           step('lead','The most surprising turn here is “'+next+'” — chasing it next.');}
       }
       hops.push({query:node.query,term:node.term,got,next});
-      if(!got){if(++stray>=2)break;}else stray=0;
+      if(!got){if(++stray>=cfg.patience)break;}else stray=0;
     }
     return {readUrls,hops};
   }
@@ -2814,6 +2905,10 @@ class Component extends DCLogic {
     if(!t)return a;if(!a)return t;return a.toLowerCase().includes(t.toLowerCase())?a:(a+' '+t);}
   // The grounded answer: rank read sentences by question-term overlap, quote the best,
   // and surface the entities the question names. Scope restricts to one source.
+  // Clip a passage to a sane sentence length for display/grounding — a guard against a
+  // mis-segmented giant "sentence" being pasted verbatim or blowing the model's context. Cuts on
+  // a word boundary and marks the elision; a normal sentence (under the cap) is returned untouched.
+  _clipPassage(s){s=String(s||'');if(s.length<=this.MAX_PASSAGE)return s;return s.slice(0,this.MAX_PASSAGE).replace(/\s+\S*$/,'')+'…';}
   answerQuestion(q,scope){
     if(!this.master||!this.master.sentences.length)
       return {text:'I haven’t read anything yet. Read a URL or import a book — it has to be read fully — then ask.',refs:[],entities:[],sources:[]};
@@ -2824,11 +2919,17 @@ class Component extends DCLogic {
     const ents=[];
     if(this.graph)for(const e of this.graph.entities.values()){if(!this.showable(e.id))continue;const lab=this.labelOf(e.id).toLowerCase();if(qwords.some(w=>lab===w||(lab.length>3&&lab.includes(w))||(w.length>3&&w.includes(lab))))ents.push(e.id);}
     const scored=[];
-    for(let i=0;i<this.master.sentences.length;i++){if(!inScope(i))continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(!this._proseOk(low))continue;let v=0;for(const w of qwords)if(low.includes(w))v++;if(v>0)scored.push({i,v});}
+    for(let i=0;i<this.master.sentences.length;i++){if(!inScope(i))continue;const s=this.norm(this.master.sentences[i]);
+      // A "sentence" longer than this is a SEGMENTATION ARTIFACT — a list, table, or directory
+      // page (e.g. "List of Russian sportspeople") the parser couldn't break into real sentences.
+      // It is not a prose answer; pasting it dumps thousands of off-topic names. Skip it as a
+      // passage. (The page is still folded into the graph as entities; it just can't BE the answer.)
+      if(s.length>this.MAX_PASSAGE)continue;
+      const low=s.toLowerCase();if(!this._proseOk(low))continue;let v=0;for(const w of qwords)if(low.includes(w))v++;if(v>0)scored.push({i,v});}
     scored.sort((a,b)=>b.v-a.v||a.i-b.i);
     const top=scored.slice(0,3);
     if(!top.length) return {text:'I didn’t find anything about that in what I’ve read.',refs:[],entities:ents.slice(0,6),sources:[]};
-    const text=top.map(o=>this.norm(this.master.sentences[o.i])).join(' ');
+    const text=top.map(o=>this._clipPassage(this.norm(this.master.sentences[o.i]))).join(' ');
     const sources=[...new Set(top.map(o=>this.master.sentenceSource[o.i]).filter(Boolean))];
     return {text,refs:top.map(o=>o.i),entities:ents.slice(0,6),sources};
   }
@@ -4958,6 +5059,12 @@ class Component extends DCLogic {
       researchModeTitle:this.state.webBrain!==false?'Web is on — when your own reading doesn’t cover a question I go read the internet, fold it into memory, and answer grounded in what I found. Click to turn the web off.':'Web is off — answers come only from what you’ve read, nothing from the internet. Click to let me read the web when your reading doesn’t cover a question.',
       researchModeHint:this.state.webBrain!==false?'I’ll read the web when your own reading doesn’t cover it.':'Off — answering only from what you’ve read.',
       researchModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
+      // HOW MUCH research — cycles shallow → deep → obsessive (the arc's coverage policy). Disabled
+      // visually when the web is off (there's nothing to scale). Only meaningful while web is on.
+      onCycleDepth:()=>this.cycleResearchDepth(),
+      depthBtnLabel:'🔬 '+(this.state.researchDepth||'deep'),
+      depthTitle:'How much research per question: shallow (the strongest answer) · deep (several angles) · obsessive (exhaust the threads). Click to cycle.',
+      depthStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
       backend:this.state.backend||'webllm',
       backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},{v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
