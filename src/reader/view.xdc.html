@@ -56,6 +56,9 @@
         <input value="{{ url }}" oninput="{{ onUrlInput }}" onkeydown="{{ onUrlKey }}" placeholder="Search or read a URL into memory…" style="flex:1;min-width:0;font-size:12.5px;color:var(--ink);background:transparent;border:none;padding:7px 10px;outline:none;">
         <button onclick="{{ onReadUrl }}" style="{{ readBtnStyle }}">{{ readBtnLabel }}</button>
       </div>
+      <input type="file" data-eo-import="" accept=".txt,.md,.markdown,.text,text/plain" onchange="{{ onImportFile }}" style="display:none;">
+      <button onclick="{{ onImportClick }}" title="Import a book or text file — read it as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">📄</button>
+      <button onclick="{{ onSwap }}" title="{{ swapTitle }}" style="{{ swapBtnStyle }}" style-hover="background:#eef0f3;color:var(--ink)">⇄</button>
       <div style="position:relative;flex:0 0 auto;">
         <button onclick="{{ onToggleSettings }}" title="EO settings" style="width:30px;height:30px;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
         <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
@@ -146,7 +149,7 @@
   <div id="eo-grid" style="display:grid;grid-template-columns:{{ gridCols }};min-height:0;">
 
     <sc-if value="{{ leftOpen }}" hint-placeholder-val="{{ true }}">
-    <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;">
+    <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;order:{{ leftOrder }};">
       <div style="padding:11px 13px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:3;">
         <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:600;color:var(--ink2);">Sources</span><span style="font-size:11px;color:var(--ink3);">{{ srcCount }}</span>
           <button onclick="{{ toggleLeft }}" title="Hide panel" style="margin-left:auto;width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">‹</button>
@@ -154,21 +157,97 @@
         <div style="font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.5;">Pages you’ve opened. Click one to revisit it here.</div>
       </div>
       <div style="padding:8px 9px;">
+        <button onclick="{{ onNewChat }}" title="Start a chat grounded in everything you've read" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:8px;" style-hover="background:var(--card)"><span style="font-size:14px;line-height:1;">✦</span>New chat</button>
+        <sc-if value="{{ hasChats }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:6px 4px 4px;">Chats</div>
+          <sc-for list="{{ chats }}" as="c" hint-placeholder-count="0">
+            <div onclick="{{ c.onOpen }}" style="{{ c.rowStyle }}" style-hover="background:#f7f8fa">
+              <div style="width:24px;height:24px;border-radius:6px;flex:0 0 auto;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:12px;">✦</div>
+              <div style="min-width:0;flex:1;">
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.title }}</div>
+                <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ c.sub }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </sc-if>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:8px 4px 4px;">Sources</div>
         <sc-for list="{{ sources }}" as="s" hint-placeholder-count="3">
-          <div onclick="{{ s.onOpen }}" style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
-            <div style="{{ s.dot }}">{{ s.glyph }}</div>
-            <div style="min-width:0;flex:1;">
+          <div style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
+            <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
+            <div onclick="{{ s.onOpen }}" style="min-width:0;flex:1;cursor:pointer;">
               <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.label }}</div>
               <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ s.host }} · {{ s.count }} entities</div>
             </div>
+            <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
           </div>
         </sc-for>
-        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:16px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Type a URL in the address bar to open your first page.</div></sc-if>
+        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Read a URL, import a book, or start a chat above.</div></sc-if>
       </div>
     </aside>
     </sc-if>
 
-    <main style="overflow-y:auto;min-height:0;position:relative;">
+    <main style="overflow-y:auto;min-height:0;position:relative;order:{{ mainOrder }};">
+      <sc-if value="{{ chatOn }}" hint-placeholder-val="{{ false }}">
+        <div style="height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);">
+          <div style="flex:0 0 auto;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--card);display:flex;align-items:center;gap:10px;">
+            <div style="width:26px;height:26px;border-radius:7px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto;">✦</div>
+            <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
+              <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">grounded in {{ chat.scopeLabel }}</div></div>
+            <button onclick="{{ onCloseChat }}" title="Close chat" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
+          </div>
+          <div id="eo-chat-scroll" style="flex:1;overflow-y:auto;padding:24px 22px;min-height:0;">
+            <div style="max-width:720px;margin:0 auto;">
+              <sc-if value="{{ chat.empty }}" hint-placeholder-val="{{ true }}">
+                <div style="text-align:center;color:var(--ink3);font-size:13px;line-height:1.65;padding:46px 10px;">Ask anything about what you’ve read.<br>Answers are quoted from your sources — every claim links back.</div>
+              </sc-if>
+              <sc-for list="{{ chat.messages }}" as="m" hint-placeholder-count="0">
+                <div style="{{ m.rowStyle }}">
+                  <div style="{{ m.bubbleStyle }}">{{ m.text }}</div>
+                  <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ false }}">
+                    <div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" style="{{ m.srcChipStyle }}">¶ {{ sx.label }}</span></sc-for></div>
+                  </sc-if>
+                  <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
+                    <div style="max-width:80%;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:0 0 auto;padding:13px 22px 17px;border-top:1px solid var(--line);background:var(--card);">
+            <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
+              <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
+              <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ gutenOn }}" hint-placeholder-val="{{ false }}">
+        <div style="height:100%;overflow-y:auto;min-height:0;padding:30px 22px 80px;">
+          <div style="max-width:680px;margin:0 auto;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+              <span style="font-size:18px;">📚</span>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Project Gutenberg · “{{ guten.query }}”</div>
+              <button onclick="{{ guten.onClear }}" style="margin-left:auto;flex:0 0 auto;font-size:12px;color:var(--ink2);background:transparent;border:none;cursor:pointer;" style-hover="color:var(--ink)">Clear</button>
+            </div>
+            <sc-if value="{{ guten.loading }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:11px;color:var(--ink3);padding:24px 4px;"><span style="width:22px;height:22px;border-radius:50%;border:3px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span><span style="font-size:13px;">Searching the catalog…</span></div>
+            </sc-if>
+            <sc-if value="{{ guten.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="color:var(--ink3);font-size:13px;line-height:1.6;padding:22px 4px;">No books found. Try a different title or author — or paste a URL to read a page.</div>
+            </sc-if>
+            <sc-for list="{{ guten.results }}" as="bk" hint-placeholder-count="0">
+              <div style="{{ bk.rowStyle }}">
+                <div style="min-width:0;flex:1;">
+                  <div style="font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.3;">{{ bk.title }}</div>
+                  <div style="font-size:12px;color:var(--ink2);margin-top:3px;">{{ bk.author }}</div>
+                  <div style="font-size:11px;color:var(--ink3);margin-top:3px;">{{ bk.downloads }}</div>
+                </div>
+                <button onclick="{{ bk.onRead }}" style="{{ bk.btnStyle }}">{{ bk.btnLabel }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
       <sc-if value="{{ showWeb }}" hint-placeholder-val="{{ false }}">
         <div style="height:100%;display:flex;flex-direction:column;min-height:0;background:#fff;">
           <sc-if value="{{ web.loading }}" hint-placeholder-val="{{ true }}">
@@ -515,7 +594,7 @@
     </main>
 
     <sc-if value="{{ rightOpen }}" hint-placeholder-val="{{ true }}">
-    <aside id="eo-panel-scroll" style="border-left:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;">
+    <aside id="eo-panel-scroll" style="border-left:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;order:{{ rightOrder }};">
       <sc-if value="{{ panelProfileOn }}" hint-placeholder-val="{{ false }}">
         <div style="position:sticky;top:0;background:var(--card);z-index:3;border-bottom:1px solid var(--line);box-shadow:0 1px 0 rgba(0,0,0,.02);">
           <div style="display:flex;align-items:center;gap:6px;padding:8px 10px 0;">

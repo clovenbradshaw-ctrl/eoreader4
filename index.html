@@ -69,6 +69,9 @@
         <input value="{{ url }}" oninput="{{ onUrlInput }}" onkeydown="{{ onUrlKey }}" placeholder="Search or read a URL into memory…" style="flex:1;min-width:0;font-size:12.5px;color:var(--ink);background:transparent;border:none;padding:7px 10px;outline:none;">
         <button onclick="{{ onReadUrl }}" style="{{ readBtnStyle }}">{{ readBtnLabel }}</button>
       </div>
+      <input type="file" data-eo-import="" accept=".txt,.md,.markdown,.text,text/plain" onchange="{{ onImportFile }}" style="display:none;">
+      <button onclick="{{ onImportClick }}" title="Import a book or text file — read it as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">📄</button>
+      <button onclick="{{ onSwap }}" title="{{ swapTitle }}" style="{{ swapBtnStyle }}" style-hover="background:#eef0f3;color:var(--ink)">⇄</button>
       <div style="position:relative;flex:0 0 auto;">
         <button onclick="{{ onToggleSettings }}" title="EO settings" style="width:30px;height:30px;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
         <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
@@ -159,7 +162,7 @@
   <div id="eo-grid" style="display:grid;grid-template-columns:{{ gridCols }};min-height:0;">
 
     <sc-if value="{{ leftOpen }}" hint-placeholder-val="{{ true }}">
-    <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;">
+    <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;order:{{ leftOrder }};">
       <div style="padding:11px 13px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:3;">
         <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:600;color:var(--ink2);">Sources</span><span style="font-size:11px;color:var(--ink3);">{{ srcCount }}</span>
           <button onclick="{{ toggleLeft }}" title="Hide panel" style="margin-left:auto;width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">‹</button>
@@ -167,21 +170,97 @@
         <div style="font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.5;">Pages you’ve opened. Click one to revisit it here.</div>
       </div>
       <div style="padding:8px 9px;">
+        <button onclick="{{ onNewChat }}" title="Start a chat grounded in everything you've read" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:8px;" style-hover="background:var(--card)"><span style="font-size:14px;line-height:1;">✦</span>New chat</button>
+        <sc-if value="{{ hasChats }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:6px 4px 4px;">Chats</div>
+          <sc-for list="{{ chats }}" as="c" hint-placeholder-count="0">
+            <div onclick="{{ c.onOpen }}" style="{{ c.rowStyle }}" style-hover="background:#f7f8fa">
+              <div style="width:24px;height:24px;border-radius:6px;flex:0 0 auto;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:12px;">✦</div>
+              <div style="min-width:0;flex:1;">
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.title }}</div>
+                <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ c.sub }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </sc-if>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:8px 4px 4px;">Sources</div>
         <sc-for list="{{ sources }}" as="s" hint-placeholder-count="3">
-          <div onclick="{{ s.onOpen }}" style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
-            <div style="{{ s.dot }}">{{ s.glyph }}</div>
-            <div style="min-width:0;flex:1;">
+          <div style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
+            <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
+            <div onclick="{{ s.onOpen }}" style="min-width:0;flex:1;cursor:pointer;">
               <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.label }}</div>
               <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ s.host }} · {{ s.count }} entities</div>
             </div>
+            <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
           </div>
         </sc-for>
-        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:16px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Type a URL in the address bar to open your first page.</div></sc-if>
+        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Read a URL, import a book, or start a chat above.</div></sc-if>
       </div>
     </aside>
     </sc-if>
 
-    <main style="overflow-y:auto;min-height:0;position:relative;">
+    <main style="overflow-y:auto;min-height:0;position:relative;order:{{ mainOrder }};">
+      <sc-if value="{{ chatOn }}" hint-placeholder-val="{{ false }}">
+        <div style="height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);">
+          <div style="flex:0 0 auto;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--card);display:flex;align-items:center;gap:10px;">
+            <div style="width:26px;height:26px;border-radius:7px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto;">✦</div>
+            <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
+              <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">grounded in {{ chat.scopeLabel }}</div></div>
+            <button onclick="{{ onCloseChat }}" title="Close chat" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
+          </div>
+          <div id="eo-chat-scroll" style="flex:1;overflow-y:auto;padding:24px 22px;min-height:0;">
+            <div style="max-width:720px;margin:0 auto;">
+              <sc-if value="{{ chat.empty }}" hint-placeholder-val="{{ true }}">
+                <div style="text-align:center;color:var(--ink3);font-size:13px;line-height:1.65;padding:46px 10px;">Ask anything about what you’ve read.<br>Answers are quoted from your sources — every claim links back.</div>
+              </sc-if>
+              <sc-for list="{{ chat.messages }}" as="m" hint-placeholder-count="0">
+                <div style="{{ m.rowStyle }}">
+                  <div style="{{ m.bubbleStyle }}">{{ m.text }}</div>
+                  <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ false }}">
+                    <div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" style="{{ m.srcChipStyle }}">¶ {{ sx.label }}</span></sc-for></div>
+                  </sc-if>
+                  <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
+                    <div style="max-width:80%;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="flex:0 0 auto;padding:13px 22px 17px;border-top:1px solid var(--line);background:var(--card);">
+            <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
+              <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
+              <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ gutenOn }}" hint-placeholder-val="{{ false }}">
+        <div style="height:100%;overflow-y:auto;min-height:0;padding:30px 22px 80px;">
+          <div style="max-width:680px;margin:0 auto;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+              <span style="font-size:18px;">📚</span>
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Project Gutenberg · “{{ guten.query }}”</div>
+              <button onclick="{{ guten.onClear }}" style="margin-left:auto;flex:0 0 auto;font-size:12px;color:var(--ink2);background:transparent;border:none;cursor:pointer;" style-hover="color:var(--ink)">Clear</button>
+            </div>
+            <sc-if value="{{ guten.loading }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:11px;color:var(--ink3);padding:24px 4px;"><span style="width:22px;height:22px;border-radius:50%;border:3px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span><span style="font-size:13px;">Searching the catalog…</span></div>
+            </sc-if>
+            <sc-if value="{{ guten.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="color:var(--ink3);font-size:13px;line-height:1.6;padding:22px 4px;">No books found. Try a different title or author — or paste a URL to read a page.</div>
+            </sc-if>
+            <sc-for list="{{ guten.results }}" as="bk" hint-placeholder-count="0">
+              <div style="{{ bk.rowStyle }}">
+                <div style="min-width:0;flex:1;">
+                  <div style="font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.3;">{{ bk.title }}</div>
+                  <div style="font-size:12px;color:var(--ink2);margin-top:3px;">{{ bk.author }}</div>
+                  <div style="font-size:11px;color:var(--ink3);margin-top:3px;">{{ bk.downloads }}</div>
+                </div>
+                <button onclick="{{ bk.onRead }}" style="{{ bk.btnStyle }}">{{ bk.btnLabel }}</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
       <sc-if value="{{ showWeb }}" hint-placeholder-val="{{ false }}">
         <div style="height:100%;display:flex;flex-direction:column;min-height:0;background:#fff;">
           <sc-if value="{{ web.loading }}" hint-placeholder-val="{{ true }}">
@@ -528,7 +607,7 @@
     </main>
 
     <sc-if value="{{ rightOpen }}" hint-placeholder-val="{{ true }}">
-    <aside id="eo-panel-scroll" style="border-left:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;">
+    <aside id="eo-panel-scroll" style="border-left:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;order:{{ rightOrder }};">
       <sc-if value="{{ panelProfileOn }}" hint-placeholder-val="{{ false }}">
         <div style="position:sticky;top:0;background:var(--card);z-index:3;border-bottom:1px solid var(--line);box-shadow:0 1px 0 rgba(0,0,0,.02);">
           <div style="display:flex;align-items:center;gap:6px;padding:8px 10px 0;">
@@ -1125,7 +1204,17 @@ class Component extends DCLogic {
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
       hoverCite:null, liveResearch:{on:false},
-      leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false };
+      leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
+      // Chat — first-class alongside sources. Each chat is a thread grounded in what
+      // has been read; answers are built from the read graph/sentences (no LLM; an
+      // LLM refines them only if window.claude is present). Chats live in the left panel.
+      chats:[], activeChat:null, chatInput:'', chatBusy:false,
+      // Project Gutenberg — "a source of sources". A non-URL query searches the catalog;
+      // a chosen book is fetched and READ FULLY before it joins the sources (and so can
+      // be chatted with). gutenReading holds the id while a book is being read.
+      gutenResults:null, gutenLoading:false, gutenQuery:'', gutenReading:null,
+      // Panel layout: swap the left (sources/chats) and right (entities) sides.
+      swapped:(()=>{try{return localStorage.getItem('eo_swap')==='1';}catch(e){return false;}})() };
   }
   // ── theme helpers ─────────────────────────────────────────────────────
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
@@ -1265,7 +1354,7 @@ class Component extends DCLogic {
     for(const pg of pages){ if(this._muted&&this._muted.has(pg.url))continue; const so=m.events.length,no=m.sentences.length;
       for(const e of pg.events){const ne={...e,seq:e.seq+so,__page:pg.url};if(e.refSeq!=null)ne.refSeq=e.refSeq+so;if(typeof e.ref==='number')ne.ref=e.ref+so;if(e.argspan!=null)ne.argspan=e.argspan+so;if(e.sentIdx!=null)ne.sentIdx=e.sentIdx+no;m.events.push(ne);}
       pg.sentences.forEach(s=>{m.sentences.push(s);m.sentenceSource.push(pg.url);});
-      m.pages.push({url:pg.url,title:pg.title,ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,seqStart:so,sentStart:no});
+      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,seqStart:so,sentStart:no});
     }
     this.master=m;
     const shim={events:m.events,snapshot:()=>m.events,get length(){return m.events.length;}};
@@ -1286,14 +1375,161 @@ class Component extends DCLogic {
     const url='text:'+(Date.now().toString(36)); const ttl=title||('Pasted text · '+text.slice(0,40).replace(/\s+/g,' ').trim()+'…');
     return this.ingest(url,ttl,text,'paste');
   }
+  // Import a book / text file: read it, then NAVIGATE the center to it so it opens
+  // as a readable book (loadCenter's text: branch) with its entities clickable.
+  async importText(text,title){
+    const r=await this.readText(text,title);
+    if(!r||!r.url){this.feedLine('warn','Could not import that text.');return false;}
+    this._srcUrl=null;this._pushLoc({t:'web',url:r.url});
+    this.setState(s=>({viewUrl:r.url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));
+    this.loadCenter(r.url);
+    this.feedSep('imported a book');this.feedLine('read','Read “'+r.title+'” · '+r.sentenceCount+' propositions');
+    return r;
+  }
+  onImportClick(){const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
+  onImportFile(ev){
+    const f=ev&&ev.target&&ev.target.files&&ev.target.files[0];if(!f)return;
+    const fr=new FileReader();
+    fr.onload=()=>{this.importText(String(fr.result||''),f.name.replace(/\.(txt|md|markdown|text)$/i,''));if(ev.target)ev.target.value='';};
+    fr.onerror=()=>{this.feedLine('warn','Could not read that file.');};
+    fr.readAsText(f);
+  }
+  // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
+  // Each chat is a thread that answers from the read sentences/graph. A chat can be
+  // scoped to one source (a fully-read book/page) or range over everything read. The
+  // answer quotes the most relevant read sentences and links the entities it found —
+  // every claim traces to a source. window.claude, if present, is not required.
+  chatId(){this._chatN=(this._chatN||0)+1;return 'c'+Date.now().toString(36)+this._chatN;}
+  activeChatObj(){return this.state.chats.find(c=>c.id===this.state.activeChat)||null;}
+  newChat(scopeUrl){
+    const id=this.chatId();
+    const title=scopeUrl?(((this.pageOf(scopeUrl)||{}).title)||this.short(scopeUrl)):'New chat';
+    const chat={id,title,scope:scopeUrl||null,messages:[],ts:Date.now()};
+    this.setState(s=>({chats:[chat,...s.chats],activeChat:id,viewUrl:null,selId:null,panelSel:null,chatInput:''}));
+    return id;
+  }
+  openChat(id){this.setState({activeChat:id,viewUrl:null,selId:null,panelSel:null,hoverEnt:null});}
+  closeChat(){this.setState({activeChat:null});}
+  onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
+  onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
+  sendChat(){
+    const q=this.norm(this.state.chatInput);if(!q)return;
+    const cur=this.activeChatObj();const scope=cur?cur.scope:null;
+    const ans=this.answerQuestion(q,scope);
+    this.setState(s=>{
+      let chats=s.chats.slice();let id=s.activeChat;let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),scope:null,messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:ans.text,refs:ans.refs,entities:ans.entities,sources:ans.sources}]};
+      return {chats,activeChat:id,chatInput:''};
+    });
+    requestAnimationFrame(()=>{const a=document.getElementById('eo-chat-scroll');if(a)a.scrollTop=a.scrollHeight;});
+  }
+  // The grounded answer: rank read sentences by question-term overlap, quote the best,
+  // and surface the entities the question names. Scope restricts to one source.
+  answerQuestion(q,scope){
+    if(!this.master||!this.master.sentences.length)
+      return {text:'I haven’t read anything yet. Read a URL or import a book — it has to be read fully — then ask.',refs:[],entities:[],sources:[]};
+    const qwords=q.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
+    if(!qwords.length) return {text:'Ask about a name, place, or idea from what you’ve read.',refs:[],entities:[],sources:[]};
+    const inScope=i=>!scope||this.master.sentenceSource[i]===scope;
+    const ents=[];
+    if(this.graph)for(const e of this.graph.entities.values()){if(!this.showable(e.id))continue;const lab=this.labelOf(e.id).toLowerCase();if(qwords.some(w=>lab===w||(lab.length>3&&lab.includes(w))||(w.length>3&&w.includes(lab))))ents.push(e.id);}
+    const scored=[];
+    for(let i=0;i<this.master.sentences.length;i++){if(!inScope(i))continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(!this._proseOk(low))continue;let v=0;for(const w of qwords)if(low.includes(w))v++;if(v>0)scored.push({i,v});}
+    scored.sort((a,b)=>b.v-a.v||a.i-b.i);
+    const top=scored.slice(0,3);
+    if(!top.length) return {text:'I didn’t find anything about that in what I’ve read.',refs:[],entities:ents.slice(0,6),sources:[]};
+    const text=top.map(o=>this.norm(this.master.sentences[o.i])).join(' ');
+    const sources=[...new Set(top.map(o=>this.master.sentenceSource[o.i]).filter(Boolean))];
+    return {text,refs:top.map(o=>o.i),entities:ents.slice(0,6),sources};
+  }
+  // View-model for the chat: the left-panel thread list + the active thread, ready
+  // for the template. Pure read of state.chats; no engine work here.
+  chatVals(base){
+    base.chats=(this.state.chats||[]).map(c=>{
+      const active=c.id===this.state.activeChat;
+      return {id:c.id,title:this.truncLabel(c.title||'New chat',32),
+        sub:(c.scope?(this.truncLabel(((this.pageOf(c.scope)||{}).title)||'a source',22)):'all sources')+' · '+Math.ceil(c.messages.length/2)+' Q',
+        active,onOpen:()=>this.openChat(c.id),
+        rowStyle:'display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;margin-bottom:3px;cursor:pointer;border:1px solid '+(active?'var(--accline)':'transparent')+';background:'+(active?'var(--accbg)':'transparent')+';'};
+    });
+    base.hasChats=base.chats.length>0;
+    const cur=this.activeChatObj();
+    if(!cur)return;
+    base.chatOn=true;
+    const msgs=cur.messages.map(m=>{
+      const isUser=m.role==='user';
+      const sources=(m.sources||[]).map(u=>({label:/^text:/i.test(u)?(this.truncLabel(((this.pageOf(u)||{}).title)||'text',20)):this.short(u),onOpen:()=>this.goWeb(u)}));
+      const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
+        style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
+      return {isUser,text:m.text,hasMeta:!isUser&&(sources.length>0||entities.length>0),
+        sources,hasSources:sources.length>0,entities,hasEntities:entities.length>0,
+        rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
+        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:var(--ink);border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;',
+        srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
+        srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
+    });
+    base.chat={title:this.truncLabel(cur.title||'New chat',40),
+      scopeLabel:cur.scope?(this.truncLabel(((this.pageOf(cur.scope)||{}).title)||this.short(cur.scope),36)):'everything read',
+      messages:msgs,empty:msgs.length===0,
+      placeholder:cur.scope?('Ask about “'+this.truncLabel(((this.pageOf(cur.scope)||{}).title)||'this source',26)+'”…'):'Ask about what you’ve read…'};
+  }
+  // ── Project Gutenberg — a source of sources ──────────────────────────────
+  // Search the catalog (gutendex), fetched through the same proxy. Returns books
+  // that have a plain-text edition we can read.
+  async searchGutenberg(query){
+    const api='https://gutendex.com/books/?search='+encodeURIComponent(query);
+    let data;
+    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
+    return (data.results||[]).map(b=>{
+      const f=b.formats||{};
+      const txt=f['text/plain; charset=utf-8']||f['text/plain; charset=us-ascii']||f['text/plain']||(Object.entries(f).find(([k,v])=>/text\/plain/i.test(k)&&!/\.zip$/i.test(v))||[])[1];
+      return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,downloads:b.download_count||0};
+    }).filter(b=>b.txtUrl).slice(0,12);
+  }
+  // Strip Project Gutenberg's license header/footer so only the work is read.
+  stripGutenberg(t){
+    t=String(t||'').replace(/\r\n/g,'\n');
+    const sm=t.match(/\*\*\*\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK[\s\S]*?\*\*\*/i);
+    if(sm)t=t.slice(sm.index+sm[0].length);
+    const em=t.match(/\*\*\*\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK/i);
+    if(em)t=t.slice(0,em.index);
+    return t.trim();
+  }
+  // Type a query: a URL is opened; anything else searches Project Gutenberg.
+  searchBooks(query){
+    this.setState({gutenLoading:true,gutenResults:null,gutenQuery:query,activeChat:null,viewUrl:null,selId:null});
+    this.searchGutenberg(query).then(res=>{this.setState({gutenLoading:false,gutenResults:res});if(!res.length)this.feedLine('warn','No books found for “'+query+'”.');});
+  }
+  // Read a chosen book FULLY (fetch → strip → parse) before it becomes a source.
+  // Until the parse completes the book is "reading…" and cannot be chatted with.
+  async readGutenberg(book){
+    if(this.state.gutenReading)return;
+    this.setState({gutenReading:book.id});
+    this.feedSep('Project Gutenberg');this.feedLine('read','Fetching “'+book.title+'”…');
+    let text;
+    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(book.txtUrl));if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
+    catch(e){this.feedLine('warn','Could not fetch the book — '+(e&&e.message||e));this.setState({gutenReading:null});return;}
+    text=this.stripGutenberg(text);
+    if(text.length<200){this.feedLine('warn','That edition had too little readable text.');this.setState({gutenReading:null});return;}
+    this.feedLine('read','Reading “'+book.title+'” fully — '+Math.round(text.length/1000)+'k chars…');
+    await this.sleep(20);                                  // let the feed paint before the synchronous parse
+    const r=await this.importText(text,book.title+' — '+book.author);
+    this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
+    if(r)this.feedLine('done','Read fully · '+r.sentenceCount+' propositions — ready to chat');
+  }
   ingest(url,title,text,via,image,parent,wikiLinks){
     const doc=this.E.parseText(text,{coordSubjects:true});
-    const page={url,title,events:doc.log.snapshot(),sentences:doc.sentences,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null};
+    // Keep the raw text on the page so an imported book can be re-rendered as a
+    // readable book in the center (see _bookHtml / loadCenter's text: branch).
+    const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null};
     const pages=[...this.state.pages,page];this.rebuild(pages);
     this.setState(s=>({pages,rev:s.rev+1,selId:s.selId||this.topEntity()}));
     // Second reader: fold the LLM's SVO reading onto the same log, then re-project.
     if(this.state.llm && this.state.llmAvail && this.SVO) this.runSVO(page);
-    return {title,sentenceCount:doc.sentences.length};
+    return {title,sentenceCount:doc.sentences.length,url};
   }
   // A researched page is RELEVANT only if it actually shares a specific referent with
   // the focal entity's PRE-research context (proper-noun set captured before reading).
@@ -2342,6 +2578,7 @@ class Component extends DCLogic {
     const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';if(cur!==startW)this.setState({panelW:cur});};
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);document.body.style.cursor='col-resize';document.body.style.userSelect='none';}
   onResizeReset(){this.setState({panelW:380});}
+  toggleSwap(){const v=!this.state.swapped;try{localStorage.setItem('eo_swap',v?'1':'0');}catch(e){}this.setState({swapped:v});}
   // ── memory log: every source read into memory, with totals ────────────────────
   memoryLog(){
     if(!this.master)return {rows:[],hasRows:false,statLine:'',empty:true};
@@ -2540,11 +2777,36 @@ class Component extends DCLogic {
   goToHist(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hpos=i;this._applyLoc(this._hist[i]);}
   closeTab(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hist.splice(i,1);if(this._hpos>=i&&this._hpos>0)this._hpos--;if(this._hpos>=this._hist.length)this._hpos=this._hist.length-1;if(this._hpos>=0)this._applyLoc(this._hist[this._hpos]);else this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
   newTab(){this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
-  tabLabel(loc,g){if(loc.t==='web')return this.short(loc.url);return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
+  tabLabel(loc,g){if(loc.t==='web')return /^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url);return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
   buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';return {label:lab,i,active,isWeb,dotStyle:'width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';',onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};});return all.slice(-6);}
   // ---- live embed of the page shown in the CENTER viewport ----
+  // A readable "book" rendering of an imported text source. The author's own
+  // paragraphs (blank-line separated) are kept; if the text has no such structure
+  // we group sentences into readable paragraphs. Rendered into the SAME sandboxed
+  // iframe the web view uses, so decorateFrame() makes every known entity clickable.
+  _bookHtml(p){
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let paras=String(p.text||'').split(/\n\s*\n+/).map(s=>this.norm(s)).filter(s=>s.length);
+    if(paras.length<=1){
+      const sents=(p.sentences||[]).map(s=>this.norm(s)).filter(Boolean);
+      paras=[];for(let i=0;i<sents.length;i+=4)paras.push(sents.slice(i,i+4).join(' '));
+    }
+    const body=paras.map(t=>'<p>'+esc(t)+'</p>').join('\n');
+    const a=this.curAccent();
+    return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+
+      '<style>html,body{margin:0;background:#fff;}'+
+      'body{font:18px/1.72 Georgia,"Iowan Old Style","Times New Roman",serif;color:#23272e;}'+
+      '.eo-book{max-width:680px;margin:0 auto;padding:56px 30px 140px;}'+
+      'h1.eo-title{font:700 30px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-.01em;color:#14171c;margin:0 0 6px;}'+
+      '.eo-byline{font:13px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:#9aa1ab;margin:0 0 34px;border-bottom:1px solid #eef0f3;padding-bottom:18px;}'+
+      'p{margin:0 0 22px;}p:first-of-type::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:'+a+';font-family:Georgia,serif;}'+
+      '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
+      '<div class="eo-byline">Imported text · '+((p.sentences||[]).length)+' propositions · read as a book</div>'+
+      body+'</div></body></html>';
+  }
   loadCenter(url){
-    if(!url||/^text:/i.test(url)){this.setState({pageDoc:null,pageLoading:false,pageErr:null});return;}
+    if(/^text:/i.test(url)){const p=this.pageOf(url);this.setState({pageDoc:p?this._bookHtml(p):null,pageLoading:false,pageErr:p?null:'Text not found'});return;}
+    if(!url){this.setState({pageDoc:null,pageLoading:false,pageErr:null});return;}
     if(this._pageUrl===url&&this.state.pageDoc)return;
     this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null});
     fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
@@ -2574,7 +2836,11 @@ class Component extends DCLogic {
   onDirInput(ev){this.setState({direction:ev&&ev.target?ev.target.value:''});}
   onUrlInput(ev){this.setState({url:ev&&ev.target?ev.target.value:''});}
   onUrlKey(ev){if(ev&&ev.key==='Enter')this.doReadUrl();}
-  doReadUrl(){const u=this.state.url.trim();if(!u)return;this.setState({url:''});this.goWeb(u);}
+  // A URL (or bare domain) is opened directly; anything else is a Project Gutenberg
+  // book search — type a title or author to find a book to read.
+  doReadUrl(){const u=this.state.url.trim();if(!u)return;this.setState({url:''});
+    if(/^https?:\/\//i.test(u)||/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(\/|$|\?)/i.test(u)){this.goWeb(u);}
+    else{this.searchBooks(u);}}
   setHover(s){this.setState({hoverSrc:s});}
   openSource(url,wide,tab){const isText=/^text:/i.test(url);this.setState({openSrc:url,srcTab:tab||(isText?'props':'page'),srcWide:!!wide});this.loadEmbed(url);}
   closeSource(){this._embedUrl=null;this.setState({openSrc:null,srcDoc:null,srcLoading:false,srcErr:null});}
@@ -2924,6 +3190,7 @@ class Component extends DCLogic {
       clickDesc:this.state.clickAction==='ask'?'When an entity is also a hyperlink, clicking asks whether to open its profile or follow the link.':this.state.clickAction==='profile'?'Clicking always opens the entity’s profile. Follow the link from the hover card instead.':'Clicking always follows the hyperlink. Open the profile from the hover card instead.',
       url:this.state.url,onUrlInput:e=>this.onUrlInput(e),onUrlKey:e=>this.onUrlKey(e),onReadUrl:()=>this.doReadUrl(),
       onBack:()=>this.goBack(),onForward:()=>this.goForward(),onReloadTop:()=>this.forceUpdate(),onNewTab:()=>this.newTab(),
+      onImportClick:()=>this.onImportClick(),onImportFile:e=>this.onImportFile(e),
       onToggleDetect:()=>this.toggleDetect(),detect:this.state.detect,showWeb:false,web:null,srcCtxOn:false,
       detectDesc:this.state.detect?'On — every page you open is read into memory.':'Off — pages open without being read. Turn on to build memory.',
       detectSwitch:'flex:0 0 auto;width:34px;height:20px;border-radius:11px;padding:2px;transition:background .15s;background:'+(this.state.detect?'var(--acc)':'#cfd3da')+';',
@@ -2936,6 +3203,8 @@ class Component extends DCLogic {
       backStyle:this.navBtnStyle(this.canBack()),fwdStyle:this.navBtnStyle(this.canForward()),
       readBtnLabel:this.state.busy?'…':'Read',readBtnStyle:'font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:7px;padding:6px 13px;flex:0 0 auto;cursor:pointer;'+(this.state.busy?'opacity:.6;':''),
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
+      chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',
+      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onCloseChat:()=>this.closeChat(),
       sources:[],srcCount:0,srcEmpty:true,rightOpen:this.state.rightOpen,rightClosed:!this.state.rightOpen,onToggleRight:()=>this.toggleRight(),panelProfileOn:false,panelListOn:true,panelPageOn:false,pageOverview:null,listFromPage:false,onShowAllEntities:()=>this.showAllEntities(),onShowOverview:()=>this.showOverview(),panelProfile:null,previewOn:false,preview:null,
       pageLinked:this.state.linkMode,onTogglePlain:()=>this.toggleLinkMode(),
       plainLabel:this.state.linkMode?'Names linked':'Plain text',
@@ -2948,16 +3217,36 @@ class Component extends DCLogic {
       direction:this.state.direction,onDirInput:e=>this.onDirInput(e),mode:this.state.mode,
       leftOpen:this.state.leftOpen,toggleLeft:()=>this.setState(s=>({leftOpen:!s.leftOpen})),
       leftIcon:this.state.leftOpen?'‹':'☰',leftTitle:this.state.leftOpen?'Hide entities panel':'Show entities panel',
-      gridCols:(this.state.leftOpen?'264px ':'')+'minmax(0,1fr)'+(this.state.rightOpen?(' '+(this.state.panelW||380)+'px'):''),
+      // Layout columns. The sources/chats side is 264px, the entity panel is panelW;
+      // when swapped, the panel sits on the left and the columns/orders mirror.
+      gridCols:(this.state.swapped
+        ? (this.state.rightOpen?((this.state.panelW||380)+'px '):'')+'minmax(0,1fr)'+(this.state.leftOpen?' 264px':'')
+        : (this.state.leftOpen?'264px ':'')+'minmax(0,1fr)'+(this.state.rightOpen?(' '+(this.state.panelW||380)+'px'):'')),
+      leftOrder:this.state.swapped?3:1,mainOrder:2,rightOrder:this.state.swapped?1:3,
+      onSwap:()=>this.toggleSwap(),swapTitle:this.state.swapped?'Swap panels back (sources left)':'Swap panels (sources right)',
+      swapBtnStyle:'width:30px;height:30px;flex:0 0 auto;border:1px solid '+(this.state.swapped?'var(--accline)':'var(--line2)')+';background:'+(this.state.swapped?'var(--accbg)':'var(--app)')+';border-radius:8px;color:'+(this.state.swapped?'var(--acc)':'var(--ink2)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;',
       panelW:this.state.panelW||380,onResizeDown:e=>this.onResizeDown(e),onResizeReset:()=>this.onResizeReset(),
-      resizeHandleStyle:'position:fixed;top:54px;bottom:0;right:'+((this.state.panelW||380)-3)+'px;width:9px;z-index:40;cursor:col-resize;display:flex;align-items:center;justify-content:center;',
+      resizeHandleStyle:'position:fixed;top:54px;bottom:0;right:'+((this.state.panelW||380)-3)+'px;width:9px;z-index:40;cursor:col-resize;display:'+(this.state.swapped?'none':'flex')+';align-items:center;justify-content:center;',
       closeSource:()=>this.closeSource(), linkChoiceOn:false, closeLinkChoice:()=>this.closeLinkChoice() };
     base.activity=this.activityVals();
+    this.chatVals(base);
+
+    // Project Gutenberg search results take the center when present (and no chat open).
+    base.gutenOn=!base.chatOn&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
+    base.guten={loading:!!this.state.gutenLoading,query:this.state.gutenQuery||'',
+      hasResults:!!(this.state.gutenResults&&this.state.gutenResults.length),
+      empty:!!(this.state.gutenResults&&!this.state.gutenResults.length),
+      onClear:()=>this.setState({gutenResults:null,gutenQuery:''}),
+      results:(this.state.gutenResults||[]).map(b=>{const reading=this.state.gutenReading===b.id;
+        return {title:b.title,author:b.author,downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
+          btnLabel:reading?'Reading…':'Read fully',onRead:()=>this.readGutenberg(b),
+          rowStyle:'display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--card);',
+          btnStyle:'flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:'+(reading?'#9aa1ab':'var(--acc)')+';border:none;border-radius:9px;padding:8px 14px;cursor:'+(reading?'default':'pointer')+';'};})};
 
     const vu=this.state.viewUrl;
     if(vu){
       base.showWeb=true;
-      base.web={url:vu,host:this.short(vu),loading:!!this.state.pageLoading&&!this.state.pageDoc,
+      base.web={url:vu,host:/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu),loading:!!this.state.pageLoading&&!this.state.pageDoc,
         err:(this.state.pageErr&&!this.state.pageDoc)?this.state.pageErr:null,hasDoc:!!this.state.pageDoc,doc:this.state.pageDoc||'',
         onReloadPage:()=>this.loadCenter(vu),detecting:this.state.detect&&this.state.busy};
     }
@@ -2969,10 +3258,10 @@ class Component extends DCLogic {
     base.onSortUpdated=()=>this.setState({sortMode:'updated'});base.onSortTop=()=>this.setState({sortMode:'mentions'});base.onSortAz=()=>this.setState({sortMode:'name'});
 
     if(!ready||!g||this.state.pages.length===0){
-      if(!vu){
+      if(!vu&&!base.chatOn&&!base.gutenOn){
         base.showPrompt=true;
-        base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Read a URL to begin':'Loading the reading engine…');
-        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type any article or page URL in the address bar above. The page opens here, and — while detection is on — every entity in it is read into the graph on the right.';
+        base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Read a URL — or find a book':'Loading the reading engine…');
+        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Paste a page URL to read it here, type a title or author to find a book on Project Gutenberg, or use 📄 to import your own. Every entity is read into the graph on the right — then ask about it in a chat.';
         base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);}}));
         base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
       }
@@ -3008,7 +3297,7 @@ class Component extends DCLogic {
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
     base.sources=orderedP.map(({p,depth})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=(bucket.get(p.url)||[]).length;
-      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),
+      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
         dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?8:9)+'px;font-weight:800;',
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});

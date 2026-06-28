@@ -7,6 +7,25 @@ renders the fetched page as a page (iframe), and decorates it with clickable ent
 **Almost all of this is computed without an LLM** — purely from the structural parse
 (`parseText` → `projectGraph`). The original chat app is preserved at `chat.html`.
 
+What you can do:
+
+- **Read a website as a website** — paste a URL; the fetched page renders in the center
+  (sandboxed iframe) with its known names highlighted and clickable.
+- **Read a book as a book** — import a `.txt`/`.md` file (📄) or search **Project
+  Gutenberg** (type a title/author in the search bar). The work renders as a readable
+  book — drop-cap, serif, the author's paragraphs — entities clickable. A book is
+  **read fully** (fetched, PG boilerplate stripped, parsed) before it becomes a source
+  and can be chatted with.
+- **Chat, grounded** — a center chat answers from what you've read; every answer is
+  quoted from your sources and links the entities/sources it drew on (no LLM). Chats are
+  first-class: a "New chat" button and a Chats section live in the left panel, and any
+  source has a ✦ button to chat about just that source.
+- **Swap panels** — the ⇄ toolbar button swaps the sources/chats side and the entities
+  side; the choice persists.
+
+The implementation lives in `src/reader/app.dc.js` (logic) and `src/reader/view.xdc.html`
+(view); the entity engine and the fetch proxy are the repo's own.
+
 This UI is the front end the engine was always built for; its footer reads *"Live
 projection of your reading log over the real eoreader4 engine."* It is React + a small
 `<x-dc>` view runtime, driving the repo's own engine.
