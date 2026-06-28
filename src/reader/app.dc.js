@@ -17,7 +17,13 @@ class Component extends DCLogic {
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
-      panelW:380, gz:{k:1,x:0,y:0},
+      // Entity panel width — persisted + clamped. Chat column width (chatW) likewise.
+      panelW:(()=>{try{return Math.max(300,Math.min(820,+localStorage.getItem('eo_panelw')||380));}catch(e){return 380;}})(),
+      chatW:(()=>{try{return Math.max(320,Math.min(640,+localStorage.getItem('eo_chatw')||420));}catch(e){return 420;}})(),
+      // Viewport width drives the responsive tier (wide / mid / phone). Updated by a
+      // resize listener; pane is the active region when in single-pane phone mode.
+      vw:(typeof window!=='undefined'?window.innerWidth:1400), pane:'doc',
+      gz:{k:1,x:0,y:0},
       hoverSrc:null, pinSrc:null, openSrc:null, mode:'breadth', direction:'', hoverEnt:null, hoverHref:null, hoverXY:{x:0,y:0}, rev:0, sortMode:'updated',
       llm:true, llmAvail:false, svoBusy:false, svoStatus:'', pasteOpen:false, pasteText:'',
       srcWide:false, srcTab:'page', srcDoc:null, srcLoading:false, srcErr:null, linkMode:savedLink==='0'?false:true, linkChoice:null,
@@ -30,7 +36,7 @@ class Component extends DCLogic {
       // Chat — first-class alongside sources. Each chat is a thread grounded in what
       // has been read; answers are built from the read graph/sentences (no LLM; an
       // LLM refines them only if window.claude is present). Chats live in the left panel.
-      chats:[], activeChat:null, chatInput:'', chatBusy:false,
+      chats:[], activeChat:null, chatInput:'', chatBusy:false, groundOpen:{},
       // Project Gutenberg — "a source of sources". A non-URL query searches the catalog;
       // a chosen book is fetched and READ FULLY before it joins the sources (and so can
       // be chatted with). gutenReading holds the id while a book is being read.
@@ -76,7 +82,20 @@ class Component extends DCLogic {
     const seed=(this.props&&this.props.seedUrl);
     if(seed) this.readURL(seed,'read');
     else this.loadSuggestions();
+    // Track viewport width so the layout engine can pick its tier. A 40px threshold
+    // keeps a browser-resize drag from flooding setState; gridCols re-reads vw on render.
+    if(typeof window!=='undefined'){
+      this._onResize=()=>{const w=window.innerWidth;if(Math.abs(w-(this.state.vw||0))>=40)this.setState({vw:w});};
+      window.addEventListener('resize',this._onResize,{passive:true});
+    }
   }
+  componentWillUnmount(){ if(this._onResize&&typeof window!=='undefined') window.removeEventListener('resize',this._onResize); }
+  // ── Responsive tiers ──────────────────────────────────────────────────────
+  // Wide (≥1180): chat can dock as its own column. Mid (760–1179): chat reverts to the
+  // overlay drawer. Phone (<760): single pane with a bottom nav. One source of truth.
+  narrow(){return (this.state.vw||1400) < 1180;}
+  phone(){return (this.state.vw||1400) < 760;}
+  setPane(p){this.setState({pane:p});}
   // ── Default suggestions: a random Wikipedia page + a few random English books ──
   // Nothing is read on load — the start screen stays empty (like before, with the
   // Great Barrier Reef suggestion), only now the suggestions are RANDOM: one Wikipedia
@@ -309,6 +328,9 @@ class Component extends DCLogic {
   closeChat(){this.setState({activeChat:null,chatAddOpen:false});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
+  // Per-answer grounding strip: collapsed by default (not overwhelming), one tap reveals
+  // the passages/entities the answer is grounded in. Keyed by chat id + message index.
+  toggleGround(key){this.setState(s=>{const g={...(s.groundOpen||{})};g[key]=!g[key];return {groundOpen:g};});}
   _scrollChat(){requestAnimationFrame(()=>{const a=document.getElementById('eo-chat-scroll');if(a)a.scrollTop=a.scrollHeight;});}
   setBackend(name){try{localStorage.setItem('eo_backend',name);}catch(e){}if(this._chatModel&&this._chatModel.id!==name)this._chatModel=null;this.setState({backend:name,modelStatus:''});}
   // Questions a clock answers — handled without any model so they always work.
@@ -323,7 +345,7 @@ class Component extends DCLogic {
   // everything read. Empty spans when nothing relevant has been read.
   groundNotes(q,sources){const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
     const a=this.answerQuestion(q,scope);
-    const span=i=>({text:this.norm(this.master.sentences[i]),score:1});
+    const span=i=>({text:this.norm(this.master.sentences[i]),score:1,i,u:this.master.sentenceSource[i]});
     if(a.refs&&a.refs.length)return {spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[]};
     // No keyword match (e.g. "what is this about?", "summarize this book") — fall back to the
     // opening lines of the source(s) in scope (or the page being viewed) so the model speaks
@@ -465,12 +487,16 @@ class Component extends DCLogic {
       }
       const raw=await model.phrase(messages,{maxTokens:512,temperature:0.4});
       const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
-      finish({text,entities:ground.entities,sources:ground.sources});
+      // Surface the verbatim spans the model leaned on as clickable grounding (collapsed
+      // by default in the UI). This is the mechanical "where did this come from" trail.
+      const passages=(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i}));
+      finish({text,entities:ground.entities,sources:ground.sources,passages});
     }catch(e){
       // model unavailable — answer structurally from what's read, or say so plainly
       const fb=this.answerQuestion(q,sources);
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
-      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:fb.sources,modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      const passages=(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i}));
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:fb.sources,passages,modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
       this.setState({modelStatus:''});
     }
   }
@@ -510,16 +536,42 @@ class Component extends DCLogic {
     const cur=this.activeChatObj();
     if(!cur)return;
     base.chatOn=true;
-    const drawer=!!this.state.viewUrl;   // a page/book is open → chat rides as a drawer
-    const msgs=cur.messages.map(m=>{
+    // How chat is laid out depends on the responsive tier + whether a page is open:
+    //   docked  → a page is open and the viewport is wide enough → chat is its own column.
+    //   drawer  → a page is open but width is tight (mid tier, not phone) → absolute overlay.
+    //   else    → no page, or phone → chat fills the centre / single pane.
+    const onPhone=this.phone(), paneChat=(this.state.pane||'doc')==='chat';
+    const docked=!!this.state.viewUrl && !this.narrow();
+    const drawer=!!this.state.viewUrl && this.narrow() && !onPhone;
+    // Dedicated chat cell: the wide-tier docked column OR the phone "Chat" pane (so the
+    // chat input never sits under the bottom nav, and reading stays untouched on doc pane).
+    base.chatDockedOn=docked || (onPhone && paneChat);
+    // In-<main> chat: the mid-tier overlay drawer, or the desktop no-page centre-fill.
+    base.chatOverlayOn=!docked && !onPhone;
+    const gOpen=this.state.groundOpen||{};
+    const titleForUrl=u=>this.truncLabel(((this.pageOf(u)||{}).title)||(/^text:/i.test(u)?'text':this.short(u)),24);
+    const msgs=cur.messages.map((m,mi)=>{
       const isUser=m.role==='user';
-      const sources=(m.sources||[]).map(u=>({label:/^text:/i.test(u)?(this.truncLabel(((this.pageOf(u)||{}).title)||'text',20)):this.short(u),onOpen:()=>this.goWeb(u)}));
+      // Grounding chips: the verbatim passages the answer leaned on (the richest, most
+      // mechanical trail), then the source(s) and the entities it named. Each passage chip
+      // opens its source; entity chips pivot the panel.
+      const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this.goWeb(p.u)}));
+      const sources=(m.sources||[]).map(u=>({label:titleForUrl(u),title:u,onOpen:()=>this.goWeb(u)}));
+      const cites=passages.length?passages:sources;   // prefer passages; fall back to bare sources
       const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
         style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
       const isMd=!isUser&&!m.pending&&!!m.text;   // render the model's markdown; user/pending stay plain
+      const hasGround=!isUser&&!m.pending&&(cites.length>0||entities.length>0);
+      const gKey=cur.id+':'+mi, gOn=!!gOpen[gKey];
+      const gBits=[]; if(cites.length)gBits.push(cites.length+(passages.length?(' passage'+(cites.length!==1?'s':'')):(' source'+(cites.length!==1?'s':''))));
+      if(entities.length)gBits.push(entities.length+' entit'+(entities.length!==1?'ies':'y'));
       return {isUser,pending:!!m.pending,text:m.pending?'…':m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
-        sources,hasSources:sources.length>0,entities,hasEntities:entities.length>0,
+        sources:cites,hasSources:cites.length>0,entities,hasEntities:entities.length>0,
+        hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
+        groundLabel:'Grounded in '+gBits.join(' · '),groundCaret:gOn?'▾':'▸',
+        groundStyle:'max-width:80%;margin-top:7px;',
+        groundHeadStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);background:transparent;border:none;padding:2px 0;cursor:pointer;',
         hasNote:!!m.modelNote,note:m.modelNote||'',
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
         bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending?'animation:eopulse 1.4s infinite;':''),
@@ -539,7 +591,7 @@ class Component extends DCLogic {
     const addable=pages.filter(p=>!ss.includes(p.url)).map(p=>({label:this.truncLabel(p.title||this.short(p.url),34),host:this.short(p.url),
       onAdd:()=>this.addChatSource(p.url),
       rowStyle:'display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 11px;border-radius:8px;cursor:pointer;'}));
-    base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,
+    base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,docked,
       scopeLabel:ss.length?(ss.length===1?titleOf(ss[0]):(ss.length+' sources')):'everything you have read',
       about:aboutChips,hasAbout:aboutChips.length>0,aboutEmpty:aboutChips.length===0,
       addOpen:!!this.state.chatAddOpen,addable,hasAddable:addable.length>0,noAddable:addable.length===0,onToggleAdd:()=>this.toggleChatAdd(),
@@ -547,7 +599,7 @@ class Component extends DCLogic {
       messages:msgs,empty:msgs.length===0,modelStatus:this.state.modelStatus||'',hasStatus:!!this.state.modelStatus,
       shellStyle:drawer
         ? 'position:absolute;top:0;right:0;bottom:0;width:min(440px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
-        : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);',
+        : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);'+(docked?'border-left:1px solid var(--line);':''),
       placeholder:ss.length?('Ask about '+(ss.length===1?('“'+titleOf(ss[0])+'”'):('these '+ss.length+' sources'))+'…'):'Ask about everything you’ve read…'};
   }
   // ── Project Gutenberg — a source of sources ──────────────────────────────
@@ -1551,13 +1603,32 @@ class Component extends DCLogic {
     const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);this._gzDrag=false;this.forceUpdate();setTimeout(()=>{this._gzMoved=false;},30);};
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);this._gzDrag=true;}
   // ── side-panel drag-to-resize ───────────────────────────────────────────────
-  onResizeDown(e){e.preventDefault();const startX=e.clientX,startW=this.state.panelW||380;const grid=document.getElementById('eo-grid');const handle=document.getElementById('eo-resize');let cur=startW;
-    const colsFor=(w)=>(this.state.leftOpen?'264px ':'')+'minmax(0,1fr) '+w+'px';
-    const move=(ev)=>{let w=startW+(startX-ev.clientX);w=Math.max(300,Math.min(820,Math.round(w)));cur=w;if(grid)grid.style.gridTemplateColumns=colsFor(w);if(handle)handle.style.right=(w-3)+'px';};
-    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';if(cur!==startW)this.setState({panelW:cur});};
+  // Both handles setState on every move (the layout engine rebuilds the whole grid
+  // string from state) rather than poking grid.style directly — the old shortcut only
+  // knew the 3-column layout and would clobber the chat column once it exists.
+  onResizeDown(e){e.preventDefault();const startX=e.clientX,startW=this.state.panelW||380;let cur=startW;
+    const move=(ev)=>{let w=startW+(startX-ev.clientX);w=Math.max(300,Math.min(820,Math.round(w)));if(w!==cur){cur=w;this.setState({panelW:w});}};
+    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';if(cur!==startW){try{localStorage.setItem('eo_panelw',String(cur));}catch(e){}this.setState({panelW:cur});}};
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);document.body.style.cursor='col-resize';document.body.style.userSelect='none';}
-  onResizeReset(){this.setState({panelW:380});}
+  onResizeReset(){try{localStorage.setItem('eo_panelw','380');}catch(e){}this.setState({panelW:380});}
+  onChatResizeDown(e){e.preventDefault();const startX=e.clientX,startW=this.state.chatW||420;let cur=startW;
+    const move=(ev)=>{let w=startW+(startX-ev.clientX);w=Math.max(320,Math.min(640,Math.round(w)));if(w!==cur){cur=w;this.setState({chatW:w});}};
+    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';if(cur!==startW){try{localStorage.setItem('eo_chatw',String(cur));}catch(e){}this.setState({chatW:cur});}};
+    window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);document.body.style.cursor='col-resize';document.body.style.userSelect='none';}
+  onChatResizeReset(){try{localStorage.setItem('eo_chatw','420');}catch(e){}this.setState({chatW:420});}
   toggleSwap(){const v=!this.state.swapped;try{localStorage.setItem('eo_swap',v?'1':'0');}catch(e){}this.setState({swapped:v});}
+  // ── layout presets ────────────────────────────────────────────────────────
+  // Presets are one-click setters of the open flags + chat. The active preset is DERIVED
+  // by comparing flags (activePreset), never stored — so a manual toggle can't desync it.
+  applyPreset(name){
+    if(name==='focus'){    this.setState({leftOpen:false,rightOpen:false}); this.closeChat(); return; }
+    if(name==='read'){     this.setState({leftOpen:false,rightOpen:true });  this.closeChat(); return; }
+    if(name==='research'){ this.setState({leftOpen:false,rightOpen:true }); if(!this.activeChatObj()) this.newChat(this.state.viewUrl||null); return; }
+  }
+  activePreset(){const L=this.state.leftOpen,R=this.state.rightOpen,C=!!this.activeChatObj();
+    if(!L&&!R&&!C)return 'focus'; if(!C&&R&&!L)return 'read'; if(C&&R&&!L)return 'research'; return null;}
+  // Toolbar chat toggle: open a chat (scoped to the page if one is open) or close it.
+  onToggleChat(){ if(this.activeChatObj()) this.closeChat(); else this.newChat(this.state.viewUrl||null); }
   // ── memory log: every source read into memory, with totals ────────────────────
   memoryLog(){
     if(!this.master)return {rows:[],hasRows:false,statLine:'',empty:true};
@@ -2200,17 +2271,86 @@ class Component extends DCLogic {
       direction:this.state.direction,onDirInput:e=>this.onDirInput(e),mode:this.state.mode,
       leftOpen:this.state.leftOpen,toggleLeft:()=>this.setState(s=>({leftOpen:!s.leftOpen})),
       leftIcon:this.state.leftOpen?'‹':'☰',leftTitle:this.state.leftOpen?'Hide entities panel':'Show entities panel',
-      // Layout columns. The sources/chats side is 264px, the entity panel is panelW;
-      // when swapped, the panel sits on the left and the columns/orders mirror.
-      gridCols:(this.state.swapped
-        ? (this.state.rightOpen?((this.state.panelW||380)+'px '):'')+'minmax(0,1fr)'+(this.state.leftOpen?' 264px':'')
-        : (this.state.leftOpen?'264px ':'')+'minmax(0,1fr)'+(this.state.rightOpen?(' '+(this.state.panelW||380)+'px'):'')),
-      leftOrder:this.state.swapped?3:1,mainOrder:2,rightOrder:this.state.swapped?1:3,
       onSwap:()=>this.toggleSwap(),swapTitle:this.state.swapped?'Swap panels back (sources left)':'Swap panels (sources right)',
       swapBtnStyle:'width:30px;height:30px;flex:0 0 auto;border:1px solid '+(this.state.swapped?'var(--accline)':'var(--line2)')+';background:'+(this.state.swapped?'var(--accbg)':'var(--app)')+';border-radius:8px;color:'+(this.state.swapped?'var(--acc)':'var(--ink2)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;',
       panelW:this.state.panelW||380,onResizeDown:e=>this.onResizeDown(e),onResizeReset:()=>this.onResizeReset(),
-      resizeHandleStyle:'position:fixed;top:54px;bottom:0;right:'+((this.state.panelW||380)-3)+'px;width:9px;z-index:40;cursor:col-resize;display:'+(this.state.swapped?'none':'flex')+';align-items:center;justify-content:center;',
+      onChatResizeDown:e=>this.onChatResizeDown(e),onChatResizeReset:()=>this.onChatResizeReset(),
       closeSource:()=>this.closeSource(), linkChoiceOn:false, closeLinkChoice:()=>this.closeLinkChoice() };
+    // ── Layout engine ────────────────────────────────────────────────────────
+    // One place builds the grid track string + every column's `order`. Reading order is
+    // Sources | Reading | Chat | Entities. The chat column appears only when a chat is
+    // active, a page is open, and the viewport is wide enough (else chat overlays/fills).
+    // Phone collapses to a single pane chosen by `pane`; mid/wide place real columns.
+    {
+      const isPhone=this.phone(), isNarrow=this.narrow();
+      const L=this.state.leftOpen, R=this.state.rightOpen;
+      const chatActive=!!this.activeChatObj();
+      const C=chatActive && !!this.state.viewUrl && !isNarrow;   // chat docked as a column
+      const pw=(this.state.panelW||380), cw=(this.state.chatW||420);
+      base.isPhone=isPhone; base.isNarrow=isNarrow; base.chatColOn=C;
+      if(isPhone){
+        base.gridCols='1fr';
+        base.leftOrder=0; base.mainOrder=0; base.chatOrder=0; base.rightOrder=0;
+      }else{
+        const mainCss=isNarrow?'minmax(0,1fr)':'minmax(420px,1fr)';   // reading floor when roomy
+        const cols=[];
+        if(L) cols.push('264px');
+              cols.push(mainCss);
+        if(C) cols.push(cw+'px');
+        if(R) cols.push(pw+'px');
+        base.gridCols=cols.join(' ');
+        // Swap moves the side GROUPS (sources↔entities) to opposite ends; reading+chat
+        // stay central, so swap never strands the page in a corner.
+        const order={left:0,main:1,chat:2,right:3};
+        if(this.state.swapped){ order.left=3; order.right=0; }
+        base.leftOrder=order.left; base.mainOrder=order.main; base.chatOrder=order.chat; base.rightOrder=order.right;
+      }
+      // Resize handles (wide/mid only, not swapped — fixed `right:` anchoring assumes
+      // the panel/chat hug the right edge). Entity handle at panelW; chat handle just
+      // left of it at panelW+chatW.
+      const showPanelH=R && !isPhone && !this.state.swapped;
+      const showChatH=C && !isPhone && !this.state.swapped;
+      base.resizeHandleStyle='position:fixed;top:54px;bottom:0;right:'+(pw-3)+'px;width:9px;z-index:40;cursor:col-resize;display:'+(showPanelH?'flex':'none')+';align-items:center;justify-content:center;';
+      base.chatResizeHandleStyle='position:fixed;top:54px;bottom:0;right:'+((R?pw:0)+cw-3)+'px;width:9px;z-index:40;cursor:col-resize;display:'+(showChatH?'flex':'none')+';align-items:center;justify-content:center;';
+    }
+    // ── Layout presets + chat toggle + phone bottom nav ───────────────────────
+    {
+      const isPhone=this.phone();
+      const ap=this.activePreset();
+      const pillSty=on=>'font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;'+(on?'background:var(--card);color:var(--acc);box-shadow:0 1px 1px rgba(0,0,0,.05);':'color:var(--ink2);');
+      base.presets=[
+        {k:'focus',label:'Focus',title:'Reading only — hide chat and panels'},
+        {k:'read',label:'Read',title:'Reading + entities panel'},
+        {k:'research',label:'Research',title:'Reading + chat + entities'},
+      ].map(p=>({label:p.label,title:p.title,onPick:()=>this.applyPreset(p.k),style:pillSty(ap===p.k)}));
+      const chatActive=!!this.activeChatObj();
+      base.chatToggleOn=chatActive;
+      base.onToggleChat=()=>this.onToggleChat();
+      base.chatToggleTitle=chatActive?'Hide chat':'Chat about what you’ve read';
+      base.chatToggleStyle='display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'+(chatActive?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);')+'border-radius:7px;padding:5px 10px;flex:0 0 auto;cursor:pointer;';
+      // Phone bottom-nav tabs. Chat tab ensures a chat exists before switching pane.
+      const pane=this.state.pane||'doc';
+      const navSty=on=>'flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 6px;font-size:10px;font-weight:600;border:none;background:transparent;cursor:pointer;color:'+(on?'var(--acc)':'var(--ink3)')+';';
+      base.navTabs=[
+        {k:'sources',label:'Sources',pane:'sources'},
+        {k:'doc',label:'Read',pane:'doc'},
+        {k:'chat',label:'Chat',pane:'chat'},
+        {k:'spine',label:'Spine',pane:'spine'},
+      ].map(t=>({key:t.k,label:t.label,style:navSty(pane===t.pane),
+        onPick:()=>{ if(t.pane==='chat'&&!this.activeChatObj())this.newChat(this.state.viewUrl||null); this.setPane(t.pane); }}));
+      // Phone single-pane visibility. Off phone, regions follow their own open flags;
+      // on phone exactly one region shows, chosen by `pane`. The chat pane is served by
+      // the dedicated chat cell (chatDockedOn), so main only shows the reading pane.
+      base.paneSources=pane==='sources'; base.paneDoc=pane==='doc'; base.paneChat=pane==='chat'; base.paneSpine=pane==='spine';
+      base.notPhone=!isPhone; base.isPhone=isPhone;
+      base.leftShow=isPhone? (pane==='sources') : this.state.leftOpen;
+      base.rightShow=isPhone? (pane==='spine') : this.state.rightOpen;
+      base.mainShow=isPhone? (pane==='doc') : true;
+      // Bottom nav is a real grid row on phone (not a fixed overlay), so it never covers
+      // the chat composer. The app shell adds an `auto` row for it on phone.
+      base.appRows=isPhone?'auto auto 1fr auto':'auto auto 1fr';
+      base.navStyle='display:'+(isPhone?'flex':'none')+';background:var(--card);border-top:1px solid var(--line);';
+    }
     base.activity=this.activityVals();
     this.chatVals(base);
 
