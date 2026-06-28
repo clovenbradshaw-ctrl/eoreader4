@@ -3731,10 +3731,134 @@ var createParser = ({
   return { parse, state };
 };
 var parseText = (text, opts = {}) => createParser(opts).parse(text, opts);
+
+// src/reader/cross-source.js — nameless referent identity for the cross-source memory
+// fold. See that file for the full reading; kept in sync here as part of the bundle.
+var senseIdFor = (label) =>
+  String(label ?? "").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+var senseHash = (str, seed = 0) => {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+};
+var referentId = (anchorUrl, baseId) => "e" + senseHash(String(anchorUrl) + " " + String(baseId));
+var SENSE_STOP = new Set(
+  ("the of and a an to in on for is are was were be been being it its this that these those with as at by from or nor but so yet not no into over under out up down off about after before then than thus also who which what when where while there here they them his her she he you your our we us my are has have had will would can could should may might must does did done only just more most some any all each both few many much such own same other another into onto upon also very then them this that with into your their there about above below between through during without within along across around because although though however therefore moreover furthermore meanwhile nonetheless nevertheless said says say according new news page site source sources read reading").split(/\s+/)
+);
+var DISAMB_TITLE = /^\s*(.+?)\s*\(([^)]{2,40})\)/;
+var senseDisamb = (title) => {
+  const m = String(title || "").match(DISAMB_TITLE);
+  if (!m) return null;
+  const base = m[1].trim(), qualifier = m[2].trim();
+  if (!base || base.length > 60) return null;
+  return { base, qualifier, baseId: senseIdFor(base) };
+};
+var SENSE_VOID = "[void]";
+var senseContext = (pg) => {
+  const labelOf = /* @__PURE__ */ new Map(), sightings = /* @__PURE__ */ new Map(), allIds = /* @__PURE__ */ new Set();
+  const note = (v) => { if (typeof v === "string" && v && v !== SENSE_VOID) allIds.add(v); };
+  for (const e of pg.events || []) {
+    note(e.id); note(e.src); note(e.tgt); note(e.from); note(e.to); note(e.node);
+    if (e.subject) note(e.subject.id);
+    if (e.object) note(e.object.id);
+    if (e.op === "INS" && e.id != null && e.id !== SENSE_VOID) {
+      if (!labelOf.has(e.id)) labelOf.set(e.id, e.label ?? e.id);
+      sightings.set(e.id, (sightings.get(e.id) || 0) + 1);
+    }
+  }
+  const proper = /* @__PURE__ */ new Set();
+  for (const id of allIds) {
+    const lab = String(labelOf.get(id) ?? "");
+    if (!/^https?:/i.test(lab)) proper.add(id);
+  }
+  const freq = /* @__PURE__ */ new Map();
+  for (const s of pg.sentences || [])
+    for (const w of (String(s || "").toLowerCase().match(/[a-z][a-z'-]{3,}/g) || []))
+      if (!SENSE_STOP.has(w)) freq.set(w, (freq.get(w) || 0) + 1);
+  const topic = /* @__PURE__ */ new Set();
+  for (const [w, n] of freq) if (n >= 2) topic.add(w);
+  return { labelOf, sightings, proper, topic, allIds, title: pg.title || "", url: pg.url };
+};
+var referentMap = (pages) => {
+  const ctx = pages.map(senseContext);
+  const dis = pages.map((p) => senseDisamb(p.title));
+  const byId = /* @__PURE__ */ new Map();
+  ctx.forEach((c, i) => {
+    for (const id of c.allIds) {
+      let arr = byId.get(id); if (!arr) byId.set(id, (arr = []));
+      arr.push(i);
+    }
+  });
+  const remap = /* @__PURE__ */ new Map();
+  const forks = [];
+  const ensure = (url) => remap.get(url) || remap.set(url, /* @__PURE__ */ new Map()).get(url);
+  const corroborates = (baseId, i, j) => {
+    const a = ctx[i], b = ctx[j];
+    for (const x of a.proper) if (x !== baseId && b.proper.has(x)) return true;
+    let t = 0; for (const w of a.topic) if (b.topic.has(w)) { if (++t >= 2) return true; }
+    return false;
+  };
+  const selfStanding = (i, baseId) => {
+    let n = 0; for (const x of ctx[i].proper) if (x !== baseId && ++n >= 3) return true; return false;
+  };
+  for (const [baseId, idxs] of byId) {
+    let groups;
+    if (idxs.length < 2) {
+      groups = [idxs];
+    } else {
+      const parent = new Map(idxs.map((i) => [i, i]));
+      const find = (x) => { while (parent.get(x) !== x) x = parent.get(x); return x; };
+      for (let a = 0; a < idxs.length; a++)
+        for (let b = a + 1; b < idxs.length; b++)
+          if (corroborates(baseId, idxs[a], idxs[b])) {
+            const ra = find(idxs[a]), rb = find(idxs[b]);
+            if (ra !== rb) parent.set(ra, rb);
+          }
+      const comps = /* @__PURE__ */ new Map();
+      for (const i of idxs) { const r = find(i); (comps.get(r) || comps.set(r, []).get(r)).push(i); }
+      const compList = [...comps.values()];
+      if (compList.length < 2) {
+        groups = [idxs];
+      } else {
+        const sightOf = (c) => c.reduce((s, i) => s + (ctx[i].sightings.get(baseId) || 0), 0);
+        compList.sort((x, y) => sightOf(y) - sightOf(x));
+        groups = [[...compList[0]]];
+        for (let k = 1; k < compList.length; k++) {
+          const c = compList[k];
+          const distinct = c.every((i) => selfStanding(i, baseId))
+            || c.some((i) => dis[i] && dis[i].baseId === baseId);
+          if (distinct) groups.push(c);
+          else groups[0] = groups[0].concat(c);
+        }
+      }
+    }
+    const forked = groups.length > 1;
+    for (const g of groups) {
+      const anchor = Math.min(...g);
+      const label = ctx[anchor].labelOf.get(baseId) ?? baseId;
+      const id = referentId(pages[anchor].url, baseId);
+      let sense = null;
+      if (forked) {
+        const dp = g.find((i) => dis[i] && dis[i].baseId === baseId);
+        sense = dp != null ? dis[dp].qualifier : null;
+      }
+      for (const i of g) ensure(pages[i].url).set(baseId, { id, label, sense });
+      if (forked) forks.push({ url: pages[anchor].url, baseId, id, label, sense, pages: g.map((i) => pages[i].url) });
+    }
+  }
+  return { remap, forks };
+};
 export {
   DEFAULT_PROJECTION_RULES,
   createParser,
   parseText,
   projectGraph,
-  projectionStats
+  projectionStats,
+  referentMap
 };

@@ -457,11 +457,27 @@ class Component extends DCLogic {
 
   rebuild(pages){
     const m={events:[],sentences:[],sentenceSource:[],pages:[]};
+    // Cross-source identity: re-key every referent in the memory log to a NAMELESS hashId,
+    // forking a name into distinct referents where context defeats the default coreference
+    // (so the 1995 film and the weather phenomenon are not one node — see cross-source.js).
+    // The display name rides on the event's `label`; the bare token never enters the log.
+    const live=pages.filter(pg=>!(this._muted&&this._muted.has(pg.url)));
+    let remap=new Map(),forks=[];
+    try{ if(this.E&&this.E.referentMap){const r=this.E.referentMap(live);remap=r.remap;forks=r.forks||[];} }catch(e){ remap=new Map();forks=[]; }
     for(const pg of pages){ if(this._muted&&this._muted.has(pg.url))continue; const so=m.events.length,no=m.sentences.length;
-      for(const e of pg.events){const ne={...e,seq:e.seq+so,__page:pg.url};if(e.refSeq!=null)ne.refSeq=e.refSeq+so;if(typeof e.ref==='number')ne.ref=e.ref+so;if(e.argspan!=null)ne.argspan=e.argspan+so;if(e.sentIdx!=null)ne.sentIdx=e.sentIdx+no;m.events.push(ne);}
+      const rm=remap.get(pg.url);
+      const fix=v=>(v!=null&&v!=='[void]'&&rm&&rm.has(v))?rm.get(v).id:v;
+      for(const e of pg.events){const ne={...e,seq:e.seq+so,__page:pg.url};if(e.refSeq!=null)ne.refSeq=e.refSeq+so;if(typeof e.ref==='number')ne.ref=e.ref+so;if(e.argspan!=null)ne.argspan=e.argspan+so;if(e.sentIdx!=null)ne.sentIdx=e.sentIdx+no;
+        if(rm){if(ne.id!=null&&ne.id!=='[void]'){const r=rm.get(ne.id);if(r){if(ne.op==='INS')ne.label=r.label;ne.id=r.id;}}
+          if(ne.src!=null)ne.src=fix(ne.src);if(ne.tgt!=null)ne.tgt=fix(ne.tgt);if(ne.from!=null)ne.from=fix(ne.from);if(ne.to!=null)ne.to=fix(ne.to);if(ne.node!=null)ne.node=fix(ne.node);
+          if(ne.subject&&ne.subject.id!=null)ne.subject={...ne.subject,id:fix(ne.subject.id)};if(ne.object&&ne.object.id!=null)ne.object={...ne.object,id:fix(ne.object.id)};}
+        m.events.push(ne);}
       pg.sentences.forEach(s=>{m.sentences.push(s);m.sentenceSource.push(pg.url);});
       m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,seqStart:so,sentStart:no});
     }
+    // The sense that distinguishes a forked referent ("a 1995 film") is a DEFEASIBLE DEF on
+    // the referent — not part of its identity. Appended after the body so the INS exists.
+    for(const f of forks){if(f.sense)m.events.push({op:'DEF',id:f.id,key:'sense',value:f.sense,sentIdx:null,seq:m.events.length,defeasible:true,__page:f.url});}
     this.master=m;
     const shim={events:m.events,snapshot:()=>m.events,get length(){return m.events.length;}};
     this.graph=this.E.projectGraph(shim,{cursor:Math.max(0,m.sentences.length-1),rules:this.E.DEFAULT_PROJECTION_RULES});

@@ -15,3 +15,6 @@
 // Both expose the same three names; the UI cannot tell them apart.
 export { parseText } from '../perceiver/parse/index.js';
 export { projectGraph, DEFAULT_PROJECTION_RULES } from '../core/index.js';
+// Cross-source identity for the memory fold: nameless referent hashIds, with a name
+// forked into distinct referents where context defeats the default coreference.
+export { referentMap } from './cross-source.js';
