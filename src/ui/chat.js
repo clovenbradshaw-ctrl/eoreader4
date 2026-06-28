@@ -503,28 +503,51 @@ export const renderWebResult = (el, fetched) => {
     box.appendChild(det);
   }
 
-  // The CURIOSITY WALK trace — the hops the gather took, each with the surprise (in bits) that
-  // steered it (docs/curiosity-research.md). Collapsed by default; present only for a multi-hop
-  // research gather. Makes "it followed its curiosity" legible: which thread, how surprising, kept
-  // or dropped as a dead seam.
+  // The RESEARCH PLAN — the facets (the multiple prompts) a DEEP research gather opened from, before
+  // any hop (docs/deep-research.md). Makes "it researched from several angles" legible: each line is
+  // a distinct query the engine generated from the one concise question. Present only for a deep gather.
+  if (Array.isArray(fetched.facets) && fetched.facets.length > 1) {
+    const det = document.createElement('details');
+    det.className = 'wr-plan';
+    det.open = true;   // the plan is the headline of a deep gather — show it expanded
+    const sum = document.createElement('summary');
+    sum.textContent = `research plan · ${fetched.facets.length} angles`;
+    det.appendChild(sum);
+    for (const f of fetched.facets) {
+      const row = document.createElement('div');
+      row.className = 'wr-facet';
+      row.textContent = `• ${f}`;
+      det.appendChild(row);
+    }
+    box.appendChild(det);
+  }
+
+  // The WALK trace — the hops the gather took, each with the surprise (in bits) that steered it and
+  // the saliency that leashed it (docs/curiosity-research.md, docs/deep-research.md). Collapsed by
+  // default; present for a multi-hop research gather. Makes "it followed its curiosity" legible:
+  // which thread, at what depth, how surprising, kept or dropped as a dead seam. A DEEP gather's hops
+  // carry a depth (indented) and a facet (the angle they belong to); a single walk's do not.
   if (Array.isArray(fetched.research) && fetched.research.length) {
     const det = document.createElement('details');
     det.className = 'wr-hops';
     const sum = document.createElement('summary');
     const kept = fetched.research.filter(h => h.kept).length;
-    sum.textContent = `curiosity walk · ${fetched.research.length} hop${fetched.research.length > 1 ? 's' : ''}, ${kept} kept`;
+    const deep = fetched.research.some(h => h.depth != null);
+    sum.textContent = `${deep ? 'deep research walk' : 'curiosity walk'} · ${fetched.research.length} hop${fetched.research.length > 1 ? 's' : ''}, ${kept} kept`;
     det.appendChild(sum);
     for (let i = 0; i < fetched.research.length; i++) {
       const h = fetched.research[i];
       const row = document.createElement('div');
       row.className = 'wr-hop' + (h.kept ? '' : ' dead');
-      const lead = h.term ? ` → ${h.term}` : ' (seed)';
+      // depth 0 is a facet (a planned angle); deeper hops are discovered leads, indented by depth.
+      const indent = h.depth ? '  '.repeat(h.depth) + '↳ ' : '';
+      const lead = h.term ? ` → ${h.term}` : (h.depth === 0 ? ' (angle)' : ' (seed)');
       // surprise steered it (curiosity, in bits) and saliency leashed it; a dropped hop says why
       // (strayed off the question, or an empty fetch).
       const metrics = `${h.curiosity} bits` + (h.salience != null ? ` · salience ${h.salience}` : '');
-      const tail = h.kept ? (h.exhausted ? ' · on topic, nothing new' : '')
+      const tail = h.kept ? ((h.exhausted ? ' · on topic, nothing new' : '') + (h.strayed ? ' · angle off topic, not deepened' : ''))
                           : (h.reason === 'strayed' ? ' · strayed off topic' : ' · no results');
-      row.textContent = `${i + 1}.${lead} “${h.query}” · ${metrics}${tail}`;
+      row.textContent = `${indent}${i + 1}.${lead} “${h.query}” · ${metrics}${tail}`;
       det.appendChild(row);
     }
     box.appendChild(det);

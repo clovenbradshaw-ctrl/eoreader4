@@ -401,6 +401,17 @@ a.prop-source:hover { text-decoration: underline; }
   word-break: break-word;
 }
 .msg.assistant .wr-hop.dead { color: #71717a; border-left-color: #3f3f46; }
+.msg.assistant .wr-hop { white-space: pre-wrap; }   /* preserve the depth indent of deep-research hops */
+
+/* DEEP RESEARCH plan — the angles (multiple prompts) the gather opened from (docs/deep-research.md). */
+.msg.assistant .wr-plan { margin: .3rem 0 .1rem; }
+.msg.assistant .wr-plan summary {
+  cursor: pointer; font-size: .7rem; color: #a78bfa; letter-spacing: .02em; user-select: none;
+}
+.msg.assistant .wr-facet {
+  margin: .25rem 0 0; padding: .15rem .5rem; font-size: .68rem; line-height: 1.45;
+  color: #ddd6fe; background: #17151f; border-left: 2px solid #8b5cf6; word-break: break-word;
+}
 
 .msg.assistant .wr-source {
   display: flex; align-items: baseline; gap: .4rem; margin-top: .3rem; font-size: .72rem;
