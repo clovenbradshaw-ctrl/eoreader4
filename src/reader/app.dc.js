@@ -10,7 +10,7 @@ class Component extends DCLogic {
     // Common adjectives / nouns that frequently OPEN a sentence or title and so get a
     // stray capital ("Soft coral…", "Deep reefs…"). Used only with the positional test.
     this.COMMON_OPENER=new Set('soft hard new old great small large big high low good bad deep shallow light dark long short full empty open close closed free real true false main key top best worst early late recent modern ancient warm cold hot cool dry wet rich poor strong weak fast slow young many most other several various such few more less same different general common special major minor local global natural human social public private red blue green white black grey gray brown clear bright wide narrow thick thin heavy soft northern southern eastern western central upper lower inner outer first second third final next last whole half single double total active passive primary secondary'.split(' '));
-    this.SUGG=[{label:'Great Barrier Reef (Wikipedia)',url:'https://en.wikipedia.org/wiki/Great_Barrier_Reef'},{label:'Coral reef',url:'https://en.wikipedia.org/wiki/Coral_reef'},{label:'Coral bleaching',url:'https://en.wikipedia.org/wiki/Coral_bleaching'}];
+    this.SUGG=[];  // filled on mount by loadSuggestions(): a random Wikipedia page + random English books
     this.PALETTE=['#2563eb','#7c3aed','#0e7490','#b45309','#dc2626','#15803d','#be185d','#4f46e5','#0891b2','#9333ea'];
     this.THEMES=[{name:'EO Violet',hex:'#5b34d6'},{name:'Indigo',hex:'#4f46e5'},{name:'Royal',hex:'#2563eb'},{name:'Teal',hex:'#0d9488'},{name:'Forest',hex:'#15803d'},{name:'Magenta',hex:'#be185d'},{name:'Amber',hex:'#b45309'},{name:'Slate',hex:'#475569'}];
     let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');}catch(e){}
@@ -68,9 +68,43 @@ class Component extends DCLogic {
     try{ this.SVO=await import(__res.eoSvo||'./svo-llm.js'); }catch(e){ this.SVO=null; }
     const llmAvail=!!(this.SVO && typeof window!=='undefined' && window.claude && typeof window.claude.complete==='function');
     this.setState({ready:true, llmAvail, llm:llmAvail});
-    // start empty — no sample data preloaded; read URLs on demand
+    // Start the chat model downloading immediately so it's ready by the time the first
+    // question is asked (progress is throttled in ensureChatModel to keep typing smooth).
+    if(this.state.backend!=='echo') this.ensureChatModel().catch(()=>{});
+    // An explicit seed URL reads on load; otherwise we stay empty and just OFFER a random
+    // Wikipedia page + a few random English books as suggestions (loaded only when clicked).
     const seed=(this.props&&this.props.seedUrl);
     if(seed) this.readURL(seed,'read');
+    else this.loadSuggestions();
+  }
+  // ── Default suggestions: a random Wikipedia page + a few random English books ──
+  // Nothing is read on load — the start screen stays empty (like before, with the
+  // Great Barrier Reef suggestion), only now the suggestions are RANDOM: one Wikipedia
+  // article and a few English Project Gutenberg books, each loaded only when clicked.
+  async loadSuggestions(){
+    const sugg=[];
+    try{
+      const j=await this._wikiJSON('https://en.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=1&format=json&origin=*');
+      const r=j&&j.query&&j.query.random&&j.query.random[0];
+      if(r&&r.title){
+        const url='https://en.wikipedia.org/wiki/'+encodeURIComponent(String(r.title).replace(/ /g,'_'));
+        sugg.push({label:r.title+' (Wikipedia)',url});
+      }
+    }catch(e){}
+    try{(await this.randomBooks(3)).forEach(b=>sugg.push({label:b.title+' — '+b.author,book:b}));}catch(e){}
+    if(sugg.length){this.SUGG=sugg;this.setState(s=>({rev:s.rev+1}));}
+  }
+  // Fetch a handful of random ENGLISH Gutenberg books (no reading) for the suggestions.
+  // A random page of the catalog gives variety; we shuffle and keep the first N with text.
+  async randomBooks(n){
+    n=n||3;
+    const page=1+Math.floor(Math.random()*40);
+    let data;
+    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://gutendex.com/books/?languages=en&page='+page));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    catch(e){return [];}
+    const books=this._gutenBooks(data);
+    for(let i=books.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=books[i];books[i]=books[j];books[j]=t;}
+    return books.slice(0,n);
   }
 
   norm(s){return (s||'').replace(/\s+/g,' ').trim();}
@@ -254,8 +288,16 @@ class Component extends DCLogic {
   // The read context for a question, as notes the model can lean on (and the source
   // chips/entities to show). Empty when nothing relevant has been read.
   groundNotes(q,scope){const a=this.answerQuestion(q,scope);
-    if(!a.refs||!a.refs.length)return {notes:'',entities:a.entities||[],sources:[]};
-    return {notes:'From what you have read:\n'+a.refs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:a.sources||[]};}
+    if(a.refs&&a.refs.length)return {notes:'From what you have read:\n'+a.refs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:a.sources||[]};
+    // No keyword match (e.g. "what is this about?", "explain this page") — fall back to the
+    // opening lines of the source in scope (or the page being viewed) so the model speaks
+    // from the actual text instead of answering as a blank-slate assistant.
+    const src=scope||this.state.viewUrl;
+    if(src&&this.master&&this.master.sentences.length){
+      const idxs=[];for(let i=0;i<this.master.sentences.length&&idxs.length<8;i++){if(this.master.sentenceSource[i]!==src)continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(this._proseOk(low))idxs.push(i);}
+      if(idxs.length)return {notes:'From what you have read:\n'+idxs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:[src]};
+    }
+    return {notes:'',entities:a.entities||[],sources:[]};}
   // Lazily load the chat model (the old app's backends). Cached on the instance.
   async ensureChatModel(){
     const name=this.state.backend||'webllm';
@@ -263,7 +305,13 @@ class Component extends DCLogic {
     if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
     const model=this._ME.createModel(name);
     this.setState({modelStatus:name+' · loading…'});
-    await model.load(p=>{const pct=Math.round((p&&p.pct||0)*100);this.setState({modelStatus:name+' · '+((p&&p.phase)||'loading')+(pct?(' '+pct+'%'):'')});});
+    // Throttle progress to ~3/sec: the load fires this callback many times a second, and a
+    // full re-render on each one makes typing in the chat box stutter while the model loads.
+    let lastTick=0,lastPct=-1;
+    await model.load(p=>{const pct=Math.round((p&&p.pct||0)*100);const now=Date.now();
+      if(pct===lastPct||(now-lastTick<300&&pct<100))return;
+      lastTick=now;lastPct=pct;
+      this.setState({modelStatus:name+' · '+((p&&p.phase)||'loading')+(pct?(' '+pct+'%'):'')});});
     this._chatModel=model;this.setState({modelStatus:''});
     return model;
   }
@@ -365,11 +413,15 @@ class Component extends DCLogic {
     let data;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
     catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
-    return (data.results||[]).map(b=>{
+    return this._gutenBooks(data).slice(0,12);
+  }
+  // Map a gutendex response to readable books — only those with a plain-text edition.
+  _gutenBooks(data){
+    return ((data&&data.results)||[]).map(b=>{
       const f=b.formats||{};
       const txt=f['text/plain; charset=utf-8']||f['text/plain; charset=us-ascii']||f['text/plain']||(Object.entries(f).find(([k,v])=>/text\/plain/i.test(k)&&!/\.zip$/i.test(v))||[])[1];
       return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,downloads:b.download_count||0};
-    }).filter(b=>b.txtUrl).slice(0,12);
+    }).filter(b=>b.txtUrl);
   }
   // Strip Project Gutenberg's license header/footer so only the work is read.
   stripGutenberg(t){
@@ -2148,7 +2200,7 @@ class Component extends DCLogic {
         base.showPrompt=true;
         base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Read a URL — or find a book':'Loading the reading engine…');
         base.promptBody=this.state.engineErr?String(this.state.engineErr):'Paste a page URL to read it here, type a title or author to find a book on Project Gutenberg, or use 📄 to import your own. Every entity is read into the graph on the right — then ask about it in a chat.';
-        base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);}}));
+        base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
         base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
       }
       return base;

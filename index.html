@@ -1273,6 +1273,35 @@ class Component extends DCLogic {
     if(seed) this.readURL(seed,'read');
     else this.loadSuggestions();
   }
+  // ── Default suggestions: a random Wikipedia page + a few random English books ──
+  // Nothing is read on load — the start screen stays empty (like before, with the
+  // Great Barrier Reef suggestion), only now the suggestions are RANDOM: one Wikipedia
+  // article and a few English Project Gutenberg books, each loaded only when clicked.
+  async loadSuggestions(){
+    const sugg=[];
+    try{
+      const j=await this._wikiJSON('https://en.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=1&format=json&origin=*');
+      const r=j&&j.query&&j.query.random&&j.query.random[0];
+      if(r&&r.title){
+        const url='https://en.wikipedia.org/wiki/'+encodeURIComponent(String(r.title).replace(/ /g,'_'));
+        sugg.push({label:r.title+' (Wikipedia)',url});
+      }
+    }catch(e){}
+    try{(await this.randomBooks(3)).forEach(b=>sugg.push({label:b.title+' — '+b.author,book:b}));}catch(e){}
+    if(sugg.length){this.SUGG=sugg;this.setState(s=>({rev:s.rev+1}));}
+  }
+  // Fetch a handful of random ENGLISH Gutenberg books (no reading) for the suggestions.
+  // A random page of the catalog gives variety; we shuffle and keep the first N with text.
+  async randomBooks(n){
+    n=n||3;
+    const page=1+Math.floor(Math.random()*40);
+    let data;
+    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://gutendex.com/books/?languages=en&page='+page));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    catch(e){return [];}
+    const books=this._gutenBooks(data);
+    for(let i=books.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=books[i];books[i]=books[j];books[j]=t;}
+    return books.slice(0,n);
+  }
 
   norm(s){return (s||'').replace(/\s+/g,' ').trim();}
   short(u){try{return new URL(u).hostname.replace(/^www\./,'');}catch(e){return String(u).slice(0,30);}}
@@ -1620,35 +1649,6 @@ class Component extends DCLogic {
     const r=await this.importText(text,book.title+' — '+book.author);
     this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
     if(r)this.feedLine('done','Read fully · '+r.sentenceCount+' propositions — ready to chat');
-  }
-  // ── Default suggestions: a random Wikipedia page + a few random English books ──
-  // Nothing is read on load — the start screen stays empty (just like before, with the
-  // Great Barrier Reef suggestion), only now the suggestions are RANDOM: one Wikipedia
-  // article and a few English Project Gutenberg books, each loaded only when clicked.
-  async loadSuggestions(){
-    const sugg=[];
-    try{
-      const j=await this._wikiJSON('https://en.wikipedia.org/w/api.php?action=query&list=random&rnnamespace=0&rnlimit=1&format=json&origin=*');
-      const r=j&&j.query&&j.query.random&&j.query.random[0];
-      if(r&&r.title){
-        const url='https://en.wikipedia.org/wiki/'+encodeURIComponent(String(r.title).replace(/ /g,'_'));
-        sugg.push({label:r.title+' (Wikipedia)',url});
-      }
-    }catch(e){}
-    try{(await this.randomBooks(3)).forEach(b=>sugg.push({label:b.title+' — '+b.author,book:b}));}catch(e){}
-    if(sugg.length){this.SUGG=sugg;this.setState(s=>({rev:s.rev+1}));}
-  }
-  // Fetch a handful of random ENGLISH Gutenberg books (no reading) for the suggestions.
-  // A random page of the catalog gives variety; we shuffle and keep the first N with text.
-  async randomBooks(n){
-    n=n||3;
-    const page=1+Math.floor(Math.random()*40);
-    let data;
-    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://gutendex.com/books/?languages=en&page='+page));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
-    catch(e){return [];}
-    const books=this._gutenBooks(data);
-    for(let i=books.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=books[i];books[i]=books[j];books[j]=t;}
-    return books.slice(0,n);
   }
   ingest(url,title,text,via,image,parent,wikiLinks){
     const doc=this.E.parseText(text,{coordSubjects:true});
