@@ -1903,6 +1903,15 @@ class Component extends DCLogic {
     const live=pages.filter(pg=>!(this._muted&&this._muted.has(pg.url)));
     let remap=new Map(),forks=[];
     try{ if(this.E&&this.E.referentMap){const r=this.E.referentMap(live);remap=r.remap;forks=r.forks||[];} }catch(e){ remap=new Map();forks=[]; }
+    // A referent that appears ONLY as a relation endpoint (an object never INS'd in its
+    // own right) gets no labelled INS, so projectGraph leaves it unlabelled and labelOf()
+    // would fall back to the bare nameless hashId — the "hashIds instead of display names"
+    // the web graph showed. The remap knows that referent's readable name (allIds covers
+    // src/tgt/from/to/node); invert it into a hashId→label index labelOf() consults so the
+    // endpoint shows its name. Mirrors cross-source.js#referentLabels, kept inline so the
+    // reader needs no rebuilt engine bundle.
+    this._refLabel=new Map();
+    for(const byBase of remap.values())for(const r of byBase.values())if(r&&r.id!=null&&r.label!=null&&!this._refLabel.has(r.id))this._refLabel.set(r.id,r.label);
     for(const pg of pages){ if(this._muted&&this._muted.has(pg.url))continue; const so=m.events.length,no=m.sentences.length;
       const rm=remap.get(pg.url);
       const fix=v=>(v!=null&&v!=='[void]'&&rm&&rm.has(v))?rm.get(v).id:v;
@@ -2750,7 +2759,7 @@ class Component extends DCLogic {
     return {subj,obj};
   }
 
-  labelOf(id){const e=this.graph.entities.get(id);return (e&&e.label)||id;}
+  labelOf(id){const e=this.graph.entities.get(id);if(e&&e.label)return e.label;return (this._refLabel&&this._refLabel.get(id))||id;}
   conceptual(label){
     const raw=this.norm(label);if(!raw)return false;
     const l=raw.toLowerCase().replace(/[.,;:'"()\u2019\u2018\u201c\u201d]/g,'').trim();

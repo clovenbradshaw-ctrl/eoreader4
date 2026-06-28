@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseText } from '../src/perceiver/parse/index.js';
-import { referentMap } from '../src/reader/cross-source.js';
+import { referentMap, referentLabels } from '../src/reader/cross-source.js';
 
 const page = (url, title, text) => {
   const doc = parseText(text, { coordSubjects: true });
@@ -64,4 +64,44 @@ test('a name read in a single source is still a nameless referent', () => {
   const mann = remap.get(film.url)?.get('michael-mann')?.id;
   assert.ok(mann, 'a single-source name gets a referent id');
   assert.match(mann, /^e[0-9a-z]+$/, 'and it is nameless');
+});
+
+// The display-name regression: the web graph showed nameless hashIds in place of names.
+// referentLabels inverts the re-key plan so every referent's name stays reachable — the
+// reader's labelOf() consults it for referents projectGraph never labelled (those that
+// appear only as a relation endpoint, never INS'd in their own right).
+test('referentLabels recovers a readable name for every nameless referent', () => {
+  const { remap } = referentMap([cnn, cdc, film]);
+  const labels = referentLabels(remap);
+
+  assert.ok(labels.size > 0, 'the index is populated');
+  // Every nameless hashId maps to a readable name, never back to the bare hash.
+  for (const [id, label] of labels) {
+    assert.match(id, /^e[0-9a-z]+$/, 'keys are the nameless referent ids');
+    assert.notEqual(label, id, 'the name is never the hashId itself');
+    assert.ok(label && label.length > 0, 'every referent has a non-empty name');
+  }
+  // The name the remap assigned each referent is exactly the one the index returns.
+  for (const byBase of remap.values())
+    for (const r of byBase.values())
+      assert.equal(labels.get(r.id), r.label, 'the index agrees with the remap');
+});
+
+// labelOf's fallback chain, reproduced: a referent that has an entity-with-label keeps it;
+// one projectGraph left unlabelled (endpoint-only) recovers its name from the index rather
+// than leaking the bare hashId; an unknown id degrades to itself.
+test('the labelOf fallback never surfaces a bare hashId for a known referent', () => {
+  const { remap } = referentMap([cnn, cdc, film]);
+  const labels = referentLabels(remap);
+  const entities = new Map();                          // empty: simulate endpoint-only nodes
+  const labelOf = (id) => {
+    const e = entities.get(id);
+    if (e && e.label) return e.label;
+    return labels.get(id) || id;
+  };
+  const heatId = remap.get(cnn.url)?.get('heat')?.id;
+  assert.ok(heatId, 'the weather "heat" has a referent');
+  assert.notEqual(labelOf(heatId), heatId, 'an endpoint-only referent shows its name, not the hash');
+  assert.equal(labelOf(heatId), 'Heat', 'and the name is the display token');
+  assert.equal(labelOf('e-nonexistent'), 'e-nonexistent', 'an unknown id degrades to itself');
 });
