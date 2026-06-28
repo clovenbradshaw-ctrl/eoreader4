@@ -379,6 +379,10 @@
               </sc-if>
               <sc-if value="{{ reading.hasMarks }}" hint-placeholder-val="{{ false }}">
                 <button onclick="{{ reading.onToggleMarks }}" title="Highlight the moments the reading flagged as important" style="{{ reading.marksStyle }}">❖ {{ reading.marksCount }}</button>
+                <sc-if value="{{ reading.marksOn }}" hint-placeholder-val="{{ false }}">
+                  <button onclick="{{ reading.onPrevMark }}" title="Previous flagged moment" style="{{ reading.btnStyle }}">◆↑</button>
+                  <button onclick="{{ reading.onNextMark }}" title="Next flagged moment" style="{{ reading.btnStyle }}">◆↓</button>
+                </sc-if>
               </sc-if>
               <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
                 <div style="position:relative;flex:0 0 auto;">
@@ -1592,6 +1596,16 @@ class Component extends DCLogic {
     this.setState({bookmarkMode:v});}
   gotoBookmark(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;
     if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-Math.round(win.innerHeight*0.18);try{win.scrollTo({top:Math.max(0,top),behavior:'smooth'});}catch(e){win.scrollTo(0,Math.max(0,top));}}}
+  // Hop to the previous / next flagged moment from where we're reading now. Turns the marks
+  // on if they're off, so the button always lands you on a visible highlight.
+  jumpMark(dir){const d=this._bookDoc();if(!d||!d.defaultView)return;const win=d.defaultView;
+    if(!this.state.bookmarkMode)this.toggleBookmarks();
+    const margin=Math.round(win.innerHeight*0.18);
+    const tops=(this.state.bookmarks||[]).map(b=>{const el=d.getElementById(b.id);return el?el.getBoundingClientRect().top+win.scrollY:null;}).filter(v=>v!=null).sort((a,b)=>a-b);
+    if(!tops.length)return;const cur=win.scrollY+margin+6;let target=null;
+    if(dir>0){for(const t of tops){if(t>cur){target=t;break;}}if(target==null)target=tops[tops.length-1];}
+    else{for(let k=tops.length-1;k>=0;k--){if(tops[k]<cur-2){target=tops[k];break;}}if(target==null)target=tops[0];}
+    const top=Math.max(0,target-margin);try{win.scrollTo({top,behavior:'smooth'});}catch(e){win.scrollTo(0,top);}}
   // Compute the live scroll fraction of each bookmarked element for the marker rail.
   _bookmarkRail(d){if(!d)return [];const h=(d.documentElement.scrollHeight||d.body.scrollHeight||1);
     return (this.state.bookmarks||[]).map(b=>{const el=d.getElementById(b.id);if(!el)return null;
@@ -1740,7 +1754,7 @@ class Component extends DCLogic {
         sugg.push({label:r.title+' (Wikipedia)',url});
       }
     }catch(e){}
-    try{(await this.randomBooks(3)).forEach(b=>sugg.push({label:b.title+' — '+b.author,book:b}));}catch(e){}
+    try{(await this.randomBooks(3)).forEach(b=>sugg.push({label:b.title+' — '+this.authorDisplay(b.author),book:b}));}catch(e){}
     if(sugg.length){this.SUGG=sugg;this.setState(s=>({rev:s.rev+1}));}
   }
   // Fetch a handful of random ENGLISH Gutenberg books (no reading) for the suggestions.
@@ -1757,6 +1771,10 @@ class Component extends DCLogic {
   }
 
   norm(s){return (s||'').replace(/\s+/g,' ').trim();}
+  // Like norm, but PRESERVES line structure — for the model's markdown chat replies, where
+  // newlines carry paragraph/list breaks that _md turns into block tags. Collapses only
+  // horizontal whitespace, trims each line, and caps blank runs at one (paragraph) gap.
+  normMd(s){return String(s||'').replace(/\r\n?/g,'\n').replace(/[^\S\n]+/g,' ').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n').trim();}
   short(u){try{return new URL(u).hostname.replace(/^www\./,'');}catch(e){return String(u).slice(0,30);}}
   // Humanize a publisher host into a readable VOICE name — "en.wikipedia.org" → "Wikipedia".
   // A take is subjective: it has to be FROM somebody. When no person/org is cited inside
@@ -1894,7 +1912,7 @@ class Component extends DCLogic {
           if(ne.subject&&ne.subject.id!=null)ne.subject={...ne.subject,id:fix(ne.subject.id)};if(ne.object&&ne.object.id!=null)ne.object={...ne.object,id:fix(ne.object.id)};}
         m.events.push(ne);}
       pg.sentences.forEach(s=>{m.sentences.push(s);m.sentenceSource.push(pg.url);});
-      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,seqStart:so,sentStart:no});
+      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,author:pg.author||null,authorDates:pg.authorDates||null,published:pg.published||null,seqStart:so,sentStart:no});
     }
     // The sense that distinguishes a forked referent ("a 1995 film") is a DEFEASIBLE DEF on
     // the referent — not part of its identity. Appended after the body so the INS exists.
@@ -1912,21 +1930,21 @@ class Component extends DCLogic {
     if(!ex.text||ex.text.length<60){this.feedLine('warn',this.short(url)+' — too little text');return false;}
     return this.ingest(url,ex.title,ex.text,via,ex.image,parent,ex.wikiLinks);
   }
-  async readText(text,title){
+  async readText(text,title,meta){
     if(!this.E)return false;
     text=String(text||'').trim(); if(text.length<60){this.feedLine('warn','Too little text to read.');return false;}
     const url='text:'+(Date.now().toString(36)); const ttl=title||('Pasted text · '+text.slice(0,40).replace(/\s+/g,' ').trim()+'…');
-    return this.ingest(url,ttl,text,'paste');
+    return this.ingest(url,ttl,text,'paste',null,null,null,meta);
   }
   // Import a book / text file: read it, then NAVIGATE the center to it so it opens
   // as a readable book (loadCenter's text: branch) with its entities clickable.
-  async importText(text,title){
-    const r=await this.readText(text,title);
+  async importText(text,title,meta){
+    const r=await this.readText(text,title,meta);
     if(!r||!r.url){this.feedLine('warn','Could not import that text.');return false;}
     this._srcUrl=null;this._pushLoc({t:'web',url:r.url});
     this.setState(s=>({viewUrl:r.url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));
     this.loadCenter(r.url);
-    this.feedSep('imported a book');this.feedLine('read','Read “'+r.title+'” · '+r.sentenceCount+' propositions');
+    this.feedSep('imported a book');this.feedLine('read','Read “'+r.title+'” · '+(r.propCount!=null?r.propCount:r.sentenceCount)+' propositions');
     return r;
   }
   onImportClick(){const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
@@ -2022,16 +2040,51 @@ class Component extends DCLogic {
     const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
     const qwords=q.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
     if(!qwords.length)return [];
+    // "Related" has to mean a shared SUBJECT, not an incidental common word — otherwise
+    // every other thing you've read shows up just for containing "name" or "story". Keep
+    // only the query words that name a folded entity (a real proper-noun subject); if the
+    // question names nothing distinctive, surface nothing rather than a wall of noise.
+    const salient=new Set();
+    if(this.graph)for(const e of this.graph.entities.values()){
+      if(!this.showable(e.id))continue;
+      const lab=this.labelOf(e.id).toLowerCase(),toks=lab.split(/\s+/);
+      for(const w of qwords){if(lab===w||toks.includes(w)||(w.length>4&&lab.includes(w)))salient.add(w);}
+    }
+    if(!salient.size)return [];
     const byUrl={};
     for(let i=0;i<this.master.sentences.length;i++){
       const u=this.master.sentenceSource[i];if(!u||scope.includes(u))continue;
       const low=this.norm(this.master.sentences[i]).toLowerCase();if(!this._proseOk(low))continue;
-      let v=0;for(const w of qwords)if(low.includes(w))v++;
+      let v=0;for(const w of salient)if(low.includes(w))v++;
       if(v>0)byUrl[u]=(byUrl[u]||0)+v;
     }
+    // A real footing, not one stray mention: the subject has to actually recur in the doc.
     return Object.keys(byUrl)
+      .filter(u=>byUrl[u]>=2)
       .map(u=>({url:u,score:byUrl[u],title:this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),28)}))
       .sort((a,b)=>b.score-a.score).slice(0,8);
+  }
+  // The entity a chat turn is really ABOUT — the folded name most mentioned across the
+  // question and its answer, tie-broken by overall weight. Drives the panel pivot so the
+  // right rail follows the conversation. Reuses the link index (full names + aliases).
+  _chatTopicEntity(text){
+    if(!this.graph||!text)return null;
+    this.buildLinkIndex();const map=this._linkMap,re=this._linkRe;if(!re)return null;
+    const counts=new Map();re.lastIndex=0;let m,n=0;
+    while((m=re.exec(text))&&n<800){n++;const id=map.get(m[0].toLowerCase());if(id==null)continue;counts.set(id,(counts.get(id)||0)+1);}
+    let best=null,bestScore=-1;
+    for(const [id,c] of counts){if(!this.graph.entities.has(id))continue;const s=c*100+this.weightOf(this.graph.entities.get(id));if(s>bestScore){bestScore=s;best=id;}}
+    return best;
+  }
+  // Pivot the right panel to the latest topic of the chat. Stays out of the way on a phone
+  // (where it would steal the chat pane) and never re-pivots to what's already shown.
+  _pivotChatPanel(text){
+    if(this.phone())return;
+    const id=this._chatTopicEntity(text);
+    if(id==null||!this.graph||!this.graph.entities.has(id)||this.state.panelSel===id)return;
+    this._panelStack=[];
+    this.setState({panelSel:id,rightOpen:true,panelLens:null});
+    try{this._highlightFirst(id);}catch(e){}this._scrollPanelTop();
   }
   // ── The meaning graph, serialized as EOT triples for the talker ───────────
   // What the reading MEANS, folded into typed relations: "A -> B : rel" for a
@@ -2180,12 +2233,13 @@ class Component extends DCLogic {
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
-      const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
+      const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       // Only surface grounding when the question actually matched the read text. Weak
       // fallback context (intro lines) is NOT shown as a citation — instead we offer the
       // related docs (ranked) the reader has open. This keeps "linked" = genuinely relevant.
       const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
       finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
+      this._pivotChatPanel(q+' '+text);
     }catch(e){
       // model unavailable — answer structurally from what's read, or say so plainly
       const fb=this.answerQuestion(q,sources);
@@ -2193,6 +2247,7 @@ class Component extends DCLogic {
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
       finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      this._pivotChatPanel(q+' '+(fb.text||''));
       this.setState({modelStatus:''});
     }
   }
@@ -2521,7 +2576,9 @@ class Component extends DCLogic {
     return ((data&&data.results)||[]).map(b=>{
       const f=b.formats||{};
       const txt=f['text/plain; charset=utf-8']||f['text/plain; charset=us-ascii']||f['text/plain']||(Object.entries(f).find(([k,v])=>/text\/plain/i.test(k)&&!/\.zip$/i.test(v))||[])[1];
-      return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,
+      const a0=(b.authors&&b.authors[0])||null;
+      return {id:b.id,title:b.title,author:(a0&&a0.name)||'Unknown author',
+        authorBirth:(a0&&a0.birth_year)||null,authorDeath:(a0&&a0.death_year)||null,txtUrl:txt,
         cover:f['image/jpeg']||null,downloads:b.download_count||0,subjects:b.subjects||[],bookshelves:b.bookshelves||[]};
     }).filter(b=>b.txtUrl);
   }
@@ -2531,6 +2588,28 @@ class Component extends DCLogic {
     [].concat(b.subjects||[],b.bookshelves||[]).forEach(s=>{const t=String(s).split(' -- ')[0].trim();const k=t.toLowerCase();
       if(t&&t.length<30&&!seen.has(k)){seen.add(k);out.push(t);}});
     return out.slice(0,3);
+  }
+  // Gutendex names come "Surname, Forename" (catalog order). Flip to natural
+  // reading order — "Kafka, Franz" → "Franz Kafka" — so the byline reads as a name,
+  // not an index entry. Single-token or organisational names pass through untouched.
+  authorDisplay(name){
+    name=String(name||'').trim();
+    if(!name||name==='Unknown author')return name;
+    const c=name.split(',');
+    if(c.length===2){const last=c[0].trim(),first=c[1].trim();if(first&&last)return first+' '+last;}
+    return name;
+  }
+  // Elegant title/author/date metadata for a Gutenberg book. The author's life
+  // dates (from gutendex) place the work in its era; an "Original publication" line
+  // in the raw header, when present, gives the true publication year and wins.
+  bookMeta(book,raw){
+    const author=this.authorDisplay(book.author);
+    const life=book.authorBirth?(book.authorBirth+'–'+(book.authorDeath||'')):'';
+    let published=null;
+    const head=String(raw||'').split(/\*\*\*\s*START OF/i)[0];
+    const m=head.match(/Original publication:[^\n]*?\b(1[0-9]{3}|20[0-9]{2})\b/i);
+    if(m)published=m[1];
+    return {author,authorDates:life,published};
   }
   // Strip Project Gutenberg's license header/footer so only the work is read.
   stripGutenberg(t){
@@ -2555,24 +2634,40 @@ class Component extends DCLogic {
     let text;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(book.txtUrl));if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
     catch(e){this.feedLine('warn','Could not fetch the book — '+(e&&e.message||e));this.setState({gutenReading:null});return;}
+    const meta=this.bookMeta(book,text);                   // read title/author/date from the raw header
     text=this.stripGutenberg(text);
     if(text.length<200){this.feedLine('warn','That edition had too little readable text.');this.setState({gutenReading:null});return;}
     this.feedLine('read','Reading “'+book.title+'” fully — '+Math.round(text.length/1000)+'k chars…');
     await this.sleep(20);                                  // let the feed paint before the synchronous parse
-    const r=await this.importText(text,book.title+' — '+book.author);
+    const r=await this.importText(text,book.title,meta);
     this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
-    if(r)this.feedLine('done','Read fully · '+r.sentenceCount+' propositions — ready to chat');
+    if(r)this.feedLine('done','Read fully · '+(r.propCount!=null?r.propCount:r.sentenceCount)+' propositions — ready to chat');
   }
-  ingest(url,title,text,via,image,parent,wikiLinks){
+  ingest(url,title,text,via,image,parent,wikiLinks,meta){
     const doc=this.E.parseText(text,{coordSubjects:true});
+    const propCount=this.countPropositions(doc.sentences);
     // Keep the raw text on the page so an imported book can be re-rendered as a
     // readable book in the center (see _bookHtml / loadCenter's text: branch).
-    const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null};
+    const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,propCount,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null,
+      author:(meta&&meta.author)||null,authorDates:(meta&&meta.authorDates)||null,published:(meta&&meta.published)||null};
     const pages=[...this.state.pages,page];this.rebuild(pages);
     this.setState(s=>({pages,rev:s.rev+1,selId:s.selId||this.topEntity()}));
     // Second reader: fold the LLM's SVO reading onto the same log, then re-project.
     if(this.state.llm && this.state.llmAvail && this.SVO) this.runSVO(page);
-    return {title,sentenceCount:doc.sentences.length,url};
+    return {title,sentenceCount:doc.sentences.length,propCount,url};
+  }
+  // PROPOSITIONS, not sentences. A proposition is a clause — a single predication —
+  // and the SVO reader already decomposes every sentence into clauses (the unit it
+  // bonds over). So the count the reader shows is the clause total: at least one per
+  // sentence, more wherever a sentence coordinates or subordinates ("he woke, and he
+  // crawled" is two). Falls back to the sentence count if the engine predates the
+  // clause segmenter export.
+  countPropositions(sentences){
+    const sents=sentences||[];
+    const seg=this.E&&this.E.segmentClauses;
+    if(!seg)return sents.length;
+    let n=0;for(const s of sents)n+=Math.max(1,seg(s).length);
+    return n;
   }
   // A researched page is RELEVANT only if it actually shares a specific referent with
   // the focal entity's PRE-research context (proper-noun set captured before reading).
@@ -3171,6 +3266,16 @@ class Component extends DCLogic {
     if(/^(is|are|was|were|has|have|had|can|could|seen|located|known|composed|made|built|consists?|defined|considered|named|protected|found|home)\b/i.test(pred))return lab+' '+pred+'.';
     if(/^(a|an|the|one|part|home|type|kind|form)\b/i.test(pred))return lab+' is '+pred+'.';
     return lab+' \u2014 '+pred+'.';}
+  // First sentence of `s`, but NEVER split on an abbreviation period — a title
+  // ("Mr."/"Mrs."/"Dr."), a lone initial, "Inc.", "U.S." The naive split chopped
+  // "a source of irritation to Mr. Samsa" to "…to Mr.", surfacing a stray bare "Mr"
+  // in the profile gloss. Mirrors the re-merge in _clipExtract.
+  _firstSentence(s){
+    const raw=String(s||'').split(/(?<=[.!?])\s+/);
+    const ABBR=/(?:^|[\s(])(?:[A-Za-z]|Mr|Mrs|Ms|Dr|Prof|Gen|Sen|Rep|Gov|Lt|Sgt|Sr|Jr|St|vs|v|etc|Inc|Ltd|Co|Corp|No|pp|al|Ave|Rd|Rev|Hon|Capt|U\.S|U\.K|U\.N|D\.C)\.$/i;
+    let out=raw[0]||'';for(let i=1;i<raw.length&&ABBR.test(out);i++)out+=' '+raw[i];
+    return out;
+  }
   // Trim to <= max chars but never mid-sentence: keep whole sentences, else cut on a
   // word boundary with an ellipsis. No more "...decreasing their abilit".
   endOnBoundary(s,max){s=this.norm(String(s||'').replace(/<[^>]*>/g,' ').replace(/\[(?:\d+|citation needed|edit)\]/gi,''));max=max||320;if(s.length<=max)return s;const cut=s.slice(0,max);const m=cut.match(/^[\s\S]*[.!?](?=\s|$)/);if(m&&m[0].length>=Math.min(70,max*0.45))return m[0].trim();return cut.replace(/\s+\S*$/,'').replace(/[\s,;:]+$/,'').trim()+'\u2026';}
@@ -3186,7 +3291,7 @@ class Component extends DCLogic {
       if(/\b(state|system|site|region|city|country|area|park|species|organi[sz]ation|company|river|island|reef|sea|nation|territory|town|lake|mountain|range)\b/.test(v))s+=1;
       if(v.length>150)s-=2.5;if(v.length<14)s-=1;s-=ev.sentIdx*0.02;return s;};
     cands.sort((a,b)=>score(b)-score(a));
-    const ev=cands[0];const pred=this.clean(ev.value).split(/(?<=[.!?])\s+/)[0];
+    const ev=cands[0];const pred=this._firstSentence(this.clean(ev.value));
     if(!pred||pred.length<8||pred.length>200)return null;
     return {pred,sentIdx:ev.sentIdx};
   }
@@ -3783,7 +3888,7 @@ class Component extends DCLogic {
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
   goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
-  processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+res.sentenceCount+' propositions');this._busy=false;this.setState({busy:false});});}
+  processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});});}
   toggleDetect(){this.setState(s=>({detect:!s.detect}));}
   canBack(){return !!(this._hist&&this._hpos>0);}
   canForward(){return !!(this._hist&&this._hpos<this._hist.length-1);}
@@ -3834,15 +3939,21 @@ class Component extends DCLogic {
     const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
     const v=(n,d)=>'--eo-'+n+':'+d+';';
     const htmlCls=this.state.bookmarkMode?' class="eo-bm-on"':'';
+    // Title / author / date head: title alone as the heading, the author in natural
+    // order on its own line, with the publication (or the author's era) beside it.
+    const dateStr=p.published||p.authorDates||'';
+    const authorHtml=p.author?'<div class="eo-author">'+esc(p.author)+(dateStr?'<span class="eo-life"> · '+esc(dateStr)+'</span>':'')+'</div>':'';
     const html='<!doctype html><html'+htmlCls+'><head><meta charset="utf-8"><base target="_blank">'+
       '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
       'html,body{margin:0;background:var(--eo-bg);}'+
       'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);transition:background .2s,color .2s;}'+
       '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
-      'h1.eo-title{font:700 1.62em/1.25 var(--eo-ff);letter-spacing:-.01em;color:var(--eo-fg);margin:0 0 6px;}'+
+      'h1.eo-title{font:700 1.95em/1.18 var(--eo-ff);letter-spacing:-.018em;color:var(--eo-fg);margin:0 0 4px;}'+
+      '.eo-author{font:italic 600 1.08em/1.4 var(--eo-ff);color:var(--eo-fg);margin:0 0 12px;}'+
+      '.eo-author .eo-life{font-style:normal;font-weight:400;color:var(--eo-fg2);}'+
       '.eo-byline{font:.72em/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--eo-fg2);margin:0 0 34px;border-bottom:1px solid var(--eo-rule);padding-bottom:18px;}'+
-      'h2.eo-chap{font:700 1.18em/1.3 var(--eo-ff);color:var(--eo-fg);margin:2.3em 0 .9em;scroll-margin-top:16px;}'+
-      'h2.eo-emergent{font-weight:600;font-style:italic;color:var(--eo-fg2);padding-left:.7em;border-left:2px solid var(--eo-acc);}'+
+      'h2.eo-chap{font:700 2.15em/1.12 var(--eo-ff);letter-spacing:-.02em;color:var(--eo-fg);margin:2.6em 0 .7em;scroll-margin-top:16px;}'+
+      'h2.eo-emergent{font-size:1.4em;font-weight:600;font-style:italic;letter-spacing:0;color:var(--eo-fg2);padding-left:.7em;border-left:2px solid var(--eo-acc);}'+
       'p{margin:0 0 1.15em;}p.eo-first::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:var(--eo-acc);font-family:Georgia,serif;}'+
       // Bookmarks: inert until the reader turns the mode on (html.eo-bm-on), then the
       // flagged passage lifts off the page with an accent wash + rule, and shows its "why".
@@ -3850,7 +3961,8 @@ class Component extends DCLogic {
       'html.eo-bm-on .eo-bm{background:var(--eo-bmbg);box-shadow:inset 3px 0 0 var(--eo-acc);padding:.5em .8em;margin-left:-.8em;position:relative;}'+
       'html.eo-bm-on .eo-bm[data-eo-why]:not([data-eo-why=""])::before{content:"❖ " attr(data-eo-why);display:block;font:700 .58em/1.3 -apple-system,BlinkMacSystemFont,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--eo-acc);margin-bottom:.4em;}'+
       '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
-      '<div class="eo-byline">'+((p.sentences||[]).length)+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+(marks.length?' · '+marks.length+' marks':'')+' · read as a book</div>'+
+      authorHtml+
+      '<div class="eo-byline">'+(p.propCount!=null?p.propCount:this.countPropositions(p.sentences))+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+(marks.length?' · '+marks.length+' marks':'')+' · read as a book</div>'+
       parts.join('\n')+'</div></body></html>';
     return {html,toc,bookmarks};
   }
@@ -3919,12 +4031,37 @@ class Component extends DCLogic {
   buildLinkIndex(){
     if(this._linkRe!==undefined&&this._linkRev===this.state.rev)return this._linkMap;
     const map=new Map(),labels=[];
-    if(this.graph){for(const e of this.graph.entities.values()){
-      if(!this.showable(e.id))continue;const l=this.labelOf(e.id);if(!l||l.length<3)continue;
-      const lc=l.toLowerCase();if(this.STOP.has(lc))continue;if(!map.has(lc)){map.set(lc,e.id);labels.push(l);}}}
+    const HON=new Set(['mr','mrs','ms','dr','sir','lady','lord','prof','professor','miss','madam','madame','herr','frau','st','saint']);
+    if(this.graph){
+      for(const e of this.graph.entities.values()){
+        if(!this.showable(e.id))continue;const l=this.labelOf(e.id);if(!l||l.length<3)continue;
+        const lc=l.toLowerCase();if(this.STOP.has(lc))continue;if(!map.has(lc)){map.set(lc,e.id);labels.push(l);}}
+      // Books name people by a single name ("Gregor"), but the graph keeps the full
+      // name ("Gregor Samsa"), so a bare first/last name would never light up. Register
+      // the distinctive proper-noun word of each multi-word name as an alias to the same
+      // entity. Skip honorifics, stop-words, short/lowercase tokens, anything already a
+      // label, and any token that is ambiguous across entities (drop it rather than
+      // mislink). This is what makes "Gregor", "Grete" &c. clickable in the reading.
+      const cand=new Map();   // token -> {id,w,disp} ; null marks an ambiguous token
+      for(const e of this.graph.entities.values()){
+        if(!this.showable(e.id))continue;const l=this.labelOf(e.id);if(!l)continue;
+        const parts=l.split(/\s+/);if(parts.length<2)continue;const w=this.weightOf(e);
+        for(const part of parts){
+          if(!/^[A-Z]/.test(part))continue;                         // proper-noun words only
+          const tok=part.toLowerCase().replace(/[^a-z0-9'-]/g,'');
+          if(tok.length<3||HON.has(tok)||this.STOP.has(tok))continue;
+          if(map.has(tok))continue;                                  // a real label wins
+          const prev=cand.get(tok);
+          if(prev===null)continue;
+          if(prev===undefined)cand.set(tok,{id:e.id,w,disp:part});
+          else if(prev.id!==e.id)cand.set(tok,null);                 // collides → forget it
+        }
+      }
+      for(const [tok,v] of cand){if(v&&!map.has(tok)){map.set(tok,v.id);labels.push(v.disp);}}
+    }
     labels.sort((a,b)=>b.length-a.length);
     const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const pat=labels.slice(0,500).map(esc).join('|');
+    const pat=labels.slice(0,600).map(esc).join('|');
     this._linkRe=pat?new RegExp('\\b('+pat+')\\b','gi'):null;
     this._linkMap=map;this._linkRev=this.state.rev;return map;
   }
@@ -4387,7 +4524,7 @@ class Component extends DCLogic {
       countLabel:_gcount+' book'+(_gcount===1?'':'s'),
       onClear:()=>this.setState({gutenResults:null,gutenQuery:''}),
       results:(this.state.gutenResults||[]).map(b=>{const reading=this.state.gutenReading===b.id;
-        return {title:b.title,author:b.author,downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
+        return {title:b.title,author:this.authorDisplay(b.author),downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
           hasCover:!!b.cover,
           coverStyle:'width:50px;height:74px;flex:0 0 auto;border-radius:5px;box-shadow:0 1px 4px rgba(20,24,30,.16);background:#eef0f3 center/cover no-repeat;'+(b.cover?'background-image:url(\''+String(b.cover).replace(/'/g,'%27')+'\');':''),
           tags:this._gutenTags(b).map(t=>({label:t,style:'display:inline-flex;align-items:center;font-size:10px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap;'})),
@@ -4414,6 +4551,7 @@ class Component extends DCLogic {
         // Auto-bookmarks: a toggle + a marker rail down the page edge.
         hasMarks:(this.state.bookmarks||[]).length>0,marksCount:(this.state.bookmarks||[]).length,
         marksOn:!!this.state.bookmarkMode,onToggleMarks:()=>this.toggleBookmarks(),marksStyle:pill(!!this.state.bookmarkMode),
+        onPrevMark:()=>this.jumpMark(-1),onNextMark:()=>this.jumpMark(1),
         railOn:!!this.state.bookmarkMode&&(this.state.bmRail||[]).length>0,
         marks:(this.state.bmRail||[]).map(m=>({top:(m.frac*100).toFixed(2)+'%',why:m.why||'Something important here',onGo:()=>this.gotoBookmark(m.id)})),
         progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
