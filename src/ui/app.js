@@ -12,7 +12,8 @@
 
 import { ingestText }       from '../organs/in/index.js';
 import { runTurn, runWebFollowup, formulateSearchQuery, searchAnnouncement, loadShapeLibrary,
-         runCuriousResearch, researchAnnouncement } from '../turn/index.js';
+         runCuriousResearch, researchAnnouncement,
+         runDeepResearch, modelPlanner, deepResearchAnnouncement } from '../turn/index.js';
 import { createWebClient, searchAndAdmit, createRawStore } from '../ingest/index.js';
 import { createSpeculativeWeb } from './prefetch.js';
 import { createAuditLog }   from '../audit/index.js';
@@ -78,6 +79,10 @@ const STATE = {
   researchHops: 6,       // the curiosity walk's hop BACKSTOP (docs/curiosity-research.md): the max hops the
                          //   auto gather may take. The real governor is the saliency leash — the walk stops
                          //   when it strays too far from the question; this only caps a runaway.
+  deepResearchHops: 14,  // DEEP RESEARCH (docs/deep-research.md, "/research <query>"): the hop backstop for
+                         //   the deliberate, dig-hard mode — far larger than the auto walk, since depth is
+                         //   the point. The saliency leash is still the real governor.
+  researchFacets: 4,     // how many ANGLES deep research plans from the one concise query (multiple prompts).
   transparency: true,    // the per-claim source view: every proposition traced to its source (or marked
                          //   unsupported). Default ON; the toggle beneath each answer persists the choice.
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
@@ -463,8 +468,25 @@ const setTab = (name) => {
 
 // Run one query through the pipeline and render it. Factored out of the composer so
 // an errored turn can offer a one-click retry (re-runs the very same question).
-const runQuery = async (question) => {
-  if (!question) return;
+const runQuery = async (rawQuestion) => {
+  if (!rawQuestion) return;
+  // DEEP RESEARCH MODE (docs/deep-research.md): "/research <query>" (or "/deep <query>") asks the
+  // engine to dig HARD — plan several angles on the concise query (multiple prompt generation), walk
+  // each one deep following its curiosity, and write up everything it found with full provenance. A
+  // bare "/research" with no query is a no-op prompt. The command prefix is stripped; the rest is the
+  // concise query both rendered and researched.
+  const deepCmd = /^\/(?:deep(?:-research)?|research)\b[\s:]*/i.exec(rawQuestion);
+  const deepResearch = !!deepCmd;
+  const question = (deepResearch ? rawQuestion.slice(deepCmd[0].length) : rawQuestion).trim();
+  if (!question) {
+    if (deepResearch) {
+      renderUserMessage(els.messages, rawQuestion);
+      finalizeThinking(createThinkingMessage(els.messages, ''),
+        'Give me a concise question after /research — e.g. “/research how do mRNA vaccines work”.',
+        [], { route: 'chat', mode: STATE.grounding });
+    }
+    return;
+  }
   // On a phone the answer lands in the chat pane — make sure it's the one shown.
   if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('chat');
   els.send.disabled = true;
@@ -484,7 +506,7 @@ const runQuery = async (question) => {
     await ensureModel();
   } catch (err) {
     finalizeThinking(thinking, `Model failed to load: ${err?.message || err}`, [], {
-      route: 'error', flags: [], mode: STATE.grounding, onRetry: () => runQuery(question),
+      route: 'error', flags: [], mode: STATE.grounding, onRetry: () => runQuery(rawQuestion),
     });
     els.send.disabled = false;
     return;
@@ -588,7 +610,35 @@ const runQuery = async (question) => {
   // double-LLM path). The meaning graph of the fetched content is fed to the talker; every
   // source is recorded for the transparency block. Confirm/off keep the proposer-only path.
   let webGather = null;
-  if (webMode === 'auto') {
+  if (deepResearch) {
+    // DEEP RESEARCH (docs/deep-research.md): plan several angles on the concise query, then walk each
+    // deep following the engine's surprise — one shared prior, one leash to the original question, a
+    // far larger hop budget than the single auto walk. Every kept page folds into the scope; the turn
+    // below synthesizes ONE grounded pass over them, and the full provenance (facets + sources + hop
+    // tree) rides back to the deep-research block.
+    setThinkingNote(thinking, '🔬 planning the research…');
+    try {
+      const search = (query, opts) => searchAndAdmit(query, { client: webClientOf(), rawStore: rawStoreOf(), ...opts });
+      const walk = await runDeepResearch(question, {
+        search,
+        plan: modelPlanner(STATE.model),
+        anchor: question,
+        maxFacets: STATE.researchFacets || 4,
+        maxHops: STATE.deepResearchHops || 14,
+        searchOpts: { kind: 'auto', fetchPages: true },
+        onPlan: (facets) => setThinkingNote(thinking, `🔬 ${deepResearchAnnouncement(question, facets, { maxHops: STATE.deepResearchHops || 14 })}`),
+        onHop: (h) => setThinkingNote(thinking, `🔎 ${h.depth === 0 ? `angle: “${h.query}”` : `${'↳'.repeat(h.depth)} hop ${h.index}: “${h.query}”`}…`),
+      });
+      if (walk.docs.length) {
+        turnArgs.docs = [...selectedDocs, ...walk.docs];
+        turnArgs.groundGraph = true;
+        // The synthesized answer (the turn below) is the report body; the facets + hop trace + sources
+        // here are its provenance, surfaced by renderWebResult (the research plan + deep-research walk).
+        webGather = { query: question, docs: walk.docs, research: walk.hops, facets: walk.facets, deep: true };
+      }
+    } catch { /* network/search/plan failed — fall through to the ungrounded turn */ }
+    setThinkingNote(thinking, '');
+  } else if (webMode === 'auto') {
     setThinkingNote(thinking, '🌐 searching the web…');
     try {
       const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history });
@@ -657,7 +707,7 @@ const runQuery = async (question) => {
         if (name && STATE.docs.has(name)) viewDoc(name);
         setTab('text');
       },
-      onRetry: () => runQuery(question),
+      onRetry: () => runQuery(rawQuestion),
     });
     // Highlight only when grounding a single document — composite indices don't map onto
     // one doc pane (clicking a source chip switches to that document instead).
@@ -695,6 +745,8 @@ const runQuery = async (question) => {
     renderWebResult(thinking, {
       query: webGather.query, results: webGather.docs.length, grounded: true,
       research: webGather.research || null,   // the curiosity-walk hop trace, surfaced collapsed
+      facets: webGather.facets || null,       // the deep-research plan (the angles it opened from)
+      deep: webGather.deep || false,
       sources: webGather.docs.map(d => ({
         docId: d.docId, title: d.web?.title || '', url: d.web?.url || d.web?.final_url || '',
         fetched_at: d.web?.fetched_at || null,
