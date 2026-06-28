@@ -2758,6 +2758,24 @@ class Component extends DCLogic {
   // reading and there are no competing lenses. Connections live elsewhere (the web =
   // Structure); a lens never segments — it lays a take over the whole.
   lensBlock(id,vu,ctxDef,ctxCites){
+    // ── "How it's read" is HIDDEN ────────────────────────────────────────────────
+    // The multi-take panel (spectral lenses, the NPOV gauge, and the combined stitch)
+    // sits on top of the entity/coreference extraction, and when that mis-attributes —
+    // grabbing sentences that merely sit NEAR an entity's name — the elaborate Born-rule
+    // layer turns the noise into confident nonsense ("Eryximachus is the love of
+    // Alcestis"). The trustworthy reading already lives one section up in the profile:
+    // the cited "In context · what we've learned together" summary (panelProfile.ctxDef).
+    // So the take machinery is gated off, not deleted: flip LENSES_ENABLED back on once
+    // the subject-role/coref attribution it feeds on is reliable enough to trust.
+    const LENSES_ENABLED=false;
+    if(!LENSES_ENABLED)return {hasLenses:false,empty:false,chips:[],
+      gaugeFill:0,gaugeMarkerStyle:'',npovLabel:'',npovDom:'',hasDom:false,nLenses:0,
+      framing:'',kindLabel:'',contested:false,hasContested:false,takeLabel:'',hasTake:false,
+      rankLabel:'',hasRank:false,hasWeightBar:false,weightBarStyle:'',
+      terrainName:'',terrainGloss:'',terrainIntro:'',hasReading:false,reading:'',attrib:'',hasAttrib:false,
+      showCombinedHeader:false,voiceName:'',voicePre:'',voicePost:'',voiceInit:'',voiceAvStyle:'',
+      voiceCited:false,hasVoicePre:false,hasVoicePost:false,voiceMore:'',hasVoiceMore:false,hasVoice:false,
+      voiceRole:'',cites:[],hasCites:false,emptyNote:''};
     const lab=this.labelOf(id),lens=this.state.panelLens||{t:'whole'};
     // The distinct recurring takes your sources lay over this entity, surfaced by
     // _spectralLenses below. Plain language — no interpretation-grain naming.
