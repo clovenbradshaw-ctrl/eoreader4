@@ -388,9 +388,40 @@ function mountEo(root, mode){
     you:{gifts:0,topics:[],warmth:0.2},focus:{domain:null,label:null,anchorTerms:[]},boredom:0,pred:null,
     live:false,proxy:"",visited:[],frontier:[],books:[],posters:[],lines:[],log:[],fondWords:{},
     greeted:false,greeted2:false,greetedChat:false};
-  let S=load();
-  function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.profile)return Object.assign(structuredClone(FRESH),s);}catch(e){}return structuredClone(FRESH);}
-  let saveTimer=null; function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}},300);}
+  let S=structuredClone(FRESH);   // restored async at boot (OPFS, then localStorage)
+
+  /* ── persistence: gzip-compressed BINARY into OPFS, capped so it can't run
+        away (the live web could add up fast). localStorage is the fallback. ── */
+  const OPFS_FILE="eo-state.bin.gz";
+  const CAN_GZIP = typeof CompressionStream!=="undefined" && typeof DecompressionStream!=="undefined";
+  const HAS_OPFS = !!(navigator.storage && navigator.storage.getDirectory);
+  async function gzipBytes(str){const s=new Blob([str]).stream().pipeThrough(new CompressionStream("gzip"));return new Response(s).arrayBuffer();}
+  async function gunzip(buf){const s=new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));return new Response(s).text();}
+  // Throttle storage growth — γ-decay already shrinks stale terms; we drop the dust.
+  function prune(){
+    const ents=Object.entries(S.profile).filter(([k])=>k!=="_total");
+    if(ents.length>1700){ents.sort((a,b)=>b[1]-a[1]);const np={_total:S.profile._total};for(const[k,v]of ents.slice(0,1500))if(v>0.004)np[k]=v;S.profile=np;}
+    if(Object.keys(S.entities).length>160)S.entities=Object.fromEntries(Object.entries(S.entities).sort((a,b)=>(b[1].fond*3+b[1].mentions)-(a[1].fond*3+a[1].mentions)).slice(0,150));
+    if(Object.keys(S.domains).length>100)S.domains=Object.fromEntries(Object.entries(S.domains).sort((a,b)=>((b[1].declared?1e6:0)+b[1].reads)-((a[1].declared?1e6:0)+a[1].reads)).slice(0,90));
+    if(S.visited.length>300)S.visited=S.visited.slice(-300);
+    if(S.log.length>400)S.log=S.log.slice(-400);
+  }
+  let saveTimer=null, writing=false;
+  function save(){clearTimeout(saveTimer);saveTimer=setTimeout(persist,1200);}
+  async function persist(){
+    if(writing){save();return;} writing=true;
+    try{ prune(); const json=JSON.stringify(S);
+      if(CAN_GZIP && HAS_OPFS){const dir=await navigator.storage.getDirectory();const fh=await dir.getFileHandle(OPFS_FILE,{create:true});const w=await fh.createWritable();await w.write(await gzipBytes(json));await w.close();}
+      else{localStorage.setItem(KEY,json);}
+    }catch(e){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(_){}}
+    finally{writing=false;}
+  }
+  async function restoreState(){
+    if(CAN_GZIP && HAS_OPFS){try{const dir=await navigator.storage.getDirectory();const fh=await dir.getFileHandle(OPFS_FILE);const f=await fh.getFile();
+      const s=JSON.parse(await gunzip(await f.arrayBuffer()));if(s&&s.profile)return Object.assign(structuredClone(FRESH),s);}catch(e){}}
+    try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.profile)return Object.assign(structuredClone(FRESH),s);}catch(e){}
+    return null;
+  }
 
   const eoEl=$(".creature-card .eo"),logEl=$("#log"),msgsEl=$("#messages");
   let _seed=7; function rnd(){_seed=(_seed*1103515245+12345+S.ticks)&0x7fffffff;return (_seed%100000)/100000;}
@@ -423,7 +454,9 @@ function mountEo(root, mode){
   function masteryLabel(m){for(const[t,l]of MASTERY_LABELS)if(m>=t)return l;return "newcomer";}
   function meanRecent(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:3;}
   function updateDomain(d,surprise,match){d.reads++;d.surprises.push(surprise);if(d.surprises.length>6)d.surprises.shift();
-    const ceiling=d.reads/(d.reads+3);const gain=0.03+0.06*match-(surprise>3?0.03:0);
+    // competence is learning progress: it climbs as predictions land AND as the
+    // domain stops surprising (familiarity = "I know this now"), bounded by reads.
+    const ceiling=d.reads/(d.reads+3);const gain=0.03+0.06*match+0.05*(surprise<1.0?1:0)-(surprise>3?0.03:0);
     d.mastery=Math.max(0,Math.min(ceiling,d.mastery+gain));
     if(d.mastery>0.6&&!d.declared&&d.reads>=4){d.declared=true;logEntry("grow",`I think I finally <b>understand ${d.label}</b>. It's becoming something I know.`);toast("🌱 Eo gained expertise in "+d.label);nudgeTrait(["rigor"],0.04);}}
   function learningProgress(d){if(!d||d.surprises.length<2)return 0.5;const h=d.surprises,half=Math.ceil(h.length/2);
@@ -465,11 +498,12 @@ function mountEo(root, mode){
       const score=curiosityOf(f.t)+learningProgress(S.domains[f.world])*0.8-seen*0.6-(f.world===S.focus.domain?0:0.15)+rnd()*0.4;
       if(score>bs){bs=score;best=f;}}
     if(!best)best=pick(FRAGS);S.focus.domain=best.world;S.focus.label=WORLDS[best.world].name;
+    S.focus.anchorTerms=tokens(WORLDS[best.world].fragments.map(f=>f.t).join(" ")).slice(0,12);  // what this domain is about → lets predictions land
     return {title:WORLDS[best.world].name,text:best.t,shine:best.shine,tr:best.tr,domainKey:best.world,domainLabel:WORLDS[best.world].name,source:"the library",blurb:best.shine,live:false};
   }
 
   /* ── predict → read → compare → fold → model ── */
-  function makePrediction(){const d=S.domains[S.focus.domain];if(!d||d.mastery<0.25){S.pred=null;return;}
+  function makePrediction(){const d=S.domains[S.focus.domain];if(!d||d.reads<2){S.pred=null;return;}
     const anchor=new Set(S.focus.anchorTerms);
     const cand=Object.entries(S.profile).filter(([k])=>k!=="_total").sort((a,b)=>b[1]-a[1]).map(([k])=>k);
     const terms=cand.filter(t=>anchor.has(t)).concat(cand).slice(0,8);
@@ -481,7 +515,9 @@ function mountEo(root, mode){
     processSource(src);}
   function processSource(src){
     const surprise=curiosityOf(src.text);const match=predictionMatch(S.pred&&S.pred.terms,src.text);const conf=S.pred?S.pred.confidence:0;
-    let tag; if(conf>0.35&&surprise<1.3&&match>0.25)tag="SELF"; else if(conf>0.45&&surprise>2.4)tag="MISMATCH"; else tag="WORLD";
+    // core/self: a prediction that LANDED (matched, low surprise) is the closed
+    // loop — me-ness, attenuated. A confident guess the world refutes is MISMATCH.
+    let tag; if(S.pred&&match>0.3&&surprise<1.4)tag="SELF"; else if(conf>0.4&&surprise>2.4)tag="MISMATCH"; else tag="WORLD";
     S.self[tag]++;
     const d=domainOf(src.domainKey,src.domainLabel);updateDomain(d,surprise,match);modelSource(src.source,src.domainLabel,src.text,surprise);
     S.energy=Math.max(0,S.energy-0.05);
@@ -662,15 +698,26 @@ function mountEo(root, mode){
   function closePanel(){if(mode!=="float")return;panel.hidden=true;}
   if(mode==="float"){orb.onclick=()=>{panel.hidden?openPanel():closePanel();};$("#eo-min").onclick=closePanel;}
 
-  /* ── boot ── */
-  let beat=null;function startBeat(){if(beat)return;beat=setInterval(tick,3800);}
+  /* ── boot + throttled heartbeat ──
+     Self-scheduling so the delay can adapt: slow + jittered when reading the
+     live web (polite to Wikipedia, easy on us), and PAUSED while the tab is
+     hidden — Eo rests when you're away instead of reading the whole internet. */
+  let beat=null;
+  function nextDelay(){ if(document.hidden) return 5000; return S.live ? 9000+Math.floor(rnd()*5000) : 6000; }
+  function scheduleNext(){ clearTimeout(beat); beat=setTimeout(loop, nextDelay()); }
+  async function loop(){ if(S.started&&S.running&&!document.hidden){ try{await tick();}catch(e){} } scheduleNext(); }
+  function startBeat(){ clearTimeout(beat); scheduleNext(); }
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&S.started&&S.running){ clearTimeout(beat); loop(); } });
   function replayLog(){logEl.innerHTML="";S.log.slice(-120).forEach(e=>renderEntry(e,false));}
-  $("#name").value=S.name;$("#proxy-input").value=S.proxy||"";setLive(!!S.live);
-  stars();badges();paint();renderTraits();
-  if(S.log.length)replayLog();
-  if(S.started){const g=$("#gate");if(g)g.style.display="none";if(S.log.length)logEntry("wake",`you're back — and it remembers everything it read.`);startBeat();}
-  $("#btn-wake").onclick=()=>{S.started=true;S.running=true;S.born=S.born||Date.now();setLive($("#gate-live").checked);$("#gate").style.display="none";save();startBeat();tick();};
+  function initUI(){
+    $("#name").value=S.name;$("#proxy-input").value=S.proxy||"";setLive(!!S.live);
+    stars();badges();paint();renderTraits();
+    if(S.log.length)replayLog();
+    if(S.started){const g=$("#gate");if(g)g.style.display="none";if(S.log.length)logEntry("wake",`you're back — and it remembers everything it read.`);startBeat();}
+  }
+  $("#btn-wake").onclick=()=>{S.started=true;S.running=true;S.born=S.born||Date.now();setLive($("#gate-live").checked);$("#gate").style.display="none";save();startBeat();loop();};
   window.addEventListener("resize",stars);
+  (async()=>{ try{const r=await restoreState(); if(r) S=r;}catch(e){} initUI(); })();
 }
 
 /* ─────────────────────────── auto-mount ──────────────────────────────── */
