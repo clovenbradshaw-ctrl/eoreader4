@@ -1,0 +1,10 @@
+{
+  "meta": {
+    "kind": "demo-empty",
+    "note": "Placeholder — no register baked. Run with --model to distill.",
+    "pairs": 1,
+    "model": null,
+    "built": "2026-06-28T05:16:31.548Z"
+  },
+  "tokens": {}
+}

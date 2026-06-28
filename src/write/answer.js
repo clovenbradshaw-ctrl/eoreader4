@@ -47,7 +47,7 @@ import { predictNextMove, MOVE_ALPHABET } from '../predict/index.js';
 // no plan resolves (the caller falls back to a single phrase(), non-breaking by
 // construction).
 export const streamAnswer = async ({
-  doc, surf, model, focus = [], onToken, budget, orientation = '', alpha,
+  doc, surf, model, focus = [], onToken, budget, orientation = '', alpha, lens = null,
 } = {}) => {
   if (!doc || !surf || !model) return null;
 
@@ -85,7 +85,9 @@ export const streamAnswer = async ({
     // every beat but the first — no boundary marker, no newline, ever reaches the
     // surface. The visible stream and the returned draft reconcile by construction.
     if (i > 0) { draft += ' '; onToken?.(' '); }
-    const raw = await streamPhrase(model, cursor.input, { maxTokens: cursor.budget, onToken });
+    // The lens port rides the same beat: each grounded sentence is steered through the logit
+    // bias (lens-port.js) when armed, and is byte-identical when not (lens === null).
+    const raw = await streamPhrase(model, cursor.input, { maxTokens: cursor.budget, onToken, lens });
     const beat = raw.trim();
     draft += beat;
 

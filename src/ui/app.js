@@ -66,6 +66,9 @@ const STATE = {
 
   grounding: 'auto',     // FIXED — no register chip. 'auto' grounds on whatever was gathered (web + docs).
   inquire:   false,      // self-directed inquiry — off (experimental; no chip)
+  lensPort:  false,      // THE LENS PORT (spec-the-lens-port.md): bias the WebLLM decoder's logits through
+                         //   the lens during generation. OFF by default → golden phrase()+veto path is
+                         //   byte-identical; a settings toggle persists the choice under eoreader.lensPort.
   webSearch: 'auto',     // FIXED to AUTO — the web is the tool's memory, so every turn searches up front and
                          //   answers grounded in what it gathered. Not a per-message option (no web chip).
   transparency: true,    // the per-claim source view: every proposition traced to its source (or marked
@@ -106,6 +109,7 @@ const els = {
   exportBtn: document.getElementById('export-audit'),
   backend:   document.getElementById('backend'),
   docChips:  document.getElementById('doc-chips'),
+  lensPort:  document.getElementById('lens-port'),
 };
 
 const setStatus = (s) => { els.status.textContent = s; };
@@ -538,6 +542,9 @@ const runQuery = async (question) => {
     now:      new Date(),       // the real clock — so a date/time question is answered directly, no web hop
     grounding: STATE.grounding, // the Auto / Chat with document / Free form register (the chip)
     inquire:  STATE.inquire,    // self-directed inquiry — read another pass on the open question (the chip)
+    lensPort: STATE.lensPort,   // THE LENS PORT (spec-the-lens-port.md): steer the decoder's logits through
+                                //   the lens — relevance + the void gate during generation (the toggle below)
+
     onStep:   (name, ctx, data) => {
       updateThinking(thinking, name, data, ctx, { verbose: CHAT_VERBOSE });
       // As soon as the fold has read the passage, type its IMPRESSION into the bubble
@@ -784,6 +791,22 @@ els.backend.addEventListener('change', () => {
   setStatus(`${STATE.backendName}: starting…`);
   ensureModel().catch(() => { /* status already reflects failure */ });
 });
+
+// THE LENS PORT toggle (spec-the-lens-port.md). A persisted on/off setting: when on, the turn
+// builds the concept→token bridge and hands the steering config to the backend, which biases the
+// decoder's logits through the lens. Off (the default) leaves the golden phrase()+veto path
+// byte-identical. Restore the saved choice, reflect it on the checkbox, persist on change.
+try {
+  const l = localStorage.getItem('eoreader.lensPort');
+  if (l === '0' || l === '1') STATE.lensPort = l === '1';
+} catch { /* default off stands */ }
+if (els.lensPort) {
+  els.lensPort.checked = STATE.lensPort;
+  els.lensPort.addEventListener('change', () => {
+    STATE.lensPort = els.lensPort.checked;
+    try { localStorage.setItem('eoreader.lensPort', STATE.lensPort ? '1' : '0'); } catch { /* ignore */ }
+  });
+}
 
 // No grounding chip and no web chip any more (internet-native, minimal settings). The
 // grounding register is fixed to 'auto' and web search is fixed to 'auto': the web is the

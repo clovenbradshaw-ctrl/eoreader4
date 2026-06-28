@@ -1211,6 +1211,13 @@
         <div style="min-width:0;"><div style="font-size:14px;font-weight:700;line-height:1.2;">{{ hoverCard.name }}</div><div style="font-size:11px;color:var(--ink3);">{{ hoverCard.stat }}</div></div>
       </div>
       <div style="font-size:12px;color:var(--ink2);margin-top:8px;line-height:1.45;">{{ hoverCard.gist }}</div>
+      <sc-if value="{{ hoverCard.hasPrefetch }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:9px;padding-top:9px;border-top:1px dashed var(--line2);">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1d4ed8;margin-bottom:4px;">↗ {{ hoverCard.prefetchTitle }}</div>
+          <sc-if value="{{ hoverCard.prefetchLoading }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px;color:var(--ink3);font-style:italic;">reading the link…</div></sc-if>
+          <sc-if value="{{ hoverCard.prefetchText }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:var(--ink2);line-height:1.45;">{{ hoverCard.prefetchText }}</div></sc-if>
+        </div>
+      </sc-if>
       <div style="display:flex;height:5px;border-radius:3px;overflow:hidden;background:#eceef1;margin:9px 0 6px;"><sc-for list="{{ hoverCard.segs }}" as="seg" hint-placeholder-count="3"><span style="{{ seg.style }}"></span></sc-for></div>
       <div style="font-size:11px;color:var(--ink3);margin-bottom:9px;"><span style="{{ hoverCard.estStyle }}">{{ hoverCard.est }}</span></div>
       <sc-if value="{{ hoverCard.hasLink }}" hint-placeholder-val="{{ false }}">
@@ -1614,7 +1621,7 @@ class Component extends DCLogic {
     // A chat is ABOUT a set of sources. One to start (the source you opened it from),
     // and you can add more to chat across them; an empty set ranges over everything read.
     const sources=scopeUrl?[scopeUrl]:[];
-    this.setState(s=>({chats:[{id,title,sources,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false}));
+    this.setState(s=>({chats:[{id,title,sources,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false,rightOpen:true}));
     return id;
   }
   // The sources a chat is ABOUT, as a URL list. Empty → it ranges over everything read.
@@ -1631,7 +1638,7 @@ class Component extends DCLogic {
   toggleChatAdd(){this.setState(s=>({chatAddOpen:!s.chatAddOpen}));}
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
-  openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false});}
+  openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false,rightOpen:true});}
   closeChat(){this.setState({activeChat:null,chatAddOpen:false});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
@@ -1792,7 +1799,14 @@ class Component extends DCLogic {
         const history=prev.slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
         messages=this._ME.buildChatMessages({question:q,history,now:new Date()});
       }
-      const raw=await model.phrase(messages,{maxTokens:512,temperature:0.4});
+      // Stream the reply into the pending bubble token by token (model/stream.js).
+      // streamPhrase drives the backend's onToken when it can decode incrementally
+      // (webllm, echo), and falls back to draw-then-emit otherwise — either way it
+      // returns the full reply, which `finish` then re-renders as bound markdown.
+      let acc='',raf=0;
+      const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
       const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       // Surface the verbatim spans the model leaned on as clickable grounding (collapsed
       // by default in the UI). This is the mechanical "where did this come from" trail.
@@ -1872,7 +1886,8 @@ class Component extends DCLogic {
       const gKey=cur.id+':'+mi, gOn=!!gOpen[gKey];
       const gBits=[]; if(cites.length)gBits.push(cites.length+(passages.length?(' passage'+(cites.length!==1?'s':'')):(' source'+(cites.length!==1?'s':''))));
       if(entities.length)gBits.push(entities.length+' entit'+(entities.length!==1?'ies':'y'));
-      return {isUser,pending:!!m.pending,text:m.pending?'…':m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
+      // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
+      return {isUser,pending:!!m.pending,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
         sources:cites,hasSources:cites.length>0,entities,hasEntities:entities.length>0,
         hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
@@ -1881,7 +1896,7 @@ class Component extends DCLogic {
         groundHeadStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);background:transparent;border:none;padding:2px 0;cursor:pointer;',
         hasNote:!!m.modelNote,note:m.modelNote||'',
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
-        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending?'animation:eopulse 1.4s infinite;':''),
+        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
         noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
@@ -2526,7 +2541,7 @@ class Component extends DCLogic {
     return lab+' \u2014 '+pred+'.';}
   // Trim to <= max chars but never mid-sentence: keep whole sentences, else cut on a
   // word boundary with an ellipsis. No more "...decreasing their abilit".
-  endOnBoundary(s,max){s=this.norm(s);max=max||320;if(s.length<=max)return s;const cut=s.slice(0,max);const m=cut.match(/^[\s\S]*[.!?](?=\s|$)/);if(m&&m[0].length>=Math.min(70,max*0.45))return m[0].trim();return cut.replace(/\s+\S*$/,'').replace(/[\s,;:]+$/,'').trim()+'\u2026';}
+  endOnBoundary(s,max){s=this.norm(String(s||'').replace(/<[^>]*>/g,' ').replace(/\[(?:\d+|citation needed|edit)\]/gi,''));max=max||320;if(s.length<=max)return s;const cut=s.slice(0,max);const m=cut.match(/^[\s\S]*[.!?](?=\s|$)/);if(m&&m[0].length>=Math.min(70,max*0.45))return m[0].trim();return cut.replace(/\s+\S*$/,'').replace(/[\s,;:]+$/,'').trim()+'\u2026';}
   // The strongest attested definition the engine isolated for this entity: a DEF
   // (assert/define) event's predicate. Earliest/cleanest wins — the intro defines.
   bestDef(id,onlyUrl){
@@ -3401,8 +3416,24 @@ class Component extends DCLogic {
     clearTimeout(this._cardT);
     const delay=(this.state.hoverPivot==='hover')?90:340;
     this._cardT=setTimeout(()=>{const p=this._pendHover;if(!p||this._hovEnt!==p.id)return;
-      this.setState({hoverEnt:p.id,hoverHref:p.href,hoverXY:{x:p.x,y:p.y}});
-      this._startCardWatch(p.x,p.y);},delay);
+      this.setState({hoverEnt:p.id,hoverHref:p.href,hoverXY:{x:p.x,y:p.y},hoverWiki:null});
+      this._startCardWatch(p.x,p.y);
+      // Run ahead one layer: if the entity links out, prefetch the linked article and
+      // show what's relevant right in the hover card (no navigation needed).
+      if(p.href)this._fetchHoverWiki(p.href);},delay);
+  }
+  // Prefetch a linked Wikipedia article's summary for the hover card (cached per title).
+  async _fetchHoverWiki(href){
+    const m=String(href||'').match(/\/wiki\/([^#?:]+)$/);if(!m)return;
+    const title=decodeURIComponent(m[1]).replace(/_/g,' ');
+    this._wikiPrev=this._wikiPrev||{};
+    if(this._wikiPrev[title]){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:this._wikiPrev[title].title,extract:this.endOnBoundary(this._wikiPrev[title].extract,260),loading:false}});return;}
+    this.setState({hoverWiki:{href,title,extract:'',loading:true}});
+    try{const d=await this._wikiSummary(title);
+      const full=this.norm(d.extract||'');
+      this._wikiPrev[title]={title:d.title||title,extract:full,desc:d.description||'',loading:false};
+      if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:d.title||title,extract:this.endOnBoundary(full,260),loading:false}});
+    }catch(e){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title,extract:'',loading:false,err:true}});}
   }
   // Anti-stick: once the card is up, watch the real pointer. The instant it leaves both
   // the card (with a small bridge) and a radius around the word that opened it, drop it.
@@ -3420,7 +3451,7 @@ class Component extends DCLogic {
     window.addEventListener('mousemove',this._cardWatch,true);
   }
   _stopCardWatch(){if(this._cardWatch){window.removeEventListener('mousemove',this._cardWatch,true);this._cardWatch=null;}}
-  _hideCardNow(){this._stopCardWatch();clearTimeout(this._cardT);clearTimeout(this._hovT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;if(this.state.hoverEnt!=null)this.setState({hoverEnt:null,hoverHref:null});}
+  _hideCardNow(){this._stopCardWatch();clearTimeout(this._cardT);clearTimeout(this._hovT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;if(this.state.hoverEnt!=null)this.setState({hoverEnt:null,hoverHref:null,hoverWiki:null});}
   // A hyperlink that ISN'T a folded entity (e.g. "Proceedings of the National Academy
   // of Sciences") still has a referent — its Wikipedia article. Dwelling on it pivots
   // the panel to a lightweight preview of that article, with a way to read it in.
@@ -3444,7 +3475,7 @@ class Component extends DCLogic {
     }catch(e){if(this.state.previewWiki&&this.state.previewWiki.href===href)this.setState({previewWiki:{title,href,loading:false,extract:'',err:true}});}
   }
   closePreview(){clearTimeout(this._prevT);this._prevHref=null;if(this.state.previewWiki)this.setState({previewWiki:null});}
-  entLeave(){clearTimeout(this._cardT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;clearTimeout(this._hovT);this._hovT=setTimeout(()=>{this._stopCardWatch();this.setState({hoverEnt:null,hoverHref:null});},220);}
+  entLeave(){clearTimeout(this._cardT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;clearTimeout(this._hovT);this._hovT=setTimeout(()=>{this._stopCardWatch();this.setState({hoverEnt:null,hoverHref:null,hoverWiki:null});},220);}
   keepHover(){clearTimeout(this._hovT);}
   hoverProfile(){const id=this.state.hoverEnt;clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(id==null)return;this.clickEntity(id);}
   hoverLink(){const u=this.state.hoverHref;clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(u){try{this.goWeb(u);}catch(e){}}}
@@ -3453,7 +3484,9 @@ class Component extends DCLogic {
     const hb={eva:0,def:0,held:0};hm.forEach(i=>hb[this.bandOf(i)]++);const ht=hb.eva+hb.def+hb.held||1;let l2,c2;if(hb.eva/ht>=.45){l2='well attested';c2='#1d4ed8';}else if(hb.def/ht>=.4){l2='mostly asserted';c2='#b45309';}else{l2='mostly mentioned';c2='#6b7280';}
     const vw=(typeof window!=='undefined'&&window.innerWidth)||960,x=Math.min(this.state.hoverXY.x+6,vw-290),y=this.state.hoverXY.y+18;
     const heHref=this.state.hoverHref;
-    base.hoverCardOn=true;base.hoverCard={name:hl,av:this.initials(hl),avStyle:this.avatar(hl,34),onEnter:()=>this.keepHover(),onLeave:()=>this.entLeave(),onProfile:()=>{this._stopCardWatch();clearTimeout(this._hovT);clearTimeout(this._pivotT);this.setState({hoverEnt:null,hoverHref:null});this.clickEntity(he);},hasLink:!!this.state.hoverHref,noLink:!this.state.hoverHref,linkHost:this.short(this.state.hoverHref||''),onLink:()=>{this._stopCardWatch();clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(heHref){try{this.goWeb(heHref);}catch(e){}}},stat:(g.entities.get(he).sightings||hm.length)+'× · '+hn.length+' links · '+hs.length+' sources',gist:this.norm(this.master.sentences[g.entities.get(he).firstSeen]||this.master.sentences[hm[0]]||'').slice(0,150),est:l2,estStyle:'color:'+c2+';font-weight:600;',segs:[[hb.eva,'#1d4ed8'],[hb.def,'#b45309'],[hb.held,'#6b7280']].filter(([n])=>n>0).map(([n,c])=>({style:'width:'+(n/ht*100)+'%;background:'+c+';display:block;'})),wrap:'position:fixed;left:'+x+'px;top:'+y+'px;width:270px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:13px 14px;z-index:30;animation:eopop .12s ease-out;'};}
+    const hw=this.state.hoverWiki,hasPre=!!(heHref&&hw&&hw.href===heHref&&(hw.loading||hw.extract));
+    base.hoverCardOn=true;base.hoverCard={name:hl,
+      hasPrefetch:hasPre,prefetchTitle:hasPre?(hw.title||''):'',prefetchLoading:!!(hasPre&&hw.loading&&!hw.extract),prefetchText:hasPre?(hw.extract||''):'',av:this.initials(hl),avStyle:this.avatar(hl,34),onEnter:()=>this.keepHover(),onLeave:()=>this.entLeave(),onProfile:()=>{this._stopCardWatch();clearTimeout(this._hovT);clearTimeout(this._pivotT);this.setState({hoverEnt:null,hoverHref:null});this.clickEntity(he);},hasLink:!!this.state.hoverHref,noLink:!this.state.hoverHref,linkHost:this.short(this.state.hoverHref||''),onLink:()=>{this._stopCardWatch();clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(heHref){try{this.goWeb(heHref);}catch(e){}}},stat:(g.entities.get(he).sightings||hm.length)+'× · '+hn.length+' links · '+hs.length+' sources',gist:this.norm(this.master.sentences[g.entities.get(he).firstSeen]||this.master.sentences[hm[0]]||'').slice(0,150),est:l2,estStyle:'color:'+c2+';font-weight:600;',segs:[[hb.eva,'#1d4ed8'],[hb.def,'#b45309'],[hb.held,'#6b7280']].filter(([n])=>n>0).map(([n,c])=>({style:'width:'+(n/ht*100)+'%;background:'+c+';display:block;'})),wrap:'position:fixed;left:'+x+'px;top:'+y+'px;width:270px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:13px 14px;z-index:30;animation:eopop .12s ease-out;'};}
 
   async research(focalId,modeOverride){
     const id=focalId||this.state.selId; if(this._busy||!id)return;const focal=this.labelOf(id);this._feedEnt=id;
