@@ -276,10 +276,11 @@
                     <div style="{{ m.groundStyle }}">
                       <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
                       <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                        <div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div>
+                        <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
                         <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
                           <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                         </sc-if>
+                        <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                       </sc-if>
                     </div>
                   </sc-if>
@@ -808,10 +809,11 @@
                   <div style="{{ m.groundStyle }}">
                     <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
                     <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                      <div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div>
+                      <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
                       <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
                         <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                       </sc-if>
+                      <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                     </sc-if>
                   </div>
                 </sc-if>
