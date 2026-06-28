@@ -345,6 +345,10 @@
               </sc-if>
               <sc-if value="{{ reading.hasMarks }}" hint-placeholder-val="{{ false }}">
                 <button onclick="{{ reading.onToggleMarks }}" title="Highlight the moments the reading flagged as important" style="{{ reading.marksStyle }}">❖ {{ reading.marksCount }}</button>
+                <sc-if value="{{ reading.marksOn }}" hint-placeholder-val="{{ false }}">
+                  <button onclick="{{ reading.onPrevMark }}" title="Previous flagged moment" style="{{ reading.btnStyle }}">◆↑</button>
+                  <button onclick="{{ reading.onNextMark }}" title="Next flagged moment" style="{{ reading.btnStyle }}">◆↓</button>
+                </sc-if>
               </sc-if>
               <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
                 <div style="position:relative;flex:0 0 auto;">
