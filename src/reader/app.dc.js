@@ -298,6 +298,29 @@ class Component extends DCLogic {
       if(idxs.length)return {notes:'From what you have read:\n'+idxs.map(i=>'- '+this.norm(this.master.sentences[i])).join('\n'),entities:a.entities||[],sources:[src]};
     }
     return {notes:'',entities:a.entities||[],sources:[]};}
+  // Minimal, SAFE markdown → HTML for chat answers (the model replies in markdown:
+  // **bold**, lists, `code`, links). Everything is HTML-escaped FIRST, then only a fixed
+  // set of tags is emitted, so nothing the model writes can inject raw markup.
+  _md(src){
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const inline=s=>esc(s)
+      .replace(/`([^`]+)`/g,(m,c)=>'<code style="background:rgba(0,0,0,.07);border-radius:4px;padding:1px 4px;font-size:.92em;">'+c+'</code>')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);">$1</a>')
+      .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
+    const lines=String(src||'').replace(/\r/g,'').split('\n');
+    const out=[];let list=null;
+    const flush=()=>{if(list){out.push('<'+list.tag+' style="margin:6px 0;padding-left:20px;">'+list.items.join('')+'</'+list.tag+'>');list=null;}};
+    for(const raw of lines){
+      const line=raw.trim();let m;
+      if(!line){flush();continue;}
+      if(m=line.match(/^(#{1,6})\s+(.*)$/)){flush();out.push('<div style="font-weight:700;margin:9px 0 2px;">'+inline(m[2])+'</div>');continue;}
+      if(m=line.match(/^[-*]\s+(.*)$/)){if(!list||list.tag!=='ul'){flush();list={tag:'ul',items:[]};}list.items.push('<li>'+inline(m[1])+'</li>');continue;}
+      if(m=line.match(/^\d+\.\s+(.*)$/)){if(!list||list.tag!=='ol'){flush();list={tag:'ol',items:[]};}list.items.push('<li>'+inline(m[1])+'</li>');continue;}
+      flush();out.push('<p style="margin:6px 0;">'+inline(line)+'</p>');
+    }
+    flush();return out.join('');
+  }
   // Lazily load the chat model (the old app's backends). Cached on the instance.
   async ensureChatModel(){
     const name=this.state.backend||'webllm';
@@ -387,7 +410,8 @@ class Component extends DCLogic {
       const sources=(m.sources||[]).map(u=>({label:/^text:/i.test(u)?(this.truncLabel(((this.pageOf(u)||{}).title)||'text',20)):this.short(u),onOpen:()=>this.goWeb(u)}));
       const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
         style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
-      return {isUser,pending:!!m.pending,text:m.pending?'…':m.text,
+      const isMd=!isUser&&!m.pending&&!!m.text;   // render the model's markdown; user/pending stay plain
+      return {isUser,pending:!!m.pending,text:m.pending?'…':m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
         sources,hasSources:sources.length>0,entities,hasEntities:entities.length>0,
         hasNote:!!m.modelNote,note:m.modelNote||'',
@@ -1699,7 +1723,8 @@ class Component extends DCLogic {
       askIdle:!researching&&!this._busy,
       askSub:'I won\u2019t add sources on my own \u2014 choose how to look.',
       onAskBreadth:()=>{this.setState({mode:'breadth'});this.research(id,'breadth');},
-      onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');}};
+      onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');},
+      onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
   goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+res.sentenceCount+' propositions');this._busy=false;this.setState({busy:false});});}
@@ -2375,6 +2400,7 @@ class Component extends DCLogic {
       :(srcs.length?('I won’t add sources on my own — '+srcs.length+' read so far. Widen out, or dig in.'):'I won’t add sources on my own — choose how to look.');
     base.onAskBreadth=()=>{this.setState({mode:'breadth'});this.research(sel,'breadth');};
     base.onAskDepth=()=>{this.setState({mode:'depth'});this.research(sel,'depth');};
+    base.onAskResearch=()=>{this.research(sel,this.state.mode||'breadth');};
 
     // ── audit mode: integral fold vs. Wikipedia, + raw graph contents ───
     base.auditOn=this.state.auditMode;
@@ -2442,7 +2468,7 @@ class Component extends DCLogic {
     // research controls
     const md=this.state.mode,segOn='font-size:12px;font-weight:600;color:var(--acc);background:var(--card);border:none;border-radius:7px;padding:6px 12px;box-shadow:0 1px 2px rgba(0,0,0,.06);',segOff='font-size:12px;font-weight:500;color:var(--ink2);background:transparent;border:none;border-radius:7px;padding:6px 12px;',busy=this.state.busy;
     base.breadthStyle=md==='breadth'?segOn:segOff;base.depthStyle=md==='depth'?segOn:segOff;base.onBreadth=()=>this.setState({mode:'breadth'});base.onDepth=()=>this.setState({mode:'depth'});
-    base.modeHint=(busy?'Working…':(md==='breadth'?'Breadth — searches and reads a few sources widely.':'Depth — reads one source and follows the thread.'))+(this.state.direction.trim()&&!busy?'  ·  aimed at “'+this.state.direction.trim()+'”':'');
+    base.modeHint=(busy?'Working…':'Research — searches and reads more sources.')+(this.state.direction.trim()&&!busy?'  ·  aimed at “'+this.state.direction.trim()+'”':'');
     base.onResearch=()=>this.research();base.researchLabel=busy?'Researching…':'Research';base.researchGlyph=busy?'◐':'✦';base.researchIcon='display:inline-block;margin-right:7px;'+(busy?'animation:eospin .9s linear infinite;':'');
     base.researchStyle='display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:#fff;background:'+(busy?'#7ea3e8':'var(--acc)')+';border:none;border-radius:9px;padding:9px 16px;box-shadow:0 1px 2px rgba(37,99,235,.3);'+(busy?'cursor:default;':'');
     const FEED={search:{i:'⌕',c:'#2563eb'},found:{i:'≣',c:'#2563eb'},read:{i:'▤',c:'#b45309'},graph:{i:'＋',c:'#15803d'},done:{i:'✓',c:'#1b1f24'},warn:{i:'!',c:'#dc2626'}};
