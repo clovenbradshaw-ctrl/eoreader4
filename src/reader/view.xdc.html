@@ -301,6 +301,7 @@
             </sc-if>
             <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
               <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
+              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
               <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -342,8 +343,12 @@
       </sc-if>
       <sc-if value="{{ showWeb }}" hint-placeholder-val="{{ false }}">
         <div style="position:relative;height:100%;display:flex;flex-direction:column;min-height:0;background:#fff;">
-          <sc-if value="{{ reading.isBook }}" hint-placeholder-val="{{ false }}">
+          <sc-if value="{{ reading.show }}" hint-placeholder-val="{{ false }}">
             <div style="position:relative;flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 14px 9px;background:var(--card);border-bottom:1px solid var(--line);">
+              <sc-if value="{{ reading.canToggleMode }}" hint-placeholder-val="{{ false }}">
+                <button onclick="{{ reading.onToggleMode }}" title="{{ reading.modeTitle }}" style="{{ reading.modeStyle }}">⇄ {{ reading.modeLabel }}</button>
+              </sc-if>
+              <sc-if value="{{ reading.isBook }}" hint-placeholder-val="{{ false }}">
               <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Reading</span>
               <span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;">
                 <button onclick="{{ reading.onFontDown }}" title="Smaller text" style="{{ reading.btnStyle }}">A−</button>
@@ -357,6 +362,7 @@
               <button onclick="{{ reading.onWidth }}" title="Column width" style="{{ reading.widthStyle }}">{{ reading.widthLabel }}</button>
               <button onclick="{{ reading.onFont }}" title="Serif / sans-serif" style="{{ reading.fontStyle }}">{{ reading.fontLabel }}</button>
               <button onclick="{{ reading.onTheme }}" title="Paper theme — Light · Sepia · Night" style="{{ reading.themeStyle }}">{{ reading.themeLabel }}</button>
+              </sc-if>
               <span style="margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;color:var(--ink3);font-variant-numeric:tabular-nums;">{{ reading.progressPct }}%</span>
               <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
                 <span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;">
@@ -835,6 +841,7 @@
           </sc-if>
           <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
             <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
+              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
             <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
