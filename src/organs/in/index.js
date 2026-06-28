@@ -33,3 +33,7 @@ export { ingestMusic }       from './music.js';
 export { ingestFrequencies } from './frequency.js';
 export { ingestFrames }      from './video.js';
 export { ingestCodons }      from './codon.js';
+export {
+  parseFasta, complement, reverseComplement, codonsOf, isStop,
+  codonVector, vectorDim, codonReadings, frameReading, sixFrameReadings,
+} from './locus.js';

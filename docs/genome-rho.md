@@ -3,8 +3,10 @@
 > Experiment spec. Written against `src/core/spectral.js` **unmodified**: the four
 > functions `buildDensity(vectors, weights, signs)`, `eigenLenses(rho, {k})`,
 > `vonNeumann(values)`, `relEntropy(rho, sigma)`, with `deriveNull` as the null.
-> Status: design. Test 0 verified against the live API (numbers below); Tests 1–3
-> are buildable from free data, Test 3 needs one off-the-shelf gLM.
+> Status: Tests 0–2 BUILT AND RUN (`scripts/genome-rho.mjs`, `src/organs/in/locus.js`,
+> `tests/genome-rho.test.js`); data pulled into `data/genome/`. Test 3 needs an
+> external gLM. Measured outcomes in **Results**, below — including where the
+> predictions did NOT hold. Run it: `node scripts/genome-rho.mjs`.
 
 ## The point of view
 
@@ -155,6 +157,54 @@ shadow, not constraint). No single-scalar predictor can produce this split.
 **Gate:** the signed residual must predict held-out selection coefficients (or
 dN/dS-style constraint) better than the unsigned likelihood alone, at the margin
 below.
+
+## Results (first run — `data/genome/`: E. coli MG1655 1–300 kb, φX174 NC_001422)
+
+Reported honestly, signed-vs-unsigned and against nulls. One clean pass, one
+inconclusive-with-diagnosis, one directional-but-muted. The negatives are kept.
+
+**Test 0 — PASS.** The planted cancellation is recovered exactly. Unsigned spectrum
+`[0.912, 0.088, …]`, S = 0.297 (two lenses); signed `[1, 0, …]`, S = 0.000 (one lens —
+the defeated reading A annihilated). The interference build does what it claims, and
+this is a unit test (`tests/genome-rho.test.js`), green offline.
+
+**Test 1 — INCONCLUSIVE, with a clear diagnosis.** A strand and its reverse complement
+*do* read as one object: ‖ρ_fwd − ρ_rc‖_F = 0.192 ≈ the within-strand baseline
+‖ρ_h1 − ρ_h2‖_F = 0.191, and the lens-projector commutator (0.795) ≈ baseline (0.827).
+**But the instrument cannot isolate RC-specific equivariance**, because ρ in the
+prefix/position basis is *composition-dominated*: the distance to an unrelated window
+(0.188) is also ≈ 0.19, and its commutator (0.765) is no worse than fwd↔rc. With
+E. coli's intra-strand Chargaff parity (#A≈#T, #C≈#G), a reverse complement has almost
+the same composition as everything else, so a composition-dominated ρ sees no
+contrast. The composition-matched shuffle null (0.156) is *tighter* than any real
+comparison — confirming the diagnosis. **Verdict:** consistent with RC-equivariance,
+unproven by this basis. The fix is the basis the spec's own argument points to — a
+signed purine/pyrimidine encoding where complementation *is* a sign flip — not more
+windows.
+
+**Test 2 — directional, muted by φX174's own biology.** The headline ordering holds in
+both readouts: the dual-coding D∩E overlap is the most mixed state, the shuffled null
+the most pure.
+
+| window | open ORF frames (run ≥ 0.9) | ρ von Neumann S |
+|--------|----------------------------|------------------|
+| single-coding (gene F, 600 bp) | 2 | 0.413 |
+| **DUAL-coding (D ∩ E, 276 bp)** | **3** | **0.564** |
+| null (D∩E shuffled) | 0 | 0.271 |
+
+The ORF-run salience cleanly finds the two real overlapping genes — frame +0 (gene E)
+at 0.99 and frame +2 (gene D) at 1.00, two full-length ORFs in one window — and the
+dual region's ρ entropy is the highest, exactly the "several readings at once" the
+headline wants. The mute: φX174 is a *compressed* genome under multi-frame selection,
+so even single-coding windows leave extra frames stop-free (gene F's reverse frame 0
+runs 0.94) — real biology that shrinks the single-vs-dual gap. A clean single-coding
+contrast needs an annotated non-overlapping genome (E. coli with its GFF), not φX174.
+
+**What the run establishes:** the interference build is real (Test 0), the spectral
+instruments run unmodified on genomic ρ (Tests 1–2), and the binding constraint is the
+**basis** — exactly as `spectral.js:28-32` warns. A composition-dominated codon basis
+cannot carry strand or selection contrasts; the next build is the signed
+purine/pyrimidine encoding for Test 1 and an annotated genome for Test 2.
 
 ## Validation protocol (same shape the ρ-formalisation cleared)
 
