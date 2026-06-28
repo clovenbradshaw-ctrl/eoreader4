@@ -153,18 +153,6 @@
         <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink3);flex:0 0 auto;"><span style="width:7px;height:7px;border-radius:50%;background:{{ liveColor }};animation:eopulse 2s infinite;display:inline-block;"></span>{{ liveLabel }}</span>
         <button onclick="{{ onTogglePlain }}" title="{{ plainTitle }}" style="{{ plainBtnStyle }}" style-hover="filter:brightness(.97)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>{{ plainLabel }}</button>
       </sc-if>
-      <sc-if value="{{ contents.has }}" hint-placeholder-val="{{ false }}">
-        <div style="position:relative;flex:0 0 auto;">
-          <button onclick="{{ contents.onToggle }}" title="{{ contents.title }}" style="{{ contentsBtnStyle }}" style-hover="background:#eef0f3;color:var(--ink)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Contents</button>
-          <sc-if value="{{ contents.open }}" hint-placeholder-val="{{ false }}">
-            <div onclick="{{ contents.onToggle }}" style="position:fixed;inset:0;z-index:44;"></div>
-            <div style="position:absolute;top:38px;right:0;width:min(300px,86vw);max-height:min(70vh,560px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(20,24,30,.2);z-index:45;animation:eopop .12s ease-out;">
-              <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:13px 14px 9px;position:sticky;top:0;background:var(--card);">{{ contents.title }}</div>
-              <sc-for list="{{ contents.items }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
-            </div>
-          </sc-if>
-        </div>
-      </sc-if>
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
         <button onclick="{{ onToggleChat }}" title="{{ chatToggleTitle }}" style="{{ chatToggleStyle }}" style-hover="background:#eef0f3;color:var(--ink)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>Chat</button>
       </sc-if>
@@ -238,6 +226,18 @@
     <main style="overflow-y:auto;min-height:0;position:relative;order:{{ mainOrder }};">
       <sc-if value="{{ askPageOn }}" hint-placeholder-val="{{ false }}">
         <button onclick="{{ onAskPage }}" title="Chat about this page" style="position:absolute;right:22px;bottom:22px;z-index:18;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:24px;padding:11px 18px;box-shadow:0 8px 24px rgba(20,24,30,.22);cursor:pointer;">✦ Ask about this page</button>
+      </sc-if>
+      <sc-if value="{{ contents.has }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute;left:22px;bottom:22px;z-index:19;">
+          <sc-if value="{{ contents.open }}" hint-placeholder-val="{{ false }}">
+            <div onclick="{{ contents.onToggle }}" style="position:fixed;inset:0;z-index:1;"></div>
+            <div style="position:absolute;left:0;bottom:50px;width:min(310px,calc(100vw - 44px));max-height:min(62vh,520px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(20,24,30,.24);z-index:2;animation:eopop .12s ease-out;">
+              <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:13px 14px 9px;position:sticky;top:0;background:var(--card);">{{ contents.title }}</div>
+              <sc-for list="{{ contents.items }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
+            </div>
+          </sc-if>
+          <button onclick="{{ contents.onToggle }}" title="{{ contents.title }}" style="{{ contentsBtnStyle }}" style-hover="filter:brightness(.97)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Contents</button>
+        </div>
       </sc-if>
       <sc-if value="{{ chatOverlayOn }}" hint-placeholder-val="{{ false }}">
         <div style="{{ chat.shellStyle }}">
@@ -4214,7 +4214,7 @@ class Component extends DCLogic {
       base.contents={has,open,count:items.length,
         title:isBook?'Sections found by reading the document':'Headings on this page',
         onToggle:()=>this.toggleTOC(),items};
-      base.contentsBtnStyle='display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:7px;padding:5px 10px;flex:0 0 auto;cursor:pointer;'+(open?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);');
+      base.contentsBtnStyle='display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;border-radius:24px;padding:10px 17px;cursor:pointer;box-shadow:0 8px 24px rgba(20,24,30,.18);'+(open?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink);background:var(--card);border:1px solid var(--line2);');
     }
     if(vu){
       base.showWeb=true;
