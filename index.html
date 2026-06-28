@@ -2469,7 +2469,13 @@ class Component extends DCLogic {
     if(words.length===1&&this.STOP.has(l))return false;          // lone stopword
     return true;
   }
-  showable(id){const l=this.labelOf(id);return !this.isURLish(l)&&this.conceptual(l)&&!this.strayCapital(id);}
+  // A label that is really an internal entity id (no human surface form was ever
+  // resolved, so labelOf fell back to the raw id) must never be shown as a name. These
+  // ids are single lowercase alphanumeric tokens with digits INTERLEAVED among letters
+  // ("efddc9jxb22", "em06b21s6xa") — a shape no real word/name takes. Trailing-digit
+  // tokens ("covid19") are left alone.
+  _looksLikeId(s){s=String(s||'');return /^[a-z0-9]{7,}$/.test(s)&&/[a-z]/.test(s)&&/[0-9][a-z]/.test(s);}
+  showable(id){const e=this.graph.entities.get(id);if(!e||!e.label)return false;const l=this.labelOf(id);return !this._looksLikeId(l)&&!this.isURLish(l)&&this.conceptual(l)&&!this.strayCapital(id);}
   // A generic concept ("tourism", "runoff") means something specific ON THIS PAGE. Its
   // qualifier is the page's dominant PROPER-NOUN subject (Great Barrier Reef), which we
   // surface in the title — while the bare concept stays reachable via its Wikipedia link.
