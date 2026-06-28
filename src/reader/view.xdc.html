@@ -354,14 +354,29 @@
               <div style="font-size:15px;color:var(--ink);line-height:1.55;{{ ent.summaryStyle }}">{{ ent.summary }}</div>
 
               <sc-if value="{{ ent.hasCursor }}" hint-placeholder-val="{{ false }}">
-                <div style="margin-top:11px;padding:9px 12px;border:1px solid var(--line2);border-radius:10px;background:#fafbfc;">
-                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <div style="margin-top:11px;padding:10px 12px;border:1px solid var(--line2);border-radius:10px;background:#fafbfc;">
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
                     <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Through time</span>
-                    <span style="font-size:11.5px;color:var(--ink2);">{{ ent.cursor.label }}</span>
-                    <sc-if value="{{ ent.cursor.hasWhen }}" hint-placeholder-val="{{ true }}"><span style="font-size:11px;color:var(--ink3);">· {{ ent.cursor.whenLabel }}</span></sc-if>
-                    <sc-if value="{{ ent.cursor.notLatest }}" hint-placeholder-val="{{ true }}"><span onclick="{{ ent.cursor.onLatest }}" title="Jump back to the full, latest summary" style="margin-left:auto;font-size:11px;font-weight:600;color:var(--acc);cursor:pointer;flex:0 0 auto;">to latest →</span></sc-if>
+                    <span style="font-size:11.5px;color:var(--ink2);">{{ ent.cursor.posLabel }}</span>
+                    <sc-if value="{{ ent.cursor.notLatest }}" hint-placeholder-val="{{ true }}"><span onclick="{{ ent.cursor.onLatest }}" title="Jump back to the latest reading" style="margin-left:auto;font-size:11px;font-weight:600;color:var(--acc);cursor:pointer;flex:0 0 auto;">to latest →</span></sc-if>
                   </div>
-                  <input type="range" min="1" max="{{ ent.cursor.n }}" step="1" value="{{ ent.cursor.k }}" oninput="{{ ent.cursor.onMove }}" title="Slide the summary through the time of the text" style="width:100%;accent-color:var(--acc);cursor:pointer;display:block;">
+                  <sc-if value="{{ ent.cursor.hasCheckpoints }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;gap:3px;margin-bottom:8px;" title="Checkpoints — the figures and sources the record crosses, in reading order">
+                      <sc-for list="{{ ent.cursor.checkpoints }}" as="cp" hint-placeholder-count="3">
+                        <div onclick="{{ cp.onPick }}" title="{{ cp.title }}" style="{{ cp.segStyle }}">
+                          <div style="{{ cp.barStyle }}"></div>
+                          <div style="{{ cp.labelStyle }}"><sc-if value="{{ cp.isBond }}" hint-placeholder-val="{{ true }}">→ </sc-if>{{ cp.label }}</div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                  <input type="range" min="1" max="{{ ent.cursor.n }}" step="1" value="{{ ent.cursor.k }}" oninput="{{ ent.cursor.onMove }}" title="Slide the summary through the time of the text — each step is one sentence" style="width:100%;accent-color:var(--acc);cursor:pointer;display:block;">
+                  <div style="margin-top:8px;display:flex;align-items:center;gap:7px;flex-wrap:wrap;">
+                    <sc-if value="{{ ent.cursor.isBond }}" hint-placeholder-val="{{ true }}"><span style="display:inline-flex;align-items:center;font-size:10.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:5px;padding:1px 7px;">→ {{ ent.cursor.structLabel }}</span></sc-if>
+                    <span style="font-size:11px;color:var(--ink3);">{{ ent.cursor.srcTitle }}</span>
+                    <sc-if value="{{ ent.cursor.hasWhen }}" hint-placeholder-val="{{ true }}"><span style="font-size:11px;color:var(--ink3);">· {{ ent.cursor.whenLabel }}</span></sc-if>
+                  </div>
+                  <div style="margin-top:5px;font-size:12.5px;color:var(--ink2);line-height:1.5;font-style:italic;">“{{ ent.cursor.sentGloss }}”</div>
                 </div>
               </sc-if>
 

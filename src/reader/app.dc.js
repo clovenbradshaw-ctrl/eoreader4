@@ -1245,6 +1245,29 @@ class Component extends DCLogic {
     const f=Math.max(0,Math.min(1,(+k||0)/N));
     this.setState(s=>({entCursor:{...(s.entCursor||{}),[id]:f}}));
   }
+  // Emergent checkpoints along the cursor. Each attested proposition (a sentence)
+  // carries a structure label read straight off the graph — the figure it binds the
+  // entity to (edge.from=id → edge.to), or, when it binds to nothing showable, the
+  // source it came from. Consecutive propositions that share a label fold into one
+  // episode: the "chapters" of the record, discovered by reading, not given. These
+  // become the visible waypoints the cursor snaps to.
+  entCheckpoints(id,attIdx){
+    const want=new Set(attIdx),best=new Map();
+    for(const e of this.graph.edges){
+      if(e.from!==id||e.to===e.from||e.sentIdx==null||!want.has(e.sentIdx))continue;
+      if(this.isURLish(this.labelOf(e.to))||!this.showable(e.to))continue;
+      const w=(e.weight!=null?e.weight:1)||0,cur=best.get(e.sentIdx);
+      if(!cur||w>cur.w)best.set(e.sentIdx,{w,toId:e.to});
+    }
+    const marks=attIdx.map((i,j)=>{const b=best.get(i),u=this.master.sentenceSource[i];
+      return b?{k:j+1,key:'b:'+b.toId,label:this.labelOf(b.toId),kind:'bond'}
+              :{k:j+1,key:'s:'+u,label:((this.pageOf(u)||{}).title)||this.short(u),kind:'source'};});
+    const episodes=[];
+    for(const m of marks){const last=episodes[episodes.length-1];
+      if(last&&last.key===m.key){last.toK=m.k;last.count++;}
+      else episodes.push({key:m.key,label:m.label,kind:m.kind,fromK:m.k,toK:m.k,count:1});}
+    return {marks,episodes};
+  }
   // Strip inline reference markers ([13], [74], [1][2], [citation needed], [a]) from
   // text we DISPLAY — never from the sentence we match/scroll against in the live page.
   stripRefs(s){return this.norm(String(s||'').replace(/\s*\[(?:\d+(?:[\u2013-]\d+)?|citation needed|note \d+|[a-z])\]/gi,'')).replace(/\s+([,.;:!?])/g,'$1');}
@@ -2513,31 +2536,43 @@ class Component extends DCLogic {
     const attIdx=subjIdx.filter(i=>this.bandOf(i)==='eva').sort((a,b)=>a-b);
     const attestedTexts=attIdx.map(i=>this.master.sentences[i]);
     // ── temporal cursor over the attested record ──────────────────────────
-    // With two or more attested propositions there is a timeline to walk: k of
-    // them, in reading order, are "in view". The summary is stitched from those,
-    // so the cursor slides the summary back and forth through the time of the
-    // text. k = N (the right edge, the default) is the whole record and the
-    // stitch is byte-identical to the untimed summary.
+    // Each attested proposition is a sentence; in reading order they are the time
+    // of the context. The cursor IS a sentence — k of N — and the summary is the
+    // verbatim stitch of the (up to two) propositions ending at it, so sliding the
+    // cursor moves the summary through the text. Right edge (the default) = the
+    // latest reading.
     const attN=attIdx.length, cursorOn=attN>=2, curK=this.entCursorK(sel,attN);
-    const scopedTexts=cursorOn?attestedTexts.slice(0,curK):attestedTexts;
+    const winStart=cursorOn?Math.max(0,curK-2):0;
+    const windowTexts=cursorOn?attestedTexts.slice(winStart,curK):attestedTexts;
     const cachedSum=this.state.summaries&&this.state.summaries[sel],sumSig=this.summarySig(sel),autoOn=false;
     let summaryText=null,sumModel=false,wikiBacked=false,wikiUrl=null,wikiTitle=null,wikiConf=false,srcComposed=false;
     if(cachedSum&&cachedSum.sig===sumSig&&!cursorOn){summaryText=cachedSum.text;sumModel=!!cachedSum.model;}
-    else { summaryText=this.summaryFallback(scopedTexts); if(attestedTexts.length)setTimeout(()=>this.ensureSummary(sel,attestedTexts),0); }
+    else { summaryText=this.summaryFallback(windowTexts); if(attestedTexts.length)setTimeout(()=>this.ensureSummary(sel,attestedTexts),0); }
     if(!summaryText){const w=this.wikiDef(sel);
       if(w&&w.text&&!w.none&&w.confirmed){summaryText=w.text;wikiBacked=true;wikiUrl=w.url;wikiTitle=w.title;wikiConf=true;}
       else{const gist=this.sourceGist(sel);if(gist){summaryText=gist;srcComposed=true;}
         if(!w&&(this.looksProperNoun(lab)||this.isGenericConcept(sel)))this.ensureWiki(sel);}}
-    const synthN=cursorOn?curK:attestedTexts.length;
+    const synthN=cursorOn?windowTexts.length:attestedTexts.length;
     // The cursor only rides the attested stitch — a wiki/gist summary has no
     // in-text timeline to walk, so it is left untimed.
     let cursorView={on:false};
     if(cursorOn&&!wikiBacked&&!srcComposed){
-      const here=attIdx[curK-1],u=this.master.sentenceSource[here],p=this.pageOf(u),when=p&&p.ts?fmtDate(p.ts):'';
-      cursorView={on:true,k:curK,n:attN,pct:Math.max(4,Math.round(curK/attN*100)),
-        label:'as of proposition '+curK+' of '+attN,
-        atLatest:curK>=attN,notLatest:curK<attN,when:when,hasWhen:!!when,host:this.short(u),
-        whenLabel:when?('read '+when):'',
+      const {marks,episodes:eps}=this.entCheckpoints(sel,attIdx);
+      const here=attIdx[curK-1],u=this.master.sentenceSource[here],p=this.pageOf(u),when=p&&p.ts?fmtDate(p.ts):'',mark=marks[curK-1]||{};
+      const checkpoints=eps.map(ep=>{const ri=attIdx[ep.toK-1],ru=this.master.sentenceSource[ri],rp=this.pageOf(ru),rw=rp&&rp.ts?fmtDate(rp.ts):'';
+        const active=curK>=ep.fromK&&curK<=ep.toK,c=this.hashColor(ep.label||ep.key);
+        return {label:this.truncLabel(ep.label||'—',22),isBond:ep.kind==='bond',count:ep.count,active,when:rw,hasWhen:!!rw,
+          segStyle:'flex:'+ep.count+' 1 0;min-width:14px;cursor:pointer;display:flex;flex-direction:column;gap:3px;',
+          barStyle:'height:6px;border-radius:3px;background:'+(active?c:c+'40')+';'+(active?'box-shadow:0 0 0 1px '+c+'55;':''),
+          labelStyle:'font-size:9.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:'+(active?'var(--ink)':'var(--ink3)')+';',
+          onPick:()=>this.setEntCursor(sel,ep.toK),title:(ep.kind==='bond'?('bound to '+ep.label):('from '+ep.label))+' · '+ep.count+' proposition'+(ep.count!==1?'s':'')+(rw?(' · read '+rw):'')};});
+      cursorView={on:true,k:curK,n:attN,posLabel:'sentence '+curK+' of '+attN,
+        sentGloss:this.endOnBoundary(this.stripRefs(this.norm(this.master.sentences[here])),160),
+        srcTitle:this.truncLabel((p&&p.title)||this.short(u),48),host:this.short(u),
+        when,hasWhen:!!when,whenLabel:when?('read '+when):'',
+        structLabel:mark.label||'',hasStruct:!!mark.label,isBond:mark.kind==='bond',
+        checkpoints,hasCheckpoints:eps.length>=2,
+        atLatest:curK>=attN,notLatest:curK<attN,
         onMove:ev=>{const v=ev&&ev.target?+ev.target.value:attN;this.setEntCursor(sel,v);},
         onLatest:()=>this.setEntCursor(sel,attN)};
     }
