@@ -292,7 +292,8 @@
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
               <span style="font-size:18px;">📚</span>
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Project Gutenberg · “{{ guten.query }}”</div>
-              <button onclick="{{ guten.onClear }}" style="margin-left:auto;flex:0 0 auto;font-size:12px;color:var(--ink2);background:transparent;border:none;cursor:pointer;" style-hover="color:var(--ink)">Clear</button>
+              <sc-if value="{{ guten.hasResults }}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;flex:0 0 auto;font-size:11px;color:var(--ink3);white-space:nowrap;">{{ guten.countLabel }}</span></sc-if>
+              <button onclick="{{ guten.onClear }}" style="flex:0 0 auto;font-size:12px;color:var(--ink2);background:transparent;border:none;cursor:pointer;margin-left:12px;" style-hover="color:var(--ink)">Clear</button>
             </div>
             <sc-if value="{{ guten.loading }}" hint-placeholder-val="{{ true }}">
               <div style="display:flex;align-items:center;gap:11px;color:var(--ink3);padding:24px 4px;"><span style="width:22px;height:22px;border-radius:50%;border:3px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span><span style="font-size:13px;">Searching the catalog…</span></div>
@@ -302,10 +303,12 @@
             </sc-if>
             <sc-for list="{{ guten.results }}" as="bk" hint-placeholder-count="0">
               <div style="{{ bk.rowStyle }}">
+                <sc-if value="{{ bk.hasCover }}" hint-placeholder-val="{{ false }}"><div style="{{ bk.coverStyle }}"></div></sc-if>
                 <div style="min-width:0;flex:1;">
                   <div style="font-size:14.5px;font-weight:700;color:var(--ink);line-height:1.3;">{{ bk.title }}</div>
                   <div style="font-size:12px;color:var(--ink2);margin-top:3px;">{{ bk.author }}</div>
-                  <div style="font-size:11px;color:var(--ink3);margin-top:3px;">{{ bk.downloads }}</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;"><sc-for list="{{ bk.tags }}" as="tg" hint-placeholder-count="0"><span style="{{ tg.style }}">{{ tg.label }}</span></sc-for></div>
+                  <div style="font-size:11px;color:var(--ink3);margin-top:7px;">{{ bk.downloads }}</div>
                 </div>
                 <button onclick="{{ bk.onRead }}" style="{{ bk.btnStyle }}">{{ bk.btnLabel }}</button>
               </div>
@@ -315,6 +318,35 @@
       </sc-if>
       <sc-if value="{{ showWeb }}" hint-placeholder-val="{{ false }}">
         <div style="height:100%;display:flex;flex-direction:column;min-height:0;background:#fff;">
+          <sc-if value="{{ reading.isBook }}" hint-placeholder-val="{{ false }}">
+            <div style="position:relative;flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 14px 9px;background:var(--card);border-bottom:1px solid var(--line);">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Reading</span>
+              <span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;">
+                <button onclick="{{ reading.onFontDown }}" title="Smaller text" style="{{ reading.btnStyle }}">A−</button>
+                <span style="font-size:11px;color:var(--ink3);min-width:36px;text-align:center;font-variant-numeric:tabular-nums;">{{ reading.fsLabel }}</span>
+                <button onclick="{{ reading.onFontUp }}" title="Larger text" style="{{ reading.btnStyle }}">A+</button>
+              </span>
+              <span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;">
+                <button onclick="{{ reading.onLineDown }}" title="Tighter line spacing" style="{{ reading.btnStyle }}">↕−</button>
+                <button onclick="{{ reading.onLineUp }}" title="Looser line spacing" style="{{ reading.btnStyle }}">↕+</button>
+              </span>
+              <button onclick="{{ reading.onWidth }}" title="Column width" style="{{ reading.widthStyle }}">{{ reading.widthLabel }}</button>
+              <button onclick="{{ reading.onFont }}" title="Serif / sans-serif" style="{{ reading.fontStyle }}">{{ reading.fontLabel }}</button>
+              <button onclick="{{ reading.onTheme }}" title="Paper theme — Light · Sepia · Night" style="{{ reading.themeStyle }}">{{ reading.themeLabel }}</button>
+              <span style="margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;color:var(--ink3);font-variant-numeric:tabular-nums;">{{ reading.progressPct }}%</span>
+              <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
+                <div style="position:relative;flex:0 0 auto;">
+                  <button onclick="{{ reading.onToggleTOC }}" title="Table of contents" style="{{ reading.tocStyle }}">☰ Contents</button>
+                  <sc-if value="{{ reading.tocOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute;top:34px;right:0;width:284px;max-height:60vh;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
+                      <sc-for list="{{ reading.toc }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
+              <span style="position:absolute;left:0;bottom:0;height:2px;background:var(--acc);width:{{ reading.progressW }};transition:width .2s;"></span>
+            </div>
+          </sc-if>
           <sc-if value="{{ web.loading }}" hint-placeholder-val="{{ true }}">
             <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;color:var(--ink3);">
               <span style="width:30px;height:30px;border-radius:50%;border:3px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>

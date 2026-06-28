@@ -13,7 +13,11 @@ class Component extends DCLogic {
     this.SUGG=[];  // filled on mount by loadSuggestions(): a random Wikipedia page + random English books
     this.PALETTE=['#2563eb','#7c3aed','#0e7490','#b45309','#dc2626','#15803d','#be185d','#4f46e5','#0891b2','#9333ea'];
     this.THEMES=[{name:'EO Violet',hex:'#5b34d6'},{name:'Indigo',hex:'#4f46e5'},{name:'Royal',hex:'#2563eb'},{name:'Teal',hex:'#0d9488'},{name:'Forest',hex:'#15803d'},{name:'Magenta',hex:'#be185d'},{name:'Amber',hex:'#b45309'},{name:'Slate',hex:'#475569'}];
-    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');}catch(e){}
+    // ── e-book reading: paper themes + type families, applied to the book iframe ──
+    this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
+    this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
+    this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
+    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
@@ -41,6 +45,10 @@ class Component extends DCLogic {
       // a chosen book is fetched and READ FULLY before it joins the sources (and so can
       // be chatted with). gutenReading holds the id while a book is being read.
       gutenResults:null, gutenLoading:false, gutenQuery:'', gutenReading:null,
+      // E-book reading preferences (font size/spacing/width/paper theme/typeface),
+      // applied live to the book iframe and persisted. bookToc is the detected
+      // chapter list; bookProgress is the live read fraction (0–1).
+      readPrefs:Object.assign({},this._defaultRead,(savedRead&&typeof savedRead==='object')?savedRead:{}), bookToc:[], tocOpen:false, bookProgress:0,
       // Panel layout: swap the left (sources/chats) and right (entities) sides.
       swapped:(()=>{try{return localStorage.getItem('eo_swap')==='1';}catch(e){return false;}})(),
       // Chat model — like the old app. Loaded lazily on first chat; grounded in what
@@ -58,6 +66,46 @@ class Component extends DCLogic {
   setHoverPivot(v){try{localStorage.setItem('eo_hoverpivot',v);}catch(e){}this.setState({hoverPivot:v});}
   setClickAction(v){try{localStorage.setItem('eo_clickact',v);}catch(e){}this.setState({clickAction:v});}
   setHoverDelay(v){v=Math.max(150,Math.min(2000,+v||1100));try{localStorage.setItem('eo_hoverdelay',String(v));}catch(e){}this.setState({hoverDelay:v});}
+  // ── e-book reading preferences ────────────────────────────────────────
+  // Each setter persists, re-renders the toolbar, and applies the change LIVE to the
+  // open book iframe via CSS variables — no reload, so scroll position and the entity
+  // decoration both survive. _bookHtml seeds the same vars so a fresh open matches.
+  setReadPref(patch){const rp=Object.assign({},this.state.readPrefs,patch);try{localStorage.setItem('eo_readprefs',JSON.stringify(rp));}catch(e){}this.setState({readPrefs:rp});const d=this._bookDoc();if(d)this.applyReadCSS(d,rp);}
+  bumpFont(d){const rp=this.state.readPrefs;this.setReadPref({fs:Math.max(14,Math.min(30,(rp.fs||19)+d))});}
+  bumpLine(d){const rp=this.state.readPrefs;this.setReadPref({lh:Math.max(1.3,Math.min(2.2,Math.round(((rp.lh||1.7)+d)*10)/10))});}
+  cycleReadTheme(){const o=['light','sepia','dark'];const i=o.indexOf(this.state.readPrefs.theme||'light');this.setReadPref({theme:o[(i+1)%o.length]});}
+  cycleWidth(){const o=[600,720,860];const i=o.indexOf(this.state.readPrefs.w||720);this.setReadPref({w:o[(i+1)%o.length]});}
+  toggleReadFont(){this.setReadPref({font:(this.state.readPrefs.font==='sans')?'serif':'sans'});}
+  _bookDoc(){const ifr=document.querySelector('iframe[data-eo-center]');return (ifr&&ifr.contentDocument)?ifr.contentDocument:null;}
+  applyReadCSS(d,rp){rp=rp||this.state.readPrefs;const t=this.READ_THEMES[rp.theme]||this.READ_THEMES.light;const r=d.documentElement&&d.documentElement.style;if(!r)return;
+    r.setProperty('--eo-fs',(rp.fs||19)+'px');r.setProperty('--eo-lh',String(rp.lh||1.7));r.setProperty('--eo-maxw',(rp.w||720)+'px');
+    r.setProperty('--eo-ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif);
+    r.setProperty('--eo-bg',t.bg);r.setProperty('--eo-fg',t.fg);r.setProperty('--eo-fg2',t.fg2);r.setProperty('--eo-rule',t.rule);r.setProperty('--eo-acc',this.curAccent());
+    try{d.body.style.background=t.bg;}catch(e){}}
+  // Per-book reading position: a 0–1 scroll fraction, keyed by the source url.
+  _readKey(url){return 'eo_pos_'+(url||'');}
+  loadReadPos(url){try{const v=localStorage.getItem(this._readKey(url));const f=v==null?0:parseFloat(v);return isFinite(f)?Math.max(0,Math.min(1,f)):0;}catch(e){return 0;}}
+  saveReadPos(url,pct){try{localStorage.setItem(this._readKey(url),String(Math.max(0,Math.min(1,pct))));}catch(e){}}
+  // Detect a chapter/section heading: a short standalone paragraph that is either an
+  // explicit marker (Chapter/Part/Book/…), a bare roman/arabic numeral, or an all-caps
+  // line. Conservative — body prose never matches (too long / has lowercase + period).
+  _isChapterHead(s){if(!s)return null;s=s.trim();if(s.length>64||s.length<2)return null;
+    if(/^(chapter|chap\.?|part|book|canto|letter|act|scene|volume|stave|section|prologue|epilogue|introduction|preface|argument)\b/i.test(s))return s.replace(/\s+/g,' ');
+    if(/^[IVXLCDM]{1,6}\.?$/.test(s))return s.replace(/\.$/,'');
+    if(/^\d{1,3}\.?$/.test(s))return s.replace(/\.$/,'');
+    if(s.length<=44&&/[A-Z]{3,}/.test(s)&&!/[a-z]/.test(s)&&/^[A-Z0-9][A-Z0-9 ,.'’\-—:;!?()&]+$/.test(s)&&!/[.!?]$/.test(s))return s.replace(/\s+/g,' ');
+    return null;}
+  // Set up the open book iframe once: apply the reading CSS, restore the saved scroll
+  // position, and track progress as the reader scrolls (throttled).
+  _setupBook(d,ifr,url){if(!d||!d.defaultView)return;this.applyReadCSS(d,this.state.readPrefs);
+    if(d.__eoBookUrl===url)return;d.__eoBookUrl=url;const win=d.defaultView;
+    const pos=this.loadReadPos(url);
+    if(pos>0){let n=0;const tryScroll=()=>{if(d.__eoBookUrl!==url)return;const max=Math.max(1,(d.documentElement.scrollHeight||d.body.scrollHeight||0)-win.innerHeight);if(max>40||n++>25){win.scrollTo(0,pos*max);}else{setTimeout(tryScroll,60);}};setTimeout(tryScroll,60);}
+    const onScroll=()=>{const max=Math.max(1,(d.documentElement.scrollHeight||d.body.scrollHeight||0)-win.innerHeight);this._lastPct=Math.max(0,Math.min(1,win.scrollY/max));
+      if(this._scrollT)return;this._scrollT=setTimeout(()=>{this._scrollT=null;const pct=this._lastPct;this.saveReadPos(url,pct);if(Math.abs((this.state.bookProgress||0)-pct)>=0.005)this.setState({bookProgress:pct});},150);};
+    win.addEventListener('scroll',onScroll,{passive:true});}
+  gotoChapter(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-14;try{win.scrollTo({top,behavior:'smooth'});}catch(e){win.scrollTo(0,top);}}this.setState({tocOpen:false});}
+  toggleTOC(){this.setState(s=>({tocOpen:!s.tocOpen}));}
   toggleSettings(){this.setState(s=>({settingsOpen:!s.settingsOpen}));}
   closeSettings(){this.setState({settingsOpen:false});}
   toggleAudit(){const v=!this.state.auditMode;try{localStorage.setItem('eo_audit',v?'1':'0');}catch(e){}this.setState({auditMode:v});}
@@ -618,15 +666,23 @@ class Component extends DCLogic {
     let data;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
     catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
-    return this._gutenBooks(data).slice(0,12);
+    return this._gutenBooks(data).slice(0,16);
   }
   // Map a gutendex response to readable books — only those with a plain-text edition.
   _gutenBooks(data){
     return ((data&&data.results)||[]).map(b=>{
       const f=b.formats||{};
       const txt=f['text/plain; charset=utf-8']||f['text/plain; charset=us-ascii']||f['text/plain']||(Object.entries(f).find(([k,v])=>/text\/plain/i.test(k)&&!/\.zip$/i.test(v))||[])[1];
-      return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,downloads:b.download_count||0};
+      return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,
+        cover:f['image/jpeg']||null,downloads:b.download_count||0,subjects:b.subjects||[],bookshelves:b.bookshelves||[]};
     }).filter(b=>b.txtUrl);
+  }
+  // A few short, readable genre/topic tags from gutendex's verbose subject strings
+  // ("Adventure stories -- Fiction" → "Adventure stories").
+  _gutenTags(b){const seen=new Set(),out=[];
+    [].concat(b.subjects||[],b.bookshelves||[]).forEach(s=>{const t=String(s).split(' -- ')[0].trim();const k=t.toLowerCase();
+      if(t&&t.length<30&&!seen.has(k)){seen.add(k);out.push(t);}});
+    return out.slice(0,3);
   }
   // Strip Project Gutenberg's license header/footer so only the work is read.
   stripGutenberg(t){
@@ -1850,24 +1906,35 @@ class Component extends DCLogic {
       const sents=(p.sentences||[]).map(s=>this.norm(s)).filter(Boolean);
       paras=[];for(let i=0;i<sents.length;i+=4)paras.push(sents.slice(i,i+4).join(' '));
     }
-    const body=paras.map(t=>'<p>'+esc(t)+'</p>').join('\n');
-    const a=this.curAccent();
-    return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+
-      '<style>html,body{margin:0;background:#fff;}'+
-      'body{font:18px/1.72 Georgia,"Iowan Old Style","Times New Roman",serif;color:#23272e;}'+
-      '.eo-book{max-width:680px;margin:0 auto;padding:56px 30px 140px;}'+
-      'h1.eo-title{font:700 30px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;letter-spacing:-.01em;color:#14171c;margin:0 0 6px;}'+
-      '.eo-byline{font:13px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:#9aa1ab;margin:0 0 34px;border-bottom:1px solid #eef0f3;padding-bottom:18px;}'+
-      'p{margin:0 0 22px;}p:first-of-type::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:'+a+';font-family:Georgia,serif;}'+
+    // Wrap chapter headings as anchored <h2> (for the table of contents); the very
+    // first body paragraph gets the drop cap.
+    const toc=[],parts=[];let dropped=false;
+    for(const t of paras){
+      const head=this._isChapterHead(t);
+      if(head&&toc.length<400){const id='eo-ch-'+toc.length;toc.push({id,label:head});parts.push('<h2 class="eo-chap" id="'+id+'">'+esc(t)+'</h2>');}
+      else{parts.push('<p'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;}
+    }
+    const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
+    const v=(n,d)=>'--eo-'+n+':'+d+';';
+    const html='<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+'}'+
+      'html,body{margin:0;background:var(--eo-bg);}'+
+      'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);transition:background .2s,color .2s;}'+
+      '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
+      'h1.eo-title{font:700 1.62em/1.25 var(--eo-ff);letter-spacing:-.01em;color:var(--eo-fg);margin:0 0 6px;}'+
+      '.eo-byline{font:.72em/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--eo-fg2);margin:0 0 34px;border-bottom:1px solid var(--eo-rule);padding-bottom:18px;}'+
+      'h2.eo-chap{font:700 1.18em/1.3 var(--eo-ff);color:var(--eo-fg);margin:2.3em 0 .9em;scroll-margin-top:16px;}'+
+      'p{margin:0 0 1.15em;}p.eo-first::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:var(--eo-acc);font-family:Georgia,serif;}'+
       '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
-      '<div class="eo-byline">Imported text · '+((p.sentences||[]).length)+' propositions · read as a book</div>'+
-      body+'</div></body></html>';
+      '<div class="eo-byline">'+((p.sentences||[]).length)+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+' · read as a book</div>'+
+      parts.join('\n')+'</div></body></html>';
+    return {html,toc};
   }
   loadCenter(url){
-    if(/^text:/i.test(url)){const p=this.pageOf(url);this.setState({pageDoc:p?this._bookHtml(p):null,pageLoading:false,pageErr:p?null:'Text not found'});return;}
-    if(!url){this.setState({pageDoc:null,pageLoading:false,pageErr:null});return;}
+    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
+    if(!url){this.setState({pageDoc:null,bookToc:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
     if(this._pageUrl===url&&this.state.pageDoc)return;
-    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null});
+    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],tocOpen:false});
     fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
       if(this.state.viewUrl!==url)return;
       let doc=html;
@@ -1986,6 +2053,9 @@ class Component extends DCLogic {
   _frameOffset(){const ifr=document.querySelector('iframe[data-eo-center]');if(!ifr)return{x:0,y:0};const r=ifr.getBoundingClientRect();return{x:r.left,y:r.top};}
   decorateFrame(d,ifr){
     try{
+      // A book in the center is an e-book: apply reading prefs, restore position, track progress.
+      const _bookUrl=(this.state.viewUrl&&/^text:/i.test(this.state.viewUrl))?this.state.viewUrl:null;
+      if(_bookUrl){try{this._setupBook(d,ifr,_bookUrl);}catch(e){}}
       // styles — rebuilt each pass so accent + highlight mode apply live
       {let st=d.getElementById('__eo_style');if(!st){st=d.createElement('style');st.id='__eo_style';(d.head||d.body).appendChild(st);}
         const a=this.curAccent(),hl=this.state.highlightStyle;
@@ -2382,18 +2452,38 @@ class Component extends DCLogic {
 
     // Project Gutenberg search results take the center when present (and no chat open).
     base.gutenOn=!base.chatOn&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
+    const _gcount=(this.state.gutenResults||[]).length;
     base.guten={loading:!!this.state.gutenLoading,query:this.state.gutenQuery||'',
       hasResults:!!(this.state.gutenResults&&this.state.gutenResults.length),
       empty:!!(this.state.gutenResults&&!this.state.gutenResults.length),
+      countLabel:_gcount+' book'+(_gcount===1?'':'s'),
       onClear:()=>this.setState({gutenResults:null,gutenQuery:''}),
       results:(this.state.gutenResults||[]).map(b=>{const reading=this.state.gutenReading===b.id;
         return {title:b.title,author:b.author,downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
+          hasCover:!!b.cover,
+          coverStyle:'width:50px;height:74px;flex:0 0 auto;border-radius:5px;box-shadow:0 1px 4px rgba(20,24,30,.16);background:#eef0f3 center/cover no-repeat;'+(b.cover?'background-image:url(\''+String(b.cover).replace(/'/g,'%27')+'\');':''),
+          tags:this._gutenTags(b).map(t=>({label:t,style:'display:inline-flex;align-items:center;font-size:10px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap;'})),
           btnLabel:reading?'Reading…':'Read fully',onRead:()=>this.readGutenberg(b),
-          rowStyle:'display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--card);',
+          rowStyle:'display:flex;align-items:flex-start;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;margin-bottom:10px;background:var(--card);',
           btnStyle:'flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:'+(reading?'#9aa1ab':'var(--acc)')+';border:none;border-radius:9px;padding:8px 14px;cursor:'+(reading?'default':'pointer')+';'};})};
 
     const vu=this.state.viewUrl;
     base.askPageOn=!!vu&&!base.chatOn;   // the discoverable "Ask about this page" FAB
+    // E-book reading toolbar — only over a book (text:). Applies live to the iframe.
+    { const rp=this.state.readPrefs||this._defaultRead,toc=this.state.bookToc||[],isBook=!!(vu&&/^text:/i.test(vu));
+      const pill=on=>'display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 9px;border:1px solid var(--line2);background:'+(on?'var(--accbg)':'var(--app)')+';color:'+(on?'var(--acc)':'var(--ink2)')+';border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1;';
+      base.reading={isBook,
+        btnStyle:pill(false),
+        fsLabel:(rp.fs||19)+'px',onFontDown:()=>this.bumpFont(-1),onFontUp:()=>this.bumpFont(1),
+        onLineDown:()=>this.bumpLine(-0.1),onLineUp:()=>this.bumpLine(0.1),
+        widthLabel:(rp.w||720)<=600?'Narrow':((rp.w||720)>=860?'Wide':'Normal'),onWidth:()=>this.cycleWidth(),widthStyle:pill(false),
+        fontLabel:rp.font==='sans'?'Sans':'Serif',onFont:()=>this.toggleReadFont(),fontStyle:pill(rp.font==='sans'),
+        themeLabel:rp.theme==='sepia'?'Sepia':(rp.theme==='dark'?'Night':'Light'),onTheme:()=>this.cycleReadTheme(),themeStyle:pill(rp.theme!=='light'),
+        hasToc:toc.length>1,tocOpen:!!this.state.tocOpen,onToggleTOC:()=>this.toggleTOC(),tocStyle:pill(!!this.state.tocOpen),
+        toc:toc.map(c=>({label:c.label,onGo:()=>this.gotoChapter(c.id),
+          rowStyle:'display:block;width:100%;text-align:left;padding:9px 13px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink2);font-size:12.5px;line-height:1.35;cursor:pointer;'})),
+        progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
+    }
     if(vu){
       base.showWeb=true;
       base.web={url:vu,host:/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu),loading:!!this.state.pageLoading&&!this.state.pageDoc,
