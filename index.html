@@ -1425,7 +1425,12 @@ class Component extends DCLogic {
     // ── e-book reading: paper themes + type families, applied to the book iframe ──
     this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
     this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
-    this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
+    // Reading defaults grounded in typographic prior art (Bringhurst; Baymard; Butterick;
+    // Pimp My Type): the MEASURE is set in characters, not pixels, so line length stays in
+    // the readable 50–75-CPL band as the font scales — px widths drift out of it. w is the
+    // measure in ch; 58ch of Georgia renders at ~66 chars/line — Bringhurst's ideal — because
+    // its "0" (the ch unit) is narrower than its average glyph. lh is the leading (1.5–1.6).
+    this._defaultRead={fs:19,lh:1.6,w:58,theme:'light',font:'serif'};
     let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
@@ -1468,7 +1473,7 @@ class Component extends DCLogic {
       // bookToc is the engine-emergent section list for a text/book; webToc is the
       // table of contents built from a live web page's own headings — together they let
       // ONE "Contents" affordance navigate any content in view.
-      readPrefs:Object.assign({},this._defaultRead,(savedRead&&typeof savedRead==='object')?savedRead:{}), bookToc:[], webToc:[], tocOpen:false, bookProgress:0,
+      readPrefs:this._migrateRead(Object.assign({},this._defaultRead,(savedRead&&typeof savedRead==='object')?savedRead:{})), bookToc:[], webToc:[], tocOpen:false, bookProgress:0,
       // Auto-bookmarks: spots the reading flags as SURPRISING (connectivity + novelty).
       // bookmarkMode shows them (in-book highlight + scrollbar markers); bookmarks holds
       // the detected spots; bmRail holds their live scroll fractions for the marker rail.
@@ -1494,15 +1499,24 @@ class Component extends DCLogic {
   // Each setter persists, re-renders the toolbar, and applies the change LIVE to the
   // open book iframe via CSS variables — no reload, so scroll position and the entity
   // decoration both survive. _bookHtml seeds the same vars so a fresh open matches.
+  // Carry a saved preference set forward. The width used to be stored in px (600/720/860);
+  // it now means a measure in characters (ch), so map any legacy px value onto the nearest
+  // character target and clamp anything out of the readable range.
+  _migrateRead(rp){rp=Object.assign({},rp);
+    if(rp.w>=100)rp.w=rp.w<=600?46:(rp.w>=860?70:58);   // legacy px → ch measure
+    if(!(typeof rp.w==='number'&&rp.w>=36&&rp.w<=84))rp.w=58;
+    return rp;}
   setReadPref(patch){const rp=Object.assign({},this.state.readPrefs,patch);try{localStorage.setItem('eo_readprefs',JSON.stringify(rp));}catch(e){}this.setState({readPrefs:rp});const d=this._bookDoc();if(d)this.applyReadCSS(d,rp);}
   bumpFont(d){const rp=this.state.readPrefs;this.setReadPref({fs:Math.max(14,Math.min(30,(rp.fs||19)+d))});}
-  bumpLine(d){const rp=this.state.readPrefs;this.setReadPref({lh:Math.max(1.3,Math.min(2.2,Math.round(((rp.lh||1.7)+d)*10)/10))});}
+  bumpLine(d){const rp=this.state.readPrefs;this.setReadPref({lh:Math.max(1.3,Math.min(2.2,Math.round(((rp.lh||1.6)+d)*10)/10))});}
   cycleReadTheme(){const o=['light','sepia','dark'];const i=o.indexOf(this.state.readPrefs.theme||'light');this.setReadPref({theme:o[(i+1)%o.length]});}
-  cycleWidth(){const o=[600,720,860];const i=o.indexOf(this.state.readPrefs.w||720);this.setReadPref({w:o[(i+1)%o.length]});}
+  // Measure presets (in ch): ~46 snug (~52 CPL), ~58 ideal (~66 CPL, Bringhurst), ~70 wide
+  // (~80 CPL, the WCAG ceiling). Leading rides with the measure — wider wants looser.
+  cycleWidth(){const o=[46,58,70];const i=o.indexOf(this.state.readPrefs.w);const w=o[((i<0?1:i)+1)%o.length];this.setReadPref({w,lh:w<=46?1.5:(w>=70?1.7:1.6)});}
   toggleReadFont(){this.setReadPref({font:(this.state.readPrefs.font==='sans')?'serif':'sans'});}
   _bookDoc(){const ifr=document.querySelector('iframe[data-eo-center]');return (ifr&&ifr.contentDocument)?ifr.contentDocument:null;}
   applyReadCSS(d,rp){rp=rp||this.state.readPrefs;const t=this.READ_THEMES[rp.theme]||this.READ_THEMES.light;const r=d.documentElement&&d.documentElement.style;if(!r)return;
-    r.setProperty('--eo-fs',(rp.fs||19)+'px');r.setProperty('--eo-lh',String(rp.lh||1.7));r.setProperty('--eo-maxw',(rp.w||720)+'px');
+    r.setProperty('--eo-fs',(rp.fs||19)+'px');r.setProperty('--eo-lh',String(rp.lh||1.6));r.setProperty('--eo-maxw',(rp.w||58)+'ch');
     r.setProperty('--eo-ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif);
     r.setProperty('--eo-bg',t.bg);r.setProperty('--eo-fg',t.fg);r.setProperty('--eo-fg2',t.fg2);r.setProperty('--eo-rule',t.rule);r.setProperty('--eo-acc',this.curAccent());
     try{d.body.style.background=t.bg;}catch(e){}}
@@ -3637,7 +3651,7 @@ class Component extends DCLogic {
     const v=(n,d)=>'--eo-'+n+':'+d+';';
     const htmlCls=this.state.bookmarkMode?' class="eo-bm-on"':'';
     const html='<!doctype html><html'+htmlCls+'><head><meta charset="utf-8"><base target="_blank">'+
-      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.6))+v('maxw',(rp.w||58)+'ch')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
       'html,body{margin:0;background:var(--eo-bg);}'+
       'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);transition:background .2s,color .2s;}'+
       '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
@@ -4209,7 +4223,7 @@ class Component extends DCLogic {
         btnStyle:pill(false),
         fsLabel:(rp.fs||19)+'px',onFontDown:()=>this.bumpFont(-1),onFontUp:()=>this.bumpFont(1),
         onLineDown:()=>this.bumpLine(-0.1),onLineUp:()=>this.bumpLine(0.1),
-        widthLabel:(rp.w||720)<=600?'Narrow':((rp.w||720)>=860?'Wide':'Normal'),onWidth:()=>this.cycleWidth(),widthStyle:pill(false),
+        widthLabel:(rp.w||58)<=46?'Narrow':((rp.w||58)>=70?'Wide':'Normal'),onWidth:()=>this.cycleWidth(),widthStyle:pill(false),
         fontLabel:rp.font==='sans'?'Sans':'Serif',onFont:()=>this.toggleReadFont(),fontStyle:pill(rp.font==='sans'),
         themeLabel:rp.theme==='sepia'?'Sepia':(rp.theme==='dark'?'Night':'Light'),onTheme:()=>this.cycleReadTheme(),themeStyle:pill(rp.theme!=='light'),
         hasToc:toc.length>1,tocOpen:!!this.state.tocOpen,onToggleTOC:()=>this.toggleTOC(),tocStyle:pill(!!this.state.tocOpen),
