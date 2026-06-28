@@ -3527,6 +3527,18 @@ class Component extends DCLogic {
     if(!content)return false;
     return capped===content&&/[A-Za-z]/.test(label);
   }
+  // The bare name a label refers to, with any leading honorific/role title stripped:
+  // "Vice President JD Vance" → "JD Vance", "Dr. Jane Goodall" → "Jane Goodall". The
+  // title tells you the person's office; the NAME is what an encyclopedia article is
+  // keyed on. We only strip leading role tokens, never the trailing name, and stop at
+  // the first non-role token so "President of the United States" keeps its office words.
+  _nameCore(label){
+    if(!this._ROLE)this._ROLE=new Set(('president vice senator sen senate representative rep congressman congresswoman governor gov mayor secretary justice judge general gen colonel col captain capt lieutenant lt sergeant sgt admiral major chancellor chairman chairwoman chair chief ceo cfo cto coo founder director minister ambassador pope king queen prince princess emperor empress sir lord lady dame dr doctor prof professor mr mrs ms mx rev reverend father rabbi imam sheikh saint commissioner sheriff attorney detective officer agent coach deputy former acting interim elect speaker premier dictator pres vp').split(' '));
+    const toks=String(label||'').trim().split(/\s+/).filter(Boolean);
+    let i=0;
+    while(i<toks.length-1){const w=toks[i].replace(/[^A-Za-z]/g,'').toLowerCase();if(w&&this._ROLE.has(w))i++;else break;}
+    return toks.slice(i).join(' ');
+  }
   wikiDef(id){return this.state.wikiDefs&&this.state.wikiDefs[id];}
   corefContext(id){
     // Context that proves a referent, graded by specificity. STRONG terms are the
@@ -3626,6 +3638,17 @@ class Component extends DCLogic {
     const canJudge=properG.size>=3;                       // graph rich enough to coref-check
     const disconfirmed=!isGen&&canJudge&&ch===0&&artN.size>=3; // proper-noun anchors elsewhere
     const lexOK=af.exact||(af.headMatch&&af.covL>=0.6&&af.covT>=0.5)||(af.headMatch&&af.covL>=0.85&&af.covT>=0.55);
+    // STRONG NAME IDENTITY — a fully sufficient confidence on its own. Strip the leading
+    // honorific/role from the label ("Vice President JD Vance" → "JD Vance") and test the
+    // bare name against the title. When the WHOLE article title sits inside that name
+    // (covT≥1), the head nouns agree both ways, and the name is a specific multi-token
+    // PROPER noun, the article simply IS this referent — a full personal/proper name like
+    // "JD Vance" rarely collides — so we may confirm on lexical identity even when the
+    // graph is too sparse to coref-check. (The disconfirmation guard above still wins
+    // whenever the graph CAN judge and the article anchors somewhere else entirely.)
+    const core=this._nameCore(label),afc=this._titleAffinity(core,top.title);
+    const coreToks=String(core).trim().split(/\s+/).filter(w=>w.replace(/[^A-Za-z0-9]/g,'').length>1).length;
+    const specificName = this.looksProperNoun(core) && coreToks>=2 && afc.headMatch && afc.headBack && afc.covT>=1 && afc.covL>=0.5;
     // Confirmation needs CORROBORATION from the entity's attested context — a shared
     // specific referent (proper-noun coref, ch) OR a shared predicate/topic term (sh) —
     // never a bare name match. A generic concept is the exception: its general article
@@ -3637,10 +3660,10 @@ class Component extends DCLogic {
     // is a different thing wearing the same letters — "trigger laws" (legal) vs "Trigger Law"
     // (a 1944 Western film). Refuse it even when the title matches exactly, generic or not.
     const articleConflict = artN.size>=3 && ch===0 && sh===0;
-    const confirmed = !disconfirmed && !articleConflict && lexOK && (isGen ? (af.exact||af.covL>=0.85) : corroborated);
+    const confirmed = !disconfirmed && (specificName || (!articleConflict && lexOK && (isGen ? (af.exact||af.covL>=0.85) : corroborated)));
     return {text:extract,title:top.title,desc:top.description||'',
       url:(top.content_urls&&top.content_urls.desktop&&top.content_urls.desktop.page)||('https://en.wikipedia.org/wiki/'+encodeURIComponent(String(top.title).replace(/ /g,'_'))),
-      thumb:(top.thumbnail&&top.thumbnail.source)||null,confirmed:confirmed,score:Math.round(score(top)*100)/100,ctxStrong:sh,coref:ch,disconfirmed:disconfirmed};
+      thumb:(top.thumbnail&&top.thumbnail.source)||null,confirmed:confirmed,score:Math.round(score(top)*100)/100,ctxStrong:sh,coref:ch,disconfirmed:disconfirmed,specificName:specificName};
   }
   // Token affinity between an entity label and a candidate article title:
   // light-stemmed content-token coverage in both directions + head-noun match.
