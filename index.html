@@ -1466,7 +1466,7 @@ class Component extends DCLogic {
       // resize listener; pane is the active region when in single-pane phone mode.
       vw:(typeof window!=='undefined'?window.innerWidth:1400), pane:'doc',
       gz:{k:1,x:0,y:0},
-      hoverSrc:null, pinSrc:null, openSrc:null, mode:'breadth', direction:'', hoverEnt:null, hoverHref:null, hoverXY:{x:0,y:0}, rev:0, sortMode:'updated',
+      hoverSrc:null, pinSrc:null, openSrc:null, mode:'breadth', direction:'', hoverEnt:null, hoverHref:null, hoverAhead:null, hoverXY:{x:0,y:0}, rev:0, sortMode:'updated',
       llm:true, llmAvail:false, svoBusy:false, svoStatus:'', pasteOpen:false, pasteText:'',
       srcWide:false, srcTab:'page', srcDoc:null, srcLoading:false, srcErr:null, linkMode:savedLink==='0'?false:true, linkChoice:null,
       viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
@@ -3407,7 +3407,7 @@ class Component extends DCLogic {
       style:{display:'block',width:'100%',height:'auto',cursor:this._gzDrag?'grabbing':'grab',touchAction:'none'}},[stage]);
   }
   setLens(l){this.setState({panelLens:l});}
-  panelNodeHover(id,ev){clearTimeout(this._pivotT);this._hovEnt=id;const st={hoverEnt:id};const x=(ev&&ev.clientX!=null)?ev.clientX:null,y=(ev&&ev.clientY!=null)?ev.clientY:null;if(x!=null)st.hoverXY={x,y};this.setState(st);if(x!=null)this._startCardWatch(x,y);}
+  panelNodeHover(id,ev){clearTimeout(this._pivotT);this._hovEnt=id;const st={hoverEnt:id,hoverHref:null,hoverAhead:null};const x=(ev&&ev.clientX!=null)?ev.clientX:null,y=(ev&&ev.clientY!=null)?ev.clientY:null;if(x!=null)st.hoverXY={x,y};this.setState(st);if(x!=null)this._startCardWatch(x,y);}
   panelNodeLeave(){this._stopCardWatch();this._hovEnt=null;this.setState({hoverEnt:null});}
   // The short take a reading reads INTO the entity — the predicate it lays over it.
   _readingLabel(id,i){
@@ -4398,7 +4398,11 @@ class Component extends DCLogic {
     // its section id and just gains the eo-bm class (its section id is the jump target).
     const marks=this.detectBookmarks(p,paras),bmAt=new Map();
     marks.forEach((m,n)=>bmAt.set(m.paraIndex,{why:m.why,n}));
-    const bookmarks=[],toc=[],parts=[];let dropped=false;
+    // Drop caps open every chapter, not just the document: chapStart is true at the very
+    // start and is re-armed after each heading, so the first paragraph of each chapter
+    // gets the ::first-letter drop cap. A prose section anchor IS its chapter's opening
+    // paragraph, so it always drop-caps.
+    const bookmarks=[],toc=[],parts=[];let chapStart=true;
     paras.forEach((t,i)=>{
       const hit=secAt.get(i),bm=bmAt.get(i);
       const bmAttr=bm?' data-eo-why="'+esc(bm.why||'')+'"':'';
@@ -4408,11 +4412,12 @@ class Component extends DCLogic {
         const disp=/^#{1,6}\s/.test(t)?t.replace(/^#{1,6}\s+/,'').replace(/\s*#+$/,''):t;
         const ind=lv>1?' style="margin-left:'+((lv-1)*1.15)+'em"':'';
         const cls='eo-chap'+(hit.s.kind==='emergent'?' eo-emergent':'')+(bm?' eo-bm':'');
-        if(hit.s.kind==='heading'||this._titleish(t)){parts.push('<h2 class="'+cls+'" id="'+id+'"'+ind+bmAttr+'>'+esc(disp)+'</h2>');return;}
-        parts.push('<p id="'+id+'" class="'+(dropped?'':'eo-first ')+(bm?'eo-bm':'')+'"'+bmAttr+'>'+esc(t)+'</p>');dropped=true;return;}
+        // A heading opens a chapter — arm the drop cap for the paragraph that follows it.
+        if(hit.s.kind==='heading'||this._titleish(t)){parts.push('<h2 class="'+cls+'" id="'+id+'"'+ind+bmAttr+'>'+esc(disp)+'</h2>');chapStart=true;return;}
+        parts.push('<p id="'+id+'" class="eo-first'+(bm?' eo-bm':'')+'"'+bmAttr+'>'+esc(t)+'</p>');chapStart=false;return;}
       if(bm){const id='eo-bm-'+bm.n;bookmarks.push({id,why:bm.why,paraIndex:i});
-        parts.push('<p id="'+id+'" class="'+(dropped?'':'eo-first ')+'eo-bm"'+bmAttr+'>'+esc(t)+'</p>');dropped=true;return;}
-      parts.push('<p'+(dropped?'':' class="eo-first"')+'>'+esc(t)+'</p>');dropped=true;
+        parts.push('<p id="'+id+'" class="'+(chapStart?'eo-first ':'')+'eo-bm"'+bmAttr+'>'+esc(t)+'</p>');chapStart=false;return;}
+      parts.push('<p'+(chapStart?' class="eo-first"':'')+'>'+esc(t)+'</p>');chapStart=false;
     });
     const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
     const v=(n,d)=>'--eo-'+n+':'+d+';';
@@ -4713,6 +4718,10 @@ class Component extends DCLogic {
           const span=d.createElement('span');const idx=this._frameIds.push(id)-1;
           span.setAttribute('data-eo-ent',String(idx));span.className=href?'eo-ent-link':'eo-ent';
           if(href)span.setAttribute('data-eo-href',href);
+          // No in-prose link (e.g. the stripped Reader view) — still run ahead on hover to
+          // the entity's own page so the card shows pivot text. Kept off data-eo-href so the
+          // span stays plain (no link chrome) and a click still opens the profile, not the link.
+          else{const aw=this._entWikiUrl(id);if(aw)span.setAttribute('data-eo-ahead',aw);}
           span.textContent=m[0];frags.push(span);last=m.index+m[0].length;wraps++;
           if(wraps>1500)break;
         }
@@ -4752,7 +4761,7 @@ class Component extends DCLogic {
         const a=ev.target.closest&&ev.target.closest('a[href]');
         if(a){const href=a.href||a.getAttribute('href');if(href&&/^https?:/i.test(href)){ev.preventDefault();ev.stopPropagation();this.entLeave();this.goWeb(href);}}};
       const onOver=ev=>{const s=ev.target.closest&&ev.target.closest('[data-eo-ent]');
-        if(s){const id=this._frameIds[+s.getAttribute('data-eo-ent')];if(id==null)return;const href=s.getAttribute('data-eo-href')||null;const o=this._frameOffset();clearTimeout(this._prevT);this.entHover(id,{clientX:o.x+ev.clientX,clientY:o.y+ev.clientY},href);return;}
+        if(s){const id=this._frameIds[+s.getAttribute('data-eo-ent')];if(id==null)return;const href=s.getAttribute('data-eo-href')||null;const ahead=s.getAttribute('data-eo-ahead')||null;const o=this._frameOffset();clearTimeout(this._prevT);this.entHover(id,{clientX:o.x+ev.clientX,clientY:o.y+ev.clientY},href,ahead);return;}
         // A wiki link that is NOT a folded entity → dwell pivots to a link preview.
         const a=ev.target.closest&&ev.target.closest('a[data-eo-wiki]');
         if(a&&!a.hasAttribute('data-eo-ent')){clearTimeout(this._pivotT);this.wikiPreviewHover(a.getAttribute('data-eo-href')||a.href);}};
@@ -4776,10 +4785,17 @@ class Component extends DCLogic {
     const delay=mode==='hover'?60:(this.state.hoverDelay||1100);
     this._pivotT=setTimeout(()=>{if(this._hovEnt===id)this.setState({panelSel:id,previewWiki:null,rightOpen:true});},delay);
   }
-  entHover(id,ev,href){clearTimeout(this._hovT);this._stopCardWatch();
+  // A Wikipedia page guessed from an entity's label — the run-ahead target for a name that
+  // has no in-prose link (the stripped Reader view). Missing/disambiguation pages fail
+  // gracefully (no pivot block), so a wrong guess just shows the plain card.
+  _entWikiUrl(id){const l=this.labelOf(id);if(!l||l.length<3)return null;return 'https://en.wikipedia.org/wiki/'+encodeURIComponent(l.replace(/\s+/g,'_'));}
+  // The URL the hover card is running ahead to: a real in-prose link if there is one, else
+  // the entity's own page. Drives the prefetch; only a real link gets the "open link" button.
+  _aheadUrl(){return this.state.hoverHref||this.state.hoverAhead||null;}
+  entHover(id,ev,href,ahead){clearTimeout(this._hovT);this._stopCardWatch();
     this._hovEnt=id;
     const x=(ev&&ev.clientX)||0,y=(ev&&ev.clientY)||0;
-    this._pendHover={id,href:href||null,x,y};
+    this._pendHover={id,href:href||null,ahead:ahead||null,x,y};
     // The card appears only once the cursor SETTLES on an entity — a glance while
     // reading, or sweeping the mouse across the text, never pops it up (see onMove,
     // which keeps re-arming the timer until the cursor stops moving).
@@ -4795,11 +4811,11 @@ class Component extends DCLogic {
     clearTimeout(this._cardT);
     const delay=(this.state.hoverPivot==='hover')?90:340;
     this._cardT=setTimeout(()=>{const p=this._pendHover;if(!p||this._hovEnt!==p.id)return;
-      this.setState({hoverEnt:p.id,hoverHref:p.href,hoverXY:{x:p.x,y:p.y},hoverWiki:null});
+      this.setState({hoverEnt:p.id,hoverHref:p.href,hoverAhead:p.ahead||null,hoverXY:{x:p.x,y:p.y},hoverWiki:null});
       this._startCardWatch(p.x,p.y);
-      // Run ahead one layer: if the entity links out, prefetch the linked article and
-      // show what's relevant right in the hover card (no navigation needed).
-      if(p.href)this._fetchHoverWiki(p.href);},delay);
+      // Run ahead one layer: prefetch the linked article (or, with no in-prose link, the
+      // entity's own page) and show what's relevant right in the hover card — no navigation.
+      const pre=p.href||p.ahead;if(pre)this._fetchHoverWiki(pre);},delay);
   }
   // A reasonable label for a link BEFORE its preview resolves: a Wikipedia article's
   // title if the URL is a /wiki/ path, else the bare host. Lets the card/panel name
@@ -4842,11 +4858,11 @@ class Component extends DCLogic {
     if(!href||/^#/.test(href)||/^javascript:/i.test(href))return;
     this._linkPrev=this._linkPrev||{};
     const cached=this._linkPrev[href];
-    if(cached){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:cached.title,extract:this.endOnBoundary(cached.extract,260),loading:false}});return;}
+    if(cached){if(this._aheadUrl()===href)this.setState({hoverWiki:{href,title:cached.title,extract:this.endOnBoundary(cached.extract,260),loading:false}});return;}
     this.setState({hoverWiki:{href,title:this._linkLabel(href),extract:'',loading:true}});
     try{const rec=await this._linkPreview(href);
-      if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:rec.title,extract:this.endOnBoundary(rec.extract,260),loading:false}});
-    }catch(e){if(this.state.hoverHref===href)this.setState({hoverWiki:{href,title:this._linkLabel(href),extract:'',loading:false,err:true}});}
+      if(this._aheadUrl()===href)this.setState({hoverWiki:{href,title:rec.title,extract:this.endOnBoundary(rec.extract,260),loading:false}});
+    }catch(e){if(this._aheadUrl()===href)this.setState({hoverWiki:{href,title:this._linkLabel(href),extract:'',loading:false,err:true}});}
   }
   // Anti-stick: once the card is up, watch the real pointer. The instant it leaves both
   // the card (with a small bridge) and a radius around the word that opened it, drop it.
@@ -4864,7 +4880,7 @@ class Component extends DCLogic {
     window.addEventListener('mousemove',this._cardWatch,true);
   }
   _stopCardWatch(){if(this._cardWatch){window.removeEventListener('mousemove',this._cardWatch,true);this._cardWatch=null;}}
-  _hideCardNow(){this._stopCardWatch();clearTimeout(this._cardT);clearTimeout(this._hovT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;if(this.state.hoverEnt!=null)this.setState({hoverEnt:null,hoverHref:null,hoverWiki:null});}
+  _hideCardNow(){this._stopCardWatch();clearTimeout(this._cardT);clearTimeout(this._hovT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;if(this.state.hoverEnt!=null)this.setState({hoverEnt:null,hoverHref:null,hoverAhead:null,hoverWiki:null});}
   // A hyperlink that ISN'T a folded entity (a news article, "Proceedings of the National
   // Academy of Sciences", &c.) still has a referent — the page it points at. Dwelling on
   // it pivots the panel to a lightweight preview of that page (title + lede, or a wiki
@@ -4887,16 +4903,17 @@ class Component extends DCLogic {
     }catch(e){if(this.state.previewWiki&&this.state.previewWiki.href===href)this.setState({previewWiki:{title,href,loading:false,extract:'',err:true}});}
   }
   closePreview(){clearTimeout(this._prevT);this._prevHref=null;if(this.state.previewWiki)this.setState({previewWiki:null});}
-  entLeave(){clearTimeout(this._cardT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;clearTimeout(this._hovT);this._hovT=setTimeout(()=>{this._stopCardWatch();this.setState({hoverEnt:null,hoverHref:null,hoverWiki:null});},220);}
+  entLeave(){clearTimeout(this._cardT);clearTimeout(this._pivotT);this._pendHover=null;this._hovEnt=null;clearTimeout(this._hovT);this._hovT=setTimeout(()=>{this._stopCardWatch();this.setState({hoverEnt:null,hoverHref:null,hoverAhead:null,hoverWiki:null});},220);}
   keepHover(){clearTimeout(this._hovT);}
-  hoverProfile(){const id=this.state.hoverEnt;clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(id==null)return;this.clickEntity(id);}
+  hoverProfile(){const id=this.state.hoverEnt;clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null,hoverAhead:null});if(id==null)return;this.clickEntity(id);}
   hoverLink(){const u=this.state.hoverHref;clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(u){try{this.goWeb(u);}catch(e){}}}
   hoverVals(base){const g=this.graph,he=this.state.hoverEnt;if(!(he&&g&&g.entities.has(he)))return;
     const hl=this.labelOf(he),hm=this.mentionsOf(he),hs=this.sourcesOf(he),hn=this.neighbors(he);
     const hb={eva:0,def:0,held:0};hm.forEach(i=>hb[this.bandOf(i)]++);const ht=hb.eva+hb.def+hb.held||1;let l2,c2;if(hb.eva/ht>=.45){l2='well attested';c2='#1d4ed8';}else if(hb.def/ht>=.4){l2='mostly asserted';c2='#b45309';}else{l2='mostly mentioned';c2='#6b7280';}
     const vw=(typeof window!=='undefined'&&window.innerWidth)||960,x=Math.min(this.state.hoverXY.x+6,vw-290),y=this.state.hoverXY.y+18;
     const heHref=this.state.hoverHref;
-    const hw=this.state.hoverWiki,hasPre=!!(heHref&&hw&&hw.href===heHref&&(hw.loading||hw.extract));
+    const preUrl=heHref||this.state.hoverAhead||null;
+    const hw=this.state.hoverWiki,hasPre=!!(preUrl&&hw&&hw.href===preUrl&&(hw.loading||hw.extract));
     base.hoverCardOn=true;base.hoverCard={name:hl,
       hasPrefetch:hasPre,prefetchTitle:hasPre?(hw.title||''):'',prefetchLoading:!!(hasPre&&hw.loading&&!hw.extract),prefetchText:hasPre?(hw.extract||''):'',av:this.initials(hl),avStyle:this.avatar(hl,34),onEnter:()=>this.keepHover(),onLeave:()=>this.entLeave(),onProfile:()=>{this._stopCardWatch();clearTimeout(this._hovT);clearTimeout(this._pivotT);this.setState({hoverEnt:null,hoverHref:null});this.clickEntity(he);},hasLink:!!this.state.hoverHref,noLink:!this.state.hoverHref,linkHost:this.short(this.state.hoverHref||''),onLink:()=>{this._stopCardWatch();clearTimeout(this._hovT);this.setState({hoverEnt:null,hoverHref:null});if(heHref){try{this.goWeb(heHref);}catch(e){}}},stat:(g.entities.get(he).sightings||hm.length)+'× · '+hn.length+' links · '+hs.length+' sources',gist:this.norm(this.master.sentences[g.entities.get(he).firstSeen]||this.master.sentences[hm[0]]||'').slice(0,150),est:l2,estStyle:'color:'+c2+';font-weight:600;',segs:[[hb.eva,'#1d4ed8'],[hb.def,'#b45309'],[hb.held,'#6b7280']].filter(([n])=>n>0).map(([n,c])=>({style:'width:'+(n/ht*100)+'%;background:'+c+';display:block;'})),wrap:'position:fixed;left:'+x+'px;top:'+y+'px;width:270px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:13px 14px;z-index:30;animation:eopop .12s ease-out;'};}
 
