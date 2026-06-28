@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import {
   personalityDirection, projectPersonality, loadVoiceCartridge, cartridgeBias,
   PANTHEON, loadPantheon, mountPersonality, capNorm, orthogonality, defaultPantheonBank,
+  STANCE, SITE_GRAIN, loadStanceBanks, stanceFamily, resolveOverlap,
+  BAND_CELLS, bandToCell, bandOfCell,
 } from '../src/write/voice.js';
 
 // Personality is the Horizon's DEPARTURE from σ projected to tokens. The load-bearing claim is
@@ -96,4 +98,65 @@ test('defaultPantheonBank — empty vectors ⇒ λ is a no-op until baked', () =
   assert.equal(bank.get('DEF').god, 'Thoth');
   assert.equal(bank.get('DEF').bias.size, 0);
   assert.equal(mountPersonality({ cell: { act: 'DEF' }, weights: { act: 1 }, bank }).bias.size, 0);
+});
+
+// ── Stance (Track C) + Site (Track D) ────────────────────────────────────────────────────
+test('Stance Mode — the projective Generate stance is capped tightest', () => {
+  assert.ok(STANCE.mode.Generate.cap < STANCE.mode.Differentiate.cap, 'Generate claims most → tightest cap');
+  assert.equal(stanceFamily('Making'), 'Generate');
+  assert.equal(stanceFamily('Clearing'), 'Differentiate');
+  assert.equal(stanceFamily('???'), null);
+});
+
+test('Site grain — Figure has no cartridge (μ carries it); Ground/Pattern do', () => {
+  assert.equal(SITE_GRAIN.Figure, undefined);
+  assert.ok(SITE_GRAIN.Ground && SITE_GRAIN.Pattern);
+});
+
+test('multi-axis mount — Act + Mode + grain sum at the cell', () => {
+  const banks = {
+    act: loadPantheon({ gods: { DEF: { tokens: { '5': 4 } } } }),
+    mode: loadStanceBanks({ mode: { Relate: { tokens: { '6': 2 } } } }).mode,
+    grain: loadStanceBanks({}).resolution,   // empty, ignored
+  };
+  const m = mountPersonality({ cell: { act: 'DEF', mode: 'Relate' }, weights: { act: 1, mode: 1 }, banks, budget: 100 });
+  assert.ok(m.bias.get(5) > 0 && m.bias.get(6) > 0, 'both coordinates contributed');
+  assert.equal(m.mounted.length, 2);
+});
+
+test('register-orthogonality gate — collapses Stance-defeat into Act-REC when too aligned', () => {
+  const act = loadPantheon({ gods: { REC: { tokens: { '1': 1, '2': 1 } } } });
+  const stance = loadStanceBanks({ resolution: { defeat: { tokens: { '1': 1, '2': 1 } } } });   // identical → cos 1
+  const r = resolveOverlap(act, stance, { threshold: 0.6 });
+  assert.equal(r.collapsed, true);
+  assert.equal(stance.resolution.has('defeat'), false, 'the overlapping coordinate goes unbaked, not double-counted');
+});
+
+// ── BAND → CARTRIDGE: epistemic status made audible ──────────────────────────────────────
+test('bandOfCell — read from provenance, not the model', () => {
+  assert.equal(bandOfCell({ spans: [{ idx: 3 }], op: 'DEF' }), 'existence');     // one resolving span
+  assert.equal(bandOfCell({ spans: [{ idx: 3 }, { idx: 9 }] }), 'structure');    // assembled across spans
+  assert.equal(bandOfCell({ spans: [{ idx: 3 }], op: 'CON' }), 'structure');     // carried by a relation
+  assert.equal(bandOfCell({ spans: [] }), 'significance');                        // a reading, no resolving span
+});
+
+test('bandToCell — existence→DEF, structure→Pattern+CON, significance→SIG+EVA', () => {
+  assert.equal(bandToCell('existence').act, 'DEF');
+  assert.equal(bandToCell('structure').grain, 'Pattern');
+  assert.deepEqual(bandToCell('significance').act, ['SIG', 'EVA']);
+  assert.equal(bandToCell('absence').act, 'NUL');
+});
+
+test('band-mounted register separates the three levels (with baked vectors)', () => {
+  // Existence bare (DEF), Structure assembled (CON+Pattern), Significance perspectival (SIG+EVA):
+  // distinct token sets ⇒ the registers are distinguishable, the whole point of routing through
+  // the band rather than the model's flat declarative.
+  const banks = {
+    act: loadPantheon({ gods: { DEF: { tokens: { '10': 3 } }, CON: { tokens: { '20': 3 } }, SIG: { tokens: { '30': 3 } }, EVA: { tokens: { '31': 3 } } } }),
+    grain: (() => { const b = new Map(); b.set('Pattern', { label: 'Pattern', cap: 0.5, bias: new Map([[21, 2]]) }); return b; })(),
+  };
+  const reg = (band) => mountPersonality({ cell: { ...bandToCell(band), grain: band === 'structure' ? 'Pattern' : null }, weights: { act: 1, grain: 1 }, banks, budget: 100 }).bias;
+  assert.ok(reg('existence').has(10) && !reg('existence').has(30), 'existence ⇒ Thoth, not Apollo');
+  assert.ok(reg('structure').has(20) && reg('structure').has(21), 'structure ⇒ Harmonia + Pattern grain');
+  assert.ok(reg('significance').has(30) && reg('significance').has(31), 'significance ⇒ Apollo + Themis');
 });

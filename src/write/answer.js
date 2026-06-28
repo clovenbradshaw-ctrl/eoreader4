@@ -39,6 +39,7 @@ import { surfToPlan } from './plan.js';
 import { frameAt } from './frame.js';
 import { streamPhrase } from '../model/stream.js';
 import { predictNextMove, MOVE_ALPHABET } from '../predict/index.js';
+import { mountPersonality, bandToCell, bandOfCell } from './voice.js';
 
 // streamAnswer — realise the grounded answer one beat per surfer stop, streaming the
 // tokens through `onToken` (§3a) and binding each beat backward with the witness
@@ -85,9 +86,20 @@ export const streamAnswer = async ({
     // every beat but the first — no boundary marker, no newline, ever reaches the
     // surface. The visible stream and the returned draft reconcile by construction.
     if (i > 0) { draft += ' '; onToken?.(' '); }
-    // The lens port rides the same beat: each grounded sentence is steered through the logit
-    // bias (lens-port.js) when armed, and is byte-identical when not (lens === null).
-    const raw = await streamPhrase(model, cursor.input, { maxTokens: cursor.budget, onToken, lens });
+    // The lens port rides the same beat: each grounded sentence is steered through the logit bias
+    // (lens-port.js) when armed, byte-identical when not (lens === null). BAND → REGISTER: the
+    // beat's epistemic band is read from its PROVENANCE (the cell's resolved spans + operator), not
+    // the model's self-judgment, and mounts the matching cartridge — Existence bare (DEF), Structure
+    // assembled (Pattern + CON), Significance perspectival (SIG + EVA) — so the prose makes the
+    // status audible. NUL-on-VOID stays locked. Empty baked vectors ⇒ a no-op until the bake lands.
+    let beatLens = lens, band = null;
+    if (lens?.banks) {
+      band = lens.locked ? 'absence' : bandOfCell(cell);
+      const cellAddr = { ...bandToCell(band), grain: band === 'structure' ? 'Pattern' : lens.grain || null, locked: lens.locked };
+      const personality = mountPersonality({ cell: cellAddr, weights: { act: 1, grain: 1 }, banks: lens.banks, budget: lens.budget ?? 6 }).bias;
+      beatLens = { ...lens, personality, lambda: personality.size ? 1 : 0 };
+    }
+    const raw = await streamPhrase(model, cursor.input, { maxTokens: cursor.budget, onToken, lens: beatLens });
     const beat = raw.trim();
     draft += beat;
 
@@ -117,7 +129,7 @@ export const streamAnswer = async ({
 
     beats.push(Object.freeze({
       text: beat, cellId: cell.id, stop: cell.stop, site: frame.site,
-      band: cell.res, witness: w, seam, predicted,
+      band: cell.res, epistemicBand: band, witness: w, seam, predicted,
     }));
     audit.push(Object.freeze({
       cell: cell.id, op: cell.op, stop: cell.stop, kind: cell.kind,

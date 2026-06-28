@@ -167,26 +167,146 @@ export const capNorm = (map, budget) => {
   return map;
 };
 
-// mountPersonality({ cell, weights, bank, tilt, budget }) → { bias, mounted }. Read the cell
-// address (act/grain/stance) and the Born weight of each coordinate, look up each coordinate's
-// cartridge, and form the Born-weighted, cap-bounded, budget-capped sum, plus the standing
-// ρ-departure tilt. Returns the λ contribution and the mounted-set for the Given-Log. (Stance and
-// the thin Site grain-diction layer join the same sum once their banks exist — Tracks C/D.)
-export const mountPersonality = ({ cell = {}, weights = {}, bank = null, tilt = null, budget = 6 } = {}) => {
+// mountPersonality({ cell, weights, banks|bank, tilt, budget }) → { bias, mounted }. Read the
+// cell address — act (Track A), mode + resolution (Stance, Track C), grain (the thin Site layer,
+// Track D) — and the Born weight of each coordinate, look up each coordinate's cartridge, and form
+// the Born-weighted, cap-bounded, budget-capped sum, plus the standing ρ-departure tilt. The faces
+// are SUMMED (not enumerated) because the cube's axes are independent. `banks` is a per-axis map
+// { act, mode, resolution, grain }; the legacy `bank` is an alias for the Act bank alone. Returns
+// the λ contribution and the mounted-set for the Given-Log.
+const MOUNT_AXES = ['act', 'mode', 'resolution', 'grain'];
+export const mountPersonality = ({ cell = {}, weights = {}, banks = null, bank = null, tilt = null, budget = 6 } = {}) => {
+  const B = banks || (bank ? { act: bank } : {});
   const acc = new Map();
   const mounted = [];
   const add = (bias, scale) => { for (const [t, d] of bias) acc.set(t, (acc.get(t) || 0) + d * scale); };
 
-  if (bank && cell.act && bank.has(cell.act)) {
-    const g = bank.get(cell.act);
-    const w = (Number.isFinite(weights.act) ? weights.act : 1) * g.cap;   // Born weight × risk cap
-    add(g.bias, w);
-    mounted.push({ axis: 'act', op: cell.act, god: g.god, weight: round(w), locked: !!cell.locked });
+  for (const axis of MOUNT_AXES) {
+    const b = B[axis]; if (!b) continue;
+    // a coordinate may name SEVERAL cartridges (Significance mounts Apollo + Themis together).
+    const keys = Array.isArray(cell[axis]) ? cell[axis] : (cell[axis] ? [cell[axis]] : []);
+    for (const key of keys) {
+      if (!b.has(key)) continue;
+      const e = b.get(key);
+      const w = (Number.isFinite(weights[axis]) ? weights[axis] : 1) * e.cap;   // Born weight × risk cap
+      add(e.bias, w);
+      mounted.push({ axis, key, god: e.god || e.label || key, weight: round(w), locked: axis === 'act' && !!cell.locked });
+    }
   }
   if (tilt && tilt.size) { add(tilt, Number.isFinite(weights.tilt) ? weights.tilt : 1); mounted.push({ axis: 'tilt', weight: round(weights.tilt ?? 1) }); }
 
   capNorm(acc, budget);
   return { bias: acc, mounted };
+};
+
+// ── Stance face (Track C) ────────────────────────────────────────────────────────────────
+// Stance is Mode — the analytic / synthetic / projective triad — plus Resolution, the assert-vs-
+// defeat confidence. Both have a real diction signature and bake as cartridges. The projective
+// Generate stance is capped tightest (it claims the most, like Apollo); the obvious overlap to
+// watch is Resolution-DEFEAT against Act-REC (walking a reading back and the defeating stance are
+// nearly the same surface move) — resolveOverlap() measures it and collapses the pair if it fails.
+export const STANCE = Object.freeze({
+  mode: {
+    Differentiate: { label: 'Differentiate', cap: 0.7, toward: 'analytic — separates, contrasts, draws the distinction', against: 'blurs categories into one' },
+    Relate:        { label: 'Relate',        cap: 0.7, toward: 'synthetic — connects, integrates, finds the common thread', against: 'leaves things disjoint' },
+    Generate:      { label: 'Generate',      cap: 0.4, toward: 'projective — proposes, extends, imagines forward', against: 'stays strictly descriptive' },
+  },
+  resolution: {
+    assert: { label: 'assert', cap: 0.6, toward: 'commits the claim plainly', against: 'hedges everything' },
+    defeat: { label: 'defeat', cap: 0.7, toward: 'walks a reading back — "on reflection, not that"', against: 'flatly restates without revising' },
+  },
+});
+
+// ── thin Site layer (Track D) ──────────────────────────────────────────────────────────────
+// Site is grain, and grain is largely WHAT YOU POINT AT — which μ (relevance) already encodes from
+// the surfer's salience. Figure-grain is up-weighting the figure's tokens, which μ does, so Figure
+// gets NO cartridge. Ground and Pattern carry only a thin extra diction signature on top — the
+// register shift μ cannot supply — so the Site face is partial by design, not co-equal.
+export const SITE_GRAIN = Object.freeze({
+  Ground:  { label: 'Ground',  cap: 0.5, toward: 'diffuse and collective — the field, the whole, the ambient', against: 'narrow specifics' },
+  Pattern: { label: 'Pattern', cap: 0.5, toward: 'abstract and meta — the recurring shape, the structure', against: 'the concrete instance' },
+});
+
+// Build a sub-bank { key -> { label, cap, bias } } from a reference table + a baked-tokens json.
+const loadAxis = (ref, tokensByKey = {}) => {
+  const bank = new Map();
+  for (const [key, meta] of Object.entries(ref)) {
+    const bias = new Map();
+    const tokens = tokensByKey[key]?.tokens;
+    if (tokens && typeof tokens === 'object') {
+      for (const [id, d] of Object.entries(tokens)) {
+        const t = Number(id);
+        if (Number.isInteger(t) && Number.isFinite(d) && d) bias.set(t, d);
+      }
+    }
+    bank.set(key, { label: meta.label, cap: meta.cap, bias });
+  }
+  return bank;
+};
+
+// loadStanceBanks(json) → { mode, resolution }; loadSiteBank(json) → grain bank. Empty vectors ⇒
+// the coordinate is a no-op until baked, exactly like the Act pantheon.
+export const loadStanceBanks = (json = {}) => ({
+  mode: loadAxis(STANCE.mode, json?.mode || {}),
+  resolution: loadAxis(STANCE.resolution, json?.resolution || {}),
+});
+export const defaultStanceBanks = () => loadStanceBanks({});
+export const loadSiteBank = (json = {}) => loadAxis(SITE_GRAIN, json?.grain || {});
+export const defaultSiteBank = () => loadSiteBank({});
+
+// stanceFamily(name) → the Mode coordinate for a surfer stance. updateStance emits Making /
+// Cultivating / Clearing; the rest map through the cube's families. Null when unknown.
+const STANCE_FAMILY = { Making: 'Generate', Cultivating: 'Generate', Clearing: 'Differentiate', Binding: 'Relate', Tending: 'Relate', Dissecting: 'Differentiate' };
+export const stanceFamily = (name) => STANCE_FAMILY[name] || null;
+
+// resolveOverlap(actBank, stanceBanks, { threshold }) → the register-INDEPENDENCE gate (Track C's
+// discipline). If the baked Act-REC vector and the Stance-defeat vector are too aligned in logit
+// space, they encode the same "walk it back" move twice; collapse the pair by dropping the Stance-
+// defeat coordinate (keep the Act god, let the other go unbaked) rather than double-count it.
+// Mutates stanceBanks.resolution in place; returns { collapsed, cos }.
+export const resolveOverlap = (actBank, stanceBanks, { threshold = 0.6 } = {}) => {
+  const rec = actBank?.get?.('REC')?.bias;
+  const defeat = stanceBanks?.resolution?.get?.('defeat')?.bias;
+  if (!rec || !defeat || !rec.size || !defeat.size) return { collapsed: false, cos: 0 };
+  const cos = orthogonality(rec, defeat);
+  const collapsed = Math.abs(cos) > threshold;
+  if (collapsed) stanceBanks.resolution.delete('defeat');   // unbaked rather than double-counted
+  return { collapsed, cos: round(cos) };
+};
+
+// ── BAND → CARTRIDGE: make the epistemic status audible in the prose ──────────────────────
+// The directive (existence / structural-truth / interpretation) is a BAND-assignment problem the
+// veto already solves — and the band is computed from PROVENANCE, never from the model's judgment
+// about its own confidence (the one thing never to trust). Route register through the band so a
+// fluent reader FEELS the drop from "Gregor dies" (existence, bare) to "taken together this
+// suggests" (structure, assembled) to "the ending reads as liberation" (significance, perspectival)
+// without a disclaimer bolted on. The cartridges do the work; the band picks them.
+//
+//   existence    → Thoth (DEF): bare, declarative, span-cited — no hedge, the span carries it.
+//   structure    → Pattern grain + Harmonia (CON): assembled, "taken together", composed not lifted.
+//   significance → Apollo (SIG) + Themis (EVA): "this reads as", "defensible but contested" — the
+//                  diction announces it is a lens. Apollo is capped hardest; over-reading is its
+//                  failure mode, the same caution that wants interpretation MARKED, not smuggled.
+//   absence      → Chaos (NUL): the void register (and NUL-on-VOID is the governance lock).
+export const BAND_CELLS = Object.freeze({
+  existence:    { act: 'DEF' },
+  structure:    { act: 'CON', grain: 'Pattern' },
+  significance: { act: ['SIG', 'EVA'] },
+  absence:      { act: 'NUL' },
+});
+export const bandToCell = (band) => ({ ...(BAND_CELLS[band] || {}) });
+
+// bandOfCell(cell) → the epistemic band of a beat, read from its PROVENANCE (the surfer/plan's
+// resolved spans and operator), not from the model. A single resolving span is Existence; a claim
+// assembled across spans or carried by a relation (CON/SYN/SEG) is Structure; a beat with no
+// resolving span is Significance (a reading — legitimate if marked, which is the point). The
+// straddling B4 seam (some existence, some inference) is the hard case the spec flags; this picks
+// the dominant band, and the per-beat mount leaves the finer split to the realizer's own clauses.
+export const bandOfCell = (cell) => {
+  const n = cell?.spans?.length || 0;
+  if (!n) return 'significance';
+  if (n > 1 || ['CON', 'SYN', 'SEG'].includes(cell?.op)) return 'structure';
+  return 'existence';
 };
 
 // orthogonality(a, b) → cosine of two token-bias maps in logit space. The register-INDEPENDENCE

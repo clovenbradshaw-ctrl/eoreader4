@@ -29,7 +29,7 @@ import { factCheck }        from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
 import { buildConceptTokenMap } from '../write/concept-tokens.js';
-import { mountPersonality, defaultPantheonBank } from '../write/voice.js';
+import { mountPersonality, defaultPantheonBank, defaultStanceBanks, defaultSiteBank, stanceFamily, resolveOverlap } from '../write/voice.js';
 
 // Weave the mind's recalled lines into the prompt as labelled BACKGROUND — only when
 // the user has the Mind chip in weave mode (ctx.mindSpans present). The memory is
@@ -1015,27 +1015,43 @@ const buildLens = (ctx) => {
   // vectors ship empty, so this names which gods mount (the log) while λ stays a no-op until the
   // bake lands; with vectors present it becomes the standing voice tilt.
   const st = ctx.surf?.stance || {};
+  // The cell address across the cube's three axes: Act (the pantheon), Mode (Stance), grain (the
+  // thin Site layer — Figure is carried by μ, so only Ground/Pattern mount a diction cartridge).
+  const grain = st.grain && st.grain !== 'Figure' ? st.grain : null;
   const cell = ctx.voidMeasure
-    ? { act: 'NUL', grain: st.grain || null, stance: st.stance || null, locked: true }
-    : { act: st.op || null, grain: st.grain || null, stance: st.stance || null };
+    ? { act: 'NUL', mode: stanceFamily(st.stance), grain, locked: true }   // NUL-on-VOID governance lock
+    : { act: st.op || null, mode: stanceFamily(st.stance), grain };
+  const w = Number.isFinite(st.firmness) ? st.firmness : 1;
   const { bias: personality, mounted } = mountPersonality({
-    cell, weights: { act: Number.isFinite(st.firmness) ? st.firmness : 1, tilt: 1 },
-    bank: pantheonBank(), budget: 6,
+    cell, weights: { act: w, mode: w, grain: w, tilt: 1 }, banks: lensBanks(), budget: 6,
   });
 
   return {
     conceptMap,
     figureWeights: figureWeightsFromSurf(ctx.surf),   // the surfer's salience as a token bias (μ)
-    personality,                                      // the Born-weighted, budget-capped λ sum
+    personality,                                      // the standing surf-stance λ sum (non-streaming path)
     mounted,                                           // the mounted-set, for the Given-Log
     mu: 2, lambda: personality.size ? 1 : 0, alpha: ctx.alpha ?? 0.05,
+    // The streaming answer loop mounts the BAND cartridge per beat (existence/structure/
+    // significance) from each cell's provenance, so it needs the banks + the standing grain.
+    banks: lensBanks(), budget: 6, grain, locked: !!ctx.voidMeasure,
   };
 };
 
-// The Act pantheon bank, loaded once. Ships with EMPTY baked vectors (λ no-op); a baked
-// data/pantheon.json swaps in the steering vectors without changing the mount mechanism.
-let _pantheonBank = null;
-const pantheonBank = () => (_pantheonBank ||= defaultPantheonBank());
+// The cartridge banks, loaded once: the Act pantheon, the Stance Mode/Resolution faces, and the
+// thin Site grain layer. The register-orthogonality gate runs at load (collapses Stance-defeat into
+// Act-REC if the baked vectors prove too aligned). All ship with EMPTY vectors (λ no-op); a baked
+// data file swaps the steering vectors in without touching the mount mechanism.
+let _banks = null;
+const lensBanks = () => {
+  if (!_banks) {
+    const act = defaultPantheonBank();
+    const stance = defaultStanceBanks();
+    resolveOverlap(act, stance);
+    _banks = { act, mode: stance.mode, resolution: stance.resolution, grain: defaultSiteBank() };
+  }
+  return _banks;
+};
 
 // figureWeightsFromSurf — the surfer's Born-rule salience as a distribution over figure labels.
 // First cut (the spec's smallest test): the focus figure carries the mass; Track-D full reads the
