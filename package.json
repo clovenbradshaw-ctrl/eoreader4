@@ -11,6 +11,7 @@
     "bench": "node scripts/surf-bench.mjs",
     "predict": "node scripts/predict-moves.mjs",
     "helix-predict": "node scripts/helix-predict.mjs",
+    "dna": "node scripts/dna-code.mjs",
     "video-predict": "node scripts/video-predict.mjs",
     "horizon": "node scripts/horizon-demo.mjs",
     "credence": "node scripts/credence-measure.mjs",

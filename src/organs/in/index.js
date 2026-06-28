@@ -7,6 +7,7 @@
 //   ingestMusic(score)          melody    → units = notes    (pitch-class entities)
 //   ingestFrequencies(spec)     raw tones → units = notes    (overtone token sets)
 //   ingestFrames(spec)          video     → units = frames   (motion tracks)
+//   ingestCodons(spec)          DNA/RNA   → units = codons   (prefix token sets)
 //
 // New modalities (audio, tables, OCR) are new adapters emitting the same
 // operators onto the same log. The spine does not change.
@@ -31,3 +32,4 @@ export { ingestImage }       from './image.js';
 export { ingestMusic }       from './music.js';
 export { ingestFrequencies } from './frequency.js';
 export { ingestFrames }      from './video.js';
+export { ingestCodons }      from './codon.js';
