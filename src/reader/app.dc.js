@@ -1066,6 +1066,11 @@ class Component extends DCLogic {
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     // 1) clock questions — no model
     const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
+    // 1b) OPT-IN LONGFORM, offline too: an essay/report/"N words" ask over what's ALREADY been read
+    // (web off, or the reading already covers it) becomes a multi-section grounded piece — the arc
+    // over the in-scope sources — instead of one capped answer. Needs grounded supply; _longformArc
+    // itself falls back to the single answer when supply is thin.
+    if(this._longformIntent(q)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size)))return this._longformArc(id,q,[]);
     // 2) the spans that surface for this question, scoped to the chat's sources
     const ground=this.groundNotes(q,sources);
     // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
