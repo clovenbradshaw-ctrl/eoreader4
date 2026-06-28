@@ -525,6 +525,14 @@ button {
 }
 button:hover { background: #1d4ed8; }
 button:disabled { opacity: .5; cursor: not-allowed; }
+/* The Send button turns into Stop while a turn is in flight (app.js setComposerBusy). */
+#send.stop { background: #b91c1c; }
+#send.stop:hover { background: #dc2626; }
+/* A small badge beneath an answer the user stopped mid-decode. */
+.msg.assistant.stopped > .body::after {
+  content: ' ⏹ stopped';
+  color: #f87171; font-size: .72rem; white-space: nowrap;
+}
 button.small {
   background: #27272a; padding: .25rem .65rem; font-size: .75rem;
 }

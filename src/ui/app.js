@@ -52,6 +52,7 @@ const STATE = {
   backendName: 'webllm',
   model:     null,
   loadingBackend: null,  // promise of the in-flight model load, if any
+  inflight:  null,       // the AbortController of the turn currently running (the Stop button), or null
   graph:     null,       // graph-view controller for the current doc
   activeTab: 'text',
   history:   [],         // the running transcript, fed back each turn (the session fold)
@@ -128,6 +129,16 @@ const els = {
 };
 
 const setStatus = (s) => { els.status.textContent = s; };
+
+// The Send button doubles as a Stop button while a turn is in flight: a click (or the
+// composer submit) aborts the running turn instead of sending. The button is never
+// disabled during a turn — the user must always be able to stop the LLM response.
+const setComposerBusy = (busy) => {
+  els.send.textContent = busy ? 'Stop' : 'Send';
+  els.send.classList.toggle('stop', busy);
+  els.send.title = busy ? 'Stop generating' : '';
+  els.send.disabled = false;
+};
 
 // Ingestion feedback. A large document used to freeze the page silently behind a
 // synchronous parse; now the parse yields and reports, and this paints a live bar in
@@ -489,7 +500,11 @@ const runQuery = async (rawQuestion) => {
   }
   // On a phone the answer lands in the chat pane — make sure it's the one shown.
   if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('chat');
-  els.send.disabled = true;
+  // The Stop handle for this turn: an AbortController whose signal is threaded through the web
+  // gather and the model decode. The Send button becomes Stop while it is in flight.
+  const ctl = new AbortController();
+  STATE.inflight = ctl;
+  setComposerBusy(true);
   renderUserMessage(els.messages, question);
 
   // The grounding scope is the SELECTED set of documents (the tagged chips).
@@ -508,7 +523,17 @@ const runQuery = async (rawQuestion) => {
     finalizeThinking(thinking, `Model failed to load: ${err?.message || err}`, [], {
       route: 'error', flags: [], mode: STATE.grounding, onRetry: () => runQuery(rawQuestion),
     });
-    els.send.disabled = false;
+    STATE.inflight = null;
+    setComposerBusy(false);
+    return;
+  }
+
+  // The user stopped while the model was still loading — abandon the turn before any search
+  // or decode, and leave a stopped marker rather than a half-rendered bubble.
+  if (ctl.signal.aborted) {
+    finalizeThinking(thinking, '⏹ Stopped.', [], { route: 'chat', mode: STATE.grounding });
+    STATE.inflight = null;
+    setComposerBusy(false);
     return;
   }
 
@@ -577,6 +602,7 @@ const runQuery = async (rawQuestion) => {
     lensPort: STATE.lensPort,   // THE LENS PORT (spec-the-lens-port.md): steer the decoder's logits through
                                 //   the lens — relevance + the void gate during generation (the toggle below)
     voicePref: STATE.voicePref, // THE DIAL (spec-the-pantheon.md): the plain-language voice preference
+    signal:   ctl.signal,       // the Stop button: halts the model decode and short-circuits the rest of the turn
 
     onStep:   (name, ctx, data) => {
       updateThinking(thinking, name, data, ctx, { verbose: CHAT_VERBOSE });
@@ -626,6 +652,8 @@ const runQuery = async (rawQuestion) => {
         maxFacets: STATE.researchFacets || 4,
         maxHops: STATE.deepResearchHops || 14,
         searchOpts: { kind: 'auto', fetchPages: true },
+        signal: ctl.signal,    // the Stop button — end the walk between hops
+
         onPlan: (facets) => setThinkingNote(thinking, `🔬 ${deepResearchAnnouncement(question, facets, { maxHops: STATE.deepResearchHops || 14 })}`),
         onHop: (h) => setThinkingNote(thinking, `🔎 ${h.depth === 0 ? `angle: “${h.query}”` : `${'↳'.repeat(h.depth)} hop ${h.index}: “${h.query}”`}…`),
       });
@@ -651,6 +679,7 @@ const runQuery = async (rawQuestion) => {
         search: (query, opts) => searchAndAdmit(query, { client: webClientOf(), rawStore: rawStoreOf(), ...opts }),
         anchor: q, maxHops: RESEARCH_HOPS, k: 3,
         searchOpts: { kind: 'auto', fetchPages: true },
+        signal: ctl.signal,    // the Stop button — end the walk between hops
         onHop: (h) => setThinkingNote(thinking, `🔎 hop ${h.index}/${RESEARCH_HOPS}: “${h.query}”${h.curiosity != null ? ` · curiosity ${h.curiosity} bits` : ''}…`),
       });
       const webDocs = walk.docs;
@@ -723,7 +752,9 @@ const runQuery = async (rawQuestion) => {
   let asstEntry = null;
   const commitHistory = (res) => {
     const route = res.route || res.turn?.route;
-    if (route === 'error') return;
+    // A stopped turn (the Stop button) is not fed back into the session fold — a partial,
+    // unverified answer should not become the premise of the next turn (same reason as an error).
+    if (route === 'error' || res.stopped) return;
     if (!asstEntry) {
       STATE.history.push({ role: 'user', content: question });
       asstEntry = { role: 'assistant', content: res.answer || '' };
@@ -734,7 +765,17 @@ const runQuery = async (rawQuestion) => {
     if (res.unbound) asstEntry.unbound = true; else delete asstEntry.unbound;
   };
 
+  // The user pressed Stop: the turn carries whatever decoded before the halt. Mark it stopped,
+  // give an empty draft a plain "Stopped." so the bubble is never blank, and tag the element so
+  // the CSS shows a small "stopped" badge. commitHistory then keeps it out of the session fold.
+  const stopped = !!result.stopped || ctl.signal.aborted;
+  if (stopped) {
+    result.stopped = true;
+    if (!String(result.answer || '').trim()) result.answer = 'Stopped.';
+  }
+
   render(result, Math.round(performance.now() - t0));
+  if (stopped) thinking.classList.add('stopped');
   // The recalled-memory and web-source blocks are part of the verbose surface — the
   // sources stay reachable through the answer's inline [sN] citation links and the
   // Audit pane. The bare chatbot shows neither inline.
@@ -788,7 +829,8 @@ const runQuery = async (rawQuestion) => {
     renderWebProposal(thinking, result.webProposal, { onSearch: (q) => runFollowup(q) });
   }
 
-  els.send.disabled = false;
+  STATE.inflight = null;
+  setComposerBusy(false);
 };
 
 // The session web instrument and its speculative quarantine, both lazily built on first
@@ -810,8 +852,11 @@ const prefetcherOf = () => (STATE.prefetcher ||= createSpeculativeWeb({
 let prefetchTimer = null;
 const maybePrefetch = () => { /* disabled: see note above — was freezing the tab on type */ };
 
-// The composer's submit path: read the box, clear it, run.
+// The composer's submit path. While a turn is in flight the Send button is a Stop button:
+// a submit aborts the running turn instead of starting a new one. Otherwise: read the box,
+// clear it, run.
 const send = () => {
+  if (STATE.inflight) { STATE.inflight.abort(); return; }
   const question = els.input.value.trim();
   if (!question) return;
   els.input.value = '';
@@ -848,6 +893,7 @@ els.composer.addEventListener('submit', (e) => {
 els.input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
+    if (STATE.inflight) return;   // a turn is running — Enter is inert; Stop is the explicit button
     send();
   }
 });

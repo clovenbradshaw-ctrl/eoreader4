@@ -166,6 +166,7 @@ export const runCuriousResearch = async (seed, {
   k = 3,
   searchOpts = {},
   onHop = null,           // (｛ index, query, term ｝) → void — a progress beat fired before each hop's fetch
+  signal = null,          // an AbortSignal (the Stop button): stop the walk between hops, keeping what it gathered
 } = {}) => {
   const q0 = String(seed || '').trim();
   if (typeof search !== 'function' || !q0) return { docs: [], hops: [], frontier: [], prior: new Map(), topic: new Map() };
@@ -206,6 +207,7 @@ export const runCuriousResearch = async (seed, {
 
   let stray = 0;
   while (hops.length < maxHops && frontier.length) {
+    if (signal?.aborted) break;   // the user stopped — return the pages gathered so far
     const node = popBest();
     const key = normalizeQuery(node.query);
     if (visited.has(key)) continue;

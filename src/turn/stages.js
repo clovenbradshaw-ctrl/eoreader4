@@ -562,11 +562,14 @@ export const stages = {
     // the downstream bind / factcheck / veto stages annotate it exactly as today.
     // Falls back to the single phrase() below when any precondition is absent —
     // non-breaking by construction; the present chat / golden paths are untouched.
+    // CANCELLATION (the Stop button): the turn's AbortSignal, threaded into every
+    // generation path so the backend can halt the decode and hand back the partial.
+    const signal = ctx.signal || null;
     if (ctx.stream && ctx.route === 'grounded' && ctx.doc && ctx.surf && ctx.spans?.length) {
       try {
         const streamed = await streamAnswer({
           doc: ctx.doc, surf: ctx.surf, model: ctx.model, focus: ctx.focus || [],
-          onToken: ctx.onToken, alpha: ctx.alpha ?? undefined, orientation: orientationOf(ctx.doc), lens,
+          onToken: ctx.onToken, alpha: ctx.alpha ?? undefined, orientation: orientationOf(ctx.doc), lens, signal,
         });
         if (streamed && streamed.draft) {
           return { ...ctx, rawOutput: streamed.draft, maxTokens, streamed, lensEvents: drainLens(ctx), lensMounted: lens?.mounted || null };
@@ -578,7 +581,7 @@ export const stages = {
       const gated = await groundedSpeak({
         model: ctx.model, messages: ctx.messages, doc: ctx.doc,
         surf: ctx.surf, question: ctx.question,
-        alpha: ctx.alpha ?? undefined, opts: { maxTokens },
+        alpha: ctx.alpha ?? undefined, opts: { maxTokens, signal },
       });
       return { ...ctx, rawOutput: gated.answer, maxTokens, gated, gatedVoided: gated.voided };
     }
@@ -587,7 +590,14 @@ export const stages = {
     // token by token where the backend exposes a decode callback (webllm, onnx-chat,
     // wllama). A backend without one falls back to draw-then-emit — the whole answer
     // once — and a turn with no `onToken` is byte-identical to the bare phrase().
-    const raw = await streamPhrase(ctx.model, ctx.messages, { maxTokens, onToken: ctx.onToken, lens });
+    const raw = await streamPhrase(ctx.model, ctx.messages, { maxTokens, onToken: ctx.onToken, lens, signal });
+    // The user stopped mid-decode: the partial text is the answer. Short-circuit the rest
+    // of the pipeline (bind/factcheck/veto) so Stop is immediate, not "stop, then grind the
+    // grounding checks over a half-sentence". bind below would do this anyway, but a measured
+    // void or the geometric fact-check can be slow, and there is nothing to verify here.
+    if (signal?.aborted) {
+      return { ...ctx, rawOutput: raw, answer: String(raw || '').trim(), sources: [], maxTokens, stopped: true, terminate: true };
+    }
     return { ...ctx, rawOutput: raw, maxTokens, lensEvents: drainLens(ctx), lensMounted: lens?.mounted || null };
   },
 

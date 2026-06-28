@@ -38,6 +38,37 @@ test('math now reaches the talker — the mechanical short-circuit is retired', 
   assert.ok(result.turn.steps.find(s => s.name === 'llm'), 'the talker runs');
 });
 
+test('the Stop button halts the turn — an aborted decode short-circuits to a stopped, partial answer', async () => {
+  // The llm stage hands the turn's AbortSignal to the backend. A backend that stops on it
+  // returns the partial beat; the stage then marks the turn `stopped` and terminates the
+  // pipeline (no bind/factcheck/veto over a half-sentence). The partial text rides as the answer.
+  const doc = setup('Widgets are small machines. They spin in factories.');
+  const ctl = new AbortController();
+  // A signal-aware streaming backend: emits two tokens, the second trips the abort.
+  const model = {
+    id: 'stub', kind: 'local', isLoaded: () => true, async load() {},
+    async phrase(_m, opts) {
+      let text = '';
+      for (const p of ['Widgets ', 'spin.']) {
+        text += p; opts.onToken?.(p);
+        ctl.abort();                      // the user presses Stop mid-decode
+        if (opts.signal?.aborted) break;
+      }
+      return text.trim();
+    },
+  };
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'what are widgets?', doc, model, embedder: createHashEmbedder(),
+    auditLog: audit, onToken: () => {}, signal: ctl.signal,
+  });
+  assert.equal(result.stopped, true, 'the turn is flagged stopped');
+  assert.equal(result.answer, 'Widgets', 'the answer is the partial decode, ungroundedly bound');
+  assert.deepEqual(result.sources, [], 'a stopped turn binds no citations');
+  // The pipeline short-circuited at llm — the post-answer annotation stages did not run.
+  assert.ok(!result.turn.steps.find(s => s.name === 'bind'), 'bind was skipped');
+});
+
 test('a summary meta-query reads the document skeleton, not fuzzy-matched fragments', async () => {
   // The audit's t1 failure: "summarize" has no lexical contact with the page, so the
   // hybrid path fuzzy-matched it onto arbitrary lines. The whole-doc meta-query now
