@@ -565,6 +565,13 @@ class Component extends DCLogic {
     if(/\b(what'?s? (the )?time|what time is it|current time)\b/.test(low))
       return 'It is '+new Date().toLocaleTimeString()+'.';
     return null;}
+  // Does this message itself ASK to research a topic? Returns the bare topic to chase, or
+  // null. Lets "research dolphins" trigger the research walk even with the mode toggle off —
+  // the verb IS the mode switch, the way "/research" or a tool toggle would be in a chat app.
+  _researchIntent(q){
+    const m=String(q||'').match(/^\s*(?:please\s+|can you\s+|could you\s+|go\s+|i want you to\s+|i'd like you to\s+)*(?:research|look\s+(?:into|up)|dig\s+into|investigate|explore|read\s+up\s+on|find\s+out\s+about)\b[:,\-\s]+(.+)$/i);
+    if(m&&m[1]){const topic=this.norm(m[1]).replace(/[?.!]+$/,'').trim();if(topic.length>1)return {topic};}
+    return null;}
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
   // everything read. Empty spans when nothing relevant has been read.
@@ -703,6 +710,13 @@ class Component extends DCLogic {
   }
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
+    // RESEARCH MODE — a way of asking, not a separate screen (docs/curiosity-research.md).
+    // When the composer's research toggle is on, or the message itself asks to research
+    // ("research dolphins", "look into X", "dig into Y"), the turn doesn't just answer from
+    // what's already read — it goes and CHASES the topic through fresh sources, following
+    // what surprises it while it stays on the question, then answers grounded in what it found.
+    // A clock question ("what's the date") still short-circuits, even with the toggle on.
+    if((this.state.researchMode||this._researchIntent(q))&&!this.mechanicalAnswer(q))return this.chatResearch(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // append the user turn + a pending assistant bubble
@@ -761,6 +775,177 @@ class Component extends DCLogic {
       this.setState({modelStatus:''});
     }
   }
+  // ── Research mode — chase a topic through fresh sources, then answer ──────────
+  // The same engine the ✦ Research button runs (a curiosity walk — docs/curiosity-research.md),
+  // but driven from the CHAT and narrated INTO it. It posts the user's turn and a live
+  // assistant bubble whose body is a step-by-step research trail; runs a best-first walk that
+  // follows the most SURPRISING term while it stays ON TOPIC (curiosity steered, competency
+  // leashed); reads every kept page into memory; folds them into what the chat is About; and
+  // finally answers, grounded in everything it gathered. One thread per hop, never a fan-out.
+  toggleResearchMode(){this.setState(s=>({researchMode:!s.researchMode}));}
+  async chatResearch(q){
+    if(this._busy)return;
+    const intent=this._researchIntent(q);
+    const topic=(intent&&intent.topic)||q;   // the thing to chase
+    const anchor=q;                          // the user's framing — the leash drifts are measured against
+    // Append the user turn + a pending assistant bubble carrying a live research trail.
+    let id=this.state.activeChat;
+    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      const research={steps:[{kind:'start',text:'Researching “'+topic+'” — I’ll follow what surprises me while it stays on topic.'}],done:false};
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,research}]};
+      return {chats,activeChat:id,chatInput:''};});
+    this._scrollChat();
+    const pushStep=(kind,text)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst'&&m[li].research){const r=m[li].research;m[li]={...m[li],research:{...r,steps:[...r.steps,{kind,text}]}};}
+      return {...c,messages:m};})}),()=>this._scrollChat());
+    this._busy=true;this.setState({busy:true});
+    let walk={readUrls:[],hops:[]};
+    try{walk=await this._curiosityWalk(topic,anchor,pushStep);}
+    catch(e){pushStep('warn','Research stopped — '+((e&&e.message)||e));}
+    this._busy=false;this.setState({busy:false});
+    const readCount=new Set(walk.readUrls).size,hops=walk.hops.length;
+    pushStep('done',readCount?('Read '+readCount+' source'+(readCount!==1?'s':'')+' across '+hops+' hop'+(hops!==1?'s':'')+'. Writing it up…')
+                              :'Couldn’t gather new sources — answering from what’s already read.');
+    // Fold what we found into what this chat is About, so the answer is grounded in it and
+    // the source chips reflect the new reading.
+    for(const u of new Set(walk.readUrls))this.addChatSource(u);
+    // Mark the trail done (so it collapses to a summary), then answer into the same bubble.
+    this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].research)m[li]={...m[li],research:{...m[li].research,done:true,readCount,hops}};
+      return {...c,messages:m};})}));
+    await this._answerInto(id,anchor,[...new Set(walk.readUrls)]);
+  }
+  // Synthesize the grounded answer into the existing pending bubble (which already carries the
+  // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
+  // UNION the sources just gathered — passed in explicitly because the addChatSource setStates
+  // above may not have flushed yet, and the new pages must be in scope for this answer.
+  async _answerInto(id,q,gathered){
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    const cur=this.state.chats.find(c=>c.id===id);
+    const had=this.chatSourcesOf(cur);
+    // Empty `had` means the chat ranges over EVERYTHING read (which already includes the new
+    // pages) — keep it empty. Otherwise widen the scope to include what we just gathered.
+    const sources=had.length?[...new Set([...had,...(gathered||[])])]:[];
+    const ground=this.groundNotes(q,sources);
+    try{
+      const model=await this.ensureChatModel();
+      const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
+      let messages;
+      if(grounded){
+        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
+          orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date()});
+      }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
+      let acc='',raf=0;
+      const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
+      const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
+      const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
+      finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
+    }catch(e){
+      const fb=this.answerQuestion(q,sources);
+      const relevant=!!(fb.refs&&fb.refs.length);
+      const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from what I gathered — the chat model didn’t load.'});
+      this.setState({modelStatus:''});
+    }
+  }
+  // The curiosity walk, in the reader's own primitives (searchLinks / readURL / the graph).
+  // CURIOSITY steers (chase the most surprising new term), COMPETENCY leashes (only follow
+  // threads that stay salient to the question; set aside pages that drift). One thread per
+  // hop. onStep(kind,text) narrates each beat into the live chat bubble. Returns the URLs it
+  // read and the hop trace.
+  async _curiosityWalk(seed,anchor,onStep){
+    const step=(k,t)=>{try{onStep&&onStep(k,t);}catch(e){}};
+    const readUrls=[],hops=[];
+    const seen=new Map();                 // term → mass read so far this walk (the prior surprise is measured against)
+    const chased=new Set();               // lead terms already used / already in the question — never re-chase
+    for(const t of this._researchTerms(anchor))chased.add(t);
+    // The fixed topic frame the leash measures drift against — the question's words, weighted to
+    // dominate, enriched once by the first page actually read, then frozen.
+    const topic=new Map();for(const t of this._researchTerms(anchor))topic.set(t,(topic.get(t)||0)+3);
+    let baseline=0,topicFrozen=false,stray=0;
+    const maxHops=4;
+    const frontier=[{query:seed,term:null}];   // FIFO of one-thread-deep leads; the seed leads
+    while(hops.length<maxHops&&frontier.length){
+      const node=frontier.shift();
+      step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching the web for “'+node.query+'”'));
+      let links=[];
+      try{links=await this.searchLinks(node.query,6);}catch(e){step('warn','Search unavailable — '+((e&&e.message)||e));break;}
+      links=(links||[]).filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u));
+      if(!links.length){step('warn','No fresh sources on that thread.');if(++stray>=2)break;continue;}
+      const want=node.term?1:2;let got=0,attempts=0;const keptText=[];
+      for(let i=0;i<links.length&&got<want&&attempts<5;i++){
+        const url=links[i];attempts++;
+        step('read','Reading '+this.short(url)+' …');
+        const preEnts=this.graph.entities.size;
+        const res=await this.readURL(url,'REAFFERENCE',this.state.viewUrl||null);
+        if(!res)continue;   // blocked / too little text — readURL already logged why; try the next candidate
+        const arrival=this._profile(this._pageText(url));
+        const sal=this._saliency(topic,arrival);
+        if(!topicFrozen){baseline=sal;for(const t of arrival.keys())topic.set(t,(topic.get(t)||0)+1);topicFrozen=true;}
+        else if(baseline>0&&sal<0.34*baseline){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+        got++;readUrls.push(url);keptText.push(this._pageText(url));
+        const grew=Math.max(0,this.graph.entities.size-preEnts);
+        step('graph','Read “'+(res.title||this.short(url))+'” · +'+grew+' new entit'+(grew===1?'y':'ies'));
+      }
+      // CURIOSITY: of everything just kept, what's the most surprising NEW turn? That becomes
+      // the single next thread, sharpened by the anchor so it never drifts into a namesake.
+      let next=null;
+      if(keptText.length){
+        const arrival=this._profile(keptText.join('\n'));
+        const leads=this._leads(seen,arrival,chased);
+        for(const [k,m] of arrival)seen.set(k,(seen.get(k)||0)+m);
+        if(leads.length&&hops.length+1<maxHops){next=leads[0].term;chased.add(next);frontier.push({query:this._nextQuery(anchor,next),term:next});
+          step('lead','The most surprising turn here is “'+next+'” — chasing it next.');}
+      }
+      hops.push({query:node.query,term:node.term,got,next});
+      if(!got){if(++stray>=2)break;}else stray=0;
+    }
+    return {readUrls,hops};
+  }
+  // The content terms that carry a page's topic — lowercased words, function words dropped.
+  _researchTerms(s){return (String(s||'').toLowerCase().match(/[a-z][a-z0-9'’-]{2,}/g)||[]).filter(t=>!this.STOP.has(t));}
+  // A page reduced to its term-frequency profile — the unit the walk measures surprise on.
+  _profile(text){const m=new Map();for(const t of this._researchTerms(text))m.set(t,(m.get(t)||0)+1);return m;}
+  // The prose of an already-read page, for the surprise / saliency measure.
+  _pageText(url){const p=this.pageOf(url);return p?(p.text||(p.sentences||[]).join(' ')):'';}
+  // SALIENCY (the competency leash): cosine overlap of a page's terms with the fixed topic frame.
+  _saliency(topic,arrival){
+    if(!arrival.size||!topic.size)return 0;
+    let dot=0,ta=0,tb=0;
+    for(const [k,w] of topic){tb+=w*w;dot+=w*(arrival.get(k)||0);}
+    for(const a of arrival.values())ta+=a*a;
+    return (ta&&tb)?dot/Math.sqrt(ta*tb):0;
+  }
+  // CURIOSITY's leads: the most surprising real terms on a page — repeated, not seen before (or
+  // far more here than in the prior), not already chased, not OCR/markup junk. Terms the engine
+  // also resolved as ENTITIES are boosted (it understood them, not just saw them — competency).
+  _leads(prior,arrival,chased){
+    const ents=new Set();try{for(const e of this.graph.entities.values()){const l=this.labelOf(e.id);if(l)ents.add(l.toLowerCase());}}catch(e){}
+    const out=[];
+    for(const [t,c] of arrival){
+      if(chased.has(t)||!this._plausibleLead(t))continue;
+      const had=prior.get(t)||0;const novelty=1/(1+had);
+      if(!((had===0&&c>=2)||(novelty>0.5&&c>=3)))continue;   // only genuinely new, repeated turns are worth a hop
+      let w=c*novelty;if(ents.has(t))w*=1.6;
+      out.push({term:t,weight:w});
+    }
+    out.sort((a,b)=>b.weight-a.weight);
+    return out.slice(0,4);
+  }
+  // Reject OCR / markup artifacts so a junk "word" is never chased (it would top surprise).
+  _plausibleLead(t){t=String(t||'').toLowerCase();
+    if(t.length<3)return false;if(!/[aeiouy]/.test(t))return false;
+    if(/[a-z]\d[a-z]/.test(t))return false;if(/(.)\1\1/.test(t))return false;
+    if(/[^aeiouy\d'’-]{6,}/.test(t))return false;return true;}
+  // The query that chases ONE lead, kept coherent by the anchor (the standing question) so a
+  // bare surprising term never matches a namesake.
+  _nextQuery(anchor,term){const a=String(anchor||'').trim(),t=String(term||'').trim();
+    if(!t)return a;if(!a)return t;return a.toLowerCase().includes(t.toLowerCase())?a:(a+' '+t);}
   // The grounded answer: rank read sentences by question-term overlap, quote the best,
   // and surface the entities the question names. Scope restricts to one source.
   answerQuestion(q,scope){
@@ -833,8 +1018,31 @@ class Component extends DCLogic {
         chipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'}));
       const relKey=cur.id+':'+mi+':rel', relOn=!!gOpen[relKey];
       const related=relOn?relAll:relAll.slice(0,3);
+      // The RESEARCH TRAIL — the live, step-by-step record of the curiosity walk this turn ran
+      // (searched · read · followed a surprising lead · set a strayer aside · done). While the
+      // walk runs it stays open and grows; once done it collapses to a one-line summary the user
+      // can re-open. Makes "it actually went and researched" legible, the way a research-mode
+      // chat shows its work.
+      const RICON={start:'✦',search:'⌕',read:'▤',graph:'＋',lead:'↳',warn:'⚠',done:'✓'};
+      const RCOL ={start:'var(--acc)',search:'#2563eb',read:'#b45309',graph:'#15803d',lead:'var(--acc)',warn:'#dc2626',done:'#15803d'};
+      const r=m.research;
+      const hasResearch=!!(r&&r.steps&&r.steps.length);
+      const researchRunning=hasResearch&&!r.done;
+      const resKey=cur.id+':'+mi+':res', resOn=hasResearch&&(researchRunning||!!gOpen[resKey]);
+      const researchSteps=hasResearch?r.steps.map(s=>({icon:RICON[s.kind]||'·',text:s.text,
+        rowStyle:'display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.45;color:var(--ink2);',
+        iconStyle:'flex:0 0 auto;width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:'+(RCOL[s.kind]||'#9aa1ab')+';background:'+(RCOL[s.kind]||'#9aa1ab')+'1c;margin-top:1px;',
+        textStyle:'flex:1;min-width:0;'})):[];
+      const researchTitle=researchRunning?'Researching…':('Researched '+((r&&r.readCount)||0)+' source'+(((r&&r.readCount)||0)!==1?'s':'')+' · '+((r&&r.hops)||0)+' hop'+(((r&&r.hops)||0)!==1?'s':''));
+      // While researching with no answer yet, the trail IS the message — suppress the empty
+      // pulsing bubble. Once the answer streams in (or for a normal turn) the bubble shows.
+      const showBubble=!(researchRunning&&!m.text);
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
-      return {isUser,pending:!!m.pending,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
+      return {isUser,pending:!!m.pending,showBubble,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
+        hasResearch,researchRunning,researchSteps,researchOpen:resOn,researchTitle,
+        researchCaret:researchRunning?'':(resOn?'▾':'▸'),onToggleResearch:()=>{if(!researchRunning)this.toggleGround(resKey);},
+        researchStyle:'max-width:80%;margin-bottom:7px;background:var(--app);border:1px solid var(--line2);border-radius:11px;padding:9px 12px;align-self:flex-start;',
+        researchHeadStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3);background:transparent;border:none;padding:0;cursor:'+(researchRunning?'default':'pointer')+';',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
         sources:cites,hasSources:cites.length>0,entities,hasEntities:entities.length>0,
         hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
@@ -875,7 +1083,7 @@ class Component extends DCLogic {
       shellStyle:drawer
         ? 'position:absolute;top:0;right:0;bottom:0;width:min(440px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
         : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);'+(docked?'border-left:1px solid var(--line);':''),
-      placeholder:ss.length?('Ask about '+(ss.length===1?('“'+titleOf(ss[0])+'”'):('these '+ss.length+' sources'))+'…'):'Ask about everything you’ve read…'};
+      placeholder:this.state.researchMode?'Name a topic to research — I’ll go read about it…':(ss.length?('Ask about '+(ss.length===1?('“'+titleOf(ss[0])+'”'):('these '+ss.length+' sources'))+'…'):'Ask about everything you’ve read…')};
   }
   // ── Project Gutenberg — a source of sources ──────────────────────────────
   // Search the catalog (gutendex), fetched through the same proxy. Returns books
@@ -1954,9 +2162,11 @@ class Component extends DCLogic {
   // Presets are one-click setters of the open flags + chat. The active preset is DERIVED
   // by comparing flags (activePreset), never stored — so a manual toggle can't desync it.
   applyPreset(name){
-    if(name==='focus'){    this.setState({leftOpen:false,rightOpen:false}); this.closeChat(); return; }
-    if(name==='read'){     this.setState({leftOpen:false,rightOpen:true });  this.closeChat(); return; }
-    if(name==='research'){ this.setState({leftOpen:false,rightOpen:true }); if(!this.activeChatObj()) this.newChat(this.state.viewUrl||null); return; }
+    // The top-bar preset is also the MODE switch: entering Research arms the chat to chase
+    // topics through fresh sources; leaving it (Focus / Read) disarms it back to grounded chat.
+    if(name==='focus'){    this.setState({leftOpen:false,rightOpen:false,researchMode:false}); this.closeChat(); return; }
+    if(name==='read'){     this.setState({leftOpen:false,rightOpen:true,researchMode:false});  this.closeChat(); return; }
+    if(name==='research'){ this.setState({leftOpen:false,rightOpen:true,researchMode:true}); if(!this.activeChatObj()) this.newChat(this.state.viewUrl||null); return; }
   }
   activePreset(){const L=this.state.leftOpen,R=this.state.rightOpen,C=!!this.activeChatObj();
     if(!L&&!R&&!C)return 'focus'; if(!C&&R&&!L)return 'read'; if(C&&R&&!L)return 'research'; return null;}
@@ -2645,6 +2855,10 @@ class Component extends DCLogic {
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
       chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
       onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
+      onToggleResearchMode:()=>this.toggleResearchMode(),researchModeOn:!!this.state.researchMode,
+      researchModeTitle:this.state.researchMode?'Research mode is on — the next message will go search and read fresh sources before answering. Click to turn off.':'Turn on research mode — your next message becomes a topic to chase through fresh sources, following what surprises me while it stays on topic.',
+      researchModeHint:this.state.researchMode?'Your message becomes a topic I’ll chase through fresh sources.':'Off — answers come from what you’ve already read.',
+      researchModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.researchMode?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       backend:this.state.backend||'webllm',
       backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},{v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),

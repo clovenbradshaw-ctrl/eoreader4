@@ -259,7 +259,19 @@
               </sc-if>
               <sc-for list="{{ chat.messages }}" as="m" hint-placeholder-count="0">
                 <div style="{{ m.rowStyle }}">
+                  <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
+                    <div style="{{ m.researchStyle }}">
+                      <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
+                      <sc-if value="{{ m.researchOpen }}" hint-placeholder-val="{{ true }}">
+                        <div style="margin-top:7px;display:flex;flex-direction:column;gap:5px;">
+                          <sc-for list="{{ m.researchSteps }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                   <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+                  </sc-if>
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
                       <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
@@ -287,6 +299,10 @@
             <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
               <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
             </sc-if>
+            <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
+              <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">✦ Research</button>
+              <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
+            </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
               <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
               <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
@@ -771,7 +787,19 @@
             </sc-if>
             <sc-for list="{{ chat.messages }}" as="m" hint-placeholder-count="0">
               <div style="{{ m.rowStyle }}">
+                <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ m.researchStyle }}">
+                    <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
+                    <sc-if value="{{ m.researchOpen }}" hint-placeholder-val="{{ true }}">
+                      <div style="margin-top:7px;display:flex;flex-direction:column;gap:5px;">
+                        <sc-for list="{{ m.researchSteps }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                 <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+                </sc-if>
                 <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.groundStyle }}">
                     <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
@@ -799,6 +827,10 @@
           <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
             <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
           </sc-if>
+          <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
+            <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">✦ Research</button>
+            <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
+          </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
             <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
             <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>

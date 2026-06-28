@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f5f6f8">
 <title>EO Reader</title>
-<link rel="icon" href="favicon.ico" sizes="any">
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script src="vendor/react.production.min.js"></script>
 <script src="vendor/react-dom.production.min.js"></script>
 <script>(function(){var R={"eoEngine":"src/reader/eoreader4-bundle.js","eoModel":"src/reader/model-entry.js","eoSvo":"src/reader/svo-llm.js","eoPhase":"src/reader/eo/phasepost.js","eoEmbed":"src/reader/eo/embed.js","eoCells":"src/reader/eo/phasepost-cells.json","eoCentroids":"src/reader/eo/centroids-27.json"},b=document.baseURI,o={};for(var k in R)o[k]=new URL(R[k],b).href;window.__resources=o;})();</script>
@@ -275,7 +272,19 @@
               </sc-if>
               <sc-for list="{{ chat.messages }}" as="m" hint-placeholder-count="0">
                 <div style="{{ m.rowStyle }}">
+                  <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
+                    <div style="{{ m.researchStyle }}">
+                      <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
+                      <sc-if value="{{ m.researchOpen }}" hint-placeholder-val="{{ true }}">
+                        <div style="margin-top:7px;display:flex;flex-direction:column;gap:5px;">
+                          <sc-for list="{{ m.researchSteps }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                   <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+                  </sc-if>
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
                       <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
@@ -303,6 +312,10 @@
             <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
               <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
             </sc-if>
+            <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
+              <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">✦ Research</button>
+              <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
+            </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
               <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
               <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
@@ -318,11 +331,6 @@
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Project Gutenberg · “{{ guten.query }}”</div>
               <sc-if value="{{ guten.hasResults }}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;flex:0 0 auto;font-size:11px;color:var(--ink3);white-space:nowrap;">{{ guten.countLabel }}</span></sc-if>
               <button onclick="{{ guten.onClear }}" style="flex:0 0 auto;font-size:12px;color:var(--ink2);background:transparent;border:none;cursor:pointer;margin-left:12px;" style-hover="color:var(--ink)">Clear</button>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;background:var(--app);border:1px solid var(--line2);border-radius:13px;padding:3px 4px 3px 14px;" style-focus-within="border-color:var(--accline);background:var(--card)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9aa1ab" stroke-width="2" style="flex:0 0 auto;"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
-              <input value="{{ guten.input }}" oninput="{{ guten.onInput }}" onkeydown="{{ guten.onKey }}" placeholder="Search every Project Gutenberg book — title, author, or subject…" style="flex:1;min-width:0;font-size:13px;color:var(--ink);background:transparent;border:none;padding:8px 4px;outline:none;">
-              <button onclick="{{ guten.onSearch }}" style="flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:8px 16px;cursor:pointer;">Search</button>
             </div>
             <sc-if value="{{ guten.loading }}" hint-placeholder-val="{{ true }}">
               <div style="display:flex;align-items:center;gap:11px;color:var(--ink3);padding:24px 4px;"><span style="width:22px;height:22px;border-radius:50%;border:3px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span><span style="font-size:13px;">Searching the catalog…</span></div>
@@ -342,9 +350,6 @@
                 <button onclick="{{ bk.onRead }}" style="{{ bk.btnStyle }}">{{ bk.btnLabel }}</button>
               </div>
             </sc-for>
-            <sc-if value="{{ guten.hasMore }}" hint-placeholder-val="{{ false }}">
-              <button onclick="{{ guten.onMore }}" style="width:100%;margin-top:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--card);border:1px solid var(--accline);border-radius:10px;padding:11px;cursor:pointer;" style-hover="background:var(--accbg)">{{ guten.moreLabel }}</button>
-            </sc-if>
           </div>
         </div>
       </sc-if>
@@ -353,18 +358,6 @@
           <sc-if value="{{ reading.isBook }}" hint-placeholder-val="{{ false }}">
             <div style="position:relative;flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 14px 9px;background:var(--card);border-bottom:1px solid var(--line);">
               <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Reading</span>
-              <sc-if value="{{ contents.bookInline }}" hint-placeholder-val="{{ false }}">
-                <div style="position:relative;flex:0 0 auto;">
-                  <button onclick="{{ contents.onToggle }}" title="{{ contents.title }}" style="{{ contentsBtnStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Contents</button>
-                  <sc-if value="{{ contents.open }}" hint-placeholder-val="{{ false }}">
-                    <div onclick="{{ contents.onToggle }}" style="position:fixed;inset:0;z-index:19;"></div>
-                    <div style="position:absolute;top:34px;left:0;width:min(320px,84vw);max-height:min(62vh,520px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
-                      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:12px 14px 8px;position:sticky;top:0;background:var(--card);">{{ contents.title }}</div>
-                      <sc-for list="{{ contents.items }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
-                    </div>
-                  </sc-if>
-                </div>
-              </sc-if>
               <span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;">
                 <button onclick="{{ reading.onFontDown }}" title="Smaller text" style="{{ reading.btnStyle }}">A−</button>
                 <span style="font-size:11px;color:var(--ink3);min-width:36px;text-align:center;font-variant-numeric:tabular-nums;">{{ reading.fsLabel }}</span>
@@ -387,22 +380,17 @@
               <sc-if value="{{ reading.hasMarks }}" hint-placeholder-val="{{ false }}">
                 <button onclick="{{ reading.onToggleMarks }}" title="Highlight the moments the reading flagged as important" style="{{ reading.marksStyle }}">❖ {{ reading.marksCount }}</button>
               </sc-if>
+              <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
+                <div style="position:relative;flex:0 0 auto;">
+                  <button onclick="{{ reading.onToggleTOC }}" title="Table of contents" style="{{ reading.tocStyle }}">☰ Contents</button>
+                  <sc-if value="{{ reading.tocOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute;top:34px;right:0;width:284px;max-height:60vh;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
+                      <sc-for list="{{ reading.toc }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
               <span style="position:absolute;left:0;bottom:0;height:2px;background:var(--acc);width:{{ reading.progressW }};transition:width .2s;"></span>
-            </div>
-          </sc-if>
-          <sc-if value="{{ contents.webBar }}" hint-placeholder-val="{{ false }}">
-            <div style="position:relative;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--card);border-bottom:1px solid var(--line);">
-              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Page</span>
-              <div style="position:relative;flex:0 0 auto;">
-                <button onclick="{{ contents.onToggle }}" title="{{ contents.title }}" style="{{ contentsBtnStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Contents</button>
-                <sc-if value="{{ contents.open }}" hint-placeholder-val="{{ false }}">
-                  <div onclick="{{ contents.onToggle }}" style="position:fixed;inset:0;z-index:19;"></div>
-                  <div style="position:absolute;top:34px;left:0;width:min(320px,84vw);max-height:min(62vh,520px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
-                    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:12px 14px 8px;position:sticky;top:0;background:var(--card);">{{ contents.title }}</div>
-                    <sc-for list="{{ contents.items }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
-                  </div>
-                </sc-if>
-              </div>
             </div>
           </sc-if>
           <sc-if value="{{ web.loading }}" hint-placeholder-val="{{ true }}">
@@ -812,7 +800,19 @@
             </sc-if>
             <sc-for list="{{ chat.messages }}" as="m" hint-placeholder-count="0">
               <div style="{{ m.rowStyle }}">
+                <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ m.researchStyle }}">
+                    <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
+                    <sc-if value="{{ m.researchOpen }}" hint-placeholder-val="{{ true }}">
+                      <div style="margin-top:7px;display:flex;flex-direction:column;gap:5px;">
+                        <sc-for list="{{ m.researchSteps }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                 <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+                </sc-if>
                 <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.groundStyle }}">
                     <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
@@ -840,6 +840,10 @@
           <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
             <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
           </sc-if>
+          <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
+            <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">✦ Research</button>
+            <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
+          </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
             <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
             <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
@@ -1433,12 +1437,7 @@ class Component extends DCLogic {
     // ── e-book reading: paper themes + type families, applied to the book iframe ──
     this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
     this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
-    // Reading defaults grounded in typographic prior art (Bringhurst; Baymard; Butterick;
-    // Pimp My Type): the MEASURE is set in characters, not pixels, so line length stays in
-    // the readable 50–75-CPL band as the font scales — px widths drift out of it. w is the
-    // measure in ch; 58ch of Georgia renders at ~66 chars/line — Bringhurst's ideal — because
-    // its "0" (the ch unit) is narrower than its average glyph. lh is the leading (1.5–1.6).
-    this._defaultRead={fs:19,lh:1.6,w:58,theme:'light',font:'serif'};
+    this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
     let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
@@ -1471,17 +1470,11 @@ class Component extends DCLogic {
       // Project Gutenberg — "a source of sources". A non-URL query searches the catalog;
       // a chosen book is fetched and READ FULLY before it joins the sources (and so can
       // be chatted with). gutenReading holds the id while a book is being read.
-      // gutenInput is the live text in the in-section search box; gutenNext/gutenCount
-      // carry gutendex pagination so "Load more" can walk through ALL matching books.
       gutenResults:null, gutenLoading:false, gutenQuery:'', gutenReading:null,
-      gutenInput:'', gutenNext:null, gutenCount:0, gutenMoreLoading:false,
       // E-book reading preferences (font size/spacing/width/paper theme/typeface),
       // applied live to the book iframe and persisted. bookToc is the detected
       // chapter list; bookProgress is the live read fraction (0–1).
-      // bookToc is the engine-emergent section list for a text/book; webToc is the
-      // table of contents built from a live web page's own headings — together they let
-      // ONE "Contents" affordance navigate any content in view.
-      readPrefs:this._migrateRead(Object.assign({},this._defaultRead,(savedRead&&typeof savedRead==='object')?savedRead:{})), bookToc:[], webToc:[], tocOpen:false, bookProgress:0,
+      readPrefs:Object.assign({},this._defaultRead,(savedRead&&typeof savedRead==='object')?savedRead:{}), bookToc:[], tocOpen:false, bookProgress:0,
       // Auto-bookmarks: spots the reading flags as SURPRISING (connectivity + novelty).
       // bookmarkMode shows them (in-book highlight + scrollbar markers); bookmarks holds
       // the detected spots; bmRail holds their live scroll fractions for the marker rail.
@@ -1507,24 +1500,15 @@ class Component extends DCLogic {
   // Each setter persists, re-renders the toolbar, and applies the change LIVE to the
   // open book iframe via CSS variables — no reload, so scroll position and the entity
   // decoration both survive. _bookHtml seeds the same vars so a fresh open matches.
-  // Carry a saved preference set forward. The width used to be stored in px (600/720/860);
-  // it now means a measure in characters (ch), so map any legacy px value onto the nearest
-  // character target and clamp anything out of the readable range.
-  _migrateRead(rp){rp=Object.assign({},rp);
-    if(rp.w>=100)rp.w=rp.w<=600?46:(rp.w>=860?70:58);   // legacy px → ch measure
-    if(!(typeof rp.w==='number'&&rp.w>=36&&rp.w<=84))rp.w=58;
-    return rp;}
   setReadPref(patch){const rp=Object.assign({},this.state.readPrefs,patch);try{localStorage.setItem('eo_readprefs',JSON.stringify(rp));}catch(e){}this.setState({readPrefs:rp});const d=this._bookDoc();if(d)this.applyReadCSS(d,rp);}
   bumpFont(d){const rp=this.state.readPrefs;this.setReadPref({fs:Math.max(14,Math.min(30,(rp.fs||19)+d))});}
-  bumpLine(d){const rp=this.state.readPrefs;this.setReadPref({lh:Math.max(1.3,Math.min(2.2,Math.round(((rp.lh||1.6)+d)*10)/10))});}
+  bumpLine(d){const rp=this.state.readPrefs;this.setReadPref({lh:Math.max(1.3,Math.min(2.2,Math.round(((rp.lh||1.7)+d)*10)/10))});}
   cycleReadTheme(){const o=['light','sepia','dark'];const i=o.indexOf(this.state.readPrefs.theme||'light');this.setReadPref({theme:o[(i+1)%o.length]});}
-  // Measure presets (in ch): ~46 snug (~52 CPL), ~58 ideal (~66 CPL, Bringhurst), ~70 wide
-  // (~80 CPL, the WCAG ceiling). Leading rides with the measure — wider wants looser.
-  cycleWidth(){const o=[46,58,70];const i=o.indexOf(this.state.readPrefs.w);const w=o[((i<0?1:i)+1)%o.length];this.setReadPref({w,lh:w<=46?1.5:(w>=70?1.7:1.6)});}
+  cycleWidth(){const o=[600,720,860];const i=o.indexOf(this.state.readPrefs.w||720);this.setReadPref({w:o[(i+1)%o.length]});}
   toggleReadFont(){this.setReadPref({font:(this.state.readPrefs.font==='sans')?'serif':'sans'});}
   _bookDoc(){const ifr=document.querySelector('iframe[data-eo-center]');return (ifr&&ifr.contentDocument)?ifr.contentDocument:null;}
   applyReadCSS(d,rp){rp=rp||this.state.readPrefs;const t=this.READ_THEMES[rp.theme]||this.READ_THEMES.light;const r=d.documentElement&&d.documentElement.style;if(!r)return;
-    r.setProperty('--eo-fs',(rp.fs||19)+'px');r.setProperty('--eo-lh',String(rp.lh||1.6));r.setProperty('--eo-maxw',(rp.w||58)+'ch');
+    r.setProperty('--eo-fs',(rp.fs||19)+'px');r.setProperty('--eo-lh',String(rp.lh||1.7));r.setProperty('--eo-maxw',(rp.w||720)+'px');
     r.setProperty('--eo-ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif);
     r.setProperty('--eo-bg',t.bg);r.setProperty('--eo-fg',t.fg);r.setProperty('--eo-fg2',t.fg2);r.setProperty('--eo-rule',t.rule);r.setProperty('--eo-acc',this.curAccent());
     try{d.body.style.background=t.bg;}catch(e){}}
@@ -1690,34 +1674,6 @@ class Component extends DCLogic {
       if(this._scrollT)return;this._scrollT=setTimeout(()=>{this._scrollT=null;const pct=this._lastPct;this.saveReadPos(url,pct);if(Math.abs((this.state.bookProgress||0)-pct)>=0.005)this.setState({bookProgress:pct});},150);};
     win.addEventListener('scroll',onScroll,{passive:true});}
   gotoChapter(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-14;try{win.scrollTo({top,behavior:'smooth'});}catch(e){win.scrollTo(0,top);}}this.setState({tocOpen:false});}
-  // ── table of contents for a LIVE WEB PAGE ────────────────────────────────
-  // A book gets its TOC from the engine's emergent sections (detectStructure, baked into
-  // _bookHtml). A web page already carries its author's structure in its heading elements,
-  // so we read THOSE directly off the rendered iframe — the page's own outline, with real
-  // elements to scroll to. Each kept heading is tagged with an id so the same Contents
-  // affordance can navigate it. Runs after decorateFrame, once the frame DOM exists.
-  _buildWebToc(d){
-    if(!d||!d.body||(this.state.viewUrl&&/^text:/i.test(this.state.viewUrl)))return;
-    const items=[];
-    try{
-      const hs=[...d.body.querySelectorAll('h1,h2,h3,h4')].filter(el=>{
-        if(el.closest('nav,header,footer,aside'))return false;          // chrome, not content
-        const t=this.norm(el.textContent||'');return t.length>=2&&t.length<=120;});
-      const minLv=hs.reduce((m,el)=>Math.min(m,+el.tagName[1]),9);
-      const seen=new Set();
-      hs.forEach((el,i)=>{const label=this.norm(el.textContent).slice(0,90),key=label.toLowerCase();
-        if(seen.has(key))return;seen.add(key);
-        if(!el.id)el.id='eo-wtoc-'+i;
-        items.push({id:el.id,label,level:Math.max(1,(+el.tagName[1])-minLv+1)});});
-    }catch(e){}
-    const cur=this.state.webToc||[];
-    if(items.length===cur.length&&items.every((it,i)=>cur[i]&&cur[i].id===it.id&&cur[i].label===it.label))return;
-    this.setState({webToc:items});
-  }
-  // Scroll the in-view web page to a heading captured by _buildWebToc.
-  gotoWebSection(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;
-    if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-16;try{win.scrollTo({top:Math.max(0,top),behavior:'smooth'});}catch(e){win.scrollTo(0,Math.max(0,top));}}
-    this.setState({tocOpen:false});}
   // Section anchors (their document tops), in reading order — the cursor's structural stops.
   _sectionTops(){const d=this._bookDoc();if(!d||!d.defaultView)return [];const win=d.defaultView,out=[];
     d.querySelectorAll('[id^="eo-ch-"]').forEach(el=>out.push(el.getBoundingClientRect().top+win.scrollY));
@@ -2030,6 +1986,13 @@ class Component extends DCLogic {
     if(/\b(what'?s? (the )?time|what time is it|current time)\b/.test(low))
       return 'It is '+new Date().toLocaleTimeString()+'.';
     return null;}
+  // Does this message itself ASK to research a topic? Returns the bare topic to chase, or
+  // null. Lets "research dolphins" trigger the research walk even with the mode toggle off —
+  // the verb IS the mode switch, the way "/research" or a tool toggle would be in a chat app.
+  _researchIntent(q){
+    const m=String(q||'').match(/^\s*(?:please\s+|can you\s+|could you\s+|go\s+|i want you to\s+|i'd like you to\s+)*(?:research|look\s+(?:into|up)|dig\s+into|investigate|explore|read\s+up\s+on|find\s+out\s+about)\b[:,\-\s]+(.+)$/i);
+    if(m&&m[1]){const topic=this.norm(m[1]).replace(/[?.!]+$/,'').trim();if(topic.length>1)return {topic};}
+    return null;}
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
   // everything read. Empty spans when nothing relevant has been read.
@@ -2168,6 +2131,13 @@ class Component extends DCLogic {
   }
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
+    // RESEARCH MODE — a way of asking, not a separate screen (docs/curiosity-research.md).
+    // When the composer's research toggle is on, or the message itself asks to research
+    // ("research dolphins", "look into X", "dig into Y"), the turn doesn't just answer from
+    // what's already read — it goes and CHASES the topic through fresh sources, following
+    // what surprises it while it stays on the question, then answers grounded in what it found.
+    // A clock question ("what's the date") still short-circuits, even with the toggle on.
+    if((this.state.researchMode||this._researchIntent(q))&&!this.mechanicalAnswer(q))return this.chatResearch(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // append the user turn + a pending assistant bubble
@@ -2226,6 +2196,177 @@ class Component extends DCLogic {
       this.setState({modelStatus:''});
     }
   }
+  // ── Research mode — chase a topic through fresh sources, then answer ──────────
+  // The same engine the ✦ Research button runs (a curiosity walk — docs/curiosity-research.md),
+  // but driven from the CHAT and narrated INTO it. It posts the user's turn and a live
+  // assistant bubble whose body is a step-by-step research trail; runs a best-first walk that
+  // follows the most SURPRISING term while it stays ON TOPIC (curiosity steered, competency
+  // leashed); reads every kept page into memory; folds them into what the chat is About; and
+  // finally answers, grounded in everything it gathered. One thread per hop, never a fan-out.
+  toggleResearchMode(){this.setState(s=>({researchMode:!s.researchMode}));}
+  async chatResearch(q){
+    if(this._busy)return;
+    const intent=this._researchIntent(q);
+    const topic=(intent&&intent.topic)||q;   // the thing to chase
+    const anchor=q;                          // the user's framing — the leash drifts are measured against
+    // Append the user turn + a pending assistant bubble carrying a live research trail.
+    let id=this.state.activeChat;
+    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      const research={steps:[{kind:'start',text:'Researching “'+topic+'” — I’ll follow what surprises me while it stays on topic.'}],done:false};
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,research}]};
+      return {chats,activeChat:id,chatInput:''};});
+    this._scrollChat();
+    const pushStep=(kind,text)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst'&&m[li].research){const r=m[li].research;m[li]={...m[li],research:{...r,steps:[...r.steps,{kind,text}]}};}
+      return {...c,messages:m};})}),()=>this._scrollChat());
+    this._busy=true;this.setState({busy:true});
+    let walk={readUrls:[],hops:[]};
+    try{walk=await this._curiosityWalk(topic,anchor,pushStep);}
+    catch(e){pushStep('warn','Research stopped — '+((e&&e.message)||e));}
+    this._busy=false;this.setState({busy:false});
+    const readCount=new Set(walk.readUrls).size,hops=walk.hops.length;
+    pushStep('done',readCount?('Read '+readCount+' source'+(readCount!==1?'s':'')+' across '+hops+' hop'+(hops!==1?'s':'')+'. Writing it up…')
+                              :'Couldn’t gather new sources — answering from what’s already read.');
+    // Fold what we found into what this chat is About, so the answer is grounded in it and
+    // the source chips reflect the new reading.
+    for(const u of new Set(walk.readUrls))this.addChatSource(u);
+    // Mark the trail done (so it collapses to a summary), then answer into the same bubble.
+    this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].research)m[li]={...m[li],research:{...m[li].research,done:true,readCount,hops}};
+      return {...c,messages:m};})}));
+    await this._answerInto(id,anchor,[...new Set(walk.readUrls)]);
+  }
+  // Synthesize the grounded answer into the existing pending bubble (which already carries the
+  // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
+  // UNION the sources just gathered — passed in explicitly because the addChatSource setStates
+  // above may not have flushed yet, and the new pages must be in scope for this answer.
+  async _answerInto(id,q,gathered){
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    const cur=this.state.chats.find(c=>c.id===id);
+    const had=this.chatSourcesOf(cur);
+    // Empty `had` means the chat ranges over EVERYTHING read (which already includes the new
+    // pages) — keep it empty. Otherwise widen the scope to include what we just gathered.
+    const sources=had.length?[...new Set([...had,...(gathered||[])])]:[];
+    const ground=this.groundNotes(q,sources);
+    try{
+      const model=await this.ensureChatModel();
+      const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
+      let messages;
+      if(grounded){
+        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
+          orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date()});
+      }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
+      let acc='',raf=0;
+      const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
+      const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
+      const passages=ground.relevant?(ground.spans||[]).map(s=>({text:s.text,u:s.u,i:s.i})):[];
+      finish({text,entities:ground.entities,sources:ground.relevant?ground.sources:[],passages,related:this.relatedDocs(q,sources)});
+    }catch(e){
+      const fb=this.answerQuestion(q,sources);
+      const relevant=!!(fb.refs&&fb.refs.length);
+      const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,related:this.relatedDocs(q,sources),modelNote:'Answered from what I gathered — the chat model didn’t load.'});
+      this.setState({modelStatus:''});
+    }
+  }
+  // The curiosity walk, in the reader's own primitives (searchLinks / readURL / the graph).
+  // CURIOSITY steers (chase the most surprising new term), COMPETENCY leashes (only follow
+  // threads that stay salient to the question; set aside pages that drift). One thread per
+  // hop. onStep(kind,text) narrates each beat into the live chat bubble. Returns the URLs it
+  // read and the hop trace.
+  async _curiosityWalk(seed,anchor,onStep){
+    const step=(k,t)=>{try{onStep&&onStep(k,t);}catch(e){}};
+    const readUrls=[],hops=[];
+    const seen=new Map();                 // term → mass read so far this walk (the prior surprise is measured against)
+    const chased=new Set();               // lead terms already used / already in the question — never re-chase
+    for(const t of this._researchTerms(anchor))chased.add(t);
+    // The fixed topic frame the leash measures drift against — the question's words, weighted to
+    // dominate, enriched once by the first page actually read, then frozen.
+    const topic=new Map();for(const t of this._researchTerms(anchor))topic.set(t,(topic.get(t)||0)+3);
+    let baseline=0,topicFrozen=false,stray=0;
+    const maxHops=4;
+    const frontier=[{query:seed,term:null}];   // FIFO of one-thread-deep leads; the seed leads
+    while(hops.length<maxHops&&frontier.length){
+      const node=frontier.shift();
+      step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching the web for “'+node.query+'”'));
+      let links=[];
+      try{links=await this.searchLinks(node.query,6);}catch(e){step('warn','Search unavailable — '+((e&&e.message)||e));break;}
+      links=(links||[]).filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u));
+      if(!links.length){step('warn','No fresh sources on that thread.');if(++stray>=2)break;continue;}
+      const want=node.term?1:2;let got=0,attempts=0;const keptText=[];
+      for(let i=0;i<links.length&&got<want&&attempts<5;i++){
+        const url=links[i];attempts++;
+        step('read','Reading '+this.short(url)+' …');
+        const preEnts=this.graph.entities.size;
+        const res=await this.readURL(url,'REAFFERENCE',this.state.viewUrl||null);
+        if(!res)continue;   // blocked / too little text — readURL already logged why; try the next candidate
+        const arrival=this._profile(this._pageText(url));
+        const sal=this._saliency(topic,arrival);
+        if(!topicFrozen){baseline=sal;for(const t of arrival.keys())topic.set(t,(topic.get(t)||0)+1);topicFrozen=true;}
+        else if(baseline>0&&sal<0.34*baseline){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+        got++;readUrls.push(url);keptText.push(this._pageText(url));
+        const grew=Math.max(0,this.graph.entities.size-preEnts);
+        step('graph','Read “'+(res.title||this.short(url))+'” · +'+grew+' new entit'+(grew===1?'y':'ies'));
+      }
+      // CURIOSITY: of everything just kept, what's the most surprising NEW turn? That becomes
+      // the single next thread, sharpened by the anchor so it never drifts into a namesake.
+      let next=null;
+      if(keptText.length){
+        const arrival=this._profile(keptText.join('\n'));
+        const leads=this._leads(seen,arrival,chased);
+        for(const [k,m] of arrival)seen.set(k,(seen.get(k)||0)+m);
+        if(leads.length&&hops.length+1<maxHops){next=leads[0].term;chased.add(next);frontier.push({query:this._nextQuery(anchor,next),term:next});
+          step('lead','The most surprising turn here is “'+next+'” — chasing it next.');}
+      }
+      hops.push({query:node.query,term:node.term,got,next});
+      if(!got){if(++stray>=2)break;}else stray=0;
+    }
+    return {readUrls,hops};
+  }
+  // The content terms that carry a page's topic — lowercased words, function words dropped.
+  _researchTerms(s){return (String(s||'').toLowerCase().match(/[a-z][a-z0-9'’-]{2,}/g)||[]).filter(t=>!this.STOP.has(t));}
+  // A page reduced to its term-frequency profile — the unit the walk measures surprise on.
+  _profile(text){const m=new Map();for(const t of this._researchTerms(text))m.set(t,(m.get(t)||0)+1);return m;}
+  // The prose of an already-read page, for the surprise / saliency measure.
+  _pageText(url){const p=this.pageOf(url);return p?(p.text||(p.sentences||[]).join(' ')):'';}
+  // SALIENCY (the competency leash): cosine overlap of a page's terms with the fixed topic frame.
+  _saliency(topic,arrival){
+    if(!arrival.size||!topic.size)return 0;
+    let dot=0,ta=0,tb=0;
+    for(const [k,w] of topic){tb+=w*w;dot+=w*(arrival.get(k)||0);}
+    for(const a of arrival.values())ta+=a*a;
+    return (ta&&tb)?dot/Math.sqrt(ta*tb):0;
+  }
+  // CURIOSITY's leads: the most surprising real terms on a page — repeated, not seen before (or
+  // far more here than in the prior), not already chased, not OCR/markup junk. Terms the engine
+  // also resolved as ENTITIES are boosted (it understood them, not just saw them — competency).
+  _leads(prior,arrival,chased){
+    const ents=new Set();try{for(const e of this.graph.entities.values()){const l=this.labelOf(e.id);if(l)ents.add(l.toLowerCase());}}catch(e){}
+    const out=[];
+    for(const [t,c] of arrival){
+      if(chased.has(t)||!this._plausibleLead(t))continue;
+      const had=prior.get(t)||0;const novelty=1/(1+had);
+      if(!((had===0&&c>=2)||(novelty>0.5&&c>=3)))continue;   // only genuinely new, repeated turns are worth a hop
+      let w=c*novelty;if(ents.has(t))w*=1.6;
+      out.push({term:t,weight:w});
+    }
+    out.sort((a,b)=>b.weight-a.weight);
+    return out.slice(0,4);
+  }
+  // Reject OCR / markup artifacts so a junk "word" is never chased (it would top surprise).
+  _plausibleLead(t){t=String(t||'').toLowerCase();
+    if(t.length<3)return false;if(!/[aeiouy]/.test(t))return false;
+    if(/[a-z]\d[a-z]/.test(t))return false;if(/(.)\1\1/.test(t))return false;
+    if(/[^aeiouy\d'’-]{6,}/.test(t))return false;return true;}
+  // The query that chases ONE lead, kept coherent by the anchor (the standing question) so a
+  // bare surprising term never matches a namesake.
+  _nextQuery(anchor,term){const a=String(anchor||'').trim(),t=String(term||'').trim();
+    if(!t)return a;if(!a)return t;return a.toLowerCase().includes(t.toLowerCase())?a:(a+' '+t);}
   // The grounded answer: rank read sentences by question-term overlap, quote the best,
   // and surface the entities the question names. Scope restricts to one source.
   answerQuestion(q,scope){
@@ -2298,8 +2439,31 @@ class Component extends DCLogic {
         chipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'}));
       const relKey=cur.id+':'+mi+':rel', relOn=!!gOpen[relKey];
       const related=relOn?relAll:relAll.slice(0,3);
+      // The RESEARCH TRAIL — the live, step-by-step record of the curiosity walk this turn ran
+      // (searched · read · followed a surprising lead · set a strayer aside · done). While the
+      // walk runs it stays open and grows; once done it collapses to a one-line summary the user
+      // can re-open. Makes "it actually went and researched" legible, the way a research-mode
+      // chat shows its work.
+      const RICON={start:'✦',search:'⌕',read:'▤',graph:'＋',lead:'↳',warn:'⚠',done:'✓'};
+      const RCOL ={start:'var(--acc)',search:'#2563eb',read:'#b45309',graph:'#15803d',lead:'var(--acc)',warn:'#dc2626',done:'#15803d'};
+      const r=m.research;
+      const hasResearch=!!(r&&r.steps&&r.steps.length);
+      const researchRunning=hasResearch&&!r.done;
+      const resKey=cur.id+':'+mi+':res', resOn=hasResearch&&(researchRunning||!!gOpen[resKey]);
+      const researchSteps=hasResearch?r.steps.map(s=>({icon:RICON[s.kind]||'·',text:s.text,
+        rowStyle:'display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.45;color:var(--ink2);',
+        iconStyle:'flex:0 0 auto;width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:'+(RCOL[s.kind]||'#9aa1ab')+';background:'+(RCOL[s.kind]||'#9aa1ab')+'1c;margin-top:1px;',
+        textStyle:'flex:1;min-width:0;'})):[];
+      const researchTitle=researchRunning?'Researching…':('Researched '+((r&&r.readCount)||0)+' source'+(((r&&r.readCount)||0)!==1?'s':'')+' · '+((r&&r.hops)||0)+' hop'+(((r&&r.hops)||0)!==1?'s':''));
+      // While researching with no answer yet, the trail IS the message — suppress the empty
+      // pulsing bubble. Once the answer streams in (or for a normal turn) the bubble shows.
+      const showBubble=!(researchRunning&&!m.text);
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
-      return {isUser,pending:!!m.pending,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
+      return {isUser,pending:!!m.pending,showBubble,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
+        hasResearch,researchRunning,researchSteps,researchOpen:resOn,researchTitle,
+        researchCaret:researchRunning?'':(resOn?'▾':'▸'),onToggleResearch:()=>{if(!researchRunning)this.toggleGround(resKey);},
+        researchStyle:'max-width:80%;margin-bottom:7px;background:var(--app);border:1px solid var(--line2);border-radius:11px;padding:9px 12px;align-self:flex-start;',
+        researchHeadStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3);background:transparent;border:none;padding:0;cursor:'+(researchRunning?'default':'pointer')+';',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
         sources:cites,hasSources:cites.length>0,entities,hasEntities:entities.length>0,
         hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
@@ -2340,22 +2504,17 @@ class Component extends DCLogic {
       shellStyle:drawer
         ? 'position:absolute;top:0;right:0;bottom:0;width:min(440px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
         : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);'+(docked?'border-left:1px solid var(--line);':''),
-      placeholder:ss.length?('Ask about '+(ss.length===1?('“'+titleOf(ss[0])+'”'):('these '+ss.length+' sources'))+'…'):'Ask about everything you’ve read…'};
+      placeholder:this.state.researchMode?'Name a topic to research — I’ll go read about it…':(ss.length?('Ask about '+(ss.length===1?('“'+titleOf(ss[0])+'”'):('these '+ss.length+' sources'))+'…'):'Ask about everything you’ve read…')};
   }
   // ── Project Gutenberg — a source of sources ──────────────────────────────
   // Search the catalog (gutendex), fetched through the same proxy. Returns books
   // that have a plain-text edition we can read.
   async searchGutenberg(query){
-    return this._gutenFetch('https://gutendex.com/books/?search='+encodeURIComponent(query));
-  }
-  // Fetch one page of gutendex results through the proxy. Returns the readable books on
-  // that page plus the `next` page URL and the total catalog match count, so the search
-  // section can page through EVERY matching Project Gutenberg book, not just the first.
-  async _gutenFetch(api){
+    const api='https://gutendex.com/books/?search='+encodeURIComponent(query);
     let data;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
-    catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return {books:[],next:null,count:0};}
-    return {books:this._gutenBooks(data),next:(data&&data.next)||null,count:(data&&data.count)||0};
+    catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
+    return this._gutenBooks(data).slice(0,16);
   }
   // Map a gutendex response to readable books — only those with a plain-text edition.
   _gutenBooks(data){
@@ -2384,21 +2543,8 @@ class Component extends DCLogic {
   }
   // Type a query: a URL is opened; anything else searches Project Gutenberg.
   searchBooks(query){
-    query=String(query||'').trim();if(!query)return;
-    this.setState({gutenLoading:true,gutenResults:null,gutenQuery:query,gutenInput:query,gutenNext:null,gutenCount:0,gutenMoreLoading:false,activeChat:null,viewUrl:null,selId:null});
-    this.searchGutenberg(query).then(res=>{this.setState({gutenLoading:false,gutenResults:res.books,gutenNext:res.next,gutenCount:res.count});
-      if(!res.books.length)this.feedLine('warn','No books found for “'+query+'”.');});
-  }
-  // Append the next page of matches (de-duped by id) — keeps walking gutendex until
-  // every book matching the query has been pulled in.
-  loadMoreGuten(){
-    if(this.state.gutenMoreLoading||!this.state.gutenNext)return;
-    const next=this.state.gutenNext;this.setState({gutenMoreLoading:true});
-    this._gutenFetch(next).then(res=>{
-      const cur=this.state.gutenResults||[],seen=new Set(cur.map(b=>b.id));
-      const add=res.books.filter(b=>!seen.has(b.id));
-      this.setState({gutenResults:cur.concat(add),gutenNext:res.next,gutenMoreLoading:false});
-    });
+    this.setState({gutenLoading:true,gutenResults:null,gutenQuery:query,activeChat:null,viewUrl:null,selId:null});
+    this.searchGutenberg(query).then(res=>{this.setState({gutenLoading:false,gutenResults:res});if(!res.length)this.feedLine('warn','No books found for “'+query+'”.');});
   }
   // Read a chosen book FULLY (fetch → strip → parse) before it becomes a source.
   // Until the parse completes the book is "reading…" and cannot be chatted with.
@@ -2414,7 +2560,7 @@ class Component extends DCLogic {
     this.feedLine('read','Reading “'+book.title+'” fully — '+Math.round(text.length/1000)+'k chars…');
     await this.sleep(20);                                  // let the feed paint before the synchronous parse
     const r=await this.importText(text,book.title+' — '+book.author);
-    this.setState({gutenReading:null,gutenResults:null,gutenQuery:'',gutenInput:'',gutenNext:null,gutenCount:0});
+    this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
     if(r)this.feedLine('done','Read fully · '+r.sentenceCount+' propositions — ready to chat');
   }
   ingest(url,title,text,via,image,parent,wikiLinks){
@@ -2522,13 +2668,7 @@ class Component extends DCLogic {
     if(words.length===1&&this.STOP.has(l))return false;          // lone stopword
     return true;
   }
-  // A label that is really an internal entity id (no human surface form was ever
-  // resolved, so labelOf fell back to the raw id) must never be shown as a name. These
-  // ids are single lowercase alphanumeric tokens with digits INTERLEAVED among letters
-  // ("efddc9jxb22", "em06b21s6xa") — a shape no real word/name takes. Trailing-digit
-  // tokens ("covid19") are left alone.
-  _looksLikeId(s){s=String(s||'');return /^[a-z0-9]{7,}$/.test(s)&&/[a-z]/.test(s)&&/[0-9][a-z]/.test(s);}
-  showable(id){const e=this.graph.entities.get(id);if(!e||!e.label)return false;const l=this.labelOf(id);return !this._looksLikeId(l)&&!this.isURLish(l)&&this.conceptual(l)&&!this.strayCapital(id);}
+  showable(id){const l=this.labelOf(id);return !this.isURLish(l)&&this.conceptual(l)&&!this.strayCapital(id);}
   // A generic concept ("tourism", "runoff") means something specific ON THIS PAGE. Its
   // qualifier is the page's dominant PROPER-NOUN subject (Great Barrier Reef), which we
   // surface in the title — while the bare concept stays reachable via its Wikipedia link.
@@ -3443,9 +3583,11 @@ class Component extends DCLogic {
   // Presets are one-click setters of the open flags + chat. The active preset is DERIVED
   // by comparing flags (activePreset), never stored — so a manual toggle can't desync it.
   applyPreset(name){
-    if(name==='focus'){    this.setState({leftOpen:false,rightOpen:false}); this.closeChat(); return; }
-    if(name==='read'){     this.setState({leftOpen:false,rightOpen:true });  this.closeChat(); return; }
-    if(name==='research'){ this.setState({leftOpen:false,rightOpen:true }); if(!this.activeChatObj()) this.newChat(this.state.viewUrl||null); return; }
+    // The top-bar preset is also the MODE switch: entering Research arms the chat to chase
+    // topics through fresh sources; leaving it (Focus / Read) disarms it back to grounded chat.
+    if(name==='focus'){    this.setState({leftOpen:false,rightOpen:false,researchMode:false}); this.closeChat(); return; }
+    if(name==='read'){     this.setState({leftOpen:false,rightOpen:true,researchMode:false});  this.closeChat(); return; }
+    if(name==='research'){ this.setState({leftOpen:false,rightOpen:true,researchMode:true}); if(!this.activeChatObj()) this.newChat(this.state.viewUrl||null); return; }
   }
   activePreset(){const L=this.state.leftOpen,R=this.state.rightOpen,C=!!this.activeChatObj();
     if(!L&&!R&&!C)return 'focus'; if(!C&&R&&!L)return 'read'; if(C&&R&&!L)return 'research'; return null;}
@@ -3693,7 +3835,7 @@ class Component extends DCLogic {
     const v=(n,d)=>'--eo-'+n+':'+d+';';
     const htmlCls=this.state.bookmarkMode?' class="eo-bm-on"':'';
     const html='<!doctype html><html'+htmlCls+'><head><meta charset="utf-8"><base target="_blank">'+
-      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.6))+v('maxw',(rp.w||58)+'ch')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
       'html,body{margin:0;background:var(--eo-bg);}'+
       'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);transition:background .2s,color .2s;}'+
       '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
@@ -3713,10 +3855,10 @@ class Component extends DCLogic {
     return {html,toc,bookmarks};
   }
   loadCenter(url){
-    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,webToc:[],bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],webToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
-    if(!url){this.setState({pageDoc:null,bookToc:[],webToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
+    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
+    if(!url){this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
     if(this._pageUrl===url&&this.state.pageDoc)return;
-    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],webToc:[],tocOpen:false});
+    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],tocOpen:false});
     fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
       if(this.state.viewUrl!==url)return;
       let doc=html;
@@ -3744,10 +3886,6 @@ class Component extends DCLogic {
   onDirInput(ev){this.setState({direction:ev&&ev.target?ev.target.value:''});}
   onUrlInput(ev){this.setState({url:ev&&ev.target?ev.target.value:''});}
   onUrlKey(ev){if(ev&&ev.key==='Enter')this.doReadUrl();}
-  // The search box inside the Project Gutenberg section — searches the whole catalog.
-  onGutenInput(ev){this.setState({gutenInput:ev&&ev.target?ev.target.value:''});}
-  onGutenKey(ev){if(ev&&ev.key==='Enter')this.runGutenSearch();}
-  runGutenSearch(){this.searchBooks(this.state.gutenInput||'');}
   // A URL (or bare domain) is opened directly; anything else is a Project Gutenberg
   // book search — type a title or author to find a book to read.
   doReadUrl(){const u=this.state.url.trim();if(!u)return;this.setState({url:''});
@@ -3835,7 +3973,7 @@ class Component extends DCLogic {
       if(token!==this._decoToken){this._decoToken=token;this._scheduleDecorate();}
     } else {this._decoToken=null;}
   }
-  _scheduleDecorate(){clearTimeout(this._decoT);let tries=0;const tick=()=>{const ifr=document.querySelector('iframe[data-eo-center]');const d=ifr&&ifr.contentDocument;if(d&&d.body&&d.body.childNodes.length){this.decorateFrame(d,ifr);this._buildWebToc(d);}else if(tries++<50){this._decoT=setTimeout(tick,80);}};this._decoT=setTimeout(tick,60);}
+  _scheduleDecorate(){clearTimeout(this._decoT);let tries=0;const tick=()=>{const ifr=document.querySelector('iframe[data-eo-center]');const d=ifr&&ifr.contentDocument;if(d&&d.body&&d.body.childNodes.length){this.decorateFrame(d,ifr);}else if(tries++<50){this._decoT=setTimeout(tick,80);}};this._decoT=setTimeout(tick,60);}
   _frameOffset(){const ifr=document.querySelector('iframe[data-eo-center]');if(!ifr)return{x:0,y:0};const r=ifr.getBoundingClientRect();return{x:r.left,y:r.top};}
   decorateFrame(d,ifr){
     try{
@@ -4138,6 +4276,10 @@ class Component extends DCLogic {
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
       chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
       onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
+      onToggleResearchMode:()=>this.toggleResearchMode(),researchModeOn:!!this.state.researchMode,
+      researchModeTitle:this.state.researchMode?'Research mode is on — the next message will go search and read fresh sources before answering. Click to turn off.':'Turn on research mode — your next message becomes a topic to chase through fresh sources, following what surprises me while it stays on topic.',
+      researchModeHint:this.state.researchMode?'Your message becomes a topic I’ll chase through fresh sources.':'Off — answers come from what you’ve already read.',
+      researchModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.researchMode?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       backend:this.state.backend||'webllm',
       backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},{v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
@@ -4238,15 +4380,12 @@ class Component extends DCLogic {
 
     // Project Gutenberg search results take the center when present (and no chat open).
     base.gutenOn=!base.chatOn&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
-    const _gcount=(this.state.gutenResults||[]).length,_gtotal=this.state.gutenCount||0;
+    const _gcount=(this.state.gutenResults||[]).length;
     base.guten={loading:!!this.state.gutenLoading,query:this.state.gutenQuery||'',
-      input:this.state.gutenInput||'',onInput:e=>this.onGutenInput(e),onKey:e=>this.onGutenKey(e),onSearch:()=>this.runGutenSearch(),
       hasResults:!!(this.state.gutenResults&&this.state.gutenResults.length),
       empty:!!(this.state.gutenResults&&!this.state.gutenResults.length),
-      countLabel:(_gtotal>_gcount?(_gcount+' of '+_gtotal.toLocaleString()):_gcount)+' book'+(_gtotal===1?'':'s'),
-      hasMore:!!this.state.gutenNext,moreLoading:!!this.state.gutenMoreLoading,
-      moreLabel:this.state.gutenMoreLoading?'Loading more…':'Load more books',onMore:()=>this.loadMoreGuten(),
-      onClear:()=>this.setState({gutenResults:null,gutenQuery:'',gutenInput:'',gutenNext:null,gutenCount:0}),
+      countLabel:_gcount+' book'+(_gcount===1?'':'s'),
+      onClear:()=>this.setState({gutenResults:null,gutenQuery:''}),
       results:(this.state.gutenResults||[]).map(b=>{const reading=this.state.gutenReading===b.id;
         return {title:b.title,author:b.author,downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
           hasCover:!!b.cover,
@@ -4265,7 +4404,7 @@ class Component extends DCLogic {
         btnStyle:pill(false),
         fsLabel:(rp.fs||19)+'px',onFontDown:()=>this.bumpFont(-1),onFontUp:()=>this.bumpFont(1),
         onLineDown:()=>this.bumpLine(-0.1),onLineUp:()=>this.bumpLine(0.1),
-        widthLabel:(rp.w||58)<=46?'Narrow':((rp.w||58)>=70?'Wide':'Normal'),onWidth:()=>this.cycleWidth(),widthStyle:pill(false),
+        widthLabel:(rp.w||720)<=600?'Narrow':((rp.w||720)>=860?'Wide':'Normal'),onWidth:()=>this.cycleWidth(),widthStyle:pill(false),
         fontLabel:rp.font==='sans'?'Sans':'Serif',onFont:()=>this.toggleReadFont(),fontStyle:pill(rp.font==='sans'),
         themeLabel:rp.theme==='sepia'?'Sepia':(rp.theme==='dark'?'Night':'Light'),onTheme:()=>this.cycleReadTheme(),themeStyle:pill(rp.theme!=='light'),
         hasToc:toc.length>1,tocOpen:!!this.state.tocOpen,onToggleTOC:()=>this.toggleTOC(),tocStyle:pill(!!this.state.tocOpen),
@@ -4278,22 +4417,6 @@ class Component extends DCLogic {
         railOn:!!this.state.bookmarkMode&&(this.state.bmRail||[]).length>0,
         marks:(this.state.bmRail||[]).map(m=>({top:(m.frac*100).toFixed(2)+'%',why:m.why||'Something important here',onGo:()=>this.gotoBookmark(m.id)})),
         progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
-    }
-    // ── Contents: one affordance for the table of contents of ANY content in view.
-    // A book/text uses the engine's emergent sections (bookToc); a live web page uses
-    // its own headings (webToc). Surfaced as a top-bar button + popover whenever the
-    // content in view has more than one section.
-    { const isBook=!!(vu&&/^text:/i.test(vu));
-      const raw=isBook?(this.state.bookToc||[]):(this.state.webToc||[]);
-      const items=raw.map(c=>({label:c.label,onGo:isBook?(()=>this.gotoChapter(c.id)):(()=>this.gotoWebSection(c.id)),
-        rowStyle:'display:block;width:100%;text-align:left;padding:9px 13px 9px '+(13+((c.level||1)-1)*15)+'px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink'+((c.level||1)>1?'3':'2')+');font-size:12.5px;line-height:1.35;cursor:pointer;'}));
-      const has=!!vu&&items.length>1,open=has&&!!this.state.tocOpen;
-      base.contents={has,open,count:items.length,
-        bookInline:has&&isBook,           // shown inside the e-book "Reading" toolbar
-        webBar:has&&!isBook,              // shown in a slim bar atop a web page
-        title:isBook?'Sections found by reading the document':'Headings on this page',
-        onToggle:()=>this.toggleTOC(),items};
-      base.contentsBtnStyle='display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1;border:1px solid '+(open?'var(--accline)':'var(--line2)')+';background:'+(open?'var(--accbg)':'var(--app)')+';color:'+(open?'var(--acc)':'var(--ink2)')+';';
     }
     if(vu){
       base.showWeb=true;
