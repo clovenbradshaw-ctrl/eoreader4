@@ -199,13 +199,14 @@
       <sc-if value="{{ askPageOn }}" hint-placeholder-val="{{ false }}">
         <button onclick="{{ onAskPage }}" title="Chat about this page" style="position:absolute;right:22px;bottom:22px;z-index:18;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:24px;padding:11px 18px;box-shadow:0 8px 24px rgba(20,24,30,.22);cursor:pointer;">✦ Ask about this page</button>
       </sc-if>
-      <sc-if value="{{ chatOn }}" hint-placeholder-val="{{ false }}">
+      <sc-if value="{{ chatInMain }}" hint-placeholder-val="{{ false }}">
         <div style="{{ chat.shellStyle }}">
           <div style="flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--card);">
             <div style="padding:10px 22px 8px;display:flex;align-items:center;gap:10px;">
               <div style="width:26px;height:26px;border-radius:7px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto;">✦</div>
               <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
                 <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Chatting about your sources — grounded in what was read</div></div>
+              <button onclick="{{ chat.onDock }}" title="{{ chat.dockTitle }}" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">{{ chat.dockGlyph }}</button>
               <button onclick="{{ onCloseChat }}" title="Close chat" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
             </div>
             <div style="padding:0 18px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;">
@@ -636,6 +637,39 @@
 
     <sc-if value="{{ rightOpen }}" hint-placeholder-val="{{ true }}">
     <aside id="eo-panel-scroll" style="border-left:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;order:{{ rightOrder }};">
+      <sc-if value="{{ showChatTab }}" hint-placeholder-val="{{ false }}">
+        <div style="background:var(--card);border-bottom:1px solid var(--line);padding:8px 10px;display:flex;align-items:center;gap:8px;">
+          <div style="display:flex;flex:1;gap:3px;background:#eef0f3;border-radius:9px;padding:2px;">
+            <button onclick="{{ onRightTabEnt }}" style="{{ rightTabEntStyle }}">Entities</button>
+            <button onclick="{{ onRightTabChat }}" style="{{ rightTabChatStyle }}">Chat</button>
+          </div>
+          <button onclick="{{ chat.onDetach }}" title="Pop the chat out into its own pane" style="width:26px;height:26px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);color:var(--ink3);border-radius:7px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc);border-color:var(--accline)">⤢</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ rightChatOn }}" hint-placeholder-val="{{ false }}">
+        <div id="eo-chat-scroll" style="padding:8px 13px 14px;">
+          <div style="font-size:11px;color:var(--ink3);padding:0 2px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">grounded in {{ chat.scopeLabel }}</div>
+          <sc-if value="{{ chat.empty }}" hint-placeholder-val="{{ true }}">
+            <div style="text-align:center;color:var(--ink3);font-size:12.5px;line-height:1.6;padding:28px 8px;">Ask anything about what you’ve read.<br>Answers link back to your sources.</div>
+          </sc-if>
+          <sc-for list="{{ chat.messages }}" as="m" hint-placeholder-count="0">
+            <div style="{{ m.rowStyle }}">
+              <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+              <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ false }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" style="{{ m.srcChipStyle }}">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+              <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}"><div style="max-width:100%;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div></sc-if>
+              <sc-if value="{{ m.hasNote }}" hint-placeholder-val="{{ false }}"><div style="{{ m.noteStyle }}">{{ m.note }}</div></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <div style="position:sticky;bottom:0;padding:10px 12px 12px;border-top:1px solid var(--line);background:var(--card);">
+          <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:var(--ink3);display:flex;align-items:center;gap:7px;margin-bottom:7px;"><span style="width:12px;height:12px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div></sc-if>
+          <div style="display:flex;gap:8px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:12px;padding:3px 4px 3px 13px;" style-focus-within="border-color:var(--accline);background:var(--card)">
+            <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13px;color:var(--ink);background:transparent;border:none;outline:none;padding:8px 0;">
+            <button onclick="{{ onSendChat }}" style="font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:10px;padding:8px 14px;flex:0 0 auto;cursor:pointer;">Ask</button>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ rightEntitiesOn }}" hint-placeholder-val="{{ true }}">
       <sc-if value="{{ panelProfileOn }}" hint-placeholder-val="{{ false }}">
         <div style="position:sticky;top:0;background:var(--card);z-index:3;border-bottom:1px solid var(--line);box-shadow:0 1px 0 rgba(0,0,0,.02);">
           <div style="display:flex;align-items:center;gap:6px;padding:8px 10px 0;">
@@ -1026,6 +1060,7 @@
         </sc-for>
         <sc-if value="{{ inboxEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:18px 14px;color:var(--ink3);font-size:12px;line-height:1.5;">No entities yet. Open a page — detection reads its entities into here.</div></sc-if>
       </sc-if>
+      </sc-if>
     </aside>
       <div id="eo-resize" onpointerdown="{{ onResizeDown }}" ondoubleclick="{{ onResizeReset }}" title="Drag to resize the panel · double-click to reset" style="{{ resizeHandleStyle }}" style-hover="background:var(--accbg)"><div style="width:4px;height:42px;border-radius:2px;background:var(--line2);"></div></div>
     </sc-if>
@@ -1091,6 +1126,13 @@
         <div style="min-width:0;"><div style="font-size:14px;font-weight:700;line-height:1.2;">{{ hoverCard.name }}</div><div style="font-size:11px;color:var(--ink3);">{{ hoverCard.stat }}</div></div>
       </div>
       <div style="font-size:12px;color:var(--ink2);margin-top:8px;line-height:1.45;">{{ hoverCard.gist }}</div>
+      <sc-if value="{{ hoverCard.hasPrefetch }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:9px;padding-top:9px;border-top:1px dashed var(--line2);">
+          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#1d4ed8;margin-bottom:4px;">↗ {{ hoverCard.prefetchTitle }}</div>
+          <sc-if value="{{ hoverCard.prefetchLoading }}" hint-placeholder-val="{{ true }}"><div style="font-size:11px;color:var(--ink3);font-style:italic;">reading the link…</div></sc-if>
+          <sc-if value="{{ hoverCard.prefetchText }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:var(--ink2);line-height:1.45;">{{ hoverCard.prefetchText }}</div></sc-if>
+        </div>
+      </sc-if>
       <div style="display:flex;height:5px;border-radius:3px;overflow:hidden;background:#eceef1;margin:9px 0 6px;"><sc-for list="{{ hoverCard.segs }}" as="seg" hint-placeholder-count="3"><span style="{{ seg.style }}"></span></sc-for></div>
       <div style="font-size:11px;color:var(--ink3);margin-bottom:9px;"><span style="{{ hoverCard.estStyle }}">{{ hoverCard.est }}</span></div>
       <sc-if value="{{ hoverCard.hasLink }}" hint-placeholder-val="{{ false }}">
