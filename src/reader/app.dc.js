@@ -329,7 +329,7 @@ class Component extends DCLogic {
         sugg.push({label:r.title+' (Wikipedia)',url});
       }
     }catch(e){}
-    try{(await this.randomBooks(3)).forEach(b=>sugg.push({label:b.title+' — '+b.author,book:b}));}catch(e){}
+    try{(await this.randomBooks(3)).forEach(b=>sugg.push({label:b.title+' — '+this.authorDisplay(b.author),book:b}));}catch(e){}
     if(sugg.length){this.SUGG=sugg;this.setState(s=>({rev:s.rev+1}));}
   }
   // Fetch a handful of random ENGLISH Gutenberg books (no reading) for the suggestions.
@@ -483,7 +483,7 @@ class Component extends DCLogic {
           if(ne.subject&&ne.subject.id!=null)ne.subject={...ne.subject,id:fix(ne.subject.id)};if(ne.object&&ne.object.id!=null)ne.object={...ne.object,id:fix(ne.object.id)};}
         m.events.push(ne);}
       pg.sentences.forEach(s=>{m.sentences.push(s);m.sentenceSource.push(pg.url);});
-      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,seqStart:so,sentStart:no});
+      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,author:pg.author||null,authorDates:pg.authorDates||null,published:pg.published||null,seqStart:so,sentStart:no});
     }
     // The sense that distinguishes a forked referent ("a 1995 film") is a DEFEASIBLE DEF on
     // the referent — not part of its identity. Appended after the body so the INS exists.
@@ -501,16 +501,16 @@ class Component extends DCLogic {
     if(!ex.text||ex.text.length<60){this.feedLine('warn',this.short(url)+' — too little text');return false;}
     return this.ingest(url,ex.title,ex.text,via,ex.image,parent,ex.wikiLinks);
   }
-  async readText(text,title){
+  async readText(text,title,meta){
     if(!this.E)return false;
     text=String(text||'').trim(); if(text.length<60){this.feedLine('warn','Too little text to read.');return false;}
     const url='text:'+(Date.now().toString(36)); const ttl=title||('Pasted text · '+text.slice(0,40).replace(/\s+/g,' ').trim()+'…');
-    return this.ingest(url,ttl,text,'paste');
+    return this.ingest(url,ttl,text,'paste',null,null,null,meta);
   }
   // Import a book / text file: read it, then NAVIGATE the center to it so it opens
   // as a readable book (loadCenter's text: branch) with its entities clickable.
-  async importText(text,title){
-    const r=await this.readText(text,title);
+  async importText(text,title,meta){
+    const r=await this.readText(text,title,meta);
     if(!r||!r.url){this.feedLine('warn','Could not import that text.');return false;}
     this._srcUrl=null;this._pushLoc({t:'web',url:r.url});
     this.setState(s=>({viewUrl:r.url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));
@@ -939,7 +939,9 @@ class Component extends DCLogic {
     return ((data&&data.results)||[]).map(b=>{
       const f=b.formats||{};
       const txt=f['text/plain; charset=utf-8']||f['text/plain; charset=us-ascii']||f['text/plain']||(Object.entries(f).find(([k,v])=>/text\/plain/i.test(k)&&!/\.zip$/i.test(v))||[])[1];
-      return {id:b.id,title:b.title,author:(b.authors&&b.authors[0]&&b.authors[0].name)||'Unknown author',txtUrl:txt,
+      const a0=(b.authors&&b.authors[0])||null;
+      return {id:b.id,title:b.title,author:(a0&&a0.name)||'Unknown author',
+        authorBirth:(a0&&a0.birth_year)||null,authorDeath:(a0&&a0.death_year)||null,txtUrl:txt,
         cover:f['image/jpeg']||null,downloads:b.download_count||0,subjects:b.subjects||[],bookshelves:b.bookshelves||[]};
     }).filter(b=>b.txtUrl);
   }
@@ -949,6 +951,28 @@ class Component extends DCLogic {
     [].concat(b.subjects||[],b.bookshelves||[]).forEach(s=>{const t=String(s).split(' -- ')[0].trim();const k=t.toLowerCase();
       if(t&&t.length<30&&!seen.has(k)){seen.add(k);out.push(t);}});
     return out.slice(0,3);
+  }
+  // Gutendex names come "Surname, Forename" (catalog order). Flip to natural
+  // reading order — "Kafka, Franz" → "Franz Kafka" — so the byline reads as a name,
+  // not an index entry. Single-token or organisational names pass through untouched.
+  authorDisplay(name){
+    name=String(name||'').trim();
+    if(!name||name==='Unknown author')return name;
+    const c=name.split(',');
+    if(c.length===2){const last=c[0].trim(),first=c[1].trim();if(first&&last)return first+' '+last;}
+    return name;
+  }
+  // Elegant title/author/date metadata for a Gutenberg book. The author's life
+  // dates (from gutendex) place the work in its era; an "Original publication" line
+  // in the raw header, when present, gives the true publication year and wins.
+  bookMeta(book,raw){
+    const author=this.authorDisplay(book.author);
+    const life=book.authorBirth?(book.authorBirth+'–'+(book.authorDeath||'')):'';
+    let published=null;
+    const head=String(raw||'').split(/\*\*\*\s*START OF/i)[0];
+    const m=head.match(/Original publication:[^\n]*?\b(1[0-9]{3}|20[0-9]{2})\b/i);
+    if(m)published=m[1];
+    return {author,authorDates:life,published};
   }
   // Strip Project Gutenberg's license header/footer so only the work is read.
   stripGutenberg(t){
@@ -973,19 +997,21 @@ class Component extends DCLogic {
     let text;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(book.txtUrl));if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
     catch(e){this.feedLine('warn','Could not fetch the book — '+(e&&e.message||e));this.setState({gutenReading:null});return;}
+    const meta=this.bookMeta(book,text);                   // read title/author/date from the raw header
     text=this.stripGutenberg(text);
     if(text.length<200){this.feedLine('warn','That edition had too little readable text.');this.setState({gutenReading:null});return;}
     this.feedLine('read','Reading “'+book.title+'” fully — '+Math.round(text.length/1000)+'k chars…');
     await this.sleep(20);                                  // let the feed paint before the synchronous parse
-    const r=await this.importText(text,book.title+' — '+book.author);
+    const r=await this.importText(text,book.title,meta);
     this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
     if(r)this.feedLine('done','Read fully · '+r.sentenceCount+' propositions — ready to chat');
   }
-  ingest(url,title,text,via,image,parent,wikiLinks){
+  ingest(url,title,text,via,image,parent,wikiLinks,meta){
     const doc=this.E.parseText(text,{coordSubjects:true});
     // Keep the raw text on the page so an imported book can be re-rendered as a
     // readable book in the center (see _bookHtml / loadCenter's text: branch).
-    const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null};
+    const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null,
+      author:(meta&&meta.author)||null,authorDates:(meta&&meta.authorDates)||null,published:(meta&&meta.published)||null};
     const pages=[...this.state.pages,page];this.rebuild(pages);
     this.setState(s=>({pages,rev:s.rev+1,selId:s.selId||this.topEntity()}));
     // Second reader: fold the LLM's SVO reading onto the same log, then re-project.
@@ -1589,6 +1615,16 @@ class Component extends DCLogic {
     if(/^(is|are|was|were|has|have|had|can|could|seen|located|known|composed|made|built|consists?|defined|considered|named|protected|found|home)\b/i.test(pred))return lab+' '+pred+'.';
     if(/^(a|an|the|one|part|home|type|kind|form)\b/i.test(pred))return lab+' is '+pred+'.';
     return lab+' \u2014 '+pred+'.';}
+  // First sentence of `s`, but NEVER split on an abbreviation period — a title
+  // ("Mr."/"Mrs."/"Dr."), a lone initial, "Inc.", "U.S." The naive split chopped
+  // "a source of irritation to Mr. Samsa" to "…to Mr.", surfacing a stray bare "Mr"
+  // in the profile gloss. Mirrors the re-merge in _clipExtract.
+  _firstSentence(s){
+    const raw=String(s||'').split(/(?<=[.!?])\s+/);
+    const ABBR=/(?:^|[\s(])(?:[A-Za-z]|Mr|Mrs|Ms|Dr|Prof|Gen|Sen|Rep|Gov|Lt|Sgt|Sr|Jr|St|vs|v|etc|Inc|Ltd|Co|Corp|No|pp|al|Ave|Rd|Rev|Hon|Capt|U\.S|U\.K|U\.N|D\.C)\.$/i;
+    let out=raw[0]||'';for(let i=1;i<raw.length&&ABBR.test(out);i++)out+=' '+raw[i];
+    return out;
+  }
   // Trim to <= max chars but never mid-sentence: keep whole sentences, else cut on a
   // word boundary with an ellipsis. No more "...decreasing their abilit".
   endOnBoundary(s,max){s=this.norm(String(s||'').replace(/<[^>]*>/g,' ').replace(/\[(?:\d+|citation needed|edit)\]/gi,''));max=max||320;if(s.length<=max)return s;const cut=s.slice(0,max);const m=cut.match(/^[\s\S]*[.!?](?=\s|$)/);if(m&&m[0].length>=Math.min(70,max*0.45))return m[0].trim();return cut.replace(/\s+\S*$/,'').replace(/[\s,;:]+$/,'').trim()+'\u2026';}
@@ -1604,7 +1640,7 @@ class Component extends DCLogic {
       if(/\b(state|system|site|region|city|country|area|park|species|organi[sz]ation|company|river|island|reef|sea|nation|territory|town|lake|mountain|range)\b/.test(v))s+=1;
       if(v.length>150)s-=2.5;if(v.length<14)s-=1;s-=ev.sentIdx*0.02;return s;};
     cands.sort((a,b)=>score(b)-score(a));
-    const ev=cands[0];const pred=this.clean(ev.value).split(/(?<=[.!?])\s+/)[0];
+    const ev=cands[0];const pred=this._firstSentence(this.clean(ev.value));
     if(!pred||pred.length<8||pred.length>200)return null;
     return {pred,sentIdx:ev.sentIdx};
   }
@@ -2250,15 +2286,21 @@ class Component extends DCLogic {
     const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
     const v=(n,d)=>'--eo-'+n+':'+d+';';
     const htmlCls=this.state.bookmarkMode?' class="eo-bm-on"':'';
+    // Title / author / date head: title alone as the heading, the author in natural
+    // order on its own line, with the publication (or the author's era) beside it.
+    const dateStr=p.published||p.authorDates||'';
+    const authorHtml=p.author?'<div class="eo-author">'+esc(p.author)+(dateStr?'<span class="eo-life"> · '+esc(dateStr)+'</span>':'')+'</div>':'';
     const html='<!doctype html><html'+htmlCls+'><head><meta charset="utf-8"><base target="_blank">'+
       '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
       'html,body{margin:0;background:var(--eo-bg);}'+
       'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);transition:background .2s,color .2s;}'+
       '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
-      'h1.eo-title{font:700 1.62em/1.25 var(--eo-ff);letter-spacing:-.01em;color:var(--eo-fg);margin:0 0 6px;}'+
+      'h1.eo-title{font:700 1.95em/1.18 var(--eo-ff);letter-spacing:-.018em;color:var(--eo-fg);margin:0 0 4px;}'+
+      '.eo-author{font:italic 600 1.08em/1.4 var(--eo-ff);color:var(--eo-fg);margin:0 0 12px;}'+
+      '.eo-author .eo-life{font-style:normal;font-weight:400;color:var(--eo-fg2);}'+
       '.eo-byline{font:.72em/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--eo-fg2);margin:0 0 34px;border-bottom:1px solid var(--eo-rule);padding-bottom:18px;}'+
-      'h2.eo-chap{font:700 1.18em/1.3 var(--eo-ff);color:var(--eo-fg);margin:2.3em 0 .9em;scroll-margin-top:16px;}'+
-      'h2.eo-emergent{font-weight:600;font-style:italic;color:var(--eo-fg2);padding-left:.7em;border-left:2px solid var(--eo-acc);}'+
+      'h2.eo-chap{font:700 2.15em/1.12 var(--eo-ff);letter-spacing:-.02em;color:var(--eo-fg);margin:2.6em 0 .7em;scroll-margin-top:16px;}'+
+      'h2.eo-emergent{font-size:1.4em;font-weight:600;font-style:italic;letter-spacing:0;color:var(--eo-fg2);padding-left:.7em;border-left:2px solid var(--eo-acc);}'+
       'p{margin:0 0 1.15em;}p.eo-first::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:var(--eo-acc);font-family:Georgia,serif;}'+
       // Bookmarks: inert until the reader turns the mode on (html.eo-bm-on), then the
       // flagged passage lifts off the page with an accent wash + rule, and shows its "why".
@@ -2266,6 +2308,7 @@ class Component extends DCLogic {
       'html.eo-bm-on .eo-bm{background:var(--eo-bmbg);box-shadow:inset 3px 0 0 var(--eo-acc);padding:.5em .8em;margin-left:-.8em;position:relative;}'+
       'html.eo-bm-on .eo-bm[data-eo-why]:not([data-eo-why=""])::before{content:"❖ " attr(data-eo-why);display:block;font:700 .58em/1.3 -apple-system,BlinkMacSystemFont,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--eo-acc);margin-bottom:.4em;}'+
       '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
+      authorHtml+
       '<div class="eo-byline">'+((p.sentences||[]).length)+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+(marks.length?' · '+marks.length+' marks':'')+' · read as a book</div>'+
       parts.join('\n')+'</div></body></html>';
     return {html,toc,bookmarks};
@@ -2824,7 +2867,7 @@ class Component extends DCLogic {
       countLabel:_gcount+' book'+(_gcount===1?'':'s'),
       onClear:()=>this.setState({gutenResults:null,gutenQuery:''}),
       results:(this.state.gutenResults||[]).map(b=>{const reading=this.state.gutenReading===b.id;
-        return {title:b.title,author:b.author,downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
+        return {title:b.title,author:this.authorDisplay(b.author),downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
           hasCover:!!b.cover,
           coverStyle:'width:50px;height:74px;flex:0 0 auto;border-radius:5px;box-shadow:0 1px 4px rgba(20,24,30,.16);background:#eef0f3 center/cover no-repeat;'+(b.cover?'background-image:url(\''+String(b.cover).replace(/'/g,'%27')+'\');':''),
           tags:this._gutenTags(b).map(t=>({label:t,style:'display:inline-flex;align-items:center;font-size:10px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap;'})),
