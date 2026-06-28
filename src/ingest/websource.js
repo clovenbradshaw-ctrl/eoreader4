@@ -73,6 +73,13 @@ const BOILERPLATE_LINE = new Set([
   'add languages', 'from wikipedia, the free encyclopedia', 'appearance', 'small', 'standard',
   'large', 'width', 'color (beta)', 'automatic', 'light', 'dark', 'read', 'edit', 'view history',
   'view source', 'talk', 'sandbox', 'preferences', 'watchlist', 'contributions', 'search',
+  // Modern-web furniture: consent/ad/subscribe/share/comment widgets that survive as bare lines.
+  'advertisement', 'sign up', 'sign in', 'log in or sign up', 'subscribe', 'subscribe now',
+  'newsletter', 'related articles', 'related stories', 'read more', 'see more', 'show more',
+  'share', 'share this', 'share this article', 'tweet', 'follow us', 'most read', 'trending',
+  'recommended for you', 'skip to content', 'skip to main content', 'accept', 'accept all',
+  'accept all cookies', 'reject all', 'manage cookies', 'cookie settings', 'we use cookies',
+  'menu', 'close', 'leave a comment', 'comments', 'all rights reserved',
 ]);
 
 // Reduce a fetched page's text to its PROSE: drop the chrome lines above, the dotted table-of-
