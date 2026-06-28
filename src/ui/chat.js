@@ -16,12 +16,96 @@
 // hatch: pass it to bring a block back inline for debugging, but the
 // default — and the shipped experience — is the bare chatbot.
 
+// ── Per-message actions: copy · reply/quote · fork ─────────────────────────
+//
+// Every rendered message (user or finalized assistant) carries a small action
+// bar: COPY the message text, REPLY to it (quote it into the composer so the
+// next turn responds to that exact message — from the model or from you), and
+// FORK the chat from that point (open a new, independent chat seeded with the
+// transcript up to and including that message, leaving this one untouched).
+//
+// The fork/reply behaviours live in app.js (they touch session state and the
+// composer); chat.js only needs the handlers, registered once at startup. Copy
+// is self-contained here. Each message stashes its plain text on `el._msgText`
+// and its role on `el.dataset.role` so app.js can rebuild the transcript prefix
+// from the DOM when forking.
+let actionHandlers = { onQuote: null, onFork: null };
+export const setMessageActionHandlers = (h) => { actionHandlers = { ...actionHandlers, ...(h || {}) }; };
+
+const copyToClipboard = async (text) => {
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; }
+  } catch { /* fall through to the legacy path */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch { return false; }
+};
+
+const actionBtn = (label, title, onClick) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'msg-action';
+  b.textContent = label;
+  b.title = title;
+  b.setAttribute('aria-label', title);
+  b.addEventListener('click', (e) => { e.stopPropagation(); onClick(b); });
+  return b;
+};
+
+// Attach (or refresh) the action bar on a message element. `opts.quote` /
+// `opts.fork` gate the affordances that don't make sense on a given turn (an
+// errored assistant turn gets copy only — there is nothing to reply to or fork).
+export const attachMessageActions = (el, role, text, opts = {}) => {
+  if (!el) return;
+  el.dataset.role = role;
+  el._msgText = text ?? '';
+  el.querySelector(':scope > .msg-actions')?.remove();   // idempotent — refresh on re-finalize
+
+  const bar = document.createElement('div');
+  bar.className = 'msg-actions';
+
+  bar.appendChild(actionBtn('⧉ Copy', 'Copy this message', async (b) => {
+    const ok = await copyToClipboard(el._msgText ?? text ?? '');
+    if (ok) {
+      const prev = b.textContent;
+      b.textContent = '✓ Copied';
+      b.classList.add('done');
+      setTimeout(() => { b.textContent = prev; b.classList.remove('done'); }, 1200);
+    }
+  }));
+
+  if (opts.quote !== false && actionHandlers.onQuote) {
+    const isModel = role === 'assistant';
+    bar.appendChild(actionBtn(
+      isModel ? '↩ Reply' : '↩ Quote',
+      isModel ? 'Quote the model’s message into the composer to respond to it'
+              : 'Quote this message into the composer',
+      () => actionHandlers.onQuote(el._msgText ?? text ?? '', role)));
+  }
+
+  if (opts.fork !== false && actionHandlers.onFork) {
+    bar.appendChild(actionBtn('⑂ Fork', 'Fork the chat from here into a new tab', () => actionHandlers.onFork(el)));
+  }
+
+  el.appendChild(bar);
+};
+
 export const renderUserMessage = (root, text) => {
   const el = document.createElement('div');
   el.className = 'msg user';
   el.textContent = text;
   root.appendChild(el);
+  attachMessageActions(el, 'user', text);
   root.scrollTop = root.scrollHeight;
+  return el;
 };
 
 // A "thinking" bubble is the assistant slot reserved early in the turn.
@@ -178,7 +262,7 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   // Idempotent: a web follow-up re-renders this same bubble with the updated answer, so drop the
   // blocks a prior finalize appended (kept as siblings of .body) before re-appending them — else
   // coverage / flags / meta / trace stack up. The web proposal/result cards are preserved.
-  el.querySelectorAll(':scope > .coverage, :scope > .docsources, :scope > .flags, :scope > .meta, :scope > .retry, :scope > .trail-toggle, :scope > .transparency-toggle, :scope > .transparency, :scope > .searchnote')
+  el.querySelectorAll(':scope > .coverage, :scope > .docsources, :scope > .flags, :scope > .meta, :scope > .retry, :scope > .trail-toggle, :scope > .transparency-toggle, :scope > .transparency, :scope > .searchnote, :scope > .msg-actions')
     .forEach(n => n.remove());
   el.classList.remove('thinking');
   el.classList.remove('streaming');     // the live stream is replaced by the cited answer
@@ -204,6 +288,12 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
     retry.addEventListener('click', () => { retry.disabled = true; opts.onRetry(); });
     el.appendChild(retry);
   }
+
+  // The action bar — copy/reply/fork. An errored turn gets copy only (there is
+  // nothing to reply to or fork from a failed answer). The text stashed is the
+  // bound answer (sans the verbose blocks), which is what copy/fork should carry.
+  const isError = opts.route === 'error';
+  attachMessageActions(el, 'assistant', text || '', { quote: !isError, fork: !isError });
 
   const root = el.parentElement;
   if (root) root.scrollTop = root.scrollHeight;

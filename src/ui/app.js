@@ -22,7 +22,7 @@ import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { createHorizon, structuralGround } from '../surfer/index.js';
 import { createCast } from '../converse/index.js';
-import { renderUserMessage, createThinkingMessage,
+import { renderUserMessage, createThinkingMessage, renderAssistantMessage, setMessageActionHandlers,
          updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
          renderWebProposal, renderWebResult, renderSearchNote, setThinkingNote, buildPropositions } from './chat.js';
 import { createMind } from '../mind/index.js';
@@ -854,6 +854,82 @@ els.input.addEventListener('keydown', (e) => {
 // Proactive search as you type — speculatively warm the web for the in-progress query
 // (auto mode only). The result is quarantined and preserved only if the turn consumes it.
 els.input.addEventListener('input', maybePrefetch);
+
+// ── Message actions: copy · reply/quote · fork ─────────────────────────────
+//
+// Each rendered message carries a copy/reply/fork bar (wired in chat.js). Copy
+// is self-contained there; the reply and fork behaviours touch session state
+// and the composer, so they live here and are registered once.
+
+// REPLY / QUOTE: drop the message — from the model or from you — into the
+// composer as a Markdown blockquote, so the next turn responds to that exact
+// message. The cursor lands after the quote, ready to type the response.
+const quoteIntoComposer = (text) => {
+  const quoted = String(text || '').trim().split('\n').map(l => '> ' + l).join('\n');
+  const existing = els.input.value;
+  els.input.value = (existing ? existing.replace(/\s+$/, '') + '\n\n' : '') + quoted + '\n\n';
+  if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('chat');
+  els.input.focus();
+  els.input.selectionStart = els.input.selectionEnd = els.input.value.length;
+  els.input.scrollTop = els.input.scrollHeight;
+};
+
+// FORK: rebuild the transcript up to and including the chosen message straight
+// from the DOM (each message stashes its role + plain text), seed it into
+// localStorage under a one-shot key, and open a fresh chat tab pointed at it
+// via the URL hash. This chat is left exactly as it was — the fork is a true
+// branch, an independent conversation that starts from that point.
+const collectTranscriptUpTo = (targetEl) => {
+  const out = [];
+  for (const el of els.messages.children) {
+    if (el.dataset?.role) out.push({ role: el.dataset.role, content: el._msgText ?? '' });
+    if (el === targetEl) break;
+  }
+  return out;
+};
+const forkFrom = (targetEl) => {
+  const transcript = collectTranscriptUpTo(targetEl);
+  if (!transcript.length) return;
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const key = `eoreader.fork.${id}`;
+  try {
+    localStorage.setItem(key, JSON.stringify({ v: 1, createdAt: new Date().toISOString(), transcript }));
+  } catch {
+    setStatus('fork failed — could not stage the transcript (storage full?)');
+    return;
+  }
+  const url = new URL('chat.html', location.href);
+  url.hash = `fork=${id}`;
+  const win = window.open(url.href, '_blank');
+  if (!win) setStatus('fork staged — allow pop-ups, or open chat.html#fork=' + id);
+};
+
+setMessageActionHandlers({ onQuote: quoteIntoComposer, onFork: forkFrom });
+
+// On boot, if this tab was opened as a fork, replay the seeded transcript into
+// the chat pane and the session fold, then consume the seed so a reload starts
+// clean. The continuation picks up exactly where the parent chat branched.
+const hydrateFork = () => {
+  const m = /(?:^|[#&])fork=([\w-]+)/.exec(location.hash || '');
+  if (!m) return;
+  const key = `eoreader.fork.${m[1]}`;
+  let seed = null;
+  try { seed = JSON.parse(localStorage.getItem(key) || 'null'); } catch { seed = null; }
+  try { localStorage.removeItem(key); } catch { /* ignore */ }
+  try { history.replaceState(null, '', location.pathname + location.search); } catch { /* ignore */ }
+  if (!seed || !Array.isArray(seed.transcript) || !seed.transcript.length) return;
+  for (const msg of seed.transcript) {
+    if (msg.role === 'user') {
+      renderUserMessage(els.messages, msg.content);
+      STATE.history.push({ role: 'user', content: msg.content });
+    } else if (msg.role === 'assistant') {
+      renderAssistantMessage(els.messages, msg.content, [], { route: 'chat', mode: STATE.grounding });
+      STATE.history.push({ role: 'assistant', content: msg.content });
+    }
+  }
+  setStatus(`forked chat — ${STATE.history.length} message${STATE.history.length > 1 ? 's' : ''} carried over · continue below`);
+};
+hydrateFork();
 
 // Backend switch — auto-load the new model immediately.
 els.backend.addEventListener('change', () => {
