@@ -311,6 +311,11 @@
               <sc-if value="{{ guten.hasResults }}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;flex:0 0 auto;font-size:11px;color:var(--ink3);white-space:nowrap;">{{ guten.countLabel }}</span></sc-if>
               <button onclick="{{ guten.onClear }}" style="flex:0 0 auto;font-size:12px;color:var(--ink2);background:transparent;border:none;cursor:pointer;margin-left:12px;" style-hover="color:var(--ink)">Clear</button>
             </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;background:var(--app);border:1px solid var(--line2);border-radius:13px;padding:3px 4px 3px 14px;" style-focus-within="border-color:var(--accline);background:var(--card)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9aa1ab" stroke-width="2" style="flex:0 0 auto;"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+              <input value="{{ guten.input }}" oninput="{{ guten.onInput }}" onkeydown="{{ guten.onKey }}" placeholder="Search every Project Gutenberg book — title, author, or subject…" style="flex:1;min-width:0;font-size:13px;color:var(--ink);background:transparent;border:none;padding:8px 4px;outline:none;">
+              <button onclick="{{ guten.onSearch }}" style="flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:8px 16px;cursor:pointer;">Search</button>
+            </div>
             <sc-if value="{{ guten.loading }}" hint-placeholder-val="{{ true }}">
               <div style="display:flex;align-items:center;gap:11px;color:var(--ink3);padding:24px 4px;"><span style="width:22px;height:22px;border-radius:50%;border:3px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span><span style="font-size:13px;">Searching the catalog…</span></div>
             </sc-if>
@@ -329,6 +334,9 @@
                 <button onclick="{{ bk.onRead }}" style="{{ bk.btnStyle }}">{{ bk.btnLabel }}</button>
               </div>
             </sc-for>
+            <sc-if value="{{ guten.hasMore }}" hint-placeholder-val="{{ false }}">
+              <button onclick="{{ guten.onMore }}" style="width:100%;margin-top:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--card);border:1px solid var(--accline);border-radius:10px;padding:11px;cursor:pointer;" style-hover="background:var(--accbg)">{{ guten.moreLabel }}</button>
+            </sc-if>
           </div>
         </div>
       </sc-if>
@@ -337,6 +345,18 @@
           <sc-if value="{{ reading.isBook }}" hint-placeholder-val="{{ false }}">
             <div style="position:relative;flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 14px 9px;background:var(--card);border-bottom:1px solid var(--line);">
               <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Reading</span>
+              <sc-if value="{{ contents.bookInline }}" hint-placeholder-val="{{ false }}">
+                <div style="position:relative;flex:0 0 auto;">
+                  <button onclick="{{ contents.onToggle }}" title="{{ contents.title }}" style="{{ contentsBtnStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Contents</button>
+                  <sc-if value="{{ contents.open }}" hint-placeholder-val="{{ false }}">
+                    <div onclick="{{ contents.onToggle }}" style="position:fixed;inset:0;z-index:19;"></div>
+                    <div style="position:absolute;top:34px;left:0;width:min(320px,84vw);max-height:min(62vh,520px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
+                      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:12px 14px 8px;position:sticky;top:0;background:var(--card);">{{ contents.title }}</div>
+                      <sc-for list="{{ contents.items }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
               <span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;">
                 <button onclick="{{ reading.onFontDown }}" title="Smaller text" style="{{ reading.btnStyle }}">A−</button>
                 <span style="font-size:11px;color:var(--ink3);min-width:36px;text-align:center;font-variant-numeric:tabular-nums;">{{ reading.fsLabel }}</span>
@@ -359,17 +379,22 @@
               <sc-if value="{{ reading.hasMarks }}" hint-placeholder-val="{{ false }}">
                 <button onclick="{{ reading.onToggleMarks }}" title="Highlight the moments the reading flagged as important" style="{{ reading.marksStyle }}">❖ {{ reading.marksCount }}</button>
               </sc-if>
-              <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
-                <div style="position:relative;flex:0 0 auto;">
-                  <button onclick="{{ reading.onToggleTOC }}" title="Table of contents" style="{{ reading.tocStyle }}">☰ Contents</button>
-                  <sc-if value="{{ reading.tocOpen }}" hint-placeholder-val="{{ false }}">
-                    <div style="position:absolute;top:34px;right:0;width:284px;max-height:60vh;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
-                      <sc-for list="{{ reading.toc }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
-                    </div>
-                  </sc-if>
-                </div>
-              </sc-if>
               <span style="position:absolute;left:0;bottom:0;height:2px;background:var(--acc);width:{{ reading.progressW }};transition:width .2s;"></span>
+            </div>
+          </sc-if>
+          <sc-if value="{{ contents.webBar }}" hint-placeholder-val="{{ false }}">
+            <div style="position:relative;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--card);border-bottom:1px solid var(--line);">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Page</span>
+              <div style="position:relative;flex:0 0 auto;">
+                <button onclick="{{ contents.onToggle }}" title="{{ contents.title }}" style="{{ contentsBtnStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Contents</button>
+                <sc-if value="{{ contents.open }}" hint-placeholder-val="{{ false }}">
+                  <div onclick="{{ contents.onToggle }}" style="position:fixed;inset:0;z-index:19;"></div>
+                  <div style="position:absolute;top:34px;left:0;width:min(320px,84vw);max-height:min(62vh,520px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
+                    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:12px 14px 8px;position:sticky;top:0;background:var(--card);">{{ contents.title }}</div>
+                    <sc-for list="{{ contents.items }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
+                  </div>
+                </sc-if>
+              </div>
             </div>
           </sc-if>
           <sc-if value="{{ web.loading }}" hint-placeholder-val="{{ true }}">
@@ -1400,7 +1425,12 @@ class Component extends DCLogic {
     // ── e-book reading: paper themes + type families, applied to the book iframe ──
     this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
     this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
-    this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
+    // Reading defaults grounded in typographic prior art (Bringhurst; Baymard; Butterick;
+    // Pimp My Type): the MEASURE is set in characters, not pixels, so line length stays in
+    // the readable 50–75-CPL band as the font scales — px widths drift out of it. w is the
+    // measure in ch; 58ch of Georgia renders at ~66 chars/line — Bringhurst's ideal — because
+    // its "0" (the ch unit) is narrower than its average glyph. lh is the leading (1.5–1.6).
+    this._defaultRead={fs:19,lh:1.6,w:58,theme:'light',font:'serif'};
     let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
@@ -1433,11 +1463,17 @@ class Component extends DCLogic {
       // Project Gutenberg — "a source of sources". A non-URL query searches the catalog;
       // a chosen book is fetched and READ FULLY before it joins the sources (and so can
       // be chatted with). gutenReading holds the id while a book is being read.
+      // gutenInput is the live text in the in-section search box; gutenNext/gutenCount
+      // carry gutendex pagination so "Load more" can walk through ALL matching books.
       gutenResults:null, gutenLoading:false, gutenQuery:'', gutenReading:null,
+      gutenInput:'', gutenNext:null, gutenCount:0, gutenMoreLoading:false,
       // E-book reading preferences (font size/spacing/width/paper theme/typeface),
       // applied live to the book iframe and persisted. bookToc is the detected
       // chapter list; bookProgress is the live read fraction (0–1).
-      readPrefs:Object.assign({},this._defaultRead,(savedRead&&typeof savedRead==='object')?savedRead:{}), bookToc:[], tocOpen:false, bookProgress:0,
+      // bookToc is the engine-emergent section list for a text/book; webToc is the
+      // table of contents built from a live web page's own headings — together they let
+      // ONE "Contents" affordance navigate any content in view.
+      readPrefs:this._migrateRead(Object.assign({},this._defaultRead,(savedRead&&typeof savedRead==='object')?savedRead:{})), bookToc:[], webToc:[], tocOpen:false, bookProgress:0,
       // Auto-bookmarks: spots the reading flags as SURPRISING (connectivity + novelty).
       // bookmarkMode shows them (in-book highlight + scrollbar markers); bookmarks holds
       // the detected spots; bmRail holds their live scroll fractions for the marker rail.
@@ -1463,15 +1499,24 @@ class Component extends DCLogic {
   // Each setter persists, re-renders the toolbar, and applies the change LIVE to the
   // open book iframe via CSS variables — no reload, so scroll position and the entity
   // decoration both survive. _bookHtml seeds the same vars so a fresh open matches.
+  // Carry a saved preference set forward. The width used to be stored in px (600/720/860);
+  // it now means a measure in characters (ch), so map any legacy px value onto the nearest
+  // character target and clamp anything out of the readable range.
+  _migrateRead(rp){rp=Object.assign({},rp);
+    if(rp.w>=100)rp.w=rp.w<=600?46:(rp.w>=860?70:58);   // legacy px → ch measure
+    if(!(typeof rp.w==='number'&&rp.w>=36&&rp.w<=84))rp.w=58;
+    return rp;}
   setReadPref(patch){const rp=Object.assign({},this.state.readPrefs,patch);try{localStorage.setItem('eo_readprefs',JSON.stringify(rp));}catch(e){}this.setState({readPrefs:rp});const d=this._bookDoc();if(d)this.applyReadCSS(d,rp);}
   bumpFont(d){const rp=this.state.readPrefs;this.setReadPref({fs:Math.max(14,Math.min(30,(rp.fs||19)+d))});}
-  bumpLine(d){const rp=this.state.readPrefs;this.setReadPref({lh:Math.max(1.3,Math.min(2.2,Math.round(((rp.lh||1.7)+d)*10)/10))});}
+  bumpLine(d){const rp=this.state.readPrefs;this.setReadPref({lh:Math.max(1.3,Math.min(2.2,Math.round(((rp.lh||1.6)+d)*10)/10))});}
   cycleReadTheme(){const o=['light','sepia','dark'];const i=o.indexOf(this.state.readPrefs.theme||'light');this.setReadPref({theme:o[(i+1)%o.length]});}
-  cycleWidth(){const o=[600,720,860];const i=o.indexOf(this.state.readPrefs.w||720);this.setReadPref({w:o[(i+1)%o.length]});}
+  // Measure presets (in ch): ~46 snug (~52 CPL), ~58 ideal (~66 CPL, Bringhurst), ~70 wide
+  // (~80 CPL, the WCAG ceiling). Leading rides with the measure — wider wants looser.
+  cycleWidth(){const o=[46,58,70];const i=o.indexOf(this.state.readPrefs.w);const w=o[((i<0?1:i)+1)%o.length];this.setReadPref({w,lh:w<=46?1.5:(w>=70?1.7:1.6)});}
   toggleReadFont(){this.setReadPref({font:(this.state.readPrefs.font==='sans')?'serif':'sans'});}
   _bookDoc(){const ifr=document.querySelector('iframe[data-eo-center]');return (ifr&&ifr.contentDocument)?ifr.contentDocument:null;}
   applyReadCSS(d,rp){rp=rp||this.state.readPrefs;const t=this.READ_THEMES[rp.theme]||this.READ_THEMES.light;const r=d.documentElement&&d.documentElement.style;if(!r)return;
-    r.setProperty('--eo-fs',(rp.fs||19)+'px');r.setProperty('--eo-lh',String(rp.lh||1.7));r.setProperty('--eo-maxw',(rp.w||720)+'px');
+    r.setProperty('--eo-fs',(rp.fs||19)+'px');r.setProperty('--eo-lh',String(rp.lh||1.6));r.setProperty('--eo-maxw',(rp.w||58)+'ch');
     r.setProperty('--eo-ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif);
     r.setProperty('--eo-bg',t.bg);r.setProperty('--eo-fg',t.fg);r.setProperty('--eo-fg2',t.fg2);r.setProperty('--eo-rule',t.rule);r.setProperty('--eo-acc',this.curAccent());
     try{d.body.style.background=t.bg;}catch(e){}}
@@ -1637,6 +1682,34 @@ class Component extends DCLogic {
       if(this._scrollT)return;this._scrollT=setTimeout(()=>{this._scrollT=null;const pct=this._lastPct;this.saveReadPos(url,pct);if(Math.abs((this.state.bookProgress||0)-pct)>=0.005)this.setState({bookProgress:pct});},150);};
     win.addEventListener('scroll',onScroll,{passive:true});}
   gotoChapter(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-14;try{win.scrollTo({top,behavior:'smooth'});}catch(e){win.scrollTo(0,top);}}this.setState({tocOpen:false});}
+  // ── table of contents for a LIVE WEB PAGE ────────────────────────────────
+  // A book gets its TOC from the engine's emergent sections (detectStructure, baked into
+  // _bookHtml). A web page already carries its author's structure in its heading elements,
+  // so we read THOSE directly off the rendered iframe — the page's own outline, with real
+  // elements to scroll to. Each kept heading is tagged with an id so the same Contents
+  // affordance can navigate it. Runs after decorateFrame, once the frame DOM exists.
+  _buildWebToc(d){
+    if(!d||!d.body||(this.state.viewUrl&&/^text:/i.test(this.state.viewUrl)))return;
+    const items=[];
+    try{
+      const hs=[...d.body.querySelectorAll('h1,h2,h3,h4')].filter(el=>{
+        if(el.closest('nav,header,footer,aside'))return false;          // chrome, not content
+        const t=this.norm(el.textContent||'');return t.length>=2&&t.length<=120;});
+      const minLv=hs.reduce((m,el)=>Math.min(m,+el.tagName[1]),9);
+      const seen=new Set();
+      hs.forEach((el,i)=>{const label=this.norm(el.textContent).slice(0,90),key=label.toLowerCase();
+        if(seen.has(key))return;seen.add(key);
+        if(!el.id)el.id='eo-wtoc-'+i;
+        items.push({id:el.id,label,level:Math.max(1,(+el.tagName[1])-minLv+1)});});
+    }catch(e){}
+    const cur=this.state.webToc||[];
+    if(items.length===cur.length&&items.every((it,i)=>cur[i]&&cur[i].id===it.id&&cur[i].label===it.label))return;
+    this.setState({webToc:items});
+  }
+  // Scroll the in-view web page to a heading captured by _buildWebToc.
+  gotoWebSection(id){const d=this._bookDoc();if(!d)return;const el=d.getElementById(id),win=d.defaultView;
+    if(el&&win){const top=el.getBoundingClientRect().top+win.scrollY-16;try{win.scrollTo({top:Math.max(0,top),behavior:'smooth'});}catch(e){win.scrollTo(0,Math.max(0,top));}}
+    this.setState({tocOpen:false});}
   // Section anchors (their document tops), in reading order — the cursor's structural stops.
   _sectionTops(){const d=this._bookDoc();if(!d||!d.defaultView)return [];const win=d.defaultView,out=[];
     d.querySelectorAll('[id^="eo-ch-"]').forEach(el=>out.push(el.getBoundingClientRect().top+win.scrollY));
@@ -2265,11 +2338,16 @@ class Component extends DCLogic {
   // Search the catalog (gutendex), fetched through the same proxy. Returns books
   // that have a plain-text edition we can read.
   async searchGutenberg(query){
-    const api='https://gutendex.com/books/?search='+encodeURIComponent(query);
+    return this._gutenFetch('https://gutendex.com/books/?search='+encodeURIComponent(query));
+  }
+  // Fetch one page of gutendex results through the proxy. Returns the readable books on
+  // that page plus the `next` page URL and the total catalog match count, so the search
+  // section can page through EVERY matching Project Gutenberg book, not just the first.
+  async _gutenFetch(api){
     let data;
     try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
-    catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
-    return this._gutenBooks(data).slice(0,16);
+    catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return {books:[],next:null,count:0};}
+    return {books:this._gutenBooks(data),next:(data&&data.next)||null,count:(data&&data.count)||0};
   }
   // Map a gutendex response to readable books — only those with a plain-text edition.
   _gutenBooks(data){
@@ -2298,8 +2376,21 @@ class Component extends DCLogic {
   }
   // Type a query: a URL is opened; anything else searches Project Gutenberg.
   searchBooks(query){
-    this.setState({gutenLoading:true,gutenResults:null,gutenQuery:query,activeChat:null,viewUrl:null,selId:null});
-    this.searchGutenberg(query).then(res=>{this.setState({gutenLoading:false,gutenResults:res});if(!res.length)this.feedLine('warn','No books found for “'+query+'”.');});
+    query=String(query||'').trim();if(!query)return;
+    this.setState({gutenLoading:true,gutenResults:null,gutenQuery:query,gutenInput:query,gutenNext:null,gutenCount:0,gutenMoreLoading:false,activeChat:null,viewUrl:null,selId:null});
+    this.searchGutenberg(query).then(res=>{this.setState({gutenLoading:false,gutenResults:res.books,gutenNext:res.next,gutenCount:res.count});
+      if(!res.books.length)this.feedLine('warn','No books found for “'+query+'”.');});
+  }
+  // Append the next page of matches (de-duped by id) — keeps walking gutendex until
+  // every book matching the query has been pulled in.
+  loadMoreGuten(){
+    if(this.state.gutenMoreLoading||!this.state.gutenNext)return;
+    const next=this.state.gutenNext;this.setState({gutenMoreLoading:true});
+    this._gutenFetch(next).then(res=>{
+      const cur=this.state.gutenResults||[],seen=new Set(cur.map(b=>b.id));
+      const add=res.books.filter(b=>!seen.has(b.id));
+      this.setState({gutenResults:cur.concat(add),gutenNext:res.next,gutenMoreLoading:false});
+    });
   }
   // Read a chosen book FULLY (fetch → strip → parse) before it becomes a source.
   // Until the parse completes the book is "reading…" and cannot be chatted with.
@@ -2315,7 +2406,7 @@ class Component extends DCLogic {
     this.feedLine('read','Reading “'+book.title+'” fully — '+Math.round(text.length/1000)+'k chars…');
     await this.sleep(20);                                  // let the feed paint before the synchronous parse
     const r=await this.importText(text,book.title+' — '+book.author);
-    this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
+    this.setState({gutenReading:null,gutenResults:null,gutenQuery:'',gutenInput:'',gutenNext:null,gutenCount:0});
     if(r)this.feedLine('done','Read fully · '+r.sentenceCount+' propositions — ready to chat');
   }
   ingest(url,title,text,via,image,parent,wikiLinks){
@@ -2423,7 +2514,13 @@ class Component extends DCLogic {
     if(words.length===1&&this.STOP.has(l))return false;          // lone stopword
     return true;
   }
-  showable(id){const l=this.labelOf(id);return !this.isURLish(l)&&this.conceptual(l)&&!this.strayCapital(id);}
+  // A label that is really an internal entity id (no human surface form was ever
+  // resolved, so labelOf fell back to the raw id) must never be shown as a name. These
+  // ids are single lowercase alphanumeric tokens with digits INTERLEAVED among letters
+  // ("efddc9jxb22", "em06b21s6xa") — a shape no real word/name takes. Trailing-digit
+  // tokens ("covid19") are left alone.
+  _looksLikeId(s){s=String(s||'');return /^[a-z0-9]{7,}$/.test(s)&&/[a-z]/.test(s)&&/[0-9][a-z]/.test(s);}
+  showable(id){const e=this.graph.entities.get(id);if(!e||!e.label)return false;const l=this.labelOf(id);return !this._looksLikeId(l)&&!this.isURLish(l)&&this.conceptual(l)&&!this.strayCapital(id);}
   // A generic concept ("tourism", "runoff") means something specific ON THIS PAGE. Its
   // qualifier is the page's dominant PROPER-NOUN subject (Great Barrier Reef), which we
   // surface in the title — while the bare concept stays reachable via its Wikipedia link.
@@ -3588,7 +3685,7 @@ class Component extends DCLogic {
     const v=(n,d)=>'--eo-'+n+':'+d+';';
     const htmlCls=this.state.bookmarkMode?' class="eo-bm-on"':'';
     const html='<!doctype html><html'+htmlCls+'><head><meta charset="utf-8"><base target="_blank">'+
-      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.6))+v('maxw',(rp.w||58)+'ch')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
       'html,body{margin:0;background:var(--eo-bg);}'+
       'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);transition:background .2s,color .2s;}'+
       '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
@@ -3608,10 +3705,10 @@ class Component extends DCLogic {
     return {html,toc,bookmarks};
   }
   loadCenter(url){
-    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
-    if(!url){this.setState({pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
+    if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){const b=this._bookHtml(p);this.setState({pageDoc:b.html,bookToc:b.toc,webToc:[],bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}else{this.setState({pageDoc:null,bookToc:[],webToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
+    if(!url){this.setState({pageDoc:null,bookToc:[],webToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
     if(this._pageUrl===url&&this.state.pageDoc)return;
-    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],tocOpen:false});
+    this._pageUrl=url;this.setState({pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],webToc:[],tocOpen:false});
     fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
       if(this.state.viewUrl!==url)return;
       let doc=html;
@@ -3639,6 +3736,10 @@ class Component extends DCLogic {
   onDirInput(ev){this.setState({direction:ev&&ev.target?ev.target.value:''});}
   onUrlInput(ev){this.setState({url:ev&&ev.target?ev.target.value:''});}
   onUrlKey(ev){if(ev&&ev.key==='Enter')this.doReadUrl();}
+  // The search box inside the Project Gutenberg section — searches the whole catalog.
+  onGutenInput(ev){this.setState({gutenInput:ev&&ev.target?ev.target.value:''});}
+  onGutenKey(ev){if(ev&&ev.key==='Enter')this.runGutenSearch();}
+  runGutenSearch(){this.searchBooks(this.state.gutenInput||'');}
   // A URL (or bare domain) is opened directly; anything else is a Project Gutenberg
   // book search — type a title or author to find a book to read.
   doReadUrl(){const u=this.state.url.trim();if(!u)return;this.setState({url:''});
@@ -3726,7 +3827,7 @@ class Component extends DCLogic {
       if(token!==this._decoToken){this._decoToken=token;this._scheduleDecorate();}
     } else {this._decoToken=null;}
   }
-  _scheduleDecorate(){clearTimeout(this._decoT);let tries=0;const tick=()=>{const ifr=document.querySelector('iframe[data-eo-center]');const d=ifr&&ifr.contentDocument;if(d&&d.body&&d.body.childNodes.length){this.decorateFrame(d,ifr);}else if(tries++<50){this._decoT=setTimeout(tick,80);}};this._decoT=setTimeout(tick,60);}
+  _scheduleDecorate(){clearTimeout(this._decoT);let tries=0;const tick=()=>{const ifr=document.querySelector('iframe[data-eo-center]');const d=ifr&&ifr.contentDocument;if(d&&d.body&&d.body.childNodes.length){this.decorateFrame(d,ifr);this._buildWebToc(d);}else if(tries++<50){this._decoT=setTimeout(tick,80);}};this._decoT=setTimeout(tick,60);}
   _frameOffset(){const ifr=document.querySelector('iframe[data-eo-center]');if(!ifr)return{x:0,y:0};const r=ifr.getBoundingClientRect();return{x:r.left,y:r.top};}
   decorateFrame(d,ifr){
     try{
@@ -4129,12 +4230,15 @@ class Component extends DCLogic {
 
     // Project Gutenberg search results take the center when present (and no chat open).
     base.gutenOn=!base.chatOn&&!this.state.viewUrl&&(this.state.gutenLoading||this.state.gutenResults!=null);
-    const _gcount=(this.state.gutenResults||[]).length;
+    const _gcount=(this.state.gutenResults||[]).length,_gtotal=this.state.gutenCount||0;
     base.guten={loading:!!this.state.gutenLoading,query:this.state.gutenQuery||'',
+      input:this.state.gutenInput||'',onInput:e=>this.onGutenInput(e),onKey:e=>this.onGutenKey(e),onSearch:()=>this.runGutenSearch(),
       hasResults:!!(this.state.gutenResults&&this.state.gutenResults.length),
       empty:!!(this.state.gutenResults&&!this.state.gutenResults.length),
-      countLabel:_gcount+' book'+(_gcount===1?'':'s'),
-      onClear:()=>this.setState({gutenResults:null,gutenQuery:''}),
+      countLabel:(_gtotal>_gcount?(_gcount+' of '+_gtotal.toLocaleString()):_gcount)+' book'+(_gtotal===1?'':'s'),
+      hasMore:!!this.state.gutenNext,moreLoading:!!this.state.gutenMoreLoading,
+      moreLabel:this.state.gutenMoreLoading?'Loading more…':'Load more books',onMore:()=>this.loadMoreGuten(),
+      onClear:()=>this.setState({gutenResults:null,gutenQuery:'',gutenInput:'',gutenNext:null,gutenCount:0}),
       results:(this.state.gutenResults||[]).map(b=>{const reading=this.state.gutenReading===b.id;
         return {title:b.title,author:b.author,downloads:(b.downloads||0).toLocaleString()+' downloads',reading,
           hasCover:!!b.cover,
@@ -4153,7 +4257,7 @@ class Component extends DCLogic {
         btnStyle:pill(false),
         fsLabel:(rp.fs||19)+'px',onFontDown:()=>this.bumpFont(-1),onFontUp:()=>this.bumpFont(1),
         onLineDown:()=>this.bumpLine(-0.1),onLineUp:()=>this.bumpLine(0.1),
-        widthLabel:(rp.w||720)<=600?'Narrow':((rp.w||720)>=860?'Wide':'Normal'),onWidth:()=>this.cycleWidth(),widthStyle:pill(false),
+        widthLabel:(rp.w||58)<=46?'Narrow':((rp.w||58)>=70?'Wide':'Normal'),onWidth:()=>this.cycleWidth(),widthStyle:pill(false),
         fontLabel:rp.font==='sans'?'Sans':'Serif',onFont:()=>this.toggleReadFont(),fontStyle:pill(rp.font==='sans'),
         themeLabel:rp.theme==='sepia'?'Sepia':(rp.theme==='dark'?'Night':'Light'),onTheme:()=>this.cycleReadTheme(),themeStyle:pill(rp.theme!=='light'),
         hasToc:toc.length>1,tocOpen:!!this.state.tocOpen,onToggleTOC:()=>this.toggleTOC(),tocStyle:pill(!!this.state.tocOpen),
@@ -4166,6 +4270,22 @@ class Component extends DCLogic {
         railOn:!!this.state.bookmarkMode&&(this.state.bmRail||[]).length>0,
         marks:(this.state.bmRail||[]).map(m=>({top:(m.frac*100).toFixed(2)+'%',why:m.why||'Something important here',onGo:()=>this.gotoBookmark(m.id)})),
         progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
+    }
+    // ── Contents: one affordance for the table of contents of ANY content in view.
+    // A book/text uses the engine's emergent sections (bookToc); a live web page uses
+    // its own headings (webToc). Surfaced as a top-bar button + popover whenever the
+    // content in view has more than one section.
+    { const isBook=!!(vu&&/^text:/i.test(vu));
+      const raw=isBook?(this.state.bookToc||[]):(this.state.webToc||[]);
+      const items=raw.map(c=>({label:c.label,onGo:isBook?(()=>this.gotoChapter(c.id)):(()=>this.gotoWebSection(c.id)),
+        rowStyle:'display:block;width:100%;text-align:left;padding:9px 13px 9px '+(13+((c.level||1)-1)*15)+'px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink'+((c.level||1)>1?'3':'2')+');font-size:12.5px;line-height:1.35;cursor:pointer;'}));
+      const has=!!vu&&items.length>1,open=has&&!!this.state.tocOpen;
+      base.contents={has,open,count:items.length,
+        bookInline:has&&isBook,           // shown inside the e-book "Reading" toolbar
+        webBar:has&&!isBook,              // shown in a slim bar atop a web page
+        title:isBook?'Sections found by reading the document':'Headings on this page',
+        onToggle:()=>this.toggleTOC(),items};
+      base.contentsBtnStyle='display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1;border:1px solid '+(open?'var(--accline)':'var(--line2)')+';background:'+(open?'var(--accbg)':'var(--app)')+';color:'+(open?'var(--acc)':'var(--ink2)')+';';
     }
     if(vu){
       base.showWeb=true;
