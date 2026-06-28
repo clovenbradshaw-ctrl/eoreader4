@@ -1096,7 +1096,19 @@ class Component extends DCLogic {
   // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
   // UNION the sources just gathered — passed in explicitly because the addChatSource setStates
   // above may not have flushed yet, and the new pages must be in scope for this answer.
+  // An ask for a LONG, multi-part piece — the opt-in trigger for the arc. Length is never the
+  // target (that fights the model's grounded prior); the request only opts INTO the multi-section
+  // shape. How long the answer actually runs is set by how much bindable evidence there is.
+  _longformIntent(q){return /\b(essays?|treatise|report|deep[\s-]?dive|comprehensive(?:ly)?|in[\s-]?depth|at length|long[\s-]?form|thorough(?:ly)?|detailed|\d{3,}\s*words?|write\s+(?:me\s+)?(?:a|an)\b[^.?!]*\b(?:essay|report|overview|account|piece|article|guide|breakdown))\b/i.test(String(q||''));}
   async _answerInto(id,q,gathered){
+    // OPT-IN LONGFORM (the arc, in the reader's own primitives): SEG the gathered evidence into one
+    // section per source (a fold), CON each grounded ONLY in that source's spans (re-prompt per
+    // fold), EVA each fold for new coverage and NUL when it would only re-cite, then assemble. Any
+    // other ask — or thin supply — takes the ordinary single answer. Length stays EMERGENT.
+    if(this._longformIntent(q))return this._longformArc(id,q,gathered);
+    return this._answerSingle(id,q,gathered);
+  }
+  async _answerSingle(id,q,gathered){
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const cur=this.state.chats.find(c=>c.id===id);
@@ -1129,6 +1141,68 @@ class Component extends DCLogic {
       finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,groundKind:relevant?'matched':undefined,related:this.relatedDocs(q,sources),modelNote:'Answered from what I gathered — the chat model didn’t load.'});
       this.setState({modelStatus:''});
     }
+  }
+  // THE ARC, in the reader's own primitives — multi-section grounded longform (spec-the-arc).
+  // The document is a fold of its events; the turn a fold of its stages; the ARC a fold of a
+  // section plan. Here the plan's sections are the SOURCES the chat has gathered/read: one
+  // grounded section per source, re-prompted at that fold, appended while it adds coverage.
+  //   SEG  rank the in-scope sources by how much they bear on the question → the section plan.
+  //   CON  generate each section grounded ONLY in that source's spans (a re-prompt per fold).
+  //   EVA  does this fold add NEW coverage (terms not already covered)? …
+  //   NUL  …if it would only re-cite, skip it. Saturation, not a token target, sets the length.
+  // Degrades to the single answer when supply is thin (<2 groundable sources) or anything throws.
+  async _longformArc(id,q,gathered){
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    const cur=this.state.chats.find(c=>c.id===id);
+    const had=this.chatSourcesOf(cur);
+    const scope=had.length?[...new Set([...had,...(gathered||[])])]:[];
+    const urls=scope.length?scope:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
+    // SEG — the section plan: each in-scope source that actually bears on the question, ranked.
+    const plan=[];
+    for(const u of urls){
+      const g=this.groundNotes(q,[u]);
+      const spans=(g.spans||[]).filter(s=>s.text&&s.text.length>24);
+      if(g.relevant&&spans.length)plan.push({url:u,title:this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),70),
+        spans:spans.slice(0,6),entities:g.entities||[],score:spans.reduce((a,s)=>a+(s.score||0),0)});
+    }
+    plan.sort((a,b)=>b.score-a.score);
+    if(plan.length<2)return this._answerSingle(id,q,gathered);   // not enough supply for a multi-section piece
+    let model=null;try{model=await this.ensureChatModel();}catch(e){model=null;}
+    const MAXSEC=6,NOVELTY=0.2;
+    const covered=new Set(),parts=[],allEnts=new Set(),allSrcs=new Set(),allPass=[];
+    let acc='',raf=0;
+    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+    for(const sec of plan){
+      if(parts.length>=MAXSEC)break;
+      // EVA → NUL: a fold whose terms are already covered would only re-cite — skip it.
+      const terms=new Set(sec.spans.flatMap(s=>this._researchTerms(s.text)));
+      const fresh=[...terms].filter(t=>!covered.has(t));
+      if(parts.length&&terms.size&&fresh.length/terms.size<NOVELTY)continue;
+      // CON — generate this section grounded ONLY in this source's spans.
+      const header='## '+sec.title;
+      acc=(parts.join('\n\n')+(parts.length?'\n\n':'')+header+'\n\n');paint();
+      let body='';
+      if(model){
+        try{
+          const msgs=this._ME.buildGroundedMessages({question:q,spans:sec.spans,graph:this.meaningGraph([sec.url]),
+            orientation:this.chatOrientation([sec.url]),task:'answer',conversation:{pastTurns:[]},now:new Date()});
+          const base=acc;
+          const onToken=(piece)=>{const t=String(piece||'');if(!t)return;acc=base+t;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+          body=this.normMd(await this._ME.streamPhrase(model,msgs,{maxTokens:384,temperature:0.4,onToken}));
+        }catch(e){body='';}
+      }
+      if(!body)body=sec.spans.slice(0,3).map(s=>this._clipPassage(s.text)).join(' ');   // structural fallback, bounded
+      parts.push(header+'\n\n'+body);
+      for(const t of terms)covered.add(t);
+      for(const e of sec.entities)allEnts.add(e);
+      allSrcs.add(sec.url);
+      for(const s of sec.spans.slice(0,2))allPass.push({text:s.text,u:s.u,i:s.i});
+      acc=parts.join('\n\n');paint();
+    }
+    if(!parts.length)return this._answerSingle(id,q,gathered);
+    finish({text:parts.join('\n\n'),entities:[...allEnts].slice(0,8),sources:[...allSrcs],
+      passages:allPass.slice(0,12),groundKind:'matched',related:this.relatedDocs(q,scope)});
   }
   // The curiosity walk, in the reader's own primitives (searchLinks / readURL / the graph).
   // CURIOSITY steers (chase the most surprising new term), COMPETENCY leashes (only follow
