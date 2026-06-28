@@ -2181,6 +2181,18 @@ class Component extends DCLogic {
     if(!content)return false;
     return capped===content&&/[A-Za-z]/.test(label);
   }
+  // The bare name a label refers to, with any leading honorific/role title stripped:
+  // "Vice President JD Vance" → "JD Vance", "Dr. Jane Goodall" → "Jane Goodall". The
+  // title tells you the person's office; the NAME is what an encyclopedia article is
+  // keyed on. We only strip leading role tokens, never the trailing name, and stop at
+  // the first non-role token so "President of the United States" keeps its office words.
+  _nameCore(label){
+    if(!this._ROLE)this._ROLE=new Set(('president vice senator sen senate representative rep congressman congresswoman governor gov mayor secretary justice judge general gen colonel col captain capt lieutenant lt sergeant sgt admiral major chancellor chairman chairwoman chair chief ceo cfo cto coo founder director minister ambassador pope king queen prince princess emperor empress sir lord lady dame dr doctor prof professor mr mrs ms mx rev reverend father rabbi imam sheikh saint commissioner sheriff attorney detective officer agent coach deputy former acting interim elect speaker premier dictator pres vp').split(' '));
+    const toks=String(label||'').trim().split(/\s+/).filter(Boolean);
+    let i=0;
+    while(i<toks.length-1){const w=toks[i].replace(/[^A-Za-z]/g,'').toLowerCase();if(w&&this._ROLE.has(w))i++;else break;}
+    return toks.slice(i).join(' ');
+  }
   wikiDef(id){return this.state.wikiDefs&&this.state.wikiDefs[id];}
   corefContext(id){
     // Context that proves a referent, graded by specificity. STRONG terms are the
@@ -2280,6 +2292,17 @@ class Component extends DCLogic {
     const canJudge=properG.size>=3;                       // graph rich enough to coref-check
     const disconfirmed=!isGen&&canJudge&&ch===0&&artN.size>=3; // proper-noun anchors elsewhere
     const lexOK=af.exact||(af.headMatch&&af.covL>=0.6&&af.covT>=0.5)||(af.headMatch&&af.covL>=0.85&&af.covT>=0.55);
+    // STRONG NAME IDENTITY — a fully sufficient confidence on its own. Strip the leading
+    // honorific/role from the label ("Vice President JD Vance" → "JD Vance") and test the
+    // bare name against the title. When the WHOLE article title sits inside that name
+    // (covT≥1), the head nouns agree both ways, and the name is a specific multi-token
+    // PROPER noun, the article simply IS this referent — a full personal/proper name like
+    // "JD Vance" rarely collides — so we may confirm on lexical identity even when the
+    // graph is too sparse to coref-check. (The disconfirmation guard above still wins
+    // whenever the graph CAN judge and the article anchors somewhere else entirely.)
+    const core=this._nameCore(label),afc=this._titleAffinity(core,top.title);
+    const coreToks=String(core).trim().split(/\s+/).filter(w=>w.replace(/[^A-Za-z0-9]/g,'').length>1).length;
+    const specificName = this.looksProperNoun(core) && coreToks>=2 && afc.headMatch && afc.headBack && afc.covT>=1 && afc.covL>=0.5;
     // Confirmation needs CORROBORATION from the entity's attested context — a shared
     // specific referent (proper-noun coref, ch) OR a shared predicate/topic term (sh) —
     // never a bare name match. A generic concept is the exception: its general article
@@ -2291,10 +2314,10 @@ class Component extends DCLogic {
     // is a different thing wearing the same letters — "trigger laws" (legal) vs "Trigger Law"
     // (a 1944 Western film). Refuse it even when the title matches exactly, generic or not.
     const articleConflict = artN.size>=3 && ch===0 && sh===0;
-    const confirmed = !disconfirmed && !articleConflict && lexOK && (isGen ? (af.exact||af.covL>=0.85) : corroborated);
+    const confirmed = !disconfirmed && (specificName || (!articleConflict && lexOK && (isGen ? (af.exact||af.covL>=0.85) : corroborated)));
     return {text:extract,title:top.title,desc:top.description||'',
       url:(top.content_urls&&top.content_urls.desktop&&top.content_urls.desktop.page)||('https://en.wikipedia.org/wiki/'+encodeURIComponent(String(top.title).replace(/ /g,'_'))),
-      thumb:(top.thumbnail&&top.thumbnail.source)||null,confirmed:confirmed,score:Math.round(score(top)*100)/100,ctxStrong:sh,coref:ch,disconfirmed:disconfirmed};
+      thumb:(top.thumbnail&&top.thumbnail.source)||null,confirmed:confirmed,score:Math.round(score(top)*100)/100,ctxStrong:sh,coref:ch,disconfirmed:disconfirmed,specificName:specificName};
   }
   // Token affinity between an entity label and a candidate article title:
   // light-stemmed content-token coverage in both directions + head-noun match.
@@ -2806,6 +2829,31 @@ class Component extends DCLogic {
   _renderBook(url,p){const b=this._bookHtml(p);this._pageUrl=url;
     this.setState({bookView:true,pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}
   _bookReady(p){return !!(p&&(this.norm(p.text||'').length>=60||(p.sentences&&p.sentences.length)));}
+  // Is a fetched body plain text rather than HTML? Trusts an explicit content-type,
+  // else sniffs the head for any block-level tag — the same test extract() uses on the
+  // memory side (mirrors ingest/plaintext.js).
+  _isPlainText(ctype,body){const ct=String(ctype||'');if(/text\/plain/i.test(ct))return true;if(/text\/html|application\/xhtml|application\/xml|\+xml/i.test(ct))return false;const head=String(body||'').slice(0,3000);return !/<\s*(!doctype|html|body|article|main|div|p|h[1-6]|table|section|span)\b/i.test(head);}
+  // Render a plain-text (.txt / Project Gutenberg / pasted) body as readable, themed
+  // HTML — blank-line paragraphs become <p>, a no-blank-line body is kept verbatim in a
+  // pre-wrap block. Without this a .txt dropped into the iframe as HTML collapses every
+  // newline to a space and the whole document reflows into one run-on blob.
+  _plainTextDoc(raw,url){
+    const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const t=String(raw||'').replace(/\r\n?/g,'\n');
+    const blocks=t.split(/\n[ \t]*\n+/).map(b=>b.replace(/[ \t]+/g,' ').replace(/\s*\n\s*/g,' ').trim()).filter(Boolean);
+    const parts=blocks.length>1?blocks.map(p=>'<p>'+esc(p)+'</p>'):['<pre class="eo-raw">'+esc(t.replace(/[ \t]+$/gm,'').trim())+'</pre>'];
+    const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
+    const v=(n,d)=>'--eo-'+n+':'+d+';';
+    const baseTag=url?'<base href="'+esc(url)+'" target="_blank"><meta name="referrer" content="no-referrer">':'';
+    return '<!doctype html><html><head><meta charset="utf-8">'+baseTag+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('acc',a)+'}'+
+      'html,body{margin:0;background:var(--eo-bg);}'+
+      'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);}'+
+      '.eo-book{max-width:var(--eo-maxw);margin:0 auto;padding:54px 30px 180px;}'+
+      'p{margin:0 0 1.15em;}'+
+      '.eo-raw{white-space:pre-wrap;word-break:break-word;font:inherit;margin:0;}'+
+      '</style></head><body><div class="eo-book">'+parts.join('\n')+'</div></body></html>';
+  }
   loadCenter(url){
     if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){this._renderBook(url,p);}else{this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
     if(!url){this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
@@ -2813,9 +2861,12 @@ class Component extends DCLogic {
     const read=this.pageOf(url);if(this._bookReady(read)){this._renderBook(url,read);return;}
     if(this._pageUrl===url&&this.state.pageDoc&&!this.state.bookView)return;
     this._pageUrl=url;this.setState({bookView:false,pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],bookmarks:[],tocOpen:false});
-    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
+    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
       if(this.state.viewUrl!==url||this.state.bookView)return;
-      let doc=html;
+      // A plain-text body has no markup — render its paragraphs explicitly, else the
+      // iframe collapses every newline and the page reads as one run-on blob.
+      if(this._isPlainText(ctype,text)){this.setState({bookView:false,pageDoc:this._plainTextDoc(text,url),bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
+      let doc=text;
       // Neutralize anything that would navigate the frame away (which turns it
       // cross-origin and breaks entity decoration): scripts, no-JS refreshes,
       // meta refreshes. Stray links open in a new tab via <base target>.
@@ -2857,11 +2908,13 @@ class Component extends DCLogic {
     if(!url||/^text:/i.test(url)){this.setState({srcDoc:null,srcLoading:false,srcErr:null});return;}
     if(this._embedUrl===url&&this.state.srcDoc)return;
     this._embedUrl=url; this.setState({srcLoading:true,srcDoc:null,srcErr:null});
-    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text();}).then(html=>{
+    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
       if(this.state.openSrc!==url)return;
+      // A plain-text source renders as paragraphs, not raw-as-HTML (which collapses it).
+      if(this._isPlainText(ctype,text)){this.setState({srcDoc:this._plainTextDoc(text,url),srcLoading:false,srcErr:null});return;}
       let origin=url; try{origin=new URL(url).origin+'/';}catch(e){}
       const baseTag='<base href="'+origin+'"><meta name="referrer" content="no-referrer">';
-      let doc=String(html||'');
+      let doc=String(text||'');
       if(/<head[^>]*>/i.test(doc)) doc=doc.replace(/<head([^>]*)>/i,'<head$1>'+baseTag);
       else if(/<html[^>]*>/i.test(doc)) doc=doc.replace(/<html([^>]*)>/i,'<html$1><head>'+baseTag+'</head>');
       else doc=baseTag+doc;

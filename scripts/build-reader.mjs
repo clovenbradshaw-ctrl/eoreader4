@@ -44,10 +44,10 @@ const html = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#f5f6f8">
+<title>EO Reader</title>
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>EO Reader</title>
 <script src="vendor/react.production.min.js"></script>
 <script src="vendor/react-dom.production.min.js"></script>
 <script>(function(){var R=${JSON.stringify(resources)},b=document.baseURI,o={};for(var k in R)o[k]=new URL(R[k],b).href;window.__resources=o;})();</script>
