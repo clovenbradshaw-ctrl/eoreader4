@@ -227,18 +227,6 @@
       <sc-if value="{{ askPageOn }}" hint-placeholder-val="{{ false }}">
         <button onclick="{{ onAskPage }}" title="Chat about this page" style="position:absolute;right:22px;bottom:22px;z-index:18;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:24px;padding:11px 18px;box-shadow:0 8px 24px rgba(20,24,30,.22);cursor:pointer;">✦ Ask about this page</button>
       </sc-if>
-      <sc-if value="{{ contents.has }}" hint-placeholder-val="{{ false }}">
-        <div style="position:absolute;left:22px;bottom:22px;z-index:19;">
-          <sc-if value="{{ contents.open }}" hint-placeholder-val="{{ false }}">
-            <div onclick="{{ contents.onToggle }}" style="position:fixed;inset:0;z-index:1;"></div>
-            <div style="position:absolute;left:0;bottom:50px;width:min(310px,calc(100vw - 44px));max-height:min(62vh,520px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(20,24,30,.24);z-index:2;animation:eopop .12s ease-out;">
-              <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:13px 14px 9px;position:sticky;top:0;background:var(--card);">{{ contents.title }}</div>
-              <sc-for list="{{ contents.items }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
-            </div>
-          </sc-if>
-          <button onclick="{{ contents.onToggle }}" title="{{ contents.title }}" style="{{ contentsBtnStyle }}" style-hover="filter:brightness(.97)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Contents</button>
-        </div>
-      </sc-if>
       <sc-if value="{{ chatOverlayOn }}" hint-placeholder-val="{{ false }}">
         <div style="{{ chat.shellStyle }}">
           <div style="flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--card);">
@@ -357,6 +345,18 @@
           <sc-if value="{{ reading.isBook }}" hint-placeholder-val="{{ false }}">
             <div style="position:relative;flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 14px 9px;background:var(--card);border-bottom:1px solid var(--line);">
               <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Reading</span>
+              <sc-if value="{{ contents.bookInline }}" hint-placeholder-val="{{ false }}">
+                <div style="position:relative;flex:0 0 auto;">
+                  <button onclick="{{ contents.onToggle }}" title="{{ contents.title }}" style="{{ contentsBtnStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Contents</button>
+                  <sc-if value="{{ contents.open }}" hint-placeholder-val="{{ false }}">
+                    <div onclick="{{ contents.onToggle }}" style="position:fixed;inset:0;z-index:19;"></div>
+                    <div style="position:absolute;top:34px;left:0;width:min(320px,84vw);max-height:min(62vh,520px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
+                      <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:12px 14px 8px;position:sticky;top:0;background:var(--card);">{{ contents.title }}</div>
+                      <sc-for list="{{ contents.items }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
               <span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;">
                 <button onclick="{{ reading.onFontDown }}" title="Smaller text" style="{{ reading.btnStyle }}">A−</button>
                 <span style="font-size:11px;color:var(--ink3);min-width:36px;text-align:center;font-variant-numeric:tabular-nums;">{{ reading.fsLabel }}</span>
@@ -380,6 +380,21 @@
                 <button onclick="{{ reading.onToggleMarks }}" title="Highlight the moments the reading flagged as important" style="{{ reading.marksStyle }}">❖ {{ reading.marksCount }}</button>
               </sc-if>
               <span style="position:absolute;left:0;bottom:0;height:2px;background:var(--acc);width:{{ reading.progressW }};transition:width .2s;"></span>
+            </div>
+          </sc-if>
+          <sc-if value="{{ contents.webBar }}" hint-placeholder-val="{{ false }}">
+            <div style="position:relative;flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--card);border-bottom:1px solid var(--line);">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Page</span>
+              <div style="position:relative;flex:0 0 auto;">
+                <button onclick="{{ contents.onToggle }}" title="{{ contents.title }}" style="{{ contentsBtnStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Contents</button>
+                <sc-if value="{{ contents.open }}" hint-placeholder-val="{{ false }}">
+                  <div onclick="{{ contents.onToggle }}" style="position:fixed;inset:0;z-index:19;"></div>
+                  <div style="position:absolute;top:34px;left:0;width:min(320px,84vw);max-height:min(62vh,520px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
+                    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:12px 14px 8px;position:sticky;top:0;background:var(--card);">{{ contents.title }}</div>
+                    <sc-for list="{{ contents.items }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
+                  </div>
+                </sc-if>
+              </div>
             </div>
           </sc-if>
           <sc-if value="{{ web.loading }}" hint-placeholder-val="{{ true }}">
@@ -4218,9 +4233,11 @@ class Component extends DCLogic {
         rowStyle:'display:block;width:100%;text-align:left;padding:9px 13px 9px '+(13+((c.level||1)-1)*15)+'px;border:none;border-bottom:1px solid var(--line);background:transparent;color:var(--ink'+((c.level||1)>1?'3':'2')+');font-size:12.5px;line-height:1.35;cursor:pointer;'}));
       const has=!!vu&&items.length>1,open=has&&!!this.state.tocOpen;
       base.contents={has,open,count:items.length,
+        bookInline:has&&isBook,           // shown inside the e-book "Reading" toolbar
+        webBar:has&&!isBook,              // shown in a slim bar atop a web page
         title:isBook?'Sections found by reading the document':'Headings on this page',
         onToggle:()=>this.toggleTOC(),items};
-      base.contentsBtnStyle='display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;border-radius:24px;padding:10px 17px;cursor:pointer;box-shadow:0 8px 24px rgba(20,24,30,.18);'+(open?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink);background:var(--card);border:1px solid var(--line2);');
+      base.contentsBtnStyle='display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 11px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1;border:1px solid '+(open?'var(--accline)':'var(--line2)')+';background:'+(open?'var(--accbg)':'var(--app)')+';color:'+(open?'var(--acc)':'var(--ink2)')+';';
     }
     if(vu){
       base.showWeb=true;
