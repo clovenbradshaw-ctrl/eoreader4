@@ -519,7 +519,12 @@ export const renderWebResult = (el, fetched) => {
       const row = document.createElement('div');
       row.className = 'wr-hop' + (h.kept ? '' : ' dead');
       const lead = h.term ? ` → ${h.term}` : ' (seed)';
-      row.textContent = `${i + 1}.${lead} “${h.query}” · ${h.curiosity} bits${h.kept ? '' : ' · dead thread'}`;
+      // surprise steered it (curiosity, in bits) and saliency leashed it; a dropped hop says why
+      // (strayed off the question, or an empty fetch).
+      const metrics = `${h.curiosity} bits` + (h.salience != null ? ` · salience ${h.salience}` : '');
+      const tail = h.kept ? (h.exhausted ? ' · on topic, nothing new' : '')
+                          : (h.reason === 'strayed' ? ' · strayed off topic' : ' · no results');
+      row.textContent = `${i + 1}.${lead} “${h.query}” · ${metrics}${tail}`;
       det.appendChild(row);
     }
     box.appendChild(det);

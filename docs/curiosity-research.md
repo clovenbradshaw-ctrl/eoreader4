@@ -1,8 +1,8 @@
 # Curiosity-guided research — following surprise across hops
 
 > Research is the engine reaching past one page to the next — not by firing every follow-up at
-> once, but by following the single thread that surprised it most, up to a fixed number of hops,
-> and stopping the moment surprise runs out.
+> once, but by following the single thread that surprised it most, for as many hops as it stays on
+> the question, and stopping when it has strayed too far from what was asked.
 
 This is the multi-hop sibling of `docs/web-search.md`. That path is **single-shot**: the `auto`
 gather formulates one query, fetches four results, folds them into the answer scope, and answers.
@@ -53,13 +53,53 @@ here, by construction — there is no second metric to keep in sync.
    - **Dead** (`bits < curiosityFloor`, or an empty fetch): dropped. It is **not** folded in and
      spawns **no** leads — the discipline that stops the loop wandering into ever-more-tangential
      pages.
-4. **Stops** at one of three boundaries: the hop budget `maxHops` is spent (the hard ceiling — the
-   "max number of hops"), the frontier empties (nothing left to be curious about), or `patience`
-   consecutive dead threads say the seam is mined out (early exit, well short of `maxHops`).
+4. **Stops** at one of three boundaries: the walk strays too far from the question (the **saliency
+   leash**, below — the real governor), the frontier empties (nothing left to be curious about), or
+   the hop budget `maxHops` is spent (the hard backstop, default 6 — only ever a runaway guard).
 
 Every next query is kept coherent by the **anchor** (the seed's standing subject):
 `nextQuery("X-Files revival", "coogler")` → `"X-Files revival coogler"`, never the bare term — the
 same namesake guard `proposeWebSearch` applies (`web.js`). One thread, sharpened.
+
+## The leash — surprise pulls out, saliency pulls back
+
+Multiple hops are good; *endless* hops are not. The danger is subtle: **a page is often surprising
+precisely because it has wandered off-topic.** "Who directs the X-Files revival?" → the director is
+Coogler → Coogler made *Black Panther* → Wakanda → vibranium metallurgy. Every step is surprising;
+by step four the walk is reading about fictional metals and has forgotten the question. Surprise
+alone is a force that pulls the walk *outward*.
+
+So curiosity is leashed by **saliency** — and saliency is, again, an instrument the engine already
+has: the Born rule (`src/surfer/salience.js`). `bornSalience(topic, hop)` is `|⟨topic|hop⟩|²`, the
+squared cosine of a page against a topic frame, in the same discrete term space — embedder-free,
+the same projection the surfer uses to decide what a *conversation* is about.
+
+- The **topic frame** is fixed: the question's own terms (weighted to dominate) plus what the seed
+  page established, frozen after the first hop. It is anchored on the **question**, not on the
+  running walk — so there is always something fixed to stray *from*. (Anchoring it on the walk
+  would let the frame drift along with the search and defeat the whole point.)
+- Each hop's content is scored against that frame. The **seed page's** own saliency is the
+  **baseline** — "this is what on-topic looks like for this question." A later hop has **strayed**
+  when its saliency falls below `salienceRatio × baseline` (default `0.34` — a third as on-topic as
+  the seed). Relative-to-baseline, so the floor self-calibrates: a three-word question and a
+  paragraph-long one have very different absolute overlaps, but "a third as relevant as the seed"
+  means the same thing for both.
+- A strayed hop is **dropped** — not grounded, not expanded. `strayPatience` consecutive strays
+  (default 2) end the walk: the search has left the question's orbit and isn't coming back.
+
+Saliency also shapes the frontier, not just the stop: a lead's priority is its surprise **×** the
+saliency of the page it was found on (`weight × (0.1 + salience)`). So a surprising term discovered
+on an on-topic page out-ranks an equally surprising one found while already drifting. The walk
+follows surprise **within the orbit of the question** — and only when the salient, surprising
+threads are exhausted does it drift, and then the leash stops it.
+
+Two distinctions the trace makes explicit:
+
+- **strayed** (off the leash) ends the walk; **exhausted** (on topic but unsurprising — a
+  restatement) does not. A relevant restatement still grounds the answer; it just opens no new
+  thread. Only leaving the question stops the search.
+- The **seed** is always kept and folded regardless of either floor — it is the question's own
+  footing and the yardstick the leash is measured against.
 
 ## Why this is not shotgunning
 
@@ -70,8 +110,8 @@ the answer in tangential pages. The loop is the opposite on every axis:
 |---|---|---|
 | queries per hop | many, parallel | **one**, the most surprising |
 | order | arbitrary / breadth-first | **best-first** over realized surprise |
-| which leads | all terms | only the heaviest few (`leadsFrom`) |
-| when it stops | a fixed count | when **surprise drops below floor** (`patience` dead threads) |
+| which leads | all terms | only the heaviest few, each weighted by saliency |
+| when it stops | a fixed count | when it **strays too far from the question** (the saliency leash) |
 
 The seed is always kept as the answer's ground, floor or not — it is the question's own footing,
 not a lead.

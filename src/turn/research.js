@@ -24,6 +24,7 @@
 // trace are all testable with a fake search and a hand-advanced budget — no model, no network.
 
 import { surpriseAt } from '../core/surprise.js';
+import { bornSalience } from '../surfer/salience.js';
 import { normalizeQuery } from '../ui/prefetch.js';
 import { runTurn } from './pipeline.js';
 
@@ -98,44 +99,65 @@ export const nextQuery = (anchor, lead) => {
   return a.toLowerCase().includes(t.toLowerCase()) ? a : `${a} ${t}`;
 };
 
-// runCuriousResearch(seed, opts) → { docs, hops, frontier, prior } — the loop.
+// runCuriousResearch(seed, opts) → { docs, hops, frontier, prior, topic } — the loop.
 //
 //   seed     the first query (the formulated search query for the user's turn)
 //   search   async (query, opts) → admitted[] — the real fetch+admit (searchAndAdmit, bound to
 //            the session web client). The ONLY effectful dependency; injected so this is offline-
 //            testable with a fake.
 //   anchor   the standing subject that keeps every hop's query coherent (defaults to the seed)
-//   maxHops  the hard ceiling on hops — "max number of hops". Default 4.
+//   maxHops  the hard ceiling on hops — "max number of hops". Generous; the saliency leash is the
+//            real governor, this is only the backstop so the walk can never run away. Default 6.
 //   gamma    the cross-hop horizon for the γ-decayed prior. Default 0.8.
-//   curiosityFloor  bits below which a hop is judged a DEAD thread: it taught us nothing new, so
-//            we neither fold it into the prior as fresh knowledge nor spawn leads from it. The
-//            anti-shotgun stop — chasing sub-floor leads is just noise. Default 0.15 bits.
-//            (The SEED hop is always kept, floor or not — it is the answer's ground, not a lead.)
+//   curiosityFloor  bits below which a hop, though on-topic, taught us nothing NEW, so it spawns no
+//            fresh leads (it is still kept as ground). Default 0.15 bits. NOT a stop condition —
+//            an exhausted-but-relevant page is fine; it is straying that ends the walk.
+//   salienceRatio   the LEASH. Surprise pulls the walk OUTWARD (the most surprising lead is often the
+//            most off-topic); saliency pulls it BACK toward the original question. Each hop's content
+//            is scored for saliency to the FIXED topic frame (the seed query + what the seed page
+//            established, frozen) by the Born rule (surfer/salience.js, |⟨topic|hop⟩|²). A hop whose
+//            saliency falls below `salienceRatio × the seed page's own saliency` has STRAYED TOO FAR
+//            — it is dropped (not grounded, not expanded). Default 0.34: a thread a third as on-topic
+//            as the seed is off the leash. `strayPatience` consecutive strays end the walk early.
+//   strayPatience   how many consecutive off-leash hops to tolerate before stopping. Default 2.
 //   k        results per hop, passed through to search. Default 3 — focused, not a fan-out.
 //   searchOpts  extra options merged into every search call (e.g. { kind:'auto', fetchPages }).
 //
-// BEST-FIRST, not breadth-first: the frontier is a priority list keyed by EXPECTED curiosity (the
-// KL contribution that surfaced the lead). Each hop pops the single most promising thread, fetches
-// it, and measures REALIZED curiosity against the running prior. A surprising page folds in and
-// pushes its own leads (deeper threads can now out-rank shallow ones — the search follows where the
-// information actually is); a flat page is dropped and the loop falls back to the next-best thread.
-// It ends when the budget is spent, the frontier empties (nothing left to be curious about), or a
-// run of `patience` consecutive dead threads says the seam is mined out.
+// BEST-FIRST under two forces. EXPECTED CURIOSITY (the KL contribution that surfaced a lead) sets
+// what to explore; SALIENCY (to the seed topic) leashes how far. The frontier priority blends them
+// — a surprising lead found on an on-topic page out-ranks an equally surprising one found while
+// already drifting — so the walk follows surprise WITHIN the orbit of the question. Each hop pops the
+// best thread, fetches, then measures realized curiosity (against the running prior) AND realized
+// saliency (against the fixed topic). On-topic pages join the ground and, if also novel, spawn deeper
+// leads; off-leash pages are dropped. It ends when the budget is spent, the frontier empties, or a run
+// of consecutive strays says the walk has wandered off the question — multiple hops, but never endless.
 export const runCuriousResearch = async (seed, {
   search,
   anchor = seed,
-  maxHops = 4,
+  maxHops = 6,
   gamma = 0.8,
   curiosityFloor = 0.15,
-  patience = 2,
+  salienceRatio = 0.34,
+  strayPatience = 2,
   k = 3,
   searchOpts = {},
   onHop = null,           // (｛ index, query, term ｝) → void — a progress beat fired before each hop's fetch
 } = {}) => {
   const q0 = String(seed || '').trim();
-  if (typeof search !== 'function' || !q0) return { docs: [], hops: [], frontier: [], prior: new Map() };
+  if (typeof search !== 'function' || !q0) return { docs: [], hops: [], frontier: [], prior: new Map(), topic: new Map() };
 
   let prior = new Map();
+  // The FIXED topic frame the saliency leash measures drift against. It is anchored PRIMARILY on the
+  // QUESTION's own terms (weighted ANCHOR_W so they dominate), enriched ONCE by the seed page (the
+  // first grounding of what the question is about, folded in at presence weight so one repeated name
+  // can't hijack the frame), then frozen. Anchoring on the question — not on the running walk — is
+  // what gives the leash something fixed to stray FROM: a later page is "on topic" to the degree it
+  // still echoes the QUESTION, with the seed page's specifics only a secondary pull.
+  const ANCHOR_W = 3;
+  const topic = new Map();
+  for (const t of researchTerms(anchor)) topic.set(t, (topic.get(t) || 0) + ANCHOR_W);
+  let topicFrozen = false;
+  let baseline = 0;       // the seed page's own saliency to the topic — the "on-topic looks like this" yardstick
   const docs = [];
   const hops = [];
   const visited = new Set();          // normalized queries already fetched — never re-fetch
@@ -143,13 +165,14 @@ export const runCuriousResearch = async (seed, {
   for (const t of researchTerms(anchor)) seenLeads.add(t);   // the anchor's own words are not "discoveries"
 
   // The frontier: { query, term, priority }. The seed leads at +∞ so it is always explored first;
-  // discovered leads enter at their realized KL contribution. Kept as a plain array, popped by max.
+  // a discovered lead's priority blends its surprise (the KL it carried) with the saliency of the
+  // page it was found on — so the walk prefers leads that are both surprising AND still on-topic.
   const frontier = [{ query: q0, term: null, priority: Infinity }];
-  const pushLead = (lead) => {
+  const pushLead = (lead, salience) => {
     const query = nextQuery(anchor, lead);
     const key = normalizeQuery(query);
     if (visited.has(key) || seenLeads.has(lead.term)) return;
-    frontier.push({ query, term: lead.term, priority: lead.weight });
+    frontier.push({ query, term: lead.term, priority: lead.weight * (0.1 + salience) });
   };
   const popBest = () => {
     let bi = -1, best = -Infinity;
@@ -157,7 +180,7 @@ export const runCuriousResearch = async (seed, {
     return bi < 0 ? null : frontier.splice(bi, 1)[0];
   };
 
-  let dead = 0;
+  let stray = 0;
   while (hops.length < maxHops && frontier.length) {
     const node = popBest();
     const key = normalizeQuery(node.query);
@@ -169,33 +192,62 @@ export const runCuriousResearch = async (seed, {
     let admitted = [];
     try { admitted = await search(node.query, { k, ...searchOpts }); } catch { admitted = []; }
     const hopDocs = (admitted || []).map(a => a?.doc).filter(Boolean);
-
-    // Measure curiosity: the surprise of THIS hop's pages, taken together, against everything
-    // read so far. An empty fetch is a zero-curiosity dead thread (and contributes no ground).
     const arrival = profileOf(hopDocs.map(d => pageText(d)).join('\n'));
     const isSeed = node.priority === Infinity;
-    const { bits, by } = arrival.size ? curiosityOf(prior, arrival, { gamma }) : { bits: 0, by: {} };
 
-    const alive = isSeed || bits >= curiosityFloor;     // the seed is always kept as the answer's ground
-    if (alive && hopDocs.length) {
-      docs.push(...hopDocs);
-      prior = foldInto(prior, arrival, gamma);          // this hop is now part of what we know
-      const leads = leadsFrom(by, { seen: seenLeads, max: 4 });
-      for (const lead of leads) { pushLead(lead); seenLeads.add(lead.term); }
-      hops.push({ query: node.query, term: node.term, curiosity: round(bits), results: hopDocs.length,
-                  leads: leads.map(l => l.term), kept: true });
-      dead = 0;
-    } else {
-      // A dead thread: fetched, but moved belief less than the floor (or fetched nothing). We do
-      // NOT fold it in and do NOT spawn leads from it — that is the discipline that keeps the loop
-      // from wandering into ever-more-tangential pages. Recorded so the trace is honest.
-      hops.push({ query: node.query, term: node.term, curiosity: round(bits), results: hopDocs.length,
-                  leads: [], kept: false });
-      if (++dead >= patience) break;                    // the seam is mined out — stop early, before maxHops
+    // The two measurements: CURIOSITY (surprise vs everything read so far) and SALIENCY (Born
+    // overlap with the fixed topic frame). One says "is this new?", the other "is this still about
+    // the question?". An empty fetch is zero on both.
+    const { bits, by } = arrival.size ? curiosityOf(prior, arrival, { gamma }) : { bits: 0, by: {} };
+    const salience = arrival.size ? bornSalience(topic, new Set(arrival.keys())) : 0;
+
+    // SEED: the question's own footing — always kept and folded, and it CALIBRATES the leash. Its
+    // saliency becomes the baseline; the topic frame is enriched with its content, then frozen.
+    if (isSeed) {
+      baseline = salience;
+      if (!topicFrozen) { for (const t of arrival.keys()) topic.set(t, (topic.get(t) || 0) + 1); topicFrozen = true; }   // presence, not counts
+      if (hopDocs.length) {
+        docs.push(...hopDocs);
+        prior = foldInto(prior, arrival, gamma);
+        const leads = leadsFrom(by, { seen: seenLeads, max: 4 });
+        for (const lead of leads) { pushLead(lead, salience); seenLeads.add(lead.term); }
+        hops.push({ query: node.query, term: node.term, curiosity: round(bits), salience: round4(salience),
+                    results: hopDocs.length, leads: leads.map(l => l.term), kept: true });
+      } else {
+        hops.push({ query: node.query, term: node.term, curiosity: 0, salience: 0, results: 0, leads: [], kept: false, reason: 'empty' });
+      }
+      stray = 0;
+      continue;
     }
+
+    // THE LEASH: has this hop strayed too far from the question? Measured relative to the seed's own
+    // saliency, so the floor self-calibrates to the query (a three-word ask and a paragraph ask have
+    // very different absolute overlaps). A baseline of ~0 disables the relative test and leaves only
+    // maxHops as the backstop.
+    const floor = baseline > 0 ? salienceRatio * baseline : 0;
+    const strayed = hopDocs.length > 0 && salience < floor;
+
+    if (!hopDocs.length || strayed) {
+      hops.push({ query: node.query, term: node.term, curiosity: round(bits), salience: round4(salience),
+                  results: hopDocs.length, leads: [], kept: false, reason: strayed ? 'strayed' : 'empty' });
+      if (++stray >= strayPatience) break;     // wandered off the question — stop, well short of maxHops
+      continue;
+    }
+
+    // ON THE LEASH: an on-topic hop. Keep it as ground and fold it into what we know. If it is also
+    // NOVEL (above the curiosity floor) it opens deeper threads; a relevant restatement just
+    // corroborates and spawns nothing. Either way it is on the question, so the stray run resets.
+    stray = 0;
+    docs.push(...hopDocs);
+    prior = foldInto(prior, arrival, gamma);
+    const novel = bits >= curiosityFloor;
+    const leads = novel ? leadsFrom(by, { seen: seenLeads, max: 4 }) : [];
+    for (const lead of leads) { pushLead(lead, salience); seenLeads.add(lead.term); }
+    hops.push({ query: node.query, term: node.term, curiosity: round(bits), salience: round4(salience),
+                results: hopDocs.length, leads: leads.map(l => l.term), kept: true, exhausted: !novel });
   }
 
-  return { docs, hops, frontier, prior };
+  return { docs, hops, frontier, prior, topic };
 };
 
 // The prose a hop reads from an admitted doc: the parsed text, falling back to the source's
@@ -214,14 +266,16 @@ export const runTurnWithResearch = async (args, {
   search,
   runTurnImpl = runTurn,
   seed,
-  maxHops = 4,
+  maxHops = 6,
   gamma = 0.8,
   curiosityFloor = 0.15,
+  salienceRatio = 0.34,
+  strayPatience = 2,
   k = 3,
   searchOpts = { kind: 'auto', fetchPages: true },
 } = {}) => {
   const q0 = String(seed || args?.question || '').trim();
-  const walk = await runCuriousResearch(q0, { search, anchor: q0, maxHops, gamma, curiosityFloor, k, searchOpts });
+  const walk = await runCuriousResearch(q0, { search, anchor: q0, maxHops, gamma, curiosityFloor, salienceRatio, strayPatience, k, searchOpts });
 
   const baseDocs = args?.docs || (args?.doc ? [args.doc] : []);
   const turnArgs = walk.docs.length
@@ -247,10 +301,11 @@ export const runTurnWithResearch = async (args, {
 // researchAnnouncement(seed, { maxHops }) → the first-person "let me dig into this" beat, the
 // multi-hop sibling of searchAnnouncement (propose.js). Said the moment a curiosity walk starts,
 // so the (slower, multi-fetch) gather reads as purposeful. Pure string-mapping, no model call.
-export const researchAnnouncement = (seed, { maxHops = 4 } = {}) => {
+export const researchAnnouncement = (seed, { maxHops = 6 } = {}) => {
   const q = String(seed || '').trim();
   if (!q) return null;
-  return `Let me look into this — I'll follow what surprises me, up to ${maxHops} hops. Starting with “${q}”…`;
+  return `Let me look into this — I'll follow what surprises me while it stays on topic, up to ${maxHops} hops. Starting with “${q}”…`;
 };
 
-const round = (x) => Math.round(x * 100) / 100;
+const round  = (x) => Math.round(x * 100) / 100;
+const round4 = (x) => Math.round(x * 10000) / 10000;   // saliency is a squared cosine — small; keep 4 places

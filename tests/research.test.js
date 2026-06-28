@@ -55,55 +55,68 @@ test('nextQuery keeps the thread coherent — the lead rides WITH the anchor, ne
   assert.equal(nextQuery('X-Files revival', { term: 'revival' }), 'X-Files revival', 'no duplication when the anchor already has it');
 });
 
-// ── The loop: best-first over curiosity, capped hops, anti-shotgun stop ───────
+// ── The loop: best-first over curiosity, leashed by saliency to the question ──
 
-test('the walk follows the most surprising thread across hops, up to maxHops', async () => {
-  // Hop 1 (seed) introduces Coogler; hop 2 (chasing Coogler) introduces Wakanda; the walk should
-  // keep digging the live thread rather than firing every term at once.
-  // A page ABOUT Coogler says "Coogler" a lot — that mass is what lifts it above the other seed
-  // terms, so the walk's most-surprising thread is the one with the real signal behind it.
+test('the walk follows the surprising thread across MANY hops while it stays on topic', async () => {
+  // Every page is on-topic (each shares the question's terms) AND opens a fresh surprising figure.
+  // The leash never trips, so the walk keeps digging hop after hop — multiple hops, not just one.
   const pages = {
-    'x-files revival': 'Coogler, Coogler, Coogler. The X-Files revival will be directed by Coogler.',
-    'x-files revival coogler': 'Coogler directed Wakanda, Wakanda, Wakanda; now Coogler takes the revival.',
-    'x-files revival wakanda': 'Wakanda is a fictional Marvel nation, ruled by the Panther, Panther, Panther.',
+    'x-files revival': 'The X-Files revival will be directed by Coogler, Coogler, Coogler.',
+    'x-files revival coogler': 'Coogler, the X-Files revival director, signed a deal, deal, deal with the network.',
+    'x-files revival deal': 'The X-Files revival deal puts the network, network, network behind a reboot.',
+    'x-files revival network': 'The network backing the X-Files revival also greenlit a spinoff, spinoff, spinoff.',
   };
   const queries = [];
-  const search = async (q) => { queries.push(q); const text = pages[q.toLowerCase()]; return text ? [{ doc: webDoc(text) }] : []; };
+  const search = async (q) => { queries.push(q); const t = pages[q.toLowerCase()]; return t ? [{ doc: webDoc(t) }] : []; };
 
-  const out = await runCuriousResearch('X-Files revival', { search, maxHops: 3, curiosityFloor: 0.05, patience: 3, k: 1 });
-  assert.equal(out.hops[0].query, 'X-Files revival', 'seed first');
+  const out = await runCuriousResearch('X-Files revival', { search, maxHops: 6, curiosityFloor: 0.02, k: 1 });
+  assert.ok(out.hops.length >= 3, `it took several hops, not one (took ${out.hops.length})`);
   assert.ok(queries.some(q => /coogler/i.test(q)), 'it chased the surprising figure Coogler');
-  assert.ok(queries.some(q => /wakanda/i.test(q)), 'and then the deeper thread Wakanda that Coogler opened');
-  assert.ok(out.docs.length >= 2, 'the kept pages joined the ground');
+  assert.ok(out.hops.filter(h => h.kept).length >= 3, 'each on-topic hop joined the ground');
+  assert.ok(out.hops.every(h => h.salience != null), 'every hop records its saliency to the question');
 });
 
-test('maxHops is a hard ceiling — the walk never exceeds it', async () => {
-  // Every page is endlessly surprising (fresh tokens each hop), so only the cap can stop it.
-  let n = 0;
-  const search = async () => { n += 1; return [{ doc: webDoc(`fresh figure number ${'alpha'.repeat(n)} entity${n} place${n} event${n}`) }]; };
-  const out = await runCuriousResearch('seed topic', { search, maxHops: 2, curiosityFloor: 0.01, k: 1 });
-  assert.equal(out.hops.length, 2, 'stopped at exactly maxHops');
-});
-
-test('NOT shotgunning: a dead (sub-floor) thread is dropped and the seam mines out (patience)', async () => {
-  // The seed is rich; every follow-up just restates it (zero new surprise). The walk must NOT keep
-  // firing tangential queries — after `patience` dead threads it stops, well short of maxHops.
-  const seedText = 'The X-Files revival is a television series produced by Carter for the network.';
-  const search = async (q) => {
-    if (/coogler|carter|revival television|network|series/i.test(q) && q.toLowerCase() !== 'x-files revival')
-      return [{ doc: webDoc('The revival is a television series. A series, the revival, on the network.') }]; // restatement → ~0 curiosity
-    return [{ doc: webDoc(seedText) }];
+test('THE LEASH: it stops when a thread strays too far from the question (saliency floor)', async () => {
+  // The seed is about the X-Files revival; the "coogler" thread is still about it; but the deeper
+  // "wakanda" page is pure Marvel lore with NO overlap with the question — off the leash. The walk
+  // must drop it as STRAYED and stop, rather than wander into ever-more-tangential pages.
+  const pages = {
+    'x-files revival': 'The X-Files revival will be directed by Coogler, Coogler, Coogler.',
+    'x-files revival coogler': 'Coogler, the X-Files revival director, once made Wakanda, Wakanda, Wakanda.',
+    'x-files revival wakanda': 'Wakanda is a fictional African nation in Marvel comics, home to vibranium and the Panther.',
   };
-  const out = await runCuriousResearch('X-Files revival', { search, maxHops: 8, curiosityFloor: 0.2, patience: 2, k: 1 });
-  assert.ok(out.hops.length < 8, `stopped early, not the full fan-out (took ${out.hops.length} hops)`);
-  assert.ok(out.hops.some(h => !h.kept), 'at least one thread was judged dead and dropped');
-  assert.ok(out.docs.length >= 1, 'the seed page is still kept as the answer ground');
+  const search = async (q) => { const t = pages[q.toLowerCase()]; return t ? [{ doc: webDoc(t) }] : []; };
+
+  const out = await runCuriousResearch('X-Files revival', { search, maxHops: 8, salienceRatio: 0.5, strayPatience: 1, k: 1 });
+  assert.ok(out.hops.length < 8, `stopped early on straying, not at the cap (took ${out.hops.length} hops)`);
+  const strayed = out.hops.find(h => h.reason === 'strayed');
+  assert.ok(strayed, 'a hop was flagged as having strayed off the question');
+  assert.ok(/wakanda/i.test(strayed.query), 'and it was the off-topic Wakanda thread that strayed');
+  assert.ok(out.docs.every(d => !/vibranium/.test(d.text || '')), 'the off-topic page never reached the answer ground');
 });
 
-test('the seed is always kept as ground even if its curiosity is below the floor', async () => {
-  const search = async () => [{ doc: webDoc('a plain page') }];
-  const out = await runCuriousResearch('plain topic', { search, maxHops: 1, curiosityFloor: 5, k: 1 });
-  assert.equal(out.hops[0].kept, true, 'the seed hop is the ground, not a lead — kept regardless of floor');
+test('maxHops is the hard backstop — even endlessly on-topic+surprising pages cannot run away', async () => {
+  // Each page repeats the anchor (always salient) and adds one fresh figure (always surprising), so
+  // only the ceiling can stop it. The leash being satisfied must not let it exceed maxHops.
+  let n = 0;
+  const search = async () => { n += 1; return [{ doc: webDoc(`X-Files revival update: new figure entity${n} entity${n} entity${n}`) }]; };
+  const out = await runCuriousResearch('X-Files revival', { search, maxHops: 3, curiosityFloor: 0.01, k: 1 });
+  assert.equal(out.hops.length, 3, 'stopped at exactly maxHops');
+});
+
+test('an on-topic restatement is kept as ground but spawns no new leads (exhausted, not strayed)', async () => {
+  // A page right on the question that says nothing new: relevant, so it grounds; unsurprising, so it
+  // opens no thread. It is NOT a stray — saliency is high — so it does not push the walk toward stopping.
+  const search = async (q) => [{ doc: webDoc('The X-Files revival is the X-Files revival, a revival of the X-Files.') }];
+  const out = await runCuriousResearch('X-Files revival', { search, maxHops: 4, curiosityFloor: 0.5, salienceRatio: 0.3, k: 1 });
+  assert.equal(out.hops[0].kept, true, 'the on-topic seed page is kept as ground');
+  assert.ok(out.hops.every(h => h.reason !== 'strayed'), 'nothing strayed — it stayed on the question');
+});
+
+test('the seed is always kept as ground and calibrates the leash baseline', async () => {
+  const search = async () => [{ doc: webDoc('a plain X-Files revival page') }];
+  const out = await runCuriousResearch('X-Files revival', { search, maxHops: 1, curiosityFloor: 5, k: 1 });
+  assert.equal(out.hops[0].kept, true, 'the seed hop is the ground and the saliency yardstick — kept regardless of floor');
   assert.equal(out.docs.length, 1);
 });
 
@@ -111,8 +124,9 @@ test('a failed/empty search degrades to no docs, no throw', async () => {
   const search = async () => { throw new Error('network down'); };
   const out = await runCuriousResearch('topic', { search, maxHops: 3 });
   assert.deepEqual(out.docs, []);
-  assert.equal(out.hops.length, 1, 'one hop attempted, recorded as a dead thread');
+  assert.equal(out.hops.length, 1, 'one hop attempted, recorded as empty');
   assert.equal(out.hops[0].kept, false);
+  assert.equal(out.hops[0].reason, 'empty');
 });
 
 test('a never-repeats-query guarantee: the same lead is never fetched twice', async () => {

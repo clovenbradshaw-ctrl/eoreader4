@@ -75,8 +75,9 @@ const STATE = {
                          //   eoreader.voice; never overrides the NUL-on-VOID lock; god-names stay in the audit.
   webSearch: 'auto',     // FIXED to AUTO — the web is the tool's memory, so every turn searches up front and
                          //   answers grounded in what it gathered. Not a per-message option (no web chip).
-  researchHops: 4,       // the curiosity walk's hop budget (docs/curiosity-research.md): the max number of
-                         //   hops the auto gather follows its own surprise before it must answer.
+  researchHops: 6,       // the curiosity walk's hop BACKSTOP (docs/curiosity-research.md): the max hops the
+                         //   auto gather may take. The real governor is the saliency leash — the walk stops
+                         //   when it strays too far from the question; this only caps a runaway.
   transparency: true,    // the per-claim source view: every proposition traced to its source (or marked
                          //   unsupported). Default ON; the toggle beneath each answer persists the choice.
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
