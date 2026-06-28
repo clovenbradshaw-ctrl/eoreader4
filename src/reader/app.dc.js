@@ -1542,6 +1542,16 @@ class Component extends DCLogic {
     if(/^(is|are|was|were|has|have|had|can|could|seen|located|known|composed|made|built|consists?|defined|considered|named|protected|found|home)\b/i.test(pred))return lab+' '+pred+'.';
     if(/^(a|an|the|one|part|home|type|kind|form)\b/i.test(pred))return lab+' is '+pred+'.';
     return lab+' \u2014 '+pred+'.';}
+  // First sentence of `s`, but NEVER split on an abbreviation period — a title
+  // ("Mr."/"Mrs."/"Dr."), a lone initial, "Inc.", "U.S." The naive split chopped
+  // "a source of irritation to Mr. Samsa" to "…to Mr.", surfacing a stray bare "Mr"
+  // in the profile gloss. Mirrors the re-merge in _clipExtract.
+  _firstSentence(s){
+    const raw=String(s||'').split(/(?<=[.!?])\s+/);
+    const ABBR=/(?:^|[\s(])(?:[A-Za-z]|Mr|Mrs|Ms|Dr|Prof|Gen|Sen|Rep|Gov|Lt|Sgt|Sr|Jr|St|vs|v|etc|Inc|Ltd|Co|Corp|No|pp|al|Ave|Rd|Rev|Hon|Capt|U\.S|U\.K|U\.N|D\.C)\.$/i;
+    let out=raw[0]||'';for(let i=1;i<raw.length&&ABBR.test(out);i++)out+=' '+raw[i];
+    return out;
+  }
   // Trim to <= max chars but never mid-sentence: keep whole sentences, else cut on a
   // word boundary with an ellipsis. No more "...decreasing their abilit".
   endOnBoundary(s,max){s=this.norm(String(s||'').replace(/<[^>]*>/g,' ').replace(/\[(?:\d+|citation needed|edit)\]/gi,''));max=max||320;if(s.length<=max)return s;const cut=s.slice(0,max);const m=cut.match(/^[\s\S]*[.!?](?=\s|$)/);if(m&&m[0].length>=Math.min(70,max*0.45))return m[0].trim();return cut.replace(/\s+\S*$/,'').replace(/[\s,;:]+$/,'').trim()+'\u2026';}
@@ -1557,7 +1567,7 @@ class Component extends DCLogic {
       if(/\b(state|system|site|region|city|country|area|park|species|organi[sz]ation|company|river|island|reef|sea|nation|territory|town|lake|mountain|range)\b/.test(v))s+=1;
       if(v.length>150)s-=2.5;if(v.length<14)s-=1;s-=ev.sentIdx*0.02;return s;};
     cands.sort((a,b)=>score(b)-score(a));
-    const ev=cands[0];const pred=this.clean(ev.value).split(/(?<=[.!?])\s+/)[0];
+    const ev=cands[0];const pred=this._firstSentence(this.clean(ev.value));
     if(!pred||pred.length<8||pred.length>200)return null;
     return {pred,sentIdx:ev.sentIdx};
   }
