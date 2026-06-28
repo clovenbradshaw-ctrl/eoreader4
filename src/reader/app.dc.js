@@ -459,7 +459,21 @@ class Component extends DCLogic {
   }
   paras(t){ return String(t||'').split(/\n\s*\n/).map(p=>this.norm(p.replace(/\n/g,' '))).filter(p=>p.length>2).join('\n'); }
   async fetchPage(url){const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));if(!r.ok)throw new Error('HTTP '+r.status);const html=await r.text();if(html.trim().length<60)throw new Error('empty page');if(/<title>\s*(?:just a moment|attention required|access denied|verify you are human|are you a robot|enable javascript|please wait\b|checking your browser)/i.test(html))throw new Error('blocked by anti-bot check');return this.extract(html,r.headers.get('content-type')||'',url);}
+  // Candidate URLs for a query — the entry point both research paths (the ✦ button and the
+  // chat research mode) walk from. PRIMARY: DuckDuckGo's HTML endpoint via the proxy. FALLBACK:
+  // Wikipedia's search API, which is CORS-direct (no proxy) through _wikiJSON. A research walk
+  // that gets ZERO candidates here ends at 0 hops and silently degrades to a generic, ungrounded
+  // answer — exactly "it's not actually doing research". So a single provider must never be the
+  // whole story: if DuckDuckGo throws (proxy hiccup, rate-limit) OR comes back empty (a bot-wall
+  // / blank result page), fall back to Wikipedia so the walk always has a real source to read.
   async searchLinks(query,n){
+    let out=[];
+    try{out=await this._searchDDG(query,n);}catch(e){out=[];}
+    if(out.length)return out;
+    try{out=await this._searchWiki(query,n);}catch(e){out=[];}
+    return out;
+  }
+  async _searchDDG(query,n){
     const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)));
     if(!r.ok)throw new Error('HTTP '+r.status);
     const doc=new DOMParser().parseFromString(await r.text(),'text/html');const out=[];
@@ -467,6 +481,14 @@ class Component extends DCLogic {
     doc.querySelectorAll('a.result__a, .result__title a').forEach(grab);
     if(!out.length)doc.querySelectorAll('a[href]').forEach(grab);
     return [...new Set(out)].slice(0,n||4);
+  }
+  // CORS-direct search (origin=*); _wikiJSON tries the direct fetch first and falls back to the
+  // proxy if the frame blocks it. Each hit becomes its article URL — pages that read cleanly.
+  async _searchWiki(query,n){
+    const u='https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(query)+'&srlimit='+(n||6)+'&format=json&origin=*';
+    const data=await this._wikiJSON(u);
+    const hits=(data&&data.query&&data.query.search)||[];
+    return hits.map(h=>'https://en.wikipedia.org/wiki/'+encodeURIComponent(String(h.title).replace(/ /g,'_'))).slice(0,n||6);
   }
 
   rebuild(pages){
@@ -595,6 +617,77 @@ class Component extends DCLogic {
     const m=String(q||'').match(/^\s*(?:please\s+|can you\s+|could you\s+|go\s+|i want you to\s+|i'd like you to\s+)*(?:research|look\s+(?:into|up)|dig\s+into|investigate|explore|read\s+up\s+on|find\s+out\s+about)\b[:,\-\s]+(.+)$/i);
     if(m&&m[1]){const topic=this.norm(m[1]).replace(/[?.!]+$/,'').trim();if(topic.length>1)return {topic};}
     return null;}
+  // Is this message a META / CONTINUATION research request with no subject of its OWN — "do more
+  // research", "research more", "keep digging", "go deeper", "research", "tell me more"? Such a
+  // message is ABOUT the conversation, not a fresh topic. Taken literally it makes the walk chase
+  // the word "research" itself (it really did: "do more research" → read "Free Proxy Tools That
+  // Help With Academic Research", chased "doi" then "proxy"). We detect it by stripping the
+  // research-verb + continuation filler and the function words; if NOTHING contentful is left, the
+  // message names no topic and the subject must come from the chat instead.
+  _isMetaResearch(t){
+    if(!this._metaWords)this._metaWords=new Set(('research researching researched researches do does doing done go going gone let lets ' +
+      'more most again deeper deep keep keeps keeping continue continuing continued further furthermore additional ' +
+      'extra please look looking dig digging investigate investigating explore exploring find finding read reading ' +
+      'tell give show expand elaborate detail details info information context background topic subject thing things ' +
+      'stuff something anything everything up into about around over same another other new newer next then now ' +
+      'me my mine us our ours your yours yourself them their it its').split(/\s+/));
+    const words=String(t||'').toLowerCase().match(/[a-z][a-z']+/g)||[];
+    if(!words.length)return true;
+    const content=words.filter(w=>!this._metaWords.has(w)&&!this.STOP.has(w));
+    return content.length===0;}
+  // The SUBJECT of the current chat, derived from context — what "do more research" should be
+  // about. Priority: (1) the source(s) the chat is grounded in, by title — the strongest, most
+  // stable signal of the subject; (2) the most recent user turn that actually named a topic (not a
+  // command like "summarize" and not another meta "research more"); (3) the dominant entity the
+  // conversation keeps returning to. Returns null only when the chat is genuinely empty.
+  _chatSubject(cur){
+    const clean=s=>this.norm(String(s||''))
+      .replace(/\s*[-–—|·:]\s*(wikipedia|wikipedia,? the free encyclopedia|npr|bbc(?: news)?|cnn|reuters|the guardian|the new york times|al jazeera|associated press|ap news|pmc)\b.*$/i,'')
+      .replace(/[?.!]+$/,'').trim();
+    // (1) the sources the chat is About → the first readable source title.
+    const srcs=this.chatSourcesOf(cur);
+    for(const u of srcs){const t=clean((this.pageOf(u)||{}).title);if(t&&t.length>2)return this.truncLabel(t,80);}
+    // (2) the most recent substantive user turn (skip commands and meta-research asks).
+    const msgs=(cur&&cur.messages)||[];
+    for(let i=msgs.length-1;i>=0;i--){const m=msgs[i];
+      if(m.role!=='user'||!m.text)continue;
+      if(this._isMetaResearch(m.text)||this._isSummaryQ(m.text))continue;
+      const t=clean(m.text).replace(/^\s*(?:please\s+|can you\s+|could you\s+|go\s+)*(?:research|look\s+(?:into|up)|dig\s+into|investigate|explore|read\s+up\s+on|find\s+out\s+about)\b[:,\-\s]*/i,'').trim();
+      if(t.length>2)return this.truncLabel(t,80);}
+    // (3) the entity the whole conversation orbits.
+    const text=msgs.map(m=>m.text||'').join(' ');
+    const id=this._chatTopicEntity(text);
+    if(id!=null){const lab=this.labelOf&&this.labelOf(id);if(lab)return lab;}
+    return null;}
+  // Resolve a research turn into the topic to chase, the anchor the leash measures drift against,
+  // and whether the subject was DERIVED from the chat (a "do more" continuation) rather than named
+  // outright. A message that names its own subject is taken as-is; a meta/continuation message
+  // hands off to _chatSubject so the walk deepens THIS conversation instead of the word "research".
+  _researchSeed(q,cur){
+    const intent=this._researchIntent(q);
+    const candidate=(intent&&intent.topic)||q;
+    if(!this._isMetaResearch(candidate)){
+      const topic=this.norm(candidate).replace(/[?.!]+$/,'').trim();
+      return {topic,anchor:topic||q,derived:false};
+    }
+    const subject=this._chatSubject(cur);
+    if(subject)return {topic:subject,anchor:subject,derived:true};
+    const topic=this.norm(candidate).replace(/[?.!]+$/,'').trim();
+    return {topic:topic||q,anchor:topic||q,derived:false};}
+  // For a "go deeper" continuation: the most surprising recurring threads ALREADY surfaced in what
+  // this chat has read, so "do more research" branches into genuinely new angles of the subject
+  // instead of re-fetching the same pages. Reuses the walk's own lead ranking over the in-scope
+  // read text, with the subject's own words excluded (they aren't discoveries).
+  _seedLeadsFromRead(subject,sources,n){
+    if(!this.master||!this.master.pages||!this.master.pages.length)return [];
+    const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    const inScope=u=>!scope.length||scope.includes(u);
+    let text='';
+    for(const p of this.master.pages)if(inScope(p.url))text+=' '+(p.text||(p.sentences||[]).join(' '));
+    if(!text.trim())return [];
+    const chased=new Set(this._researchTerms(subject));
+    const leads=this._leads(new Map(),this._profile(text),chased);
+    return leads.slice(0,n||3).map(l=>l.term);}
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
   // everything read. Empty spans when nothing relevant has been read.
@@ -872,15 +965,24 @@ class Component extends DCLogic {
   toggleResearchMode(){this.setState(s=>({researchMode:!s.researchMode}));}
   async chatResearch(q){
     if(this._busy)return;
-    const intent=this._researchIntent(q);
-    const topic=(intent&&intent.topic)||q;   // the thing to chase
-    const anchor=q;                          // the user's framing — the leash drifts are measured against
+    // The SUBJECT to chase — named outright when the message carries its own topic, or DERIVED
+    // from this chat when the message is a continuation ("do more research", "go deeper"). This is
+    // the fix for "it researched the word research": a meta ask now deepens THIS conversation.
+    const cur=this.activeChatObj();
+    const seed=this._researchSeed(q,cur);
+    const topic=seed.topic, anchor=seed.anchor;
+    // For a continuation, also branch into the surprising threads already surfaced in what's been
+    // read — so "do more" finds new angles of the subject instead of re-fetching the same pages.
+    const extraSeeds=seed.derived?this._seedLeadsFromRead(topic,this.chatSourcesOf(cur),3):[];
+    const startText=seed.derived
+      ? ('Picking up this chat — researching “'+topic+'” more'+(extraSeeds.length?(', branching into '+extraSeeds.map(t=>'“'+t+'”').join(', ')):'')+'. I’ll follow what surprises me while it stays on topic.')
+      : ('Researching “'+topic+'” — I’ll follow what surprises me while it stays on topic.');
     // Append the user turn + a pending assistant bubble carrying a live research trail.
     let id=this.state.activeChat;
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
       if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
-      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-      const research={steps:[{kind:'start',text:'Researching “'+topic+'” — I’ll follow what surprises me while it stays on topic.'}],done:false};
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(topic,40);
+      const research={steps:[{kind:'start',text:startText}],done:false};
       chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,research}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();
@@ -888,13 +990,15 @@ class Component extends DCLogic {
       if(li>=0&&m[li].role==='asst'&&m[li].research){const r=m[li].research;m[li]={...m[li],research:{...r,steps:[...r.steps,{kind,text}]}};}
       return {...c,messages:m};})}),()=>this._scrollChat());
     this._busy=true;this.setState({busy:true});
+    const preEnts=(this.graph&&this.graph.entities&&this.graph.entities.size)||0;
     let walk={readUrls:[],hops:[]};
-    try{walk=await this._curiosityWalk(topic,anchor,pushStep);}
+    try{walk=await this._curiosityWalk(topic,anchor,pushStep,{extraSeeds});}
     catch(e){pushStep('warn','Research stopped — '+((e&&e.message)||e));}
     this._busy=false;this.setState({busy:false});
     const readCount=new Set(walk.readUrls).size,hops=walk.hops.length;
-    pushStep('done',readCount?('Read '+readCount+' source'+(readCount!==1?'s':'')+' across '+hops+' hop'+(hops!==1?'s':'')+'. Writing it up…')
-                              :'Couldn’t gather new sources — answering from what’s already read.');
+    const learned=Math.max(0,((this.graph&&this.graph.entities&&this.graph.entities.size)||0)-preEnts);
+    pushStep('done',readCount?('Read '+readCount+' source'+(readCount!==1?'s':'')+' across '+hops+' hop'+(hops!==1?'s':'')+(learned?(' · learned '+learned+' new '+(learned===1?'entity':'entities')):'')+'. Writing it up…')
+                              :'Couldn’t gather fresh sources on “'+topic+'” — answering from what’s already read.');
     // Fold what we found into what this chat is About, so the answer is grounded in it and
     // the source chips reflect the new reading.
     for(const u of new Set(walk.readUrls))this.addChatSource(u);
@@ -902,7 +1006,8 @@ class Component extends DCLogic {
     this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].research)m[li]={...m[li],research:{...m[li].research,done:true,readCount,hops}};
       return {...c,messages:m};})}));
-    await this._answerInto(id,anchor,[...new Set(walk.readUrls)]);
+    // Answer about the SUBJECT (not the literal "do more research" message) grounded in what was read.
+    await this._answerInto(id,topic,[...new Set(walk.readUrls)]);
   }
   // Synthesize the grounded answer into the existing pending bubble (which already carries the
   // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
@@ -929,7 +1034,8 @@ class Component extends DCLogic {
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
-      const text=this.norm(raw)||this.answerQuestion(q,sources).text||'(no answer)';
+      // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
+      const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       const gr=this._groundReport(ground,grounded);
       finish({text,entities:ground.entities,sources:gr.sources,passages:gr.passages,
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
@@ -946,7 +1052,7 @@ class Component extends DCLogic {
   // threads that stay salient to the question; set aside pages that drift). One thread per
   // hop. onStep(kind,text) narrates each beat into the live chat bubble. Returns the URLs it
   // read and the hop trace.
-  async _curiosityWalk(seed,anchor,onStep){
+  async _curiosityWalk(seed,anchor,onStep,opts){
     const step=(k,t)=>{try{onStep&&onStep(k,t);}catch(e){}};
     const readUrls=[],hops=[];
     const seen=new Map();                 // term → mass read so far this walk (the prior surprise is measured against)
@@ -956,13 +1062,20 @@ class Component extends DCLogic {
     // dominate, enriched once by the first page actually read, then frozen.
     const topic=new Map();for(const t of this._researchTerms(anchor))topic.set(t,(topic.get(t)||0)+3);
     let baseline=0,topicFrozen=false,stray=0;
-    const maxHops=4;
     const frontier=[{query:seed,term:null}];   // FIFO of one-thread-deep leads; the seed leads
+    // EXTRA SEEDS — surprising threads already surfaced in what's been read, chased alongside the
+    // subject so a "go deeper" research turn opens new angles instead of re-reading the same pages.
+    const extra=(opts&&opts.extraSeeds)||[];
+    for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
+    const maxHops=Math.min(6,4+extra.length);   // a few more hops when there are planned angles to cover
     while(hops.length<maxHops&&frontier.length){
       const node=frontier.shift();
       step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching the web for “'+node.query+'”'));
       let links=[];
-      try{links=await this.searchLinks(node.query,6);}catch(e){step('warn','Search unavailable — '+((e&&e.message)||e));break;}
+      // A single provider hiccup must not end the whole walk — searchLinks already falls back from
+      // DuckDuckGo to Wikipedia; if even that fails, treat the thread as dry and try the next one
+      // (two dry threads in a row ends it), so an extra-seed thread can still find sources.
+      try{links=await this.searchLinks(node.query,6);}catch(e){step('warn','Search unavailable on that thread — '+((e&&e.message)||e));if(++stray>=2)break;continue;}
       links=(links||[]).filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u));
       if(!links.length){step('warn','No fresh sources on that thread.');if(++stray>=2)break;continue;}
       const want=node.term?1:2;let got=0,attempts=0;const keptText=[];
@@ -1094,7 +1207,9 @@ class Component extends DCLogic {
       const cites=passages.length?passages:sources;   // prefer passages; fall back to bare sources
       const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
         style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
-      const isMd=!isUser&&!m.pending&&!!m.text;   // render the model's markdown; user/pending stay plain
+      // Render the model's markdown LIVE — even while the bubble is still pending — so lists, bold
+      // and line breaks form as the answer streams in, not only once it finishes. User turns stay plain.
+      const isMd=!isUser&&!!m.text;
       // The grounding mode this turn was tagged with (sendChat/_answerInto via _groundReport):
       // 'matched' (lines that matched), 'opening' (drew on the source's opening), 'model' (the
       // model's own words). Older/structural turns carry none — fall back to the matched look
@@ -3115,12 +3230,19 @@ class Component extends DCLogic {
         base.gridCols='1fr';
         base.leftOrder=0; base.mainOrder=0; base.chatOrder=0; base.rightOrder=0;
       }else{
-        const mainCss=isNarrow?'minmax(0,1fr)':'minmax(420px,1fr)';   // reading floor when roomy
+        // Reading is the hero: give the centre column a readable floor that the side
+        // panels must yield to, never the other way round. The panels are sized as
+        // minmax(0,Wpx) — they take their preferred width when there's room, but shrink
+        // (and finally scroll) before the prose column collapses. Without this the fixed
+        // panel tracks crushed the reading column to a sliver (one word per line) on a
+        // narrowish window with both panels open. Phone drops to a single pane above.
+        const floor=isNarrow?340:420;
+        const mainCss='minmax('+floor+'px,1fr)';
         const cols=[];
-        if(L) cols.push('264px');
+        if(L) cols.push('minmax(0,264px)');
               cols.push(mainCss);
-        if(C) cols.push(cw+'px');
-        if(R) cols.push(pw+'px');
+        if(C) cols.push('minmax(0,'+cw+'px)');
+        if(R) cols.push('minmax(0,'+pw+'px)');
         base.gridCols=cols.join(' ');
         // Swap moves the side GROUPS (sources↔entities) to opposite ends; reading+chat
         // stay central, so swap never strands the page in a corner.
