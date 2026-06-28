@@ -33,6 +33,11 @@ class Component extends DCLogic {
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
       hoverCite:null, liveResearch:{on:false},
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
+      // Temporal cursor on the entity summary. Keyed by entity id → a fraction in
+      // [0,1] of the way through that entity's attested record. Undefined means the
+      // latest (right edge); dragging left rewinds the summary to what the record
+      // said about the entity earlier in the reading.
+      entCursor:{},
       // Chat — first-class alongside sources. Each chat is a thread grounded in what
       // has been read; answers are built from the read graph/sentences (no LLM; an
       // LLM refines them only if window.claude is present). Chats live in the left panel.
@@ -1216,6 +1221,30 @@ class Component extends DCLogic {
   subjectSentences(id){const s=new Set();for(const e of this.graph.edges){if(e.from===id&&e.to!==e.from&&e.sentIdx!=null&&!this.isURLish(this.labelOf(e.to)))s.add(e.sentIdx);}return [...s].sort((a,b)=>a-b);}
   // ── the one written sentence ─────────────────────────────────────
   summaryFallback(texts){ if(!texts||!texts.length)return null; return texts.slice(0,2).map(t=>this.norm(t)).join(' ').slice(0,320); }
+  // ── temporal cursor over an entity's attested record ───────────────
+  // The summary is stitched from the propositions the entity is the SUBJECT of,
+  // in reading order. Those propositions are spread across the time of the text —
+  // each one a moment the record had something to say. The cursor walks that
+  // sequence: at position k we know only the first k attested propositions, so the
+  // summary reads as it would have "as of" that point. k = N (the right edge, the
+  // default) is the whole record and reproduces the untimed summary exactly.
+  entTimeline(id){
+    const att=this.subjectSentences(id).filter(i=>this.bandOf(i)==='eva').sort((a,b)=>a-b);
+    return {att, N:att.length};
+  }
+  // Resolve the stored fraction into an integer count k ∈ [1..N] (at least one
+  // proposition once the cursor is shown — k=0 has nothing to say). Undefined → N.
+  entCursorK(id,N){
+    if(N<=0)return 0;
+    const f=this.state.entCursor&&this.state.entCursor[id];
+    if(f==null)return N;
+    return Math.max(1,Math.min(N,Math.round(f*N)));
+  }
+  setEntCursor(id,k){
+    const {N}=this.entTimeline(id); if(N<=0)return;
+    const f=Math.max(0,Math.min(1,(+k||0)/N));
+    this.setState(s=>({entCursor:{...(s.entCursor||{}),[id]:f}}));
+  }
   // Strip inline reference markers ([13], [74], [1][2], [citation needed], [a]) from
   // text we DISPLAY — never from the sentence we match/scroll against in the live page.
   stripRefs(s){return this.norm(String(s||'').replace(/\s*\[(?:\d+(?:[\u2013-]\d+)?|citation needed|note \d+|[a-z])\]/gi,'')).replace(/\s+([,.;:!?])/g,'$1');}
@@ -2479,17 +2508,39 @@ class Component extends DCLogic {
     const realAliases=aliasCands.filter(a=>this.trueAlias(lab,a));
     const facets=aliasCands.filter(a=>!this.trueAlias(lab,a));
     const aliases=realAliases.slice(0,8).map(a=>({a,style:'display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:6px;color:var(--ink2);border:1px solid var(--line2);'}));
+    const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
     const subjIdx=this.subjectSentences(sel),subjSet=new Set(subjIdx),apprIdx=mentions.filter(i=>!subjSet.has(i));
-    const attestedTexts=subjIdx.filter(i=>this.bandOf(i)==='eva').map(i=>this.master.sentences[i]);
+    const attIdx=subjIdx.filter(i=>this.bandOf(i)==='eva').sort((a,b)=>a-b);
+    const attestedTexts=attIdx.map(i=>this.master.sentences[i]);
+    // ── temporal cursor over the attested record ──────────────────────────
+    // With two or more attested propositions there is a timeline to walk: k of
+    // them, in reading order, are "in view". The summary is stitched from those,
+    // so the cursor slides the summary back and forth through the time of the
+    // text. k = N (the right edge, the default) is the whole record and the
+    // stitch is byte-identical to the untimed summary.
+    const attN=attIdx.length, cursorOn=attN>=2, curK=this.entCursorK(sel,attN);
+    const scopedTexts=cursorOn?attestedTexts.slice(0,curK):attestedTexts;
     const cachedSum=this.state.summaries&&this.state.summaries[sel],sumSig=this.summarySig(sel),autoOn=false;
     let summaryText=null,sumModel=false,wikiBacked=false,wikiUrl=null,wikiTitle=null,wikiConf=false,srcComposed=false;
-    if(cachedSum&&cachedSum.sig===sumSig){summaryText=cachedSum.text;sumModel=!!cachedSum.model;}
-    else { summaryText=this.summaryFallback(attestedTexts); if(attestedTexts.length)setTimeout(()=>this.ensureSummary(sel,attestedTexts),0); }
+    if(cachedSum&&cachedSum.sig===sumSig&&!cursorOn){summaryText=cachedSum.text;sumModel=!!cachedSum.model;}
+    else { summaryText=this.summaryFallback(scopedTexts); if(attestedTexts.length)setTimeout(()=>this.ensureSummary(sel,attestedTexts),0); }
     if(!summaryText){const w=this.wikiDef(sel);
       if(w&&w.text&&!w.none&&w.confirmed){summaryText=w.text;wikiBacked=true;wikiUrl=w.url;wikiTitle=w.title;wikiConf=true;}
       else{const gist=this.sourceGist(sel);if(gist){summaryText=gist;srcComposed=true;}
         if(!w&&(this.looksProperNoun(lab)||this.isGenericConcept(sel)))this.ensureWiki(sel);}}
-    const synthN=attestedTexts.length;
+    const synthN=cursorOn?curK:attestedTexts.length;
+    // The cursor only rides the attested stitch — a wiki/gist summary has no
+    // in-text timeline to walk, so it is left untimed.
+    let cursorView={on:false};
+    if(cursorOn&&!wikiBacked&&!srcComposed){
+      const here=attIdx[curK-1],u=this.master.sentenceSource[here],p=this.pageOf(u),when=p&&p.ts?fmtDate(p.ts):'';
+      cursorView={on:true,k:curK,n:attN,pct:Math.max(4,Math.round(curK/attN*100)),
+        label:'as of proposition '+curK+' of '+attN,
+        atLatest:curK>=attN,notLatest:curK<attN,when:when,hasWhen:!!when,host:this.short(u),
+        whenLabel:when?('read '+when):'',
+        onMove:ev=>{const v=ev&&ev.target?+ev.target.value:attN;this.setEntCursor(sel,v);},
+        onLatest:()=>this.setEntCursor(sel,attN)};
+    }
     base.hasSel=true;base.showPrompt=false;base.autoOn=autoOn;
     if(this.state.panelSel&&g.entities.has(this.state.panelSel)){
       base.panelProfileOn=true;base.panelListOn=false;
@@ -2500,6 +2551,7 @@ class Component extends DCLogic {
       summaryStyle:summaryText?'':'color:var(--ink3);font-style:italic;',
       synthMark:wikiBacked?('✦ Wikipedia · '+wikiTitle+' — matched to your graph'):(srcComposed?'✦ composed from your sources — not yet an attested definition':(summaryText?('✦ stitched verbatim from '+synthN+' attested proposition'+(synthN!==1?'s':'')+' — every line traced below'):'✦ nothing attested to summarize yet — only appearances')),
       wikiBacked:wikiBacked,wikiUrl:wikiUrl,wikiTitle:wikiTitle,
+      cursor:cursorView,hasCursor:cursorView.on,
       av:this.initials(lab),avStyle:this.avatar(lab,46),avStyleSm:this.avatar(lab,24),meta:{sightings:e.sightings||mentions.length}};
     base.aliases=aliases;
 
@@ -2512,7 +2564,6 @@ class Component extends DCLogic {
     // Each register a distinct marker: reports (documented), asserts (intent/claim),
     // names (in passing). Glyph + color + label, kept visibly apart.
     const REGV={eva:{verb:'reports',fg:'#1d4ed8',bg:'#e8eefc',gl:'\u25A0'},def:{verb:'asserts',fg:'#b45309',bg:'#fbf0db',gl:'\u25C6'},held:{verb:'names',fg:'#6b7280',bg:'#eef0f3',gl:'\u25CB'}};
-    const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
     const fpRows=subjIdx.map(i=>{const b=this.bandOf(i),u=this.master.sentenceSource[i],p=this.pageOf(u),R=REGV[b]||REGV.held,ch=this.chip(u,active===u);
       return {sortw:b==='eva'?0:(b==='def'?1:2),verb:R.verb,glyph:R.gl,
         regStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:'+R.fg+';background:'+R.bg+';border-radius:5px;padding:2px 8px;flex:0 0 auto;',
