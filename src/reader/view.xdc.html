@@ -26,7 +26,7 @@
   </style>
 </helmet>
 
-<div data-acc="" style="--acc:{{ accentVar }};--accbg:{{ accbgVar }};--accline:{{ acclineVar }};height:100vh;background:var(--app);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;display:grid;grid-template-rows:{{ appRows }};position:relative;">
+<div data-acc="" style="--acc:{{ accentVar }};--accbg:{{ accbgVar }};--accline:{{ acclineVar }};height:100vh;background:var(--app);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;display:grid;grid-template-rows:{{ appRows }};grid-template-columns:minmax(0,1fr);position:relative;">
 
   <div style="background:#dee1e6;border-bottom:1px solid var(--line);">
     <div style="display:flex;align-items:flex-end;gap:6px;padding:8px 14px 0;">
@@ -171,10 +171,10 @@
     </sc-if>
   </div>
 
-  <div id="eo-grid" style="display:grid;grid-template-columns:{{ gridCols }};min-height:0;">
+  <div id="eo-grid" style="display:grid;grid-template-columns:{{ gridCols }};min-height:0;min-width:0;">
 
     <sc-if value="{{ leftShow }}" hint-placeholder-val="{{ true }}">
-    <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;order:{{ leftOrder }};">
+    <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;min-width:0;order:{{ leftOrder }};">
       <div style="padding:11px 13px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:3;">
         <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:600;color:var(--ink2);">Sources</span><span style="font-size:11px;color:var(--ink3);">{{ srcCount }}</span>
           <button onclick="{{ toggleLeft }}" title="Hide panel" style="margin-left:auto;width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">‹</button>
@@ -215,7 +215,7 @@
     </sc-if>
 
     <sc-if value="{{ mainShow }}" hint-placeholder-val="{{ true }}">
-    <main style="overflow-y:auto;min-height:0;position:relative;order:{{ mainOrder }};">
+    <main style="overflow-y:auto;min-height:0;min-width:0;position:relative;order:{{ mainOrder }};">
       <sc-if value="{{ askPageOn }}" hint-placeholder-val="{{ false }}">
         <button onclick="{{ onAskPage }}" class="eo-askfab" title="Ask about this page" style="position:absolute;right:20px;bottom:20px;z-index:18;display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;box-shadow:0 6px 18px rgba(20,24,30,.2);cursor:pointer;line-height:1;"><span style="font-size:15px;flex:0 0 auto;">✦</span><span class="eo-askfab-lbl">Ask about this page</span></button>
       </sc-if>
@@ -750,7 +750,7 @@
     <!-- Docked chat column (wide tier with a page open). Same bindings as the in-<main>
          overlay copy, so content never diverges; only the wrapper/position differs. -->
     <sc-if value="{{ chatDockedOn }}" hint-placeholder-val="{{ false }}">
-    <div style="position:relative;min-height:0;order:{{ chatOrder }};display:flex;flex-direction:column;">
+    <div style="position:relative;min-height:0;min-width:0;order:{{ chatOrder }};display:flex;flex-direction:column;">
       <div id="eo-chat-resize" onpointerdown="{{ onChatResizeDown }}" ondoubleclick="{{ onChatResizeReset }}" title="Drag to resize chat · double-click to reset" style="{{ chatResizeHandleStyle }}" style-hover="background:var(--accbg)"><div style="width:4px;height:42px;border-radius:2px;background:var(--line2);"></div></div>
       <div style="{{ chat.shellStyle }}">
         <div style="flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--card);">
@@ -845,7 +845,7 @@
     </sc-if>
 
     <sc-if value="{{ rightShow }}" hint-placeholder-val="{{ true }}">
-    <aside id="eo-panel-scroll" style="border-left:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;order:{{ rightOrder }};">
+    <aside id="eo-panel-scroll" style="border-left:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;min-width:0;order:{{ rightOrder }};">
       <sc-if value="{{ panelProfileOn }}" hint-placeholder-val="{{ false }}">
         <div style="position:sticky;top:0;background:var(--card);z-index:3;border-bottom:1px solid var(--line);box-shadow:0 1px 0 rgba(0,0,0,.02);">
           <div style="display:flex;align-items:center;gap:6px;padding:8px 10px 0;">
