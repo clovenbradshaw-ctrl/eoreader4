@@ -36,4 +36,5 @@ export { ingestCodons }      from './codon.js';
 export {
   parseFasta, complement, reverseComplement, codonsOf, isStop,
   codonVector, vectorDim, codonReadings, frameReading, sixFrameReadings,
+  rcCanonical, complementSignedReadings,
 } from './locus.js';

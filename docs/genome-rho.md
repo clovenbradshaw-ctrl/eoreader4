@@ -4,9 +4,10 @@
 > functions `buildDensity(vectors, weights, signs)`, `eigenLenses(rho, {k})`,
 > `vonNeumann(values)`, `relEntropy(rho, sigma)`, with `deriveNull` as the null.
 > Status: Tests 0–2 BUILT AND RUN (`scripts/genome-rho.mjs`, `src/organs/in/locus.js`,
-> `tests/genome-rho.test.js`); data pulled into `data/genome/`. Test 3 needs an
-> external gLM. Measured outcomes in **Results**, below — including where the
-> predictions did NOT hold. Run it: `node scripts/genome-rho.mjs`.
+> `tests/genome-rho.test.js`); data pulled into `data/genome/` (E. coli MG1655, φX174,
+> MS2). Test 3 needs an external gLM. Measured outcomes in **Results**, below —
+> including where predictions did NOT hold and which results are calibration vs.
+> discovery. Run it: `node scripts/genome-rho.mjs`.
 
 ## The point of view
 
@@ -103,33 +104,41 @@ SIGNED   spectrum: [1.000, 0,     0, 0]   S = 0.000   (one lens — A annihilate
 **Gate:** if ρ cannot recover structure you built by hand, **stop** — nothing
 downstream is interpretable.
 
-### Test 1 — strand complementarity (calibration gate)
+### Test 1 — strand complementarity: TWO different questions, two different bases
 
-**Data:** *E. coli* K-12 MG1655, `GCF_000005845.2` (NCBI Datasets, free).
-**Question:** does the basis encode that a sequence and its reverse-complement are one
-object? This is the field's validated load-bearing symmetry (Caduceus / JanusDNA
-hard-code reverse-complement equivariance) — here we **measure** whether the
-prefix-reading representation (`src/organs/in/codon.js`) already respects it.
-**Construction:** build ρ over a window's codons and ρ over its reverse-complement.
-Two routes to one verdict: (a) `vonNeumann` should be *lower* on the signed
-forward⊕RC build than unsigned, if the two strands are read as one; (b)
-`commutator(projectorFrom(forwardLenses), projectorFrom(rcLenses))` (`spectral.js:261`,
-zero iff shared eigenbasis) measures the residual non-equivariance, gated against the
-within-window baseline the Paradigm pass already builds (`surf.js:280-295`).
-**Prediction:** known answer — the strands are one object, so a *correct* basis gives
-signed S < unsigned S and a commutator at or below baseline.
-**Gate:** if it fails, the basis does not encode complementarity. The commutator
-residual *names the signed axis you would have to impose* (this is Caduceus's
-hard-coding, but measured rather than assumed). Fix the basis before Test 2.
+This test splits in two, and they want opposite bases. Be explicit about which is
+being answered (the run answers the first; the second is left open):
+
+- **The calibration question** — *given a basis where complementation is a sign flip,
+  does the interference build correctly cancel the redundant reading?* This needs a
+  basis with the symmetry **built in** (each codon carried by its
+  reverse-complement-canonical form + an orientation sign, `complementSignedReadings`
+  in `src/organs/in/locus.js`). The answer is necessarily yes for `w ⊕ RC(w)` (that is
+  the construction), so this is **Test 0 on real sequence with a biological sign** — it
+  confirms the mechanism, it does *not* discover the symmetry. On top of the calibrated
+  mechanism it *measures* a real, data-dependent quantity: the strand's violation of
+  reverse-complement parity (Chargaff 2). See Results 1b.
+- **The discovery question** — *can ρ find the strand symmetry it was NOT told about?*
+  This needs a complementation-**agnostic** basis (the plain codon prefix/position
+  vectors), and the symmetry must *emerge*. Results 1a shows that at 300 bp the
+  codon-count ρ has no usable rank structure — every window is the same composition
+  smear — so this question is **unanswered** by the current basis, not failed. Routes:
+  genome-scale ρ, or an emergent RC-pairing through the mutual-nearest `SYN` merge (the
+  way the codon organ discovered amino-acid families). Left for a later build.
+
+**Data:** *E. coli* K-12 MG1655 `GCF_000005845.2` (the calibration + parity run).
 
 ### Test 2 — reading-frame opposition (the headline)
 
-**Data:** φX174, `NC_001422` — the textbook overlapping-genes genome (free).
+**Data:** φX174 `NC_001422` and MS2 `NC_001417` — two genomes with textbook
+overlapping genes; multiple overlap loci, not one (n=1 is an anecdote).
 **Question:** can ρ hold "this locus is read in several frames at once," which a
 forced-single-parse tool cannot represent?
 **Construction:** for each window, build the reading vectors for each of the (up to
-six) frames as separate units; ρ mixes them. A single-frame coding region vs. a φX174
-region where genes overlap in two frames.
+six) frames as separate units; ρ mixes them. Overlap loci vs. single-coding controls,
+each read against **its own genome's baseline openness** — because a compact genome
+leaves extra frames stop-free, coding density is a confound and absolute open-frame
+counts are not comparable across genomes (see Results 2).
 **Prediction:** single-frame region → ρ collapses to **one** lens (S low, one frame
 dominant). Overlapping region → ρ stays a **two-lens mixture** (S high, two frames
 co-present, neither defeating the other). The contrast *one reading vs. several at
@@ -158,53 +167,94 @@ shadow, not constraint). No single-scalar predictor can produce this split.
 dN/dS-style constraint) better than the unsigned likelihood alone, at the margin
 below.
 
-## Results (first run — `data/genome/`: E. coli MG1655 1–300 kb, φX174 NC_001422)
+## Results (`data/genome/`: E. coli MG1655 1–300 kb · φX174 NC_001422 · MS2 NC_001417)
 
-Reported honestly, signed-vs-unsigned and against nulls. One clean pass, one
-inconclusive-with-diagnosis, one directional-but-muted. The negatives are kept.
+Reported honestly, signed-vs-unsigned and against nulls. The negatives and the
+confounds are kept — they are more informative than the passes.
 
 **Test 0 — PASS.** The planted cancellation is recovered exactly. Unsigned spectrum
 `[0.912, 0.088, …]`, S = 0.297 (two lenses); signed `[1, 0, …]`, S = 0.000 (one lens —
-the defeated reading A annihilated). The interference build does what it claims, and
-this is a unit test (`tests/genome-rho.test.js`), green offline.
+the defeated reading A annihilated). A unit test (`tests/genome-rho.test.js`), green
+offline.
 
-**Test 1 — INCONCLUSIVE, with a clear diagnosis.** A strand and its reverse complement
-*do* read as one object: ‖ρ_fwd − ρ_rc‖_F = 0.192 ≈ the within-strand baseline
-‖ρ_h1 − ρ_h2‖_F = 0.191, and the lens-projector commutator (0.795) ≈ baseline (0.827).
-**But the instrument cannot isolate RC-specific equivariance**, because ρ in the
-prefix/position basis is *composition-dominated*: the distance to an unrelated window
-(0.188) is also ≈ 0.19, and its commutator (0.765) is no worse than fwd↔rc. With
-E. coli's intra-strand Chargaff parity (#A≈#T, #C≈#G), a reverse complement has almost
-the same composition as everything else, so a composition-dominated ρ sees no
-contrast. The composition-matched shuffle null (0.156) is *tighter* than any real
-comparison — confirming the diagnosis. **Verdict:** consistent with RC-equivariance,
-unproven by this basis. The fix is the basis the spec's own argument points to — a
-signed purine/pyrimidine encoding where complementation *is* a sign flip — not more
-windows.
+**Test 1a — the unsigned codon basis has NO discriminating power.** Not "weak signal,
+better basis pending" — *no power*. At 300 bp, `‖ρ_fwd − ρ_rc‖_F = 0.192 ≈
+‖ρ_h1 − ρ_h2‖_F = 0.191 ≈ ‖ρ_fwd − ρ_unrelated‖_F = 0.188`. Every window's
+trace-normalised codon-count ρ is the *same* composition smear, so the basis cannot
+tell a reverse complement from an unrelated window at all. The earlier "PASS" was an
+artifact of a too-tight, composition-preserving shuffle null (0.156), and the
+commutator carried a near-vacuous verdict. This is the system working — the
+unrelated-window control caught it — but the honest status is *the instrument was
+blind*, full stop.
 
-**Test 2 — directional, muted by φX174's own biology.** The headline ordering holds in
-both readouts: the dual-coding D∩E overlap is the most mixed state, the shuffled null
-the most pure.
+**Test 1b — the signed complement basis: a CALIBRATION, plus a real regularity.** Two
+distinct claims, kept separate:
 
-| window | open ORF frames (run ≥ 0.9) | ρ von Neumann S |
-|--------|----------------------------|------------------|
-| single-coding (gene F, 600 bp) | 2 | 0.413 |
-| **DUAL-coding (D ∩ E, 276 bp)** | **3** | **0.564** |
-| null (D∩E shuffled) | 0 | 0.271 |
+- *Calibration (mechanism, by construction).* In a basis where complementation is a
+  sign flip — each codon carried by its reverse-complement-canonical form with an
+  orientation sign — the interference build cancels a strand against its own reverse
+  complement: residual `‖ρ_signed‖/‖ρ_unsigned‖ = 0.000` for `w ⊕ RC(w)`. This is
+  **Test 0 on real sequence with a biological sign**. It confirms the interference
+  mechanism; it does **not** discover the symmetry, because the symmetry is built into
+  the encoder. Calling this "ρ found that strands are one object" would be circular.
+- *Measurement (on top of the calibrated mechanism).* The signed residual of a single
+  strand is its violation of reverse-complement parity (Chargaff's 2nd rule), and that
+  **is** data-dependent: real E. coli (40×3 kb) sits at **0.12**, unbiased random at
+  **0.065**, a purine-biased strand at **0.78**. Real genomic strands sit near the
+  parity floor — slightly above random, because genes and replication skew break parity
+  a little — and an order of magnitude below a strand-biased control. A genuine,
+  named, still-not-fully-explained genomic regularity, quantified through the signed ρ.
 
-The ORF-run salience cleanly finds the two real overlapping genes — frame +0 (gene E)
-at 0.99 and frame +2 (gene D) at 1.00, two full-length ORFs in one window — and the
-dual region's ρ entropy is the highest, exactly the "several readings at once" the
-headline wants. The mute: φX174 is a *compressed* genome under multi-frame selection,
-so even single-coding windows leave extra frames stop-free (gene F's reverse frame 0
-runs 0.94) — real biology that shrinks the single-vs-dual gap. A clean single-coding
-contrast needs an annotated non-overlapping genome (E. coli with its GFF), not φX174.
+The **discovery** question — can ρ find strand symmetry it was *not* told about? —
+remains open. It needs a complementation-*agnostic* basis with real rank structure
+(Test 1a shows the codon-count ρ has none at 300 bp); genome-scale ρ or an emergent
+RC-pairing via the mutual-nearest `SYN` merge (as the codon organ did for amino-acid
+families) is the route, not this encoder.
 
-**What the run establishes:** the interference build is real (Test 0), the spectral
-instruments run unmodified on genomic ρ (Tests 1–2), and the binding constraint is the
-**basis** — exactly as `spectral.js:28-32` warns. A composition-dominated codon basis
-cannot carry strand or selection contrasts; the next build is the signed
-purine/pyrimidine encoding for Test 1 and an annotated genome for Test 2.
+**Test 2 — reading-frame opposition across 3 overlap loci and 2 genomes.** Read each
+locus against *its own* genome's baseline (the coding-density confound, below, forbids
+cross-genome absolute comparison):
+
+| genome | baseline openness (random windows) |
+|--------|-----------------------------------|
+| E. coli | open 1.15, S 0.463 |
+| φX174 | **open 1.08** (compact: extra frames stop-free) |
+| MS2 | open 0.78, S 0.312 |
+
+| locus | open frames (Δ vs genome) | ρ S (Δ) |
+|-------|---------------------------|---------|
+| ▲ overlap φX174 D∩E | 3 (**+1.93**) | 0.564 (+0.01) |
+| ▲ overlap φX174 A∩B | 2 (**+0.93**) | 0.559 (+0.00) |
+| ▲ overlap MS2 lysis | 1 (+0.22) | 0.446 (**+0.13**) |
+| · single MS2 replicase | 1 (+0.22) | 0.142 (−0.17) |
+| · single E. coli aspK | 1 (−0.15) | 0.210 (−0.25) |
+| · single E. coli thrC | 1 (−0.15) | 0.282 (−0.18) |
+| ○ null (D∩E shuffled) | 0 | 0.252 |
+
+**3/3 overlap loci sit above their genome's baseline; the clean single-coding controls
+at or below it.** The ORF-run salience finds the real overlapping genes (φX174 D∩E:
+frame +0 = gene E, frame +2 = gene D, two full ORFs at once). Two honest caveats:
+
+- *The open-frame count is the strong readout; ρ von Neumann S is the weak one* — the
+  frame reading-vectors are composition-similar, so the entropy Δ is near zero for the
+  φX174 overlaps and only clearly positive for MS2. Where the two readouts disagree the
+  count wins.
+- *Coding density is a confound, not an annoyance.* φX174 is so compact that even a
+  single-coding window (gene F) reads as 2 open frames — above its own baseline. So ORF
+  salience and frame-entropy are **confounded by genome compactness**, and any
+  cross-genome comparison must control for it (hence the per-genome baseline). This is
+  invisible until a compressed genome forces it into view, and it is a real
+  methodological constraint on Test 2.
+
+**What the run establishes:** the interference build is real (Test 0) and runs
+unmodified on genomic ρ; in a complementation-signed basis it correctly cancels
+redundant strand structure (Test 1b calibration) and quantifies a real parity
+regularity; and frame opposition shows up as above-baseline openness at true
+overlapping-gene loci across two genomes (Test 2), modulo a coding-density confound.
+The two things *not* shown, and named as such: ρ discovering strand symmetry unaided
+(needs a different basis / scale), and a clean entropy separation for frames (needs
+more distinct frame vectors). The binding constraint throughout is the **basis** —
+exactly as `spectral.js:28-32` warns.
 
 ## Validation protocol (same shape the ρ-formalisation cleared)
 

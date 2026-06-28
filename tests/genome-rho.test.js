@@ -4,9 +4,17 @@ import assert from 'node:assert/strict';
 import { buildDensity, eigenLenses, vonNeumann } from '../src/core/index.js';
 import {
   reverseComplement, parseFasta, codonsOf, codonVector, codonReadings, frameReading, isStop,
+  rcCanonical, complementSignedReadings,
 } from '../src/organs/in/locus.js';
 
 const entropy = (rho) => vonNeumann(eigenLenses(rho).map((l) => l.weight).filter((w) => w > 1e-12));
+const fro = (A) => { let s = 0; for (const r of A) for (const x of r) s += x * x; return Math.sqrt(s); };
+const residual = (seq) => {
+  const { vectors, signs } = complementSignedReadings(seq);
+  const s = buildDensity(vectors, null, signs), u = buildDensity(vectors, null, null);
+  const raw = (d) => d.rho.map((r) => r.map((x) => x * d.trace));
+  return fro(raw(s)) / fro(raw(u));
+};
 
 // ── Test 0: the synthetic positive control (docs/genome-rho.md) ──────────────
 // Two overlapping readings A,B; one vantage asserts both, a second DEFEATS A. Signed,
@@ -54,6 +62,30 @@ test('codonReadings yields one vector per in-frame codon', () => {
   const { codons, vectors } = codonReadings('ATGAAATAG', { basis: 'prefix' });
   assert.deepEqual(codons, ['ATG', 'AAA', 'TAG']);
   assert.equal(vectors.length, 3);
+});
+
+test('rcCanonical: a codon and its reverse complement share a canon, carry opposite signs', () => {
+  const a = rcCanonical('GCT');           // rc = AGC; AGC < GCT → canon AGC, GCT is the rc member
+  const b = rcCanonical('AGC');
+  assert.equal(a.canon, b.canon, 'both map to the same canonical form');
+  assert.equal(a.sign * b.sign, -1, 'opposite orientation signs');
+});
+
+test('Test 1b — signed residual: a strand ⊕ its reverse complement cancels exactly (calibration)', () => {
+  // The mechanism, by construction: in a basis where complementation is a sign flip, a
+  // sequence read together with its reverse complement must cancel to ~0 (Test 0 on real
+  // sequence). This CONFIRMS the interference build; it does not discover the symmetry.
+  const seq = 'ATGGCATTAGCCTAGGCATCGGATCCAATTGGCCAATTGGAACCGGTTAACCGGATCGATCGTAGCTAGC';
+  assert.ok(residual(seq + reverseComplement(seq)) < 1e-9, 'w ⊕ RC(w) cancels to zero');
+  assert.ok(residual('AAAGAAGAGAAGGAAGAAAGGAGAAAGAGGAAAGAA') > 1e-6, 'a strand-biased sequence has non-zero parity residual');
+});
+
+test('Test 1b — a reverse-complement-balanced strand has a far smaller residual than a biased one', () => {
+  // A real, measured property on top of the calibrated mechanism: parity-respecting
+  // sequence sits near the floor; a purine-only strand (no parity) sits far above it.
+  const balanced = 'ACGTACGTACGTACGTACGTACGTACGTACGTACGT';     // every base balanced
+  const biased = 'AAAGAAGAGAAGGAAGAAAGGAGAAAGAGGAAAGAA';        // purines only, parity broken
+  assert.ok(residual(balanced) < residual(biased), 'balanced strand violates parity less than a biased one');
 });
 
 test('frameReading: an uninterrupted ORF scores salience 1; an internal stop chops it', () => {

@@ -110,6 +110,38 @@ export const frameReading = (seq, frame, { basis = 'prefix' } = {}) => {
   return { frame, codons: codons.length, stops, longestRun, salience: orf * orf, vector };
 };
 
+// ── the signed complement basis (Test 1, the calibration build) ─────────────────
+//
+// The reverse-complement-canonical form of a codon (the lexicographically smaller of
+// the codon and its reverse complement) and the orientation sign (+1 if the codon IS
+// the canonical form, −1 if it is the rc member). Complementation flips the sign — the
+// k-mer generalisation of purine↔pyrimidine — so this is a basis in which strand
+// complementarity IS a sign flip, BY CONSTRUCTION. (Test 1 is therefore a calibration
+// of the interference mechanism on a biological sign, not a discovery that ρ finds the
+// symmetry on its own — see docs/genome-rho.md.)
+export const rcCanonical = (codon) => {
+  const rc = reverseComplement(codon);
+  return codon <= rc ? { canon: codon, sign: 1 } : { canon: rc, sign: -1 };
+};
+
+// A window read into the signed complement basis. Content = the prefix vector of each
+// codon's rc-canonical form, so a codon and its reverse complement share ONE content
+// direction; sign = orientation. The two therefore INTERFERE in ρ: the signed build
+// cancels them when they occur equally often, so the residual mass of the signed ρ is
+// the strand's violation of reverse-complement parity (Chargaff's second rule). All
+// three frames are read, so the units are every overlapping 3-mer (step 1).
+export const complementSignedReadings = (seq, { basis = 'prefix' } = {}) => {
+  const codons = [...codonsOf(seq, 0), ...codonsOf(seq, 1), ...codonsOf(seq, 2)];
+  const vectors = [], signs = [], canons = [];
+  for (const c of codons) {
+    const { canon, sign } = rcCanonical(c);
+    vectors.push(codonVector(canon, basis));
+    signs.push(sign);
+    canons.push(canon);
+  }
+  return { codons, canons, vectors, signs };
+};
+
 // All six reading frames of a window (3 forward + 3 on the reverse complement), each as
 // a (vector, salience) pair — the units of the reading-frame ρ (Test 2).
 export const sixFrameReadings = (seq, { basis = 'prefix' } = {}) => {
