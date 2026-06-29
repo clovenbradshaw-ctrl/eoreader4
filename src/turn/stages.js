@@ -692,7 +692,7 @@ export const stages = {
     // refusing: its corrections ride out as flags, the answer is never gagged. Pure and
     // additive — it touches neither the edge verdicts the veto battery reads nor `refuse`.
     let propositions = null;
-    try { propositions = auditPropositions({ prose: ctx.rawOutput, doc: ctx.doc, cursor }); }
+    try { propositions = auditPropositions({ prose: ctx.rawOutput, doc: ctx.doc, cursor, now: ctx.now || null }); }
     catch { propositions = null; }
     return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, propositions, sources, bound, answer };
   },

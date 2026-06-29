@@ -94,8 +94,18 @@ with its citation. The answer is the user's to read; the grounding is shown.
   - **Space** — jurisdiction binding + wrong-place.
   - **Time** — current/former at the cursor → superseded / stale.
   - **Corroboration** — ≥2 meaningfully-different sources, syndication collapse.
-- **Next:** surfer date-awareness (re-date sourced claims against now — this also
-  hardens the identity fork: an old source's present-tense "is a council member" becomes
-  former, so it bridges as succession instead of forking), and the active loop (a
-  `single-source` claim goes and fetches a second, meaningfully-different witness before
-  it is stated flatly).
+  - **Time, dated** — each pocket universe carries its publication year; a current office
+    whose freshest witness predates `now` by more than `STALE_YEARS` is re-dated `dated`
+    (current *as of* that year, not asserted-now). The surfer's clock (`ctx.now`) drives
+    it; absent a clock the axis is inert. A hedge, never fired. `admitWebSource` now carries
+    a `published` date.
+- **Next:**
+  - **Date-aware identity fork** — feed the per-universe date into the clustering oracle so
+    an old source's present-tense "is a council member" is re-dated former and bridges as
+    succession instead of forking (the engine knows the date now; the oracle does not yet
+    read it).
+  - **Position-awareness** — carry the (source · universe-local cursor) on every citation,
+    not just the composite index, so "where it is" is fully addressed.
+  - **Active loop** — a `single-source` / superseded claim fetches a second, meaningfully-
+    different witness, then re-verifies.
+  - **Reader → engine** — route the reader through `auditPropositions`.

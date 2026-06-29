@@ -157,6 +157,35 @@ test('meaningfulSupport collapses same-source and near-duplicate witnesses', () 
   assert.equal(meaningfulSupport([s('a', 'OConnell is the mayor of Nashville'), s('b', 'The council confirmed OConnell took office as mayor last spring')]), 2, 'distinct source + distinct wording → two');
 });
 
+// ── Time: the surfer's clock re-dates a stale "current" claim ─────────────────
+
+const datedDoc = (text, published, i = 0) => admitWebSource({ url: `https://w/${i}`, text, published }).doc;
+
+test('DATE: a current office from a stale source is re-dated against now (current as of <year>)', () => {
+  const doc = createCompositeDoc([datedDoc('OConnell is the mayor of Nashville. OConnell ran the city.', '2021-02-01')]);
+  const a = auditPropositions({ prose: 'OConnell is the mayor.', doc, now: '2026-06-29' });
+  assert.equal(a.counts.dated, 1, 'a 2021 "is the mayor" read in 2026 is current AS OF 2021, not now');
+  assert.equal(a.dated[0].asOf, 2021);
+  assert.equal(a.dated[0].dated, true);
+});
+
+test('a fresh source is not dated', () => {
+  const doc = createCompositeDoc([datedDoc('OConnell is the mayor of Nashville. OConnell ran the city.', '2026-01-01')]);
+  assert.equal(auditPropositions({ prose: 'OConnell is the mayor.', doc, now: '2026-06-29' }).counts.dated, 0);
+});
+
+test('without a clock (no now) the date axis is inert', () => {
+  const doc = createCompositeDoc([datedDoc('OConnell is the mayor of Nashville.', '2010-01-01')]);
+  assert.equal(auditPropositions({ prose: 'OConnell is the mayor.', doc }).counts.dated, 0, 'no now → no re-dating');
+});
+
+test('date-awareness never fires — it is a hedge, not a correction', () => {
+  const doc = createCompositeDoc([datedDoc('OConnell is the mayor of Nashville.', '2019-01-01')]);
+  const a = auditPropositions({ prose: 'OConnell is the mayor.', doc, now: '2026-06-29' });
+  assert.equal(a.counts.dated, 1);
+  assert.equal(a.fired.length, 0, 'a dated current claim is surfaced, never corrected/refused');
+});
+
 // ── Space: a role is bound to its jurisdiction ────────────────────────────────
 
 test('SPACE: a role placed in the wrong jurisdiction is caught (never in Salt Lake City)', () => {

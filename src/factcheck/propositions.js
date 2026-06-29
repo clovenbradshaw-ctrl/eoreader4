@@ -132,6 +132,19 @@ const PRESENT_NOW = /\b(now|currently|today|presently|these days)\b/i;
 const lower = (s) => String(s ?? '').toLowerCase();
 const tokens = (s) => lower(s).split(/[^a-z0-9']+/).filter(Boolean);
 
+// The TIME axis is dated, not just tensed. yearOf lifts a 4-digit year from a date string,
+// Date, or number — the grain the grounding re-dates on: "is the mayor" on a 2021 page is
+// current AS OF 2021, not assumed true now. The surfer's clock (now) decides if that is stale.
+const STALE_YEARS = 2;   // a current claim whose freshest witness predates now by more than this is re-dated
+const yearOf = (v) => {
+  if (v == null) return null;
+  if (typeof v === 'number') return (v >= 1900 && v <= 2100) ? v : null;
+  if (v instanceof Date) return v.getFullYear();
+  const m = String(v).match(/\b(?:19|20)\d{2}\b/);
+  return m ? parseInt(m[0], 10) : null;
+};
+const universeYear = (u) => yearOf(u?.web?.published || u?.web?.date || u?.web?.fetched_at);
+
 // The SPACE axis. A seat is bound to a jurisdiction — "mayor OF NASHVILLE", "council
 // member IN SALT LAKE CITY". readPlace lifts that proper-noun place so a role can be
 // grounded against WHERE, not just who and when: a Nashville council membership is a
@@ -270,6 +283,7 @@ const universeOfficeRecords = (u, ui) => {
   if (!u?.admission) return out;
   const tag = (id) => `U${ui}::${id}`;
   const source = u.web?.url || u.web?.final_url || u.docId || `u${ui}`;
+  const date = universeYear(u);   // when this universe was published — the as-of date of its claims
   const sents = u.sentences || [];
   for (let i = 0; i < sents.length; i++) {
     for (const p of parseProps(sents[i], u, i)) {
@@ -277,7 +291,7 @@ const universeOfficeRecords = (u, ui) => {
       const office = readOffice(p.attr?.value);
       if (!office) continue;
       out.push({ ref: tag(p.subj), label: u.admission.labelOf?.(p.subj) || p.subj, office,
-        tense: defTense(p.surface || sents[i], p.attr?.value), source, sentIdx: i, value: p.attr?.value, text: p.surface || sents[i] });
+        tense: defTense(p.surface || sents[i], p.attr?.value), source, date, sentIdx: i, value: p.attr?.value, text: p.surface || sents[i] });
     }
   }
   for (const [label, id] of (u.admission.admitted || [])) {
@@ -285,7 +299,7 @@ const universeOfficeRecords = (u, ui) => {
     if (!office) continue;
     const sentIdx = (u.mentions?.get(id) || [])[0] ?? null;
     out.push({ ref: tag(id), label, office, tense: FORMER_VALUE.test(lower(label)) ? 'former' : 'current',
-      source, sentIdx, value: label, text: sents[sentIdx] || label });
+      source, date, sentIdx, value: label, text: sents[sentIdx] || label });
   }
   return out;
 };
@@ -347,7 +361,7 @@ export const personClusters = (doc) => {
     let f = slot.get(rc.office.head);
     if (!f) { f = { sentIdx: rc.sentIdx, value: rc.value, exclusive: rc.office.exclusive, places: new Set(), supports: [] }; slot.set(rc.office.head, f); }
     if (rc.office.place) f.places.add(rc.office.place);
-    f.supports.push({ source: rc.source, text: rc.text });
+    f.supports.push({ source: rc.source, text: rc.text, date: rc.date });
   }
   return { clusters, disc, find };
 };
@@ -422,9 +436,10 @@ const answerDefs = (prose, doc, cursor) => {
 //
 // Edges (CON/SIG) are the edge channel's domain (correspond.js) and are not graded
 // here — this is the DEF half, deliberately non-overlapping.
-export const auditPropositions = ({ prose, doc, cursor = Infinity } = {}) => {
-  const empty = { verdicts: [], superseded: [], corrections: [], fired: [], counts: { corroborated: 0, unsupported: 0, superseded: 0, stale: 0 } };
+export const auditPropositions = ({ prose, doc, cursor = Infinity, now = null } = {}) => {
+  const empty = { verdicts: [], superseded: [], corrected: [], weak: [], dated: [], corrections: [], fired: [], counts: { corroborated: 0, singleSource: 0, unsupported: 0, superseded: 0, stale: 0, placeMismatch: 0, dated: 0 } };
   if (!doc?.admission || !prose) return empty;
+  const nowYear = yearOf(now);   // the surfer's clock — null leaves the date axis inert
 
   const { clusters } = personClusters(doc);
   // The answer's own relational discriminators, by subject — edges only, so the office a
@@ -486,8 +501,15 @@ export const auditPropositions = ({ prose, doc, cursor = Infinity } = {}) => {
     if (docFacts?.current?.has(office.head)) {
       const f = docFacts.current.get(office.head);
       const support = meaningfulSupport(f.supports);
+      // DATE — the freshest witness's year. If the surfer's clock says it predates now by
+      // more than STALE_YEARS, the "current" claim is RE-DATED: current as of that year, not
+      // assumed true now (a 2021 "is the mayor" read in 2026 is a 2021 fact). A hedge, not an
+      // error — surfaced, never fired.
+      const dates = f.supports.map(s => s.date).filter((y) => y != null);
+      const asOf = dates.length ? Math.max(...dates) : null;
+      const dated = nowYear != null && asOf != null && (nowYear - asOf) > STALE_YEARS;
       verdicts.push({ subj, value, office: office.head, verdict: 'corroborated', reason: 'office-current',
-        support, weak: support < 2, citation: cite(f), places: [...f.places], surface });
+        support, weak: support < 2, dated, asOf, citation: cite(f), places: [...f.places], surface });
       continue;
     }
 
@@ -526,9 +548,14 @@ export const auditPropositions = ({ prose, doc, cursor = Infinity } = {}) => {
   // an error; the signal that the system should seek a second, meaningfully-different
   // witness before stating it flatly (the user's "can't say it because it appears once").
   const weak = verdicts.filter(v => v.verdict === 'corroborated' && v.weak);
+  // The dated claims — current per the sources, but the freshest witness predates now by
+  // more than STALE_YEARS, so it is current AS OF its date, not asserted-now (the surfer's
+  // clock at work). A hedge, like single-source — surfaced, not fired.
+  const dated = verdicts.filter(v => v.verdict === 'corroborated' && v.dated);
   const counts = {
     corroborated: verdicts.filter(v => v.verdict === 'corroborated' && !v.weak).length,
     singleSource: weak.length,
+    dated:        dated.length,
     unsupported:  verdicts.filter(v => v.verdict === 'unsupported').length,
     superseded:   verdicts.filter(v => v.verdict === 'superseded').length,
     stale:        verdicts.filter(v => v.verdict === 'stale').length,
@@ -542,7 +569,7 @@ export const auditPropositions = ({ prose, doc, cursor = Infinity } = {}) => {
   }] : [];
 
   // `superseded` kept for back-compat (the prior field name); `corrected` is the wider set.
-  return { verdicts, superseded: corrected, corrected, weak, corrections, fired, counts };
+  return { verdicts, superseded: corrected, corrected, weak, dated, corrections, fired, counts };
 };
 
 // Re-title a lowercased place for a correction string ("salt lake city" → "Salt Lake City").
