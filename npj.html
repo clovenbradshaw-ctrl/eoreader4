@@ -200,74 +200,33 @@ function placeholder(h1, h2, label){
   return 'data:image/svg+xml;base64,' + btoa(svg);
 }
 
-/* ── the feed (most-recent-first; one may be `pinned`) ──────────────────── */
+/* ── the feed ─────────────────────────────────────────────────────────────
+   NPJ currently has exactly ONE live article, so there is one record and no
+   feed. The lead is rendered from it; the "More from the newsroom" divider
+   and feed only appear once a second published record exists.
+
+   Replace the fields below with the real article. `body` carries the
+   underlined claims, each pinned to its archived snapshot via
+   data-archive="<archive.org snapshot URL>" — the source count (§5) is
+   derived from those, deduped by snapshot URL.
+   ────────────────────────────────────────────────────────────────────────── */
 const RECORDS = [
   {
-    id: 'r-2207',
-    pinned: true,
-    section: 'Investigation',
-    headline: 'The water board met 41 times. The minutes show 6.',
-    dek: 'A two-year reconstruction of a rural utility’s vanishing paper trail — built entirely from snapshots its own website tried to forget.',
-    author: { handle: '@m.rosen' },
-    editor:  { name: 'Dana Okafor' },
-    publish_date: 'June 28, 2026',
-    image: { src: placeholder('#1a3a44','#0d2530','RIVER OUTFALL · 2026'),
-             alt: 'A concrete water-treatment outfall photographed at dawn, pipes draining into a low river.' },
+    id: 'REPLACE-record-id',                 // → /sources?record=<id>
+    pinned: true,                            // the single live record is the lead
+    section: 'REPLACE — section / kicker',
+    headline: 'REPLACE — the article headline',
+    dek: 'REPLACE — the standfirst / dek.',
+    author: { handle: 'REPLACE — @author' },
+    editor:  null,                           // { name: 'Editor Name' } or null if none
+    publish_date: 'REPLACE — Month D, YYYY',
+    // Real article serves the image from R2/CDN: image: { src: 'https://…', alt: '…' }
+    // Until then, leave null for an empty gray frame (never a broken <img>).
+    image: null,
     body: `
-      <p>The board <a class="claim" data-archive="https://web.archive.org/web/20240112/utilminutes/jan">approved the rate increase</a>
-      without a recorded vote, and <a class="claim" data-archive="https://web.archive.org/web/20240118/utilminutes/jan">struck the line item</a>
-      from the published agenda. A later revision
-      <a class="claim" data-archive="https://web.archive.org/web/20240522/utilminutes/may">reinstated the figure</a>,
-      then <a class="claim" data-archive="https://web.archive.org/web/20240601/utilbudget/fy25">moved it to the capital budget</a>.
-      The state filing <a class="claim" data-archive="https://web.archive.org/web/20240730/stateauditor/fy25">flagged the gap</a>,
-      and a duplicate of the same January snapshot
-      <a class="claim" data-archive="https://web.archive.org/web/20240112/utilminutes/jan">confirms the original wording</a>.</p>`
-  },
-  {
-    id: 'r-2206',
-    section: 'Housing',
-    headline: 'A landlord, a shell company, and 19 deleted listings',
-    dek: 'The units were never off the market. They were off the record.',
-    author: { handle: '@priya' },
-    editor:  { name: 'Sam Vance' },
-    publish_date: 'June 27, 2026',
-    image: { src: placeholder('#3a2a44','#1d1230','BLOCK 14 · WALK-UP'),
-             alt: 'A row of brick walk-up apartment buildings under flat overcast light.' },
-    body: `
-      <p><a class="claim" data-archive="https://web.archive.org/web/20260301/listings/a14">Listing A</a>,
-      <a class="claim" data-archive="https://web.archive.org/web/20260301/listings/b14">Listing B</a>, and
-      <a class="claim" data-archive="https://web.archive.org/web/20260302/listings/c14">Listing C</a>
-      shared a registered agent, per the
-      <a class="claim" data-archive="https://web.archive.org/web/20260310/secstate/agent">corporate filing</a>.</p>`
-  },
-  {
-    id: 'r-2205',
-    section: 'Climate',
-    headline: 'The heat map the county stopped publishing',
-    dek: 'Three summers of asphalt readings, archived the week before the dashboard went dark.',
-    author: { handle: '@lee' },
-    editor:  null,                          /* no editor → byline omits the run */
-    publish_date: 'June 26, 2026',
-    image: { src: placeholder('#44321a','#301d0d','SURFACE TEMP · JUL'),
-             alt: 'A thermal-camera view of a parking lot rendered in oranges and deep reds.' },
-    body: `
-      <p>The <a class="claim" data-archive="https://web.archive.org/web/20250801/heat/dash">2025 dashboard</a>
-      and its <a class="claim" data-archive="https://web.archive.org/web/20250801/heat/dash">cached duplicate</a>
-      both record the <a class="claim" data-archive="https://web.archive.org/web/20250815/heat/csv">raw CSV</a>.</p>`
-  },
-  {
-    id: 'r-2204',
-    section: 'Courts',
-    headline: 'A sealed settlement, reopened by its own footnote',
-    dek: 'The amount was redacted. The exhibit index was not.',
-    author: { handle: '@okonkwo' },
-    editor:  { name: 'Dana Okafor' },
-    publish_date: 'June 25, 2026',
-    image: null,                            /* missing image → empty gray frame */
-    body: `
-      <p>The <a class="claim" data-archive="https://web.archive.org/web/20260210/docket/exh">exhibit index</a>
-      named the figure the <a class="claim" data-archive="https://web.archive.org/web/20260210/docket/seal">sealed order</a>
-      tried to hide.</p>`
+      <p>REPLACE — the article body. Each underlined claim links to its
+      archived source, e.g.
+      <a class="claim" data-archive="https://web.archive.org/web/REPLACE">a claim</a>.</p>`
   }
 ];
 
@@ -406,11 +365,15 @@ function render(records){
 
   if (lead) main.appendChild(renderLead(lead));
 
-  main.appendChild(el('div', 'feed-label', 'More from the newsroom'));
-
-  const feedEl = el('div', 'feed');
-  feed.forEach(r => feedEl.appendChild(renderCard(r)));
-  main.appendChild(feedEl);
+  // Only surface the divider + feed when there is actually a feed.
+  // With a single live record there is just the lead — no empty "More
+  // from the newsroom" header, no dummy cards.
+  if (feed.length){
+    main.appendChild(el('div', 'feed-label', 'More from the newsroom'));
+    const feedEl = el('div', 'feed');
+    feed.forEach(r => feedEl.appendChild(renderCard(r)));
+    main.appendChild(feedEl);
+  }
 }
 
 render(RECORDS);
