@@ -270,7 +270,7 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   el.classList.remove('streaming');     // the live stream is replaced by the cited answer
   const body  = el.querySelector('.body');
   const trail = el.querySelector('.trail');
-  if (body) body.innerHTML = linkifyCitations(text || '', opts.citationSources);
+  if (body) body.innerHTML = renderRich(text || '', opts.citationSources);
 
   // CHATBOT SURFACE (default): the answer is the whole message. The coverage
   // verdict, doc-source chips, veto pills, the route/timing meta line, and the
@@ -911,9 +911,9 @@ export const renderTransparency = (el, opts = {}) => {
 // Per-claim attribution: each [sN] becomes a chip that names the source it cites. When a source
 // map is supplied (idx → {label, url}), a web citation links to the page and shows its title on
 // hover; a document citation still scrolls to the span. Falls back to the bare [sN] chip.
-const linkifyCitations = (text, citationSources = null) => {
-  const escaped = escapeHtml(text);
-  return escaped.replace(/\[s(\d+)\]/g, (_, n) => {
+// Operates on ALREADY-ESCAPED text — the bracket form survives escaping, so callers escape once.
+const linkifyEscaped = (escaped, citationSources = null) =>
+  escaped.replace(/\[s(\d+)\]/g, (_, n) => {
     const src = citationSources && citationSources[n];
     if (src && src.url) {
       const title = escapeHtml(`${src.label} — ${src.url}`);
@@ -922,6 +922,62 @@ const linkifyCitations = (text, citationSources = null) => {
     const title = src?.label ? ` title="${escapeHtml(src.label)}"` : '';
     return `<span class="cite" data-idx="${n}"${title}>[s${n}]</span>`;
   });
+
+const linkifyCitations = (text, citationSources = null) =>
+  linkifyEscaped(escapeHtml(text), citationSources);
+
+// Inline span markup on a RAW segment: escape first (no markup injection), then **bold** and
+// *italic* (bold before italic so `**x**` is not eaten by the single-star rule), then the
+// citation chips. The marker characters (* # - [ ]) are not HTML-special, so they survive the
+// escape and the regexes see them intact.
+const formatInline = (raw, citationSources = null) => {
+  let s = escapeHtml(raw);
+  s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
+  return linkifyEscaped(s, citationSources);
+};
+
+// renderRich — the chat answer body as markdown-lite HTML. The answer used to render as a single
+// escaped+linkified blob, so a multi-section answer's `## headings`, `**bold**`, and `- lists`
+// showed as literal punctuation. This honours that light structure (the shape the arc and the
+// research reports emit) while keeping the escape-first, no-raw-HTML guarantee: every text node
+// is escaped before any tag is introduced. Blocks split on blank lines; within a block, a lone
+// `#…` line is a heading, an all-`-`/`*` (or all-`1.`) block is a list, everything else is a
+// paragraph with hard newlines kept as <br>.
+const renderRich = (text, citationSources = null) => {
+  const blocks = String(text || '').split(/\n{2,}/);
+  const html = [];
+  for (const block of blocks) {
+    const b = block.replace(/\s+$/, '');
+    if (!b.trim()) continue;
+    const lines = b.split('\n');
+
+    // Heading: a single line opening with 1–4 `#`. `#`/`##` → h3, deeper → h4 (the chat has no h1/h2).
+    const h = lines.length === 1 && b.match(/^\s*(#{1,4})\s+(.+?)\s*$/);
+    if (h) {
+      const tag = h[1].length <= 2 ? 'h3' : 'h4';
+      html.push(`<${tag}>${formatInline(h[2], citationSources)}</${tag}>`);
+      continue;
+    }
+
+    // Unordered list: every line is a `- ` / `* ` item.
+    if (lines.every(l => /^\s*[-*]\s+/.test(l))) {
+      const items = lines.map(l => `<li>${formatInline(l.replace(/^\s*[-*]\s+/, ''), citationSources)}</li>`);
+      html.push(`<ul>${items.join('')}</ul>`);
+      continue;
+    }
+
+    // Ordered list: every line is a `1.` / `2.` item.
+    if (lines.every(l => /^\s*\d+\.\s+/.test(l))) {
+      const items = lines.map(l => `<li>${formatInline(l.replace(/^\s*\d+\.\s+/, ''), citationSources)}</li>`);
+      html.push(`<ol>${items.join('')}</ol>`);
+      continue;
+    }
+
+    // Paragraph: hard line wraps within the block become <br>.
+    html.push(`<p>${lines.map(l => formatInline(l, citationSources)).join('<br>')}</p>`);
+  }
+  return html.join('');
 };
 
 const escapeHtml = (s) =>
@@ -929,3 +985,7 @@ const escapeHtml = (s) =>
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+
+// Exported for the renderer's regression test (rich-render.test.js). Pure string → HTML string,
+// no DOM — the chat body's markdown-lite render in one inspectable function.
+export { renderRich, formatInline };
