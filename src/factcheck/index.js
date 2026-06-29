@@ -28,5 +28,5 @@ export {
 // office (O'Connell "is a council member" against "Mayor O'Connell") is caught as
 // superseded/stale and surfaced, never refused.
 export {
-  auditPropositions, documentOffices, readOffice, personKey, meaningfulSupport,
+  auditPropositions, personClusters, readOffice, personKey, meaningfulSupport,
 } from './propositions.js';

@@ -46,7 +46,7 @@
 
 import { parseProps }          from '../enactor/props.js';
 import { parseText }           from '../perceiver/parse/index.js';
-import { attributesConflict }  from '../core/index.js';
+import { attributesConflict, projectGraph, evaluateSameAs, discriminatorIndex } from '../core/index.js';
 
 // ── The office lexicon ──────────────────────────────────────────────────────
 //
@@ -209,58 +209,169 @@ export const meaningfulSupport = (supports = []) => {
   return witnesses.length;
 };
 
-// The source a composite sentence came from — its origin doc id, so two supports can be
-// told apart by WHERE they were read, not just THAT they were read. Falls back to the
-// single doc's url/id when the doc is not a composite.
-const sourceAt = (doc, sentIdx) =>
-  (typeof doc?.origin === 'function' && doc.origin(sentIdx)?.docId) || doc?.web?.url || doc?.docId || null;
-
-// documentOffices(doc) → Map<personKey, { current: Map<head,fact>, former: Map<head,fact> }>.
+// ── The IDENTITY axis — pocket universes (docs/pocket-universe-grounding.md) ──
 //
-// The sources' OWN office propositions, RESOLVED THROUGH THE REFERENTS (parseProps reads
-// each clause's subject through the document field, so "he is the mayor" binds to the
-// hot referent, not a surface string) and read EACH at the cursor where it sits — the
-// "correct cursor", so a past frame reads former. Folded by person across sources, with
-// every fact carrying its WHERE (places) and its WITNESSES (source · text), so the three
-// axes — identity, space, time — and corroboration are all available to the verdict.
+// Surname is a bad cross-document tool. Identity is the engine's own physics: each
+// document is a POCKET UNIVERSE in which a name resolves to one referent carrying that
+// universe's relationships; across universes, same-name referents are DISTINCT, and a
+// `same_as` bridge is ASSERTED — by convergence of discriminators, forked by conflict,
+// held open otherwise (core/asterisk.js evaluateSameAs). The name proposes the
+// candidate; the relationships dispose. So a Nashville mayor and a Salt Lake City
+// council member named Smith stay two people, while a council-member-then-mayor O'Connell,
+// converging on a shared context, is one.
 //
-// A `fact` is { sentIdx, value, exclusive, places:Set, supports:[{source,text}], referents:Set }.
-export const documentOffices = (doc) => {
-  const out = new Map();
-  if (!doc?.admission) return out;
-  const at = (pk) => out.get(pk) || out.set(pk, { current: new Map(), former: new Map() }).get(pk);
-  const record = (pk, referent, office, tense, sentIdx, value, text) => {
-    if (!pk || !office) return;
-    const slot = tense === 'former' ? at(pk).former : at(pk).current;
-    let f = slot.get(office.head);
-    if (!f) { f = { sentIdx, value, exclusive: office.exclusive, places: new Set(), supports: [], referents: new Set() }; slot.set(office.head, f); }
-    if (office.place) f.places.add(office.place);
-    if (referent != null) f.referents.add(referent);
-    f.supports.push({ source: sourceAt(doc, sentIdx), text: text || value || '' });
-  };
+// The composite collapses identical labels across documents (first-doc-wins), so the
+// pocket universes live in its PART documents — each keeps its own un-collapsed
+// admission. `universesOf` recovers them.
+const universesOf = (doc) => {
+  if (!doc?.isComposite) return doc ? [doc] : [];
+  const seen = new Map();
+  for (let i = 0; i < (doc.sentences || []).length; i++) {
+    const o = typeof doc.origin === 'function' ? doc.origin(i) : null;
+    if (o?.doc && !seen.has(o.docId)) seen.set(o.docId, o.doc);
+  }
+  return seen.size ? [...seen.values()] : [doc];
+};
 
-  // DEF predicates, sentence by sentence, at the correct cursor — subject resolved to its
-  // referent by parseProps (the identity axis), tense read from the clause (the time axis).
-  const sentences = doc.sentences || [];
-  for (let i = 0; i < sentences.length; i++) {
-    for (const p of parseProps(sentences[i], doc, i)) {
+// nameTokens — the candidate-BLOCKING tokens of a label (full-name tokens, office and
+// honorific words dropped). NOT the identity decision — only which referents are worth
+// TESTING for sameness. The label is the thing in question and cannot be its own evidence.
+const nameTokens = (label) => new Set(
+  lower(label).replace(/['’]/g, '').split(/[^a-z0-9]+/)
+    .filter(t => t.length > 2 && !NAME_NOISE.has(t) && !ALL_OFFICE_TOKENS.has(t)));
+const shareName = (a, b) => { const A = nameTokens(a); for (const t of nameTokens(b)) if (A.has(t)) return true; return false; };
+
+// The TIME-and-SPACE-gated office conflict oracle (the crux). Two CURRENT exclusive
+// offices are two people — one bearer holds one current exclusive seat:
+//   · office-head  (the bare seat) — disjoint heads ⇒ a current mayor and a current
+//                  council member are two people. Same head converges (exact overlap),
+//                  so a missing jurisdiction never conflicts with a present one.
+//   · office-where (head@jurisdiction) — the SAME seat in two jurisdictions (a Nashville
+//                  mayor and a Salt Lake City mayor) ⇒ two people.
+// A FORMER office is never a conflict (council-member→mayor is succession, not a split).
+// Everything else (jurisdiction alone, relational vias) defers to the standard oracle.
+const officeConflict = (via, A, B, opts) => {
+  if (via === 'office-head') return { conflict: 1, reason: 'two-current-seats' };   // disjoint current seats
+  if (via === 'office-where') {
+    const heads = (s) => new Set([...s].map(t => t.split('@')[0]));
+    const hb = heads(B);
+    for (const h of heads(A)) if (hb.has(h)) return { conflict: 1, reason: 'same-seat-two-jurisdictions' };
+    return { conflict: 0, reason: 'distinct-seats' };
+  }
+  return attributesConflict(via, A, B, opts);
+};
+
+const EMPTY_DISC = new Map();
+
+// The office propositions one pocket universe holds, each tagged with its universe-
+// namespaced referent, source, tense (read at its cursor), place, and witnessing text.
+const universeOfficeRecords = (u, ui) => {
+  const out = [];
+  if (!u?.admission) return out;
+  const tag = (id) => `U${ui}::${id}`;
+  const source = u.web?.url || u.web?.final_url || u.docId || `u${ui}`;
+  const sents = u.sentences || [];
+  for (let i = 0; i < sents.length; i++) {
+    for (const p of parseProps(sents[i], u, i)) {
       if (p.kind !== 'def') continue;
       const office = readOffice(p.attr?.value);
       if (!office) continue;
-      const pk = personKey(doc.admission.labelOf?.(p.subj) || p.subj);
-      record(pk, p.subj, office, defTense(p.surface || sentences[i], p.attr?.value), i, p.attr?.value, p.surface || sentences[i]);
+      out.push({ ref: tag(p.subj), label: u.admission.labelOf?.(p.subj) || p.subj, office,
+        tense: defTense(p.surface || sents[i], p.attr?.value), source, sentIdx: i, value: p.attr?.value, text: p.surface || sents[i] });
     }
   }
-
-  // Appositive titles carried in the entity label ("Mayor Freddie O'Connell") — the
-  // referent is the admitted id itself, a present descriptor unless marked former.
-  for (const [label, id] of (doc.admission.admitted || [])) {
+  for (const [label, id] of (u.admission.admitted || [])) {
     const office = readOffice(label);
     if (!office) continue;
-    const sentIdx = (doc.mentions?.get(id) || [])[0] ?? null;
-    record(personKey(label), id, office, FORMER_VALUE.test(lower(label)) ? 'former' : 'current', sentIdx, label, sentences[sentIdx] || label);
+    const sentIdx = (u.mentions?.get(id) || [])[0] ?? null;
+    out.push({ ref: tag(id), label, office, tense: FORMER_VALUE.test(lower(label)) ? 'former' : 'current',
+      source, sentIdx, value: label, text: sents[sentIdx] || label });
   }
   return out;
+};
+
+// The discriminators of every universe-namespaced referent: the relationships from its
+// universe's own graph (the relational fingerprint), PLUS its offices encoded as
+// time-tagged discriminators. These are what evaluateSameAs reads to bridge or fork.
+const buildDiscriminators = (universes, records) => {
+  const disc = new Map();
+  const add = (r, via, t) => { let m = disc.get(r); if (!m) disc.set(r, (m = new Map())); let s = m.get(via); if (!s) m.set(via, (s = new Set())); s.add(t); };
+  universes.forEach((u, ui) => {
+    let edges = [];
+    try { edges = projectGraph(u.log, {}).edges || []; } catch { edges = []; }
+    const lf = (id) => u.admission?.labelOf?.(id) || id;
+    for (const [r, m] of discriminatorIndex(edges, (x) => x, lf)) for (const [via, ts] of m) for (const t of ts) add(`U${ui}::${r}`, via, t);
+  });
+  for (const rc of records) {
+    if (rc.tense === 'current' && rc.office.exclusive) {
+      add(rc.ref, 'office-head', rc.office.head);                                   // converges same current seat
+      if (rc.office.place) { add(rc.ref, 'office-where', `${rc.office.head}@${rc.office.place}`); add(rc.ref, 'jurisdiction', rc.office.place); }
+    } else if (rc.tense === 'former') add(rc.ref, 'former-office', `${rc.office.head}@${rc.office.place || ''}`);
+    else add(rc.ref, 'title', rc.office.head);
+  }
+  return disc;
+};
+
+// personClusters(doc) → { clusters: Map<clusterId, person>, disc, find }. The pocket-
+// universe identity layer: extract each universe's office referents, bridge them by the
+// `same_as` physics (name-blocked, decided by evaluateSameAs over discriminators, merged
+// only on PROMOTE — earned convergence, never the name), and aggregate offices per
+// person. A `person` is { current: Map<head,fact>, former: Map<head,fact>, names:Set,
+// disc:Map<via,Set>, refs:Set }; a `fact` is { sentIdx, value, exclusive, places:Set,
+// supports:[{source,text}] }, so space, time, and corroboration ride on every office.
+export const personClusters = (doc) => {
+  const universes = universesOf(doc);
+  const records = universes.flatMap((u, ui) => universeOfficeRecords(u, ui));
+  const disc = buildDiscriminators(universes, records);
+  const labelOfRef = new Map(records.map(r => [r.ref, r.label]));
+  const refs = [...new Set(records.map(r => r.ref))];
+
+  const parent = new Map();
+  const find = (x) => { let p = parent.get(x) ?? x; while (p !== (parent.get(p) ?? p)) p = parent.get(p) ?? p; return p; };
+  const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent.set(ra, rb); };
+  const dof = (r) => disc.get(r) || EMPTY_DISC;
+  for (let i = 0; i < refs.length; i++) for (let j = i + 1; j < refs.length; j++) {
+    if (!shareName(labelOfRef.get(refs[i]), labelOfRef.get(refs[j]))) continue;   // name proposes
+    if (evaluateSameAs(refs[i], refs[j], { discriminatorsOf: dof, attributesConflict: officeConflict, minConvergence: 1 }).verdict === 'promote')
+      union(refs[i], refs[j]);                                                      // relationships dispose
+  }
+
+  const clusters = new Map();
+  for (const rc of records) {
+    const c = find(rc.ref);
+    let e = clusters.get(c);
+    if (!e) { e = { current: new Map(), former: new Map(), names: new Set(), refs: new Set(), disc: new Map() }; clusters.set(c, e); }
+    e.names.add(rc.label); e.refs.add(rc.ref);
+    for (const [via, ts] of (disc.get(rc.ref) || EMPTY_DISC)) { let s = e.disc.get(via); if (!s) e.disc.set(via, (s = new Set())); for (const t of ts) s.add(t); }
+    const slot = rc.tense === 'former' ? e.former : e.current;
+    let f = slot.get(rc.office.head);
+    if (!f) { f = { sentIdx: rc.sentIdx, value: rc.value, exclusive: rc.office.exclusive, places: new Set(), supports: [] }; slot.set(rc.office.head, f); }
+    if (rc.office.place) f.places.add(rc.office.place);
+    f.supports.push({ source: rc.source, text: rc.text });
+  }
+  return { clusters, disc, find };
+};
+
+// bindClaim(clusters, claimLabel, claimDisc) → the person a claim is ABOUT, or null. The
+// answer is the CLAIM, not a pocket universe — so it is matched to a source person by
+// name + its OTHER relationships (claimDisc EXCLUDES the office it is asserting), never
+// forked from that person by the very office under test. Name-blocked; a candidate whose
+// non-office discriminators CONFLICT is dropped (a different person of the same name);
+// among the rest the most-converged wins, and a lone non-split candidate binds.
+const bindClaim = (clusters, claimLabel, claimDisc) => {
+  const cands = [];
+  for (const [cid, e] of clusters) {
+    if (![...e.names].some(n => shareName(n, claimLabel))) continue;
+    const v = evaluateSameAs('claim', cid, {
+      discriminatorsOf: (r) => (r === 'claim' ? claimDisc : e.disc), attributesConflict: officeConflict, minConvergence: 1,
+    });
+    if (v.verdict === 'split') continue;                       // a different person of the same name
+    cands.push({ e, shared: v.shared.length, promote: v.verdict === 'promote' });
+  }
+  if (!cands.length) return null;
+  if (cands.length === 1) return cands[0].e;                   // a lone, non-conflicting same-name person
+  cands.sort((a, b) => (b.promote - a.promote) || (b.shared - a.shared));
+  return (cands[0].promote || cands[0].shared) ? cands[0].e : null;   // else need evidence to disambiguate
 };
 
 const cite = (c) => (c && c.sentIdx != null) ? `s${c.sentIdx}` : null;
@@ -315,16 +426,32 @@ export const auditPropositions = ({ prose, doc, cursor = Infinity } = {}) => {
   const empty = { verdicts: [], superseded: [], corrections: [], fired: [], counts: { corroborated: 0, unsupported: 0, superseded: 0, stale: 0 } };
   if (!doc?.admission || !prose) return empty;
 
-  const offices = documentOffices(doc);
+  const { clusters } = personClusters(doc);
+  // The answer's own relational discriminators, by subject — edges only, so the office a
+  // claim asserts is naturally excluded; used to bind each claim to the RIGHT source
+  // person (the claim is graded against that person, never forked from them by its office).
+  const answerRel = [];
+  try {
+    const aDoc = parseText(prose, { docId: 'answer' });
+    const lf = (id) => aDoc.admission?.labelOf?.(id) || id;
+    for (const [r, m] of discriminatorIndex(projectGraph(aDoc.log, {}).edges || [], (x) => x, lf))
+      answerRel.push({ label: lf(r), disc: m });
+  } catch { /* binding falls back to name-only */ }
+  const claimDiscOf = (claimLabel, place) => {
+    const m = new Map();
+    for (const { label: l, disc } of answerRel) if (shareName(l, claimLabel)) for (const [via, ts] of disc) { let s = m.get(via); if (!s) m.set(via, (s = new Set())); for (const t of ts) s.add(t); }
+    if (place) { let s = m.get('jurisdiction'); if (!s) m.set('jurisdiction', (s = new Set())); s.add(place); }
+    return m;
+  };
   const verdicts = [];
 
   for (const claim of answerDefs(prose, doc, cursor)) {
-    const { value, surface, personKey: pk, subj } = claim;
-    // Prefer a real surface name for the correction: the source's label for this
-    // person, else the name the answer itself wrote.
-    const label = (pk && labelForPerson(doc, pk)) || claim.label || subj;
+    const { value, surface, subj } = claim;
     const office = readOffice(value);
-    const docFacts = pk ? offices.get(pk) : null;
+    // IDENTITY — bind the claim to the source PERSON (pocket-universe cluster), by name +
+    // the claim's other relationships, never by surname alone.
+    const docFacts = office ? bindClaim(clusters, claim.label || subj, claimDiscOf(claim.label || subj, office.place)) : null;
+    const label = (docFacts && shortestName(docFacts.names)) || claim.label || subj;
 
     // A NON-office predicate is outside this channel's reach (no exclusive-slot
     // semantics to grade it by) — recorded, unwitnessed, never fired.
@@ -425,15 +552,12 @@ const titleCasePlace = (p) => String(p || '').replace(/\b([a-z])/g, (_, c) => c.
 // words kept (it reads as written), trimmed of a leading article.
 const displayName = (label) => String(label || '').replace(/^(the|a|an)\s+/i, '').trim() || String(label || '');
 
-// The source's surface name for a person (by surname key), preferring the SHORTEST
-// admitted label that keys to them — "O'Connell" over "Mayor Freddie O'Connell" — so
-// a correction names the person, not their title. Null when the corpus never wrote
-// a bare name for them.
-const labelForPerson = (doc, pk) => {
+// The shortest BARE name among a cluster's surface labels (office words stripped) — so a
+// correction names the person ("O'Connell"), not a title-laden form ("Mayor Freddie O'Connell").
+const shortestName = (names) => {
   let best = null;
-  for (const [label] of (doc?.admission?.admitted || [])) {
-    if (personKey(label) !== pk) continue;
-    const bare = displayName(label.replace(new RegExp(`\\b(${[...ALL_OFFICE_TOKENS].join('|')})\\b`, 'gi'), '').replace(/\s+/g, ' ').trim());
+  for (const n of names || []) {
+    const bare = displayName(String(n).replace(new RegExp(`\\b(${[...ALL_OFFICE_TOKENS].join('|')})\\b`, 'gi'), '').replace(/\s+/g, ' ').trim());
     if (bare && (!best || bare.length < best.length)) best = bare;
   }
   return best;

@@ -8,8 +8,11 @@ import { runTurn } from '../src/turn/pipeline.js';
 import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import {
-  auditPropositions, documentOffices, readOffice, personKey, meaningfulSupport,
+  auditPropositions, personClusters, readOffice, personKey, meaningfulSupport,
 } from '../src/factcheck/index.js';
+
+// The single person in a one-subject corpus (the office cluster the audit grades against).
+const personOf = (doc) => [...personClusters(doc).clusters.values()][0];
 
 // The proposition channel (docs/proposition-audit.md): the DEF/claim-grain sibling
 // of the edge-grounding veto. The edge veto is EDGES-ONLY — a single-argument
@@ -42,9 +45,10 @@ test('readOffice reads a value-level FORMER marker', () => {
   assert.equal(readOffice('the mayor').former, false);
 });
 
-// ── personKey: the surname bridge across name variants ───────────────────────
+// ── personKey: the candidate-blocking name token (NOT the identity decision) ──
 
-test('personKey keys a label on its surname, stripping titles and qualifiers', () => {
+test('personKey keys a label on its name token, stripping titles and qualifiers', () => {
+  // Used only to PROPOSE same-name candidates; the bridge is decided by relationships.
   assert.equal(personKey('Mayor Freddie OConnell'), 'oconnell');
   assert.equal(personKey('Freddie OConnell'), 'oconnell');
   assert.equal(personKey('OConnell'), 'oconnell');
@@ -52,16 +56,14 @@ test('personKey keys a label on its surname, stripping titles and qualifiers', (
   assert.equal(personKey('the mayor'), null, 'a bare title names no person');
 });
 
-// ── documentOffices: the sources' offices, read at the correct cursor ─────────
+// ── personClusters: the sources' offices, per person, read at the correct cursor ──
 
-test('documentOffices reads a current office and a former office at their own cursors', () => {
-  const doc = scope([
-    'OConnell is the mayor of Nashville.',                                   // s0 — current
-    'As a council member, OConnell was a chief critic. OConnell is now a former council member.',  // s1,s2 — former
-  ]);
-  const facts = documentOffices(doc);
-  const oc = facts.get('oconnell');
-  assert.ok(oc, 'OConnell is keyed by surname across both sources');
+test('a person carries a current office and a former office, each at its own cursor', () => {
+  // One pocket universe (within-document coref unifies the mentions): mayor current,
+  // council member past-framed → former.
+  const doc = scope(['OConnell is the mayor of Nashville. As a council member, OConnell was a chief critic. OConnell is now a former council member.']);
+  const oc = personOf(doc);
+  assert.ok(oc, 'the person clusters out of the universe');
   assert.deepEqual([...oc.current.keys()], ['mayor'], 'the present-tense office is current');
   assert.ok(oc.former.has('councilmember'), 'the past-framed office is former, not current');
   assert.ok(!oc.current.has('councilmember'), 'the former office is NOT counted current');
@@ -70,9 +72,25 @@ test('documentOffices reads a current office and a former office at their own cu
 test('an appositive title in the entity label counts as a current office', () => {
   // "Mayor Freddie O'Connell backed …" never appears as a copular DEF — the title is
   // folded into the entity label. It must still register as the current office.
-  const doc = webDoc('Mayor Freddie OConnell backed the contract.');
-  const oc = documentOffices(doc).get('oconnell');
+  const oc = personOf(webDoc('Mayor Freddie OConnell backed the contract.'));
   assert.ok(oc && oc.current.has('mayor'), 'the appositive title is mined as a current office');
+});
+
+test('two same-name people in different universes do NOT merge by name', () => {
+  // A Nashville mayor and a Salt Lake City council member named Smith — distinct current
+  // exclusive seats, no shared discriminator → the pocket-universe physics forks them.
+  const doc = scope(['Frank Smith is the mayor of Nashville.', 'Frank Smith is a council member of Salt Lake City.']);
+  const people = [...personClusters(doc).clusters.values()];
+  assert.equal(people.length, 2, 'name alone never merges two people');
+});
+
+test('same-name referents that converge on a shared relationship bridge into one person', () => {
+  // Two universes, both naming O'Connell AND both bound to Fusus → convergence promotes
+  // the same_as bridge: one person, mayor.
+  const doc = scope(['Mayor OConnell backed Fusus.', 'OConnell is the mayor of Nashville. OConnell backed Fusus.']);
+  const people = [...personClusters(doc).clusters.values()];
+  assert.equal(people.length, 1, 'shared relationships (not the name) earn the bridge');
+  assert.ok(people[0].current.has('mayor'));
 });
 
 // ── auditPropositions: the catch and its guards ──────────────────────────────
@@ -196,11 +214,12 @@ test('a person the sources never mention is left untouched', () => {
   assert.equal(audit.fired.length, 0);
 });
 
-test('the same person under two name variants is reconciled by surname', () => {
+test('a claim binds to the one same-name person in the sources (name variants)', () => {
   // The corpus only ever writes "Mayor O'Connell"; the answer writes "Freddie O'Connell".
+  // A lone, non-conflicting same-name person is who the claim is about — bind and grade.
   const doc = scope(['Mayor OConnell signed the order.']);
   const audit = auditPropositions({ prose: 'Freddie OConnell is a council member.', doc });
-  assert.equal(audit.counts.superseded, 1, 'the surname bridge reconciles the variants');
+  assert.equal(audit.counts.superseded, 1, 'the claim binds to the one O’Connell and is graded');
 });
 
 test('an empty or doc-less call is inert', () => {
