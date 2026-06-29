@@ -186,10 +186,9 @@
     </sc-if>
   </div>
 
-  <div id="eo-grid" style="display:grid;grid-template-columns:{{ gridCols }};min-height:0;min-width:0;">
+  <div id="eo-grid" style="{{ gridStyle }}">
 
-    <sc-if value="{{ leftShow }}" hint-placeholder-val="{{ true }}">
-    <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;min-width:0;order:{{ leftOrder }};">
+    <aside style="{{ leftStyle }}">
       <div style="padding:11px 13px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:3;">
         <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:600;color:var(--ink2);">Sources</span><span style="font-size:11px;color:var(--ink3);">{{ srcCount }}</span>
           <button onclick="{{ toggleLeft }}" title="Hide panel" style="margin-left:auto;width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">‹</button>
@@ -227,113 +226,11 @@
         <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Read a URL, import a book, or start a chat above.</div></sc-if>
       </div>
     </aside>
-    </sc-if>
+    <div onpointerdown="{{ dragLeft }}" style="{{ leftGutStyle }}"><div style="width:1px;height:100%;background:var(--line);"></div></div>
 
-    <sc-if value="{{ mainShow }}" hint-placeholder-val="{{ true }}">
-    <main style="overflow-y:auto;min-height:0;min-width:0;position:relative;order:{{ mainOrder }};">
+    <main style="{{ mainStyle }}">
       <sc-if value="{{ askPageOn }}" hint-placeholder-val="{{ false }}">
         <button onclick="{{ onAskPage }}" class="eo-askfab" title="Ask about this page" style="position:absolute;right:20px;bottom:20px;z-index:18;display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;box-shadow:0 6px 18px rgba(20,24,30,.2);cursor:pointer;line-height:1;"><span style="font-size:15px;flex:0 0 auto;">✦</span><span class="eo-askfab-lbl">Ask about this page</span></button>
-      </sc-if>
-      <sc-if value="{{ chatOverlayOn }}" hint-placeholder-val="{{ false }}">
-        <div style="{{ chat.shellStyle }}">
-          <div style="flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--card);">
-            <div style="padding:10px 22px 8px;display:flex;align-items:center;gap:10px;">
-              <div style="width:26px;height:26px;border-radius:7px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto;">✦</div>
-              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
-                <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Chatting about your sources — grounded in what was read</div></div>
-              <button onclick="{{ onCloseChat }}" title="Close chat" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
-            </div>
-            <div style="padding:0 18px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;">
-              <span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:2px;">About</span>
-              <sc-for list="{{ chat.about }}" as="ab" hint-placeholder-count="1">
-                <span style="{{ ab.chipStyle }}"><span onclick="{{ ab.onOpen }}" title="Open this source" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ab.label }}</span><button onclick="{{ ab.onRemove }}" title="Remove from this chat" style="{{ ab.xStyle }}" style-hover="background:var(--accline)">✕</button></span>
-              </sc-for>
-              <sc-if value="{{ chat.aboutEmpty }}" hint-placeholder-val="{{ false }}">
-                <span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:3px 9px;">Everything you’ve read</span>
-              </sc-if>
-              <button onclick="{{ chat.onToggleAdd }}" title="Add a source to chat with" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px dashed var(--line2);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">+ Add source</button>
-              <sc-if value="{{ chat.addOpen }}" hint-placeholder-val="{{ false }}">
-                <div style="position:absolute;top:100%;left:18px;right:18px;z-index:30;margin-top:4px;background:var(--card);border:1px solid var(--line2);border-radius:11px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:6px;max-height:260px;overflow-y:auto;">
-                  <sc-for list="{{ chat.addable }}" as="ad" hint-placeholder-count="0">
-                    <div onclick="{{ ad.onAdd }}" style="{{ ad.rowStyle }}" style-hover="background:var(--accbg)">
-                      <span style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">{{ ad.label }}</span>
-                      <span style="font-size:10.5px;color:var(--ink3);">{{ ad.host }}</span>
-                    </div>
-                  </sc-for>
-                  <sc-if value="{{ chat.noAddable }}" hint-placeholder-val="{{ true }}">
-                    <div style="padding:12px 11px;font-size:11.5px;color:var(--ink3);line-height:1.5;">{{ chat.addEmptyMsg }}</div>
-                  </sc-if>
-                </div>
-              </sc-if>
-            </div>
-          </div>
-          <div id="eo-chat-scroll" style="flex:1;overflow-y:auto;padding:24px 22px;min-height:0;">
-            <div style="max-width:720px;margin:0 auto;">
-              <sc-if value="{{ chat.empty }}" hint-placeholder-val="{{ true }}">
-                <div style="text-align:center;color:var(--ink3);font-size:13px;line-height:1.65;padding:46px 10px;">Ask anything about what you’ve read.<br>Answers are quoted from your sources — every claim links back.</div>
-              </sc-if>
-              <sc-for list="{{ chat.messages }}" as="m" hint-placeholder-count="0">
-                <div style="{{ m.rowStyle }}">
-                  <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
-                    <div style="{{ m.researchStyle }}">
-                      <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
-                      <sc-if value="{{ m.researchLiveOn }}" hint-placeholder-val="{{ true }}">
-                        <div style="{{ m.researchLiveBox }}">
-                          <sc-for list="{{ m.researchLive }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
-                          <sc-if value="{{ m.researchHasEarlier }}" hint-placeholder-val="{{ false }}"><div style="{{ m.researchEarlierStyle }}">{{ m.researchEarlierLabel }}</div></sc-if>
-                        </div>
-                      </sc-if>
-                      <sc-if value="{{ m.researchFullOn }}" hint-placeholder-val="{{ false }}">
-                        <div style="margin-top:7px;display:flex;flex-direction:column;gap:5px;">
-                          <sc-for list="{{ m.researchSteps }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
-                        </div>
-                      </sc-if>
-                    </div>
-                  </sc-if>
-                  <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
-                  <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
-                  </sc-if>
-                  <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
-                    <div style="{{ m.groundStyle }}">
-                      <sc-if value="{{ m.refsHas }}" hint-placeholder-val="{{ false }}">
-                        <div style="{{ m.refsStyle }}">
-                          <div style="{{ m.refsHeadStyle }}">{{ m.refsLabel }}</div>
-                          <sc-for list="{{ m.refs }}" as="r" hint-placeholder-count="1"><div onclick="{{ r.onOpen }}" style="{{ m.refRowStyle }}" style-hover="background:var(--app)"><span style="{{ m.refNumStyle }}">{{ r.n }}</span><span style="{{ m.refBodyStyle }}"><span style="{{ m.refPreviewStyle }}">{{ r.preview }}</span><span style="{{ m.refSrcStyle }}">{{ r.domain }}</span></span></div></sc-for>
-                        </div>
-                      </sc-if>
-                      <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
-                      <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                        <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}<sc-if value="{{ en.hasDomain }}" hint-placeholder-val="{{ false }}"><span style="{{ en.domStyle }}">{{ en.domain }}<sc-if value="{{ en.hasExtra }}" hint-placeholder-val="{{ false }}"> {{ en.extraLabel }}</sc-if></span></sc-if></span></sc-for></div>
-                      </sc-if>
-                    </div>
-                  </sc-if>
-                  <sc-if value="{{ m.hasRelated }}" hint-placeholder-val="{{ false }}">
-                    <div style="{{ m.relatedStyle }}">
-                      <span style="{{ m.relatedHeadStyle }}">Related</span>
-                      <sc-for list="{{ m.related }}" as="rd" hint-placeholder-count="1"><span onclick="{{ rd.onOpen }}" title="{{ rd.title }}" style="{{ rd.chipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">{{ rd.label }}</span></sc-for>
-                      <sc-if value="{{ m.relatedHasMore }}" hint-placeholder-val="{{ false }}"><button onclick="{{ m.onToggleRelated }}" style="{{ m.relatedMoreStyle }}">{{ m.relatedMoreLabel }}</button></sc-if>
-                    </div>
-                  </sc-if>
-                  <sc-if value="{{ m.hasNote }}" hint-placeholder-val="{{ false }}"><div style="{{ m.noteStyle }}">{{ m.note }}</div></sc-if>
-                </div>
-              </sc-for>
-            </div>
-          </div>
-          <div style="flex:0 0 auto;padding:13px 22px 17px;border-top:1px solid var(--line);background:var(--card);">
-            <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
-              <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
-            </sc-if>
-            <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
-              <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
-              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
-              <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
-            </div>
-            <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
-              <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
-              <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
-            </div>
-          </div>
-        </div>
       </sc-if>
       <sc-if value="{{ gutenOn }}" hint-placeholder-val="{{ false }}">
         <div style="height:100%;overflow-y:auto;min-height:0;padding:30px 22px 80px;">
@@ -776,23 +673,32 @@
         </div>
       </sc-if>
     </main>
-    </sc-if>
 
-    <!-- Docked chat column (wide tier with a page open). Same bindings as the in-<main>
-         overlay copy, so content never diverges; only the wrapper/position differs. -->
-    <sc-if value="{{ chatDockedOn }}" hint-placeholder-val="{{ false }}">
-    <div style="position:relative;min-height:0;min-width:0;order:{{ chatOrder }};display:flex;flex-direction:column;">
-      <div id="eo-chat-resize" onpointerdown="{{ onChatResizeDown }}" ondoubleclick="{{ onChatResizeReset }}" title="Drag to resize chat · double-click to reset" style="{{ chatResizeHandleStyle }}" style-hover="background:var(--accbg)"><div style="width:4px;height:42px;border-radius:2px;background:var(--line2);"></div></div>
-      <div style="{{ chat.shellStyle }}">
+    <!-- divider: reading ↔ dock (a real flex sibling on the region edge, not position:fixed) -->
+    <div onpointerdown="{{ dragDock }}" style="{{ dockGutStyle }}"><div style="width:1px;height:100%;background:var(--line);"></div></div>
+
+    <!-- ── THE DOCK — single home for Entities · Chat · Profile · Source ───────── -->
+    <aside style="{{ dockStyle }}">
+      <!-- segmented header (Read single-pane) / split label (Research) -->
+      <div style="{{ dockSegBarStyle }}">
+        <div style="{{ segWrapStyle }}">
+          <div onclick="{{ onSegEnts }}" style="{{ segEntsStyle }}">Entities</div>
+          <div onclick="{{ onSegChat }}" style="{{ segChatStyle }}">Chat</div>
+        </div>
+        <span style="{{ splitLabelStyle }}">Chat + Entities</span>
+        <button onclick="{{ onToggleRight }}" title="Hide dock" style="margin-left:auto;width:22px;height:22px;border:none;background:transparent;color:var(--ink3);border-radius:6px;font-size:14px;line-height:1;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)">›</button>
+      </div>
+      <div style="flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;">
+        <!-- CHAT pane -->
+        <div style="{{ dockChatStyle }}">
         <div style="flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--card);">
-          <div style="padding:10px 22px 8px;display:flex;align-items:center;gap:10px;">
-            <div style="width:26px;height:26px;border-radius:7px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:14px;flex:0 0 auto;">✦</div>
-            <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
-              <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Chatting about your sources — grounded in what was read</div></div>
-            <button onclick="{{ onCloseChat }}" title="Close chat" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
+          <div style="padding:8px 12px 6px;display:flex;align-items:center;gap:8px;">
+            <div style="width:22px;height:22px;border-radius:6px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:12px;flex:0 0 auto;">✦</div>
+            <div style="min-width:0;flex:1;font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
+            <button onclick="{{ onCloseChat }}" title="Close chat" style="width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:14px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
           </div>
-          <div style="padding:0 18px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;">
-            <span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:2px;">About</span>
+          <div style="padding:0 12px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;">
+            <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:1px;">About</span>
             <sc-for list="{{ chat.about }}" as="ab" hint-placeholder-count="1">
               <span style="{{ ab.chipStyle }}"><span onclick="{{ ab.onOpen }}" title="Open this source" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ab.label }}</span><button onclick="{{ ab.onRemove }}" title="Remove from this chat" style="{{ ab.xStyle }}" style-hover="background:var(--accline)">✕</button></span>
             </sc-for>
@@ -815,7 +721,7 @@
             </sc-if>
           </div>
         </div>
-        <div id="eo-chat-scroll-docked" style="flex:1;overflow-y:auto;padding:24px 22px;min-height:0;">
+        <div id="eo-chat-scroll-docked" style="flex:1;overflow-y:auto;padding:14px 16px;min-height:0;">
           <div style="max-width:720px;margin:0 auto;">
             <sc-if value="{{ chat.empty }}" hint-placeholder-val="{{ true }}">
               <div style="text-align:center;color:var(--ink3);font-size:13px;line-height:1.65;padding:46px 10px;">Ask anything about what you’ve read.<br>Answers are quoted from your sources — every claim links back.</div>
@@ -867,26 +773,24 @@
             </sc-for>
           </div>
         </div>
-        <div style="flex:0 0 auto;padding:13px 22px 17px;border-top:1px solid var(--line);background:var(--card);">
+        <div style="flex:0 0 auto;padding:9px 14px 12px;border-top:1px solid var(--line);background:var(--card);">
           <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
-            <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
+            <div style="max-width:720px;margin:0 auto 7px;font-size:11px;color:var(--ink3);display:flex;align-items:center;gap:7px;"><span style="width:12px;height:12px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
           </sc-if>
-          <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
+          <div style="max-width:720px;margin:0 auto 7px;display:flex;align-items:center;gap:6px;" title="{{ researchModeHint }}">
             <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
-              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
-            <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
+            <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
             <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
             <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
           </div>
         </div>
-      </div>
-    </div>
-    </sc-if>
-
-    <sc-if value="{{ rightShow }}" hint-placeholder-val="{{ true }}">
-    <aside id="eo-panel-scroll" style="border-left:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;min-width:0;order:{{ rightOrder }};">
+        </div>
+        <!-- split gutter (Research: chat over entities) -->
+        <div onpointerdown="{{ dragSplit }}" style="{{ splitGutStyle }}"><div style="height:1px;width:100%;background:var(--line);"></div></div>
+        <!-- ENTITIES · PROFILE · PREVIEW · PAGE-OVERVIEW region -->
+        <div id="eo-panel-scroll" style="{{ dockPanelStyle }}">
       <sc-if value="{{ panelProfileOn }}" hint-placeholder-val="{{ false }}">
         <div style="position:sticky;top:0;background:var(--card);z-index:3;border-bottom:1px solid var(--line);box-shadow:0 1px 0 rgba(0,0,0,.02);">
           <div style="display:flex;align-items:center;gap:6px;padding:8px 10px 0;">
@@ -1277,9 +1181,36 @@
         </sc-for>
         <sc-if value="{{ inboxEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:18px 14px;color:var(--ink3);font-size:12px;line-height:1.5;">No entities yet. Open a page — detection reads its entities into here.</div></sc-if>
       </sc-if>
+        </div>
+        <!-- SOURCE inspector pane — provenance opens here on Propositions; "Read live" promotes to a reading tab -->
+        <div style="{{ dockSourceStyle }}">
+          <div style="flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--card);">
+            <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;">
+              <button onclick="{{ closeSource }}" title="Back" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:5px 9px;cursor:pointer;flex:0 0 auto;" style-hover="background:#eef0f3;color:var(--ink)">‹ {{ srcView.backLabel }}</button>
+              <span style="{{ srcView.dot }}"></span>
+              <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ srcView.label }}</span>
+              <a href="{{ srcView.url }}" target="_blank" title="Open the original in a new tab" style="width:28px;height:28px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;color:var(--ink2);font-size:13px;display:flex;align-items:center;justify-content:center;text-decoration:none;" style-hover="background:#eef0f3;color:var(--ink)">↗</a>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;padding:0 12px 9px;flex-wrap:wrap;">
+              <sc-if value="{{ srcView.canEmbed }}" hint-placeholder-val="{{ true }}">
+                <button onclick="{{ srcView.onReadLive }}" title="Open the live page in the reading column" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:5px 11px;cursor:pointer;">⤢ Read live page</button>
+              </sc-if>
+              <button onclick="{{ srcView.onToggleLink }}" title="Interconnect concepts — link every known entity in the text, wiki-style." style="{{ srcView.linkBtnStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Link concepts</button>
+              <span style="margin-left:auto;font-size:11.5px;color:var(--ink3);"><b style="color:var(--acc);">{{ srcView.aboutCount }}</b> mention {{ ent.name }}</span>
+            </div>
+          </div>
+          <div style="flex:1;min-height:0;overflow-y:auto;padding:10px 16px 34px;">
+            <div style="font-size:12px;color:var(--ink2);margin:4px 0 10px;background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:8px 11px;">Parsed into <b>{{ srcView.total }}</b> propositions · <b style="color:var(--acc);">{{ srcView.aboutCount }}</b> mention {{ ent.name }}</div>
+            <sc-for list="{{ srcView.props }}" as="p" hint-placeholder-count="5">
+              <div style="{{ p.rowStyle }}">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;"><span style="{{ p.tagStyle }}">{{ p.tag }}</span><sc-if value="{{ p.about }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;color:var(--acc);font-weight:600;">● mentions {{ ent.name }}</span></sc-if></div>
+                <div style="font-size:13.5px;color:var(--ink);line-height:1.5;">{{ p.body }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
     </aside>
-      <div id="eo-resize" onpointerdown="{{ onResizeDown }}" ondoubleclick="{{ onResizeReset }}" title="Drag to resize the panel · double-click to reset" style="{{ resizeHandleStyle }}" style-hover="background:var(--accbg)"><div style="width:4px;height:42px;border-radius:2px;background:var(--line2);"></div></div>
-    </sc-if>
   </div>
 
   <!-- Phone bottom nav — one tap per region. A real grid row (see appRows) so it never
@@ -1384,69 +1315,6 @@
     </div>
   </sc-if>
 
-  <sc-if value="{{ srcOpen }}" hint-placeholder-val="{{ false }}">
-    <div onclick="{{ closeSource }}" style="position:absolute;inset:0;background:rgba(20,24,30,.34);z-index:20;"></div>
-    <div style="{{ srcView.panelStyle }}">
-      <div style="background:#eceef1;flex:0 0 auto;border-bottom:1px solid var(--line);">
-        <div style="display:flex;align-items:flex-end;gap:0;padding:7px 10px 0;">
-          <div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-bottom:none;border-radius:9px 9px 0 0;padding:7px 11px;max-width:300px;min-width:0;box-shadow:0 -1px 0 rgba(0,0,0,.01);">
-            <span style="{{ srcView.dot }}"></span>
-            <span style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">{{ srcView.label }}</span>
-            <span onclick="{{ closeSource }}" title="Close" style="margin-left:2px;width:17px;height:17px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--ink3);cursor:pointer;font-size:13px;line-height:1;" style-hover="background:#fdecec;color:#dc2626;">✕</span>
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:7px;padding:8px 12px;background:var(--card);">
-          <button onclick="{{ srcView.onReload }}" title="Reload page" style="width:30px;height:30px;flex:0 0 auto;border:none;background:transparent;border-radius:7px;color:var(--ink2);font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)">⟳</button>
-          <div style="flex:1;display:flex;align-items:center;gap:7px;background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:6px 12px;min-width:0;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.4" style="flex:0 0 auto;"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
-            <span style="font-size:12.5px;color:var(--ink);font-weight:500;flex:0 0 auto;">{{ srcView.host }}</span>
-            <span style="font-size:12.5px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ srcView.urlPath }}</span>
-          </div>
-          <a href="{{ srcView.url }}" target="_blank" title="Open the original in a new tab" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;color:var(--ink2);font-size:13px;display:flex;align-items:center;justify-content:center;text-decoration:none;" style-hover="background:#eef0f3;color:var(--ink)">↗</a>
-          <button onclick="{{ srcView.onWide }}" title="{{ srcView.wideTitle }}" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;color:var(--ink2);font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)">{{ srcView.wideIcon }}</button>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;padding:0 12px 9px;background:var(--card);flex-wrap:wrap;">
-          <sc-if value="{{ srcView.canEmbed }}" hint-placeholder-val="{{ true }}">
-            <button onclick="{{ srcView.onPage }}" style="{{ srcView.pageTabStyle }}">Page</button>
-          </sc-if>
-          <button onclick="{{ srcView.onProps }}" style="{{ srcView.propsTabStyle }}">Propositions · {{ srcView.total }}</button>
-          <button onclick="{{ srcView.onToggleLink }}" title="Interconnect concepts — link every known entity in the text, wiki-style. Hover for a preview, click to choose where to go." style="{{ srcView.linkBtnStyle }}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>Link concepts</button>
-          <span style="margin-left:auto;font-size:11.5px;color:var(--ink3);"><b style="color:var(--acc);">{{ srcView.aboutCount }}</b> mention {{ ent.name }}</span>
-        </div>
-      </div>
-
-      <sc-if value="{{ srcView.showPage }}" hint-placeholder-val="{{ true }}">
-        <div style="flex:1;min-height:0;position:relative;background:#fff;">
-          <sc-if value="{{ srcView.loading }}" hint-placeholder-val="{{ true }}">
-            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;color:var(--ink3);">
-              <span style="width:28px;height:28px;border-radius:50%;border:3px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>
-              <span style="font-size:12.5px;">Loading the live page…</span>
-            </div>
-          </sc-if>
-          <sc-if value="{{ srcView.err }}" hint-placeholder-val="{{ false }}">
-            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:34px;text-align:center;color:var(--ink2);">
-              <span style="font-size:13px;line-height:1.5;">Couldn’t embed this page here.<br><a href="{{ srcView.url }}" target="_blank" style="color:var(--acc);font-weight:600;">Open it in a new tab ↗</a> &nbsp;·&nbsp; <span onclick="{{ srcView.onProps }}" style="color:var(--acc);font-weight:600;cursor:pointer;">read it as propositions</span></span>
-            </div>
-          </sc-if>
-          <sc-if value="{{ srcView.hasDoc }}" hint-placeholder-val="{{ false }}">
-            <iframe srcdoc="{{ srcView.doc }}" sandbox="allow-popups" referrerpolicy="no-referrer" style="width:100%;height:100%;border:none;display:block;background:#fff;"></iframe>
-          </sc-if>
-        </div>
-      </sc-if>
-
-      <sc-if value="{{ srcView.showProps }}" hint-placeholder-val="{{ false }}">
-        <div style="flex:1;min-height:0;overflow-y:auto;padding:10px 16px 34px;">
-          <div style="font-size:12px;color:var(--ink2);margin:4px 0 10px;background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:8px 11px;">Parsed into <b>{{ srcView.total }}</b> propositions · <b style="color:var(--acc);">{{ srcView.aboutCount }}</b> mention {{ ent.name }}</div>
-          <sc-for list="{{ srcView.props }}" as="p" hint-placeholder-count="5">
-            <div style="{{ p.rowStyle }}">
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px;"><span style="{{ p.tagStyle }}">{{ p.tag }}</span><sc-if value="{{ p.about }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;color:var(--acc);font-weight:600;">● mentions {{ ent.name }}</span></sc-if></div>
-              <div style="font-size:13.5px;color:var(--ink);line-height:1.5;">{{ p.body }}</div>
-            </div>
-          </sc-for>
-        </div>
-      </sc-if>
-    </div>
-  </sc-if>
 
 </div>
 </x-dc>
@@ -1476,8 +1344,12 @@ class Component extends DCLogic {
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
       // Entity panel width — persisted + clamped. Chat column width (chatW) likewise.
-      panelW:(()=>{try{return Math.max(300,Math.min(820,+localStorage.getItem('eo_panelw')||380));}catch(e){return 380;}})(),
+      panelW:(()=>{try{return Math.max(320,Math.min(640,+localStorage.getItem('eo_panelw')||380));}catch(e){return 380;}})(),
       chatW:(()=>{try{return Math.max(320,Math.min(640,+localStorage.getItem('eo_chatw')||420));}catch(e){return 420;}})(),
+      leftW:(()=>{try{return Math.max(190,Math.min(380,+localStorage.getItem('eo_leftw')||264));}catch(e){return 264;}})(),
+      splitH:(()=>{try{return Math.max(150,Math.min(620,+localStorage.getItem('eo_splith')||320));}catch(e){return 320;}})(),
+      preset:(()=>{try{return localStorage.getItem('eo_preset')||'read';}catch(e){return 'read';}})(),
+      dockView:'entities',
       // Viewport width drives the responsive tier (wide / mid / phone). Updated by a
       // resize listener; pane is the active region when in single-pane phone mode.
       vw:(typeof window!=='undefined'?window.innerWidth:1400), pane:'doc',
@@ -4382,13 +4254,10 @@ class Component extends DCLogic {
   selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
   _scrollPanelTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-panel-scroll');if(a)a.scrollTop=0;});}
   clickEntity(id){if(this._gzMoved)return;const cur=this.state.panelSel;if(cur&&cur!==id)this._panelStack.push(cur);
+    // The profile is a dock inspector now — it pushes over the whole dock (over chat too, in
+    // Research) with a back button, so there's no need to steal width from the library.
     const patch={panelSel:id,rightOpen:true,panelLens:null,gz:{k:1,x:0,y:0}};
-    // Show the entity without losing the chat or the source. On a phone that means jumping
-    // to the entity pane (otherwise nothing would appear). On desktop, when a chat is open,
-    // free up width by collapsing the sources rail so source · chat · entity all fit — the
-    // "double panel" beside the document.
-    if(this.phone())patch.pane='spine';
-    else if(this.activeChatObj())patch.leftOpen=false;
+    if(this.phone())patch.pane='entities';
     this.setState(patch);this._highlightFirst(id);this._scrollPanelTop();}
   closePanelSel(){this._panelStack=[];this.setState({panelSel:null});}
   panelBack(){if(this._panelStack&&this._panelStack.length){const prev=this._panelStack.pop();this.setState({panelSel:prev,panelLens:null,gz:{k:1,x:0,y:0}});if(this._highlightFirst)this._highlightFirst(prev);this._scrollPanelTop();}else this.closePanelSel();}
@@ -4430,35 +4299,45 @@ class Component extends DCLogic {
       const sc=((this._gvb&&this._gvb.w)||300)/w;this.setState(s=>({gz:{...(s.gz||{k:1,x:0,y:0}),x:ox+dx*sc,y:oy+dy*sc}}));};
     const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);this._gzDrag=false;this.forceUpdate();setTimeout(()=>{this._gzMoved=false;},30);};
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);this._gzDrag=true;}
-  // ── side-panel drag-to-resize ───────────────────────────────────────────────
-  // Both handles setState on every move (the layout engine rebuilds the whole grid
-  // string from state) rather than poking grid.style directly — the old shortcut only
-  // knew the 3-column layout and would clobber the chat column once it exists.
-  onResizeDown(e){e.preventDefault();const startX=e.clientX,startW=this.state.panelW||380;let cur=startW;
-    const move=(ev)=>{let w=startW+(startX-ev.clientX);w=Math.max(300,Math.min(820,Math.round(w)));if(w!==cur){cur=w;this.setState({panelW:w});}};
-    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';if(cur!==startW){try{localStorage.setItem('eo_panelw',String(cur));}catch(e){}this.setState({panelW:cur});}};
-    window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);document.body.style.cursor='col-resize';document.body.style.userSelect='none';}
-  onResizeReset(){try{localStorage.setItem('eo_panelw','380');}catch(e){}this.setState({panelW:380});}
-  onChatResizeDown(e){e.preventDefault();const startX=e.clientX,startW=this.state.chatW||420;let cur=startW;
-    const move=(ev)=>{let w=startW+(startX-ev.clientX);w=Math.max(320,Math.min(640,Math.round(w)));if(w!==cur){cur=w;this.setState({chatW:w});}};
-    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';if(cur!==startW){try{localStorage.setItem('eo_chatw',String(cur));}catch(e){}this.setState({chatW:cur});}};
-    window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);document.body.style.cursor='col-resize';document.body.style.userSelect='none';}
-  onChatResizeReset(){try{localStorage.setItem('eo_chatw','420');}catch(e){}this.setState({chatW:420});}
+  // ── gutter drag-to-resize ───────────────────────────────────────────────────
+  // ONE drag system. Every divider is a real flex sibling on the region edge, so the same
+  // handler resizes Library, the Dock, or the Research split. setState on each move lets the
+  // layout engine rebuild from state. The horizontal sign inverts under Swap because the
+  // panel then sits on the opposite side of its gutter.
+  startDrag(which,e){
+    e.preventDefault();
+    const sx=e.clientX, sy=e.clientY;
+    const L=this.state.leftW||264, D=this.state.panelW||380, S=this.state.splitH||320;
+    const sgn=this.state.swapped?-1:1;     // swap flips which side of the gutter the panel is on
+    let curL=L, curD=D, curS=S;
+    const move=(ev)=>{
+      if(which==='left'){ curL=Math.max(190,Math.min(380,Math.round(L+sgn*(ev.clientX-sx)))); this.setState({leftW:curL}); }
+      else if(which==='dock'){ curD=Math.max(320,Math.min(640,Math.round(D-sgn*(ev.clientX-sx)))); this.setState({panelW:curD}); }
+      else if(which==='split'){ curS=Math.max(150,Math.min(620,Math.round(S+(ev.clientY-sy)))); this.setState({splitH:curS}); }
+    };
+    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';
+      try{ if(which==='left')localStorage.setItem('eo_leftw',String(curL)); else if(which==='dock')localStorage.setItem('eo_panelw',String(curD)); else localStorage.setItem('eo_splith',String(curS)); }catch(e){}};
+    window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);
+    document.body.style.cursor=which==='split'?'row-resize':'col-resize';document.body.style.userSelect='none';}
   toggleSwap(){const v=!this.state.swapped;try{localStorage.setItem('eo_swap',v?'1':'0');}catch(e){}this.setState({swapped:v});}
   // ── layout presets ────────────────────────────────────────────────────────
-  // Presets are one-click setters of the open flags + chat. The active preset is DERIVED
-  // by comparing flags (activePreset), never stored — so a manual toggle can't desync it.
+  // A preset sets region visibility + what the dock holds. `preset` is stored (research vs
+  // read can't be derived from open flags — both show library + dock), but it collapses to
+  // 'focus' whenever both rails are hidden, so a manual toggle still reads honestly.
+  // Research also arms the chat to chase topics through fresh sources; Focus/Read disarm it.
   applyPreset(name){
-    // The top-bar preset is also the MODE switch: entering Research arms the chat to chase
-    // topics through fresh sources; leaving it (Focus / Read) disarms it back to grounded chat.
-    if(name==='focus'){    this.setState({leftOpen:false,rightOpen:false,researchMode:false}); this.closeChat(); return; }
-    if(name==='read'){     this.setState({leftOpen:false,rightOpen:true,researchMode:false});  this.closeChat(); return; }
-    if(name==='research'){ this.setState({leftOpen:false,rightOpen:true,researchMode:true}); if(!this.activeChatObj()) this.newChat(this.state.viewUrl||null); return; }
+    try{localStorage.setItem('eo_preset',name);}catch(e){}
+    if(name==='focus'){    this.setState({preset:'focus',leftOpen:false,rightOpen:false,researchMode:false}); return; }
+    if(name==='read'){     this.setState({preset:'read',leftOpen:true,rightOpen:true,researchMode:false}); return; }
+    if(name==='research'){ this.setState({preset:'research',leftOpen:true,rightOpen:true,researchMode:true}); if(!this.activeChatObj()) this.newChat(this.state.viewUrl||null); return; }
   }
-  activePreset(){const L=this.state.leftOpen,R=this.state.rightOpen,C=!!this.activeChatObj();
-    if(!L&&!R&&!C)return 'focus'; if(!C&&R&&!L)return 'read'; if(C&&R&&!L)return 'research'; return null;}
-  // Toolbar chat toggle: open a chat (scoped to the page if one is open) or close it.
-  onToggleChat(){ if(this.activeChatObj()) this.closeChat(); else this.newChat(this.state.viewUrl||null); }
+  activePreset(){ if(!this.state.leftOpen&&!this.state.rightOpen)return 'focus'; return this.state.preset||'read'; }
+  // Toolbar chat toggle: show chat in the dock (creating one if needed), or flip back to entities.
+  onToggleChat(){
+    if(!this.activeChatObj()){ this.newChat(this.state.viewUrl||null); this.setState({rightOpen:true,dockView:'chat'}); if(this.phone())this.setPane('chat'); return; }
+    if(this.state.dockView==='chat'){ this.setState({dockView:'entities'}); }
+    else { this.setState({rightOpen:true,dockView:'chat'}); if(this.phone())this.setPane('chat'); }
+  }
   // ── memory log: every source read into memory, with totals ────────────────────
   memoryLog(){
     if(!this.master)return {rows:[],hasRows:false,statLine:'',empty:true};
@@ -4684,6 +4563,20 @@ class Component extends DCLogic {
   // marks, returned as strings so they can be located in a live DOM for the native view.
   _pageFlags(p){const paras=this._pageParas(p);
     return this.detectBookmarks(p,paras).map(m=>({text:paras[m.paraIndex]||'',why:m.why||''})).filter(f=>f.text.length>=24);}
+  // A standalone chapter marker, recognised by SHAPE not vocabulary: a short line that is
+  // a lone numeral (roman or arabic) or a lead word + numeral ("Chapter 1", "Part II",
+  // "Book Three"). The engine's structure detector ignores bare numerals on purpose (no
+  // lead word), so this presentation-only pass arms the per-chapter drop cap for books like
+  // those — purely visual, it never feeds the record. Returns the clean label or null.
+  _chapMarker(t){
+    const s=this.norm(t||'').trim();
+    if(!s||s.length>40)return null;
+    if(/^[IVXLCDM]{1,7}\.?$/.test(s))return s.replace(/\.$/,'');                 // I, II, XIV
+    if(/^\d{1,3}\.?$/.test(s))return s.replace(/\.$/,'');                        // 1, 12
+    if(/^(chapter|part|book|canto|section|act|scene|volume)\b[\s.:—-]*([0-9]+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)?\.?$/i.test(s))
+      return s.replace(/\s*[.:]\s*$/,'');
+    return null;
+  }
   _bookHtml(p){
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     let paras=this._pageParas(p);
@@ -4700,10 +4593,16 @@ class Component extends DCLogic {
     // start and is re-armed after each heading, so the first paragraph of each chapter
     // gets the ::first-letter drop cap. A prose section anchor IS its chapter's opening
     // paragraph, so it always drop-caps.
-    const bookmarks=[],toc=[],parts=[];let chapStart=true;
+    const bookmarks=[],toc=[],parts=[];let chapStart=true,rc=0;
     paras.forEach((t,i)=>{
       const hit=secAt.get(i),bm=bmAt.get(i);
       const bmAttr=bm?' data-eo-why="'+esc(bm.why||'')+'"':'';
+      // A bare chapter marker the engine didn't flag: render it as a chapter number and arm
+      // the drop cap for the paragraph that follows (so every chapter opens with a drop cap).
+      if(!hit){const cm=this._chapMarker(t);
+        if(cm){const id='eo-ch-r'+(rc++);toc.push({id,label:cm,level:1});
+          if(bm)bookmarks.push({id,why:bm.why,paraIndex:i});
+          parts.push('<h2 class="eo-chap eo-chapnum'+(bm?' eo-bm':'')+'" id="'+id+'"'+bmAttr+'>'+esc(cm)+'</h2>');chapStart=true;return;}}
       if(hit){const id='eo-ch-'+hit.n,lv=hit.s.level||1;toc.push({id,label:this.norm(hit.s.label),level:lv});
         if(bm)bookmarks.push({id,why:bm.why,paraIndex:i});
         // Markdown headings carry their #'s in the source line — show the clean title.
@@ -4734,6 +4633,7 @@ class Component extends DCLogic {
       '.eo-author .eo-life{font-style:normal;font-weight:400;color:var(--eo-fg2);}'+
       '.eo-byline{font:.72em/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--eo-fg2);margin:0 0 34px;border-bottom:1px solid var(--eo-rule);padding-bottom:18px;}'+
       'h2.eo-chap{font:700 2.15em/1.12 var(--eo-ff);letter-spacing:-.02em;color:var(--eo-fg);margin:2.6em 0 .7em;scroll-margin-top:16px;}'+
+      'h2.eo-chapnum{text-align:center;font-size:1.5em;font-weight:700;letter-spacing:.16em;color:var(--eo-fg2);text-transform:uppercase;margin:2.9em 0 1.2em;}'+
       'h2.eo-emergent{font-size:1.4em;font-weight:600;font-style:italic;letter-spacing:0;color:var(--eo-fg2);padding-left:.7em;border-left:2px solid var(--eo-acc);}'+
       'p{margin:0 0 1.15em;}p.eo-first::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:var(--eo-acc);font-family:Georgia,serif;}'+
       // Bookmarks: inert until the reader turns the mode on (html.eo-bm-on), then the
@@ -4828,7 +4728,10 @@ class Component extends DCLogic {
     if(/^https?:\/\//i.test(u)||/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(\/|$|\?)/i.test(u)){this.goWeb(u);}
     else{this.searchBooks(u);}}
   setHover(s){this.setState({hoverSrc:s});}
-  openSource(url,wide,tab){const isText=/^text:/i.test(url);this.setState({openSrc:url,srcTab:tab||(isText?'props':'page'),srcWide:!!wide});this.loadEmbed(url);}
+  // Provenance: open a source as a dock inspector on its Propositions (the receipts are text
+  // and fit dock width). Reading the live page is a separate intent — "Read live" promotes it
+  // to a reading tab via goWeb. (Legacy wide/tab args are ignored.)
+  openSource(url){this.setState({openSrc:url,srcTab:'props',rightOpen:true});if(this.phone())this.setPane('entities');}
   closeSource(){this._embedUrl=null;this.setState({openSrc:null,srcDoc:null,srcLoading:false,srcErr:null});}
   toggleWide(){this.setState(s=>({srcWide:!s.srcWide}));}
   setSrcTab(t){this.setState({srcTab:t});if(t==='page')this.loadEmbed(this.state.openSrc);}
@@ -5351,90 +5254,112 @@ class Component extends DCLogic {
       leftIcon:this.state.leftOpen?'‹':'☰',leftTitle:this.state.leftOpen?'Hide entities panel':'Show entities panel',
       onSwap:()=>this.toggleSwap(),swapTitle:this.state.swapped?'Swap panels back (sources left)':'Swap panels (sources right)',
       swapBtnStyle:'width:30px;height:30px;flex:0 0 auto;border:1px solid '+(this.state.swapped?'var(--accline)':'var(--line2)')+';background:'+(this.state.swapped?'var(--accbg)':'var(--app)')+';border-radius:8px;color:'+(this.state.swapped?'var(--acc)':'var(--ink2)')+';display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;',
-      panelW:this.state.panelW||380,onResizeDown:e=>this.onResizeDown(e),onResizeReset:()=>this.onResizeReset(),
-      onChatResizeDown:e=>this.onChatResizeDown(e),onChatResizeReset:()=>this.onChatResizeReset(),
+      panelW:this.state.panelW||380,
       closeSource:()=>this.closeSource(), linkChoiceOn:false, closeLinkChoice:()=>this.closeLinkChoice() };
-    // ── Layout engine ────────────────────────────────────────────────────────
-    // One place builds the grid track string + every column's `order`. Reading order is
-    // Sources | Reading | Chat | Entities. The chat column appears only when a chat is
-    // active, a page is open, and the viewport is wide enough (else chat overlays/fills).
-    // Phone collapses to a single pane chosen by `pane`; mid/wide place real columns.
+    // ── Layout engine — one flex row: Library · gutter · Reading · gutter · Dock ──
+    // Every region is a flex sibling; every divider is the same draggable gutter sitting on
+    // the real region edge (no position:fixed, no hand-computed right: offsets). Swap flips
+    // Library ↔ Dock by `order` only — resize keeps working because the gutter is a real
+    // sibling and the drag sign inverts. Two breakpoints only: wide = three regions + dock,
+    // narrow/phone = a single pane chosen by the bottom nav (chat never floats anywhere).
     {
-      const isPhone=this.phone(), isNarrow=this.narrow();
-      const L=this.state.leftOpen, R=this.state.rightOpen;
+      const single=this.phone();                 // single-pane + bottom nav
+      const wide=!single;
+      const isNarrow=this.narrow();
+      const L=this.state.leftOpen, D=this.state.rightOpen;
+      const swapOn=this.state.swapped;
+      const preset=this.state.preset||'read';
+      const pane=this.state.pane||'doc';
+      const dockView=this.state.dockView||'entities';
       const chatActive=!!this.activeChatObj();
-      const C=chatActive && !!this.state.viewUrl && !isNarrow;   // chat docked as a column
-      const pw=(this.state.panelW||380), cw=(this.state.chatW||420);
-      base.isPhone=isPhone; base.isNarrow=isNarrow; base.chatColOn=C;
-      if(isPhone){
-        base.gridCols='1fr';
-        base.leftOrder=0; base.mainOrder=0; base.chatOrder=0; base.rightOrder=0;
-      }else{
-        // Reading is the hero: give the centre column a readable floor that the side
-        // panels must yield to, never the other way round. The panels are sized as
-        // minmax(0,Wpx) — they take their preferred width when there's room, but shrink
-        // (and finally scroll) before the prose column collapses. Without this the fixed
-        // panel tracks crushed the reading column to a sliver (one word per line) on a
-        // narrowish window with both panels open. Phone drops to a single pane above.
-        const floor=isNarrow?340:420;
-        const mainCss='minmax('+floor+'px,1fr)';
-        const cols=[];
-        if(L) cols.push('minmax(0,264px)');
-              cols.push(mainCss);
-        if(C) cols.push('minmax(0,'+cw+'px)');
-        if(R) cols.push('minmax(0,'+pw+'px)');
-        base.gridCols=cols.join(' ');
-        // Swap moves the side GROUPS (sources↔entities) to opposite ends; reading+chat
-        // stay central, so swap never strands the page in a corner.
-        const order={left:0,main:1,chat:2,right:3};
-        if(this.state.swapped){ order.left=3; order.right=0; }
-        base.leftOrder=order.left; base.mainOrder=order.main; base.chatOrder=order.chat; base.rightOrder=order.right;
-      }
-      // Resize handles (wide/mid only, not swapped — fixed `right:` anchoring assumes
-      // the panel/chat hug the right edge). Entity handle at panelW; chat handle just
-      // left of it at panelW+chatW.
-      const showPanelH=R && !isPhone && !this.state.swapped;
-      const showChatH=C && !isPhone && !this.state.swapped;
-      base.resizeHandleStyle='position:fixed;top:54px;bottom:0;right:'+(pw-3)+'px;width:9px;z-index:40;cursor:col-resize;display:'+(showPanelH?'flex':'none')+';align-items:center;justify-content:center;';
-      base.chatResizeHandleStyle='position:fixed;top:54px;bottom:0;right:'+((R?pw:0)+cw-3)+'px;width:9px;z-index:40;cursor:col-resize;display:'+(showChatH?'flex':'none')+';align-items:center;justify-content:center;';
-    }
-    // ── Layout presets + chat toggle + phone bottom nav ───────────────────────
-    {
-      const isPhone=this.phone();
+      const leftW=this.state.leftW||264, dockW=this.state.panelW||380, splitH=this.state.splitH||320;
+      const floor=isNarrow?340:420;
+
+      // Inspector = profile / wiki preview / source: it takes over the whole dock body.
+      const srcOpen=!!this.state.openSrc;
+      const profOpen=(!!this.state.panelSel && this.graph && this.graph.entities.has(this.state.panelSel)) || !!this.state.previewWiki;
+      const inspector=srcOpen||profOpen;
+      const research=wide && preset==='research' && !inspector;     // chat (top) + entities (bottom)
+      const readSingle=wide && preset!=='research' && !inspector;   // one pane, segmented
+      base.isPhone=single; base.isNarrow=isNarrow; base.chatColOn=false;
+
+      // ── flex orders: each gutter stays attached to its panel; reading is always centre ──
+      base.leftOrder    = swapOn?5:1;
+      base.leftGutOrder = swapOn?4:2;
+      base.mainOrder    = 3;
+      base.dockGutOrder = swapOn?2:4;
+      base.dockOrder    = swapOn?1:5;
+      base.gridStyle='display:flex;min-height:0;min-width:0;';
+
+      const col='min-height:0;min-width:0;';
+      // visibility per region
+      const libVis  = single ? (pane==='sources') : L;
+      const mainVis = single ? (pane==='doc')      : true;
+      const dockVis = single ? (pane==='entities'||pane==='chat') : D;
+
+      base.leftStyle = 'order:'+base.leftOrder+';background:var(--card);border-right:1px solid var(--line);overflow-y:auto;'+col
+        + (libVis ? (single?'flex:1 1 0;display:block;':'flex:0 0 '+leftW+'px;display:block;') : 'display:none;');
+      base.mainStyle = 'order:3;position:relative;overflow-y:auto;background:var(--app);'+col
+        + (mainVis ? (single?'flex:1 1 0;display:block;':'flex:1 1 0;min-width:'+floor+'px;display:block;') : 'display:none;');
+      base.dockStyle = 'order:'+base.dockOrder+';background:var(--card);border-left:1px solid var(--line);flex-direction:column;'+col
+        + (dockVis ? (single?'flex:1 1 0;display:flex;':'flex:0 0 '+dockW+'px;display:flex;') : 'display:none;');
+
+      const gut='flex:0 0 5px;cursor:col-resize;align-items:center;justify-content:center;background:transparent;';
+      base.leftGutStyle = 'order:'+base.leftGutOrder+';'+gut+((wide&&libVis)?'display:flex;':'display:none;');
+      base.dockGutStyle = 'order:'+base.dockGutOrder+';'+gut+((wide&&dockVis)?'display:flex;':'display:none;');
+      base.dragLeft=(e)=>this.startDrag('left',e);
+      base.dragDock=(e)=>this.startDrag('dock',e);
+      base.dragSplit=(e)=>this.startDrag('split',e);
+
+      // ── which dock panes show ──
+      let showChat,panelVis,splitOn;
+      if(single){ showChat=(pane==='chat')&&!inspector; panelVis=(pane==='entities')&&!srcOpen; splitOn=false; }
+      else if(srcOpen){ showChat=false; panelVis=false; splitOn=false; }
+      else if(profOpen){ showChat=false; panelVis=true;  splitOn=false; }
+      else if(research){ showChat=true;  panelVis=true;  splitOn=true;  }
+      else { showChat=(dockView==='chat'); panelVis=(dockView!=='chat'); splitOn=false; }   // readSingle
+      const colFlex='display:flex;flex-direction:column;min-height:0;min-width:0;';
+      base.dockChatStyle  = !showChat ? 'display:none;' : (splitOn?'flex:0 0 '+splitH+'px;'+colFlex+'background:var(--app);':'flex:1 1 auto;'+colFlex+'background:var(--app);');
+      base.dockPanelStyle = !panelVis ? 'display:none;' : 'flex:1 1 auto;overflow-y:auto;'+col+'background:var(--card);display:block;';
+      base.dockSourceStyle= !srcOpen  ? 'display:none;' : 'flex:1 1 auto;'+colFlex+'background:var(--card);';
+      base.splitGutStyle  = !splitOn  ? 'display:none;' : 'flex:0 0 5px;cursor:row-resize;display:flex;align-items:center;justify-content:center;background:transparent;';
+
+      // ── dock header: segmented Entities/Chat in Read; "Chat + Entities" label in Research ──
+      base.dockSegBarStyle = (wide && !inspector && (readSingle||research)) ? 'flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:9px 11px;border-bottom:1px solid var(--line);background:var(--card);' : 'display:none;';
+      base.segWrapStyle    = readSingle ? 'display:flex;gap:2px;background:#eef0f3;border-radius:8px;padding:3px;' : 'display:none;';
+      base.splitLabelStyle = research ? 'display:inline;font-size:11px;font-weight:600;color:var(--ink3);' : 'display:none;';
+      const seg=on=>'font-size:11.5px;font-weight:600;padding:4px 13px;border-radius:6px;cursor:pointer;'+(on?'background:var(--card);color:var(--acc);box-shadow:0 1px 1px rgba(0,0,0,.05);':'color:var(--ink2);');
+      base.segEntsStyle=seg(readSingle && dockView!=='chat');
+      base.segChatStyle=seg(readSingle && dockView==='chat');
+      base.onSegEnts=()=>this.setState({dockView:'entities'});
+      base.onSegChat=()=>{ if(!this.activeChatObj())this.newChat(this.state.viewUrl||null); this.setState({dockView:'chat'}); };
+
+      // ── preset pills (the active one is derived, never stored, so a manual toggle can't desync) ──
       const ap=this.activePreset();
       const pillSty=on=>'font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer;white-space:nowrap;'+(on?'background:var(--card);color:var(--acc);box-shadow:0 1px 1px rgba(0,0,0,.05);':'color:var(--ink2);');
       base.presets=[
-        {k:'focus',label:'Focus',title:'Reading only — hide chat and panels'},
-        {k:'read',label:'Read',title:'Reading + entities panel'},
-        {k:'research',label:'Research',title:'Reading + chat + entities'},
+        {k:'focus',label:'Focus',title:'Reading only — hide the library and dock'},
+        {k:'read',label:'Read',title:'Library + Reading + Dock (Entities/Chat)'},
+        {k:'research',label:'Research',title:'Library + Reading + Dock split: Chat over Entities'},
       ].map(p=>({label:p.label,title:p.title,onPick:()=>this.applyPreset(p.k),style:pillSty(ap===p.k)}));
-      const chatActive=!!this.activeChatObj();
-      base.chatToggleOn=chatActive;
+      base.chatToggleOn=chatActive&&(showChat);
       base.onToggleChat=()=>this.onToggleChat();
-      base.chatToggleTitle=chatActive?'Hide chat':'Chat about what you’ve read';
-      base.chatToggleStyle='display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'+(chatActive?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);')+'border-radius:7px;padding:5px 10px;flex:0 0 auto;cursor:pointer;';
-      // Phone bottom-nav tabs. Chat tab ensures a chat exists before switching pane.
-      const pane=this.state.pane||'doc';
+      base.chatToggleTitle=chatActive?'Show chat in the dock':'Chat about what you’ve read';
+      base.chatToggleStyle='display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'+(base.chatToggleOn?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);')+'border-radius:7px;padding:5px 10px;flex:0 0 auto;cursor:pointer;';
+
+      // ── phone bottom nav — Library · Read · Entities · Chat (one tap per region) ──
       const navSty=on=>'flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 6px;font-size:10px;font-weight:600;border:none;background:transparent;cursor:pointer;color:'+(on?'var(--acc)':'var(--ink3)')+';';
       base.navTabs=[
-        {k:'sources',label:'Sources',pane:'sources'},
+        {k:'sources',label:'Library',pane:'sources'},
         {k:'doc',label:'Read',pane:'doc'},
+        {k:'entities',label:'Entities',pane:'entities'},
         {k:'chat',label:'Chat',pane:'chat'},
-        {k:'spine',label:'Spine',pane:'spine'},
       ].map(t=>({key:t.k,label:t.label,style:navSty(pane===t.pane),
         onPick:()=>{ if(t.pane==='chat'&&!this.activeChatObj())this.newChat(this.state.viewUrl||null); this.setPane(t.pane); }}));
-      // Phone single-pane visibility. Off phone, regions follow their own open flags;
-      // on phone exactly one region shows, chosen by `pane`. The chat pane is served by
-      // the dedicated chat cell (chatDockedOn), so main only shows the reading pane.
-      base.paneSources=pane==='sources'; base.paneDoc=pane==='doc'; base.paneChat=pane==='chat'; base.paneSpine=pane==='spine';
-      base.notPhone=!isPhone; base.isPhone=isPhone;
-      base.leftShow=isPhone? (pane==='sources') : this.state.leftOpen;
-      base.rightShow=isPhone? (pane==='spine') : this.state.rightOpen;
-      base.mainShow=isPhone? (pane==='doc') : true;
-      // Bottom nav is a real grid row on phone (not a fixed overlay), so it never covers
-      // the chat composer. The app shell adds an `auto` row for it on phone.
-      base.appRows=isPhone?'auto auto 1fr auto':'auto auto 1fr';
-      base.navStyle='display:'+(isPhone?'flex':'none')+';background:var(--card);border-top:1px solid var(--line);';
+      base.paneSources=pane==='sources'; base.paneDoc=pane==='doc'; base.paneChat=pane==='chat'; base.paneEntities=pane==='entities'; base.paneSpine=false;
+      base.notPhone=wide; base.isPhone=single;
+      base.appRows=single?'auto auto 1fr auto':'auto auto 1fr';
+      base.navStyle='display:'+(single?'flex':'none')+';background:var(--card);border-top:1px solid var(--line);';
     }
     base.activity=this.activityVals();
     this.chatVals(base);
@@ -5809,14 +5734,11 @@ class Component extends DCLogic {
       const selMentions=new Set(this.mentionsOf(sel));
       const props=idxs.map(i=>{const b=this.bandOf(i),about=selMentions.has(i),txt=this.norm(this.master.sentences[i]);return {txt,body:this.linkifyNode(txt,url),tag:tagName[b],about,tagStyle:'font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:'+tagColor[b]+';',rowStyle:'padding:10px 0;border-bottom:1px solid #f0f1f3;'+(about?'background:linear-gradient(90deg,#eef3fc 0,transparent 60%);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:6px;':'')};});
       props.sort((a,b)=>(b.about?1:0)-(a.about?1:0));
-      const wide=this.state.srcWide,isText=/^text:/i.test(url),tab=(this.state.srcTab||'page'),canEmbed=!isText,showPage=tab==='page'&&canEmbed,showProps=!showPage;
-      const tabOn='font-size:12px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:5px 12px;cursor:pointer;',tabOff='font-size:12px;font-weight:500;color:var(--ink2);background:var(--card);border:1px solid var(--line2);border-radius:8px;padding:5px 12px;cursor:pointer;';
+      const isText=/^text:/i.test(url),canEmbed=!isText;
+      const backLabel=(this.state.dockView==='chat'&&this.activeChatObj())?'Chat':'Entities';
       let urlPath='';try{const _u=new URL(url);urlPath=(_u.pathname+_u.search)||'/';}catch(e){urlPath=isText?' reader text':'';}
-      base.srcOpen=true;base.srcWide=wide;base.srcView={sid:this.srcId(url),label:p.title,host:this.short(url),urlPath,read:this.fmtTime(p.ts),url,dot:'width:11px;height:11px;border-radius:50%;background:'+c+';display:inline-block;flex:0 0 auto;',total:props.length,aboutCount:props.filter(x=>x.about).length,props,
-        panelStyle:'position:absolute;top:0;right:0;bottom:0;width:'+(wide?'min(1180px,94vw)':'468px')+';max-width:96vw;background:var(--card);border-left:1px solid var(--line);box-shadow:-12px 0 44px rgba(0,0,0,.14);z-index:21;display:flex;flex-direction:column;animation:eoslide .18s ease-out;transition:width .2s ease;',
-        canEmbed,showPage,showProps,loading:!!this.state.srcLoading&&!this.state.srcDoc,err:(this.state.srcErr&&!this.state.srcDoc)?this.state.srcErr:null,hasDoc:!!this.state.srcDoc,doc:this.state.srcDoc||'',
-        pageTabStyle:showPage?tabOn:tabOff,propsTabStyle:showProps?tabOn:tabOff,onPage:()=>this.setSrcTab('page'),onProps:()=>this.setSrcTab('props'),
-        onWide:()=>this.toggleWide(),wideIcon:wide?'⤡':'⤢',wideTitle:wide?'Read in brief':'Expand full width',onReload:()=>this.loadEmbed(url),
+      base.srcOpen=true;base.srcView={sid:this.srcId(url),label:p.title,host:this.short(url),urlPath,read:this.fmtTime(p.ts),url,backLabel,dot:'width:11px;height:11px;border-radius:50%;background:'+c+';display:inline-block;flex:0 0 auto;',total:props.length,aboutCount:props.filter(x=>x.about).length,props,
+        canEmbed,onReadLive:()=>{this.closeSource();this.goWeb(url);},
         linkMode:this.state.linkMode,onToggleLink:()=>this.toggleLinkMode(),
         linkBtnStyle:'display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:8px;padding:5px 11px;cursor:pointer;'+(this.state.linkMode?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--card);border:1px solid var(--line2);')};}
     this.linkChoiceVals(base);
