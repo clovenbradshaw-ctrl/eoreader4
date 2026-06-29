@@ -386,14 +386,14 @@
                 </sc-if>
               </sc-if>
               <sc-if value="{{ reading.hasToc }}" hint-placeholder-val="{{ false }}">
-                <div style="position:relative;flex:0 0 auto;">
+                <div style="flex:0 0 auto;">
                   <button onclick="{{ reading.onToggleTOC }}" title="Table of contents" style="{{ reading.tocStyle }}">☰ Contents</button>
-                  <sc-if value="{{ reading.tocOpen }}" hint-placeholder-val="{{ false }}">
-                    <div style="position:absolute;top:34px;right:0;width:284px;max-height:60vh;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
-                      <sc-for list="{{ reading.toc }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
-                    </div>
-                  </sc-if>
                 </div>
+                <sc-if value="{{ reading.tocOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;top:100%;right:14px;width:min(284px,calc(100% - 28px));max-height:60vh;overflow-y:auto;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
+                    <sc-for list="{{ reading.toc }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
+                  </div>
+                </sc-if>
               </sc-if>
               <button onclick="{{ onTogglePlain }}" title="{{ plainTitle }}" style="{{ plainBtnStyle }}" style-hover="filter:brightness(.97)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>{{ plainLabel }}</button>
               <span style="position:absolute;left:0;bottom:0;height:2px;background:var(--acc);width:{{ reading.progressW }};transition:width .2s;"></span>
