@@ -162,6 +162,30 @@ section h2 {
 .msg.user { background: #1d2030; align-self: flex-end; }
 .msg.assistant { background: #18181b; align-self: flex-start; }
 
+/* Markdown-lite structure inside a finalized answer (renderRich): section headings,
+   emphasis, and lists, kept compact so the answer reads as one flowing piece rather
+   than a stack of widely-spaced blocks. */
+.msg.assistant .body h3 { font-size: 1.02rem; font-weight: 650; margin: .85rem 0 .35rem; color: #e4e4e7; }
+.msg.assistant .body h4 { font-size: .94rem; font-weight: 600; margin: .7rem 0 .3rem; color: #d4d4d8; }
+.msg.assistant .body > :first-child { margin-top: 0; }
+.msg.assistant .body p  { margin: .5rem 0; }
+.msg.assistant .body ul,
+.msg.assistant .body ol { margin: .4rem 0; padding-left: 1.35rem; }
+.msg.assistant .body li { margin: .2rem 0; }
+.msg.assistant .body strong { font-weight: 650; color: #f4f4f5; }
+
+/* Explore leads — the trailing "want me to go deeper" list, made clickable. Each item re-asks
+   as a fresh turn, so it reads as a chip-row of next steps rather than plain bullets. */
+.msg.assistant .body ul.explore-leads { list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: .35rem; }
+.msg.assistant .body ul.explore-leads .explore-lead,
+.msg.assistant .body ol.explore-leads .explore-lead {
+  cursor: pointer; border: 1px solid #3f3f46; border-radius: .55rem;
+  padding: .4rem .6rem; background: #1f1f23; transition: background .12s, border-color .12s;
+}
+.msg.assistant .body .explore-lead:hover,
+.msg.assistant .body .explore-lead:focus-visible { background: #27272c; border-color: #60a5fa; outline: none; }
+.msg.assistant .body .explore-lead::after { content: " →"; color: #60a5fa; }
+
 /* Per-message actions — copy · reply/quote · fork. Quiet until the message is
    hovered or focused, so the chat stays spare; always shown on touch. */
 .msg-actions {
@@ -463,6 +487,26 @@ a.prop-source:hover { text-decoration: underline; }
 }
 .msg.assistant .wr-source-label { flex: 1 1 auto; min-width: 0; }
 a.wr-source:hover .wr-source-label { text-decoration: underline; }
+
+/* Rich-media source card (video/image) — the thumbnail+caption card the screenshot shows above
+   its text sources. Scaffold: renders only when a source carries `media` (none do yet). */
+.msg.assistant .wr-media {
+  display: flex; align-items: center; gap: .6rem; margin-top: .4rem; padding: .4rem;
+  border: 1px solid #3f3f46; border-radius: .55rem; background: #1f1f23;
+  text-decoration: none; color: #e4e4e7;
+}
+.msg.assistant .wr-media:hover { border-color: #60a5fa; }
+.msg.assistant .wr-media-thumb { position: relative; flex: 0 0 auto; width: 88px; height: 56px; border-radius: .35rem; overflow: hidden; background: #000; }
+.msg.assistant .wr-media-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.msg.assistant .wr-media-play {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7);
+}
+.msg.assistant .wr-media-dur {
+  position: absolute; right: .2rem; bottom: .2rem; font-size: .6rem; color: #fff;
+  background: rgba(0,0,0,.7); border-radius: .2rem; padding: 0 .25rem;
+}
+.msg.assistant .wr-media-cap { flex: 1 1 auto; min-width: 0; font-size: .76rem; }
 
 /* Per-source verdict tag (verify turns) — each source carries its own ✓ backs / – no match
    badge, so different sources read as different evidence, not one merged corpus. */

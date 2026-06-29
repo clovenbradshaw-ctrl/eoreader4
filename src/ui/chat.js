@@ -270,7 +270,13 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   el.classList.remove('streaming');     // the live stream is replaced by the cited answer
   const body  = el.querySelector('.body');
   const trail = el.querySelector('.trail');
-  if (body) body.innerHTML = linkifyCitations(text || '', opts.citationSources);
+  if (body) {
+    body.innerHTML = renderRich(text || '', opts.citationSources);
+    // EXPLORE CHIPS: when the answer closes with a "want me to go deeper" list, make those
+    // leads clickable — each re-asks as a fresh turn. Defensive: a no-op when the cue/list is
+    // absent, so a plain answer is untouched. (The shape cue produces this list on broad turns.)
+    if (typeof opts.onExplore === 'function') wireExploreChips(body, opts.onExplore);
+  }
 
   // CHATBOT SURFACE (default): the answer is the whole message. The coverage
   // verdict, doc-source chips, veto pills, the route/timing meta line, and the
@@ -537,6 +543,47 @@ export const setThinkingNote = (el, msg) => {
 
 // host → just the domain, for a compact, honest source chip ("en.wikipedia.org").
 const domainOf = (url) => { try { return new URL(url).host.replace(/^www\./, ''); } catch { return ''; } };
+
+// A rich-media source card (video/image), the kind the screenshot shows above its text sources.
+// SCAFFOLD — DARK by default: nothing in the current retrieval path emits `s.media`, so this never
+// renders today. It lights up the moment a media-returning source attaches `media:{type,
+// thumbnail, embedUrl}` to a source, with no further UI change. We link OUT to the page rather than
+// embedding an iframe — the strict, safe choice (no third-party frame, no autoplay). Returns the
+// card element, or null when the source carries no usable media.
+const renderSourceMedia = (s) => {
+  const m = s && s.media;
+  if (!m || (!m.thumbnail && !m.embedUrl)) return null;
+  const href = m.embedUrl || s.url;
+  const card = document.createElement(href ? 'a' : 'div');
+  card.className = 'wr-media';
+  if (href) { card.href = href; card.target = '_blank'; card.rel = 'noopener'; card.title = href; }
+  if (m.type) card.dataset.mediaType = m.type;
+  if (m.thumbnail) {
+    const thumb = document.createElement('span');
+    thumb.className = 'wr-media-thumb';
+    const img = document.createElement('img');
+    img.src = m.thumbnail; img.alt = s.title || 'media'; img.loading = 'lazy';
+    thumb.appendChild(img);
+    if (m.type === 'video') {
+      const play = document.createElement('span');
+      play.className = 'wr-media-play';
+      play.textContent = '▶';
+      thumb.appendChild(play);
+    }
+    if (m.duration) {
+      const dur = document.createElement('span');
+      dur.className = 'wr-media-dur';
+      dur.textContent = m.duration;
+      thumb.appendChild(dur);
+    }
+    card.appendChild(thumb);
+  }
+  const cap = document.createElement('span');
+  cap.className = 'wr-media-cap';
+  cap.textContent = s.title || domainOf(href) || 'media';
+  card.appendChild(cap);
+  return card;
+};
 // ISO → a short local date/time, so each source carries WHEN it was fetched (provenance).
 const whenOf = (iso) => { if (!iso) return ''; try { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(); } catch { return ''; } };
 
@@ -653,6 +700,10 @@ export const renderWebResult = (el, fetched) => {
   const sources = fetched.augmented?.sources || fetched.sources || [];
   for (const s of sources) {
     if (!s) continue;
+    // A media source (video/image) renders as a card; everything else as a text source row.
+    // Dark today — no retrieval path emits `s.media` yet (renderSourceMedia).
+    const media = renderSourceMedia(s);
+    if (media) { box.appendChild(media); continue; }
     const item = document.createElement(s.url ? 'a' : 'div');
     item.className = 'wr-source';
     if (s.url) { item.href = s.url; item.target = '_blank'; item.rel = 'noopener'; item.title = s.url; }
@@ -911,9 +962,9 @@ export const renderTransparency = (el, opts = {}) => {
 // Per-claim attribution: each [sN] becomes a chip that names the source it cites. When a source
 // map is supplied (idx → {label, url}), a web citation links to the page and shows its title on
 // hover; a document citation still scrolls to the span. Falls back to the bare [sN] chip.
-const linkifyCitations = (text, citationSources = null) => {
-  const escaped = escapeHtml(text);
-  return escaped.replace(/\[s(\d+)\]/g, (_, n) => {
+// Operates on ALREADY-ESCAPED text — the bracket form survives escaping, so callers escape once.
+const linkifyEscaped = (escaped, citationSources = null) =>
+  escaped.replace(/\[s(\d+)\]/g, (_, n) => {
     const src = citationSources && citationSources[n];
     if (src && src.url) {
       const title = escapeHtml(`${src.label} — ${src.url}`);
@@ -922,6 +973,62 @@ const linkifyCitations = (text, citationSources = null) => {
     const title = src?.label ? ` title="${escapeHtml(src.label)}"` : '';
     return `<span class="cite" data-idx="${n}"${title}>[s${n}]</span>`;
   });
+
+const linkifyCitations = (text, citationSources = null) =>
+  linkifyEscaped(escapeHtml(text), citationSources);
+
+// Inline span markup on a RAW segment: escape first (no markup injection), then **bold** and
+// *italic* (bold before italic so `**x**` is not eaten by the single-star rule), then the
+// citation chips. The marker characters (* # - [ ]) are not HTML-special, so they survive the
+// escape and the regexes see them intact.
+const formatInline = (raw, citationSources = null) => {
+  let s = escapeHtml(raw);
+  s = s.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
+  return linkifyEscaped(s, citationSources);
+};
+
+// renderRich — the chat answer body as markdown-lite HTML. The answer used to render as a single
+// escaped+linkified blob, so a multi-section answer's `## headings`, `**bold**`, and `- lists`
+// showed as literal punctuation. This honours that light structure (the shape the arc and the
+// research reports emit) while keeping the escape-first, no-raw-HTML guarantee: every text node
+// is escaped before any tag is introduced. Blocks split on blank lines; within a block, a lone
+// `#…` line is a heading, an all-`-`/`*` (or all-`1.`) block is a list, everything else is a
+// paragraph with hard newlines kept as <br>.
+const renderRich = (text, citationSources = null) => {
+  const blocks = String(text || '').split(/\n{2,}/);
+  const html = [];
+  for (const block of blocks) {
+    const b = block.replace(/\s+$/, '');
+    if (!b.trim()) continue;
+    const lines = b.split('\n');
+
+    // Heading: a single line opening with 1–4 `#`. `#`/`##` → h3, deeper → h4 (the chat has no h1/h2).
+    const h = lines.length === 1 && b.match(/^\s*(#{1,4})\s+(.+?)\s*$/);
+    if (h) {
+      const tag = h[1].length <= 2 ? 'h3' : 'h4';
+      html.push(`<${tag}>${formatInline(h[2], citationSources)}</${tag}>`);
+      continue;
+    }
+
+    // Unordered list: every line is a `- ` / `* ` item.
+    if (lines.every(l => /^\s*[-*]\s+/.test(l))) {
+      const items = lines.map(l => `<li>${formatInline(l.replace(/^\s*[-*]\s+/, ''), citationSources)}</li>`);
+      html.push(`<ul>${items.join('')}</ul>`);
+      continue;
+    }
+
+    // Ordered list: every line is a `1.` / `2.` item.
+    if (lines.every(l => /^\s*\d+\.\s+/.test(l))) {
+      const items = lines.map(l => `<li>${formatInline(l.replace(/^\s*\d+\.\s+/, ''), citationSources)}</li>`);
+      html.push(`<ol>${items.join('')}</ol>`);
+      continue;
+    }
+
+    // Paragraph: hard line wraps within the block become <br>.
+    html.push(`<p>${lines.map(l => formatInline(l, citationSources)).join('<br>')}</p>`);
+  }
+  return html.join('');
 };
 
 const escapeHtml = (s) =>
@@ -929,3 +1036,34 @@ const escapeHtml = (s) =>
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
+
+// Exported for the renderer's regression test (rich-render.test.js). Pure string → HTML string,
+// no DOM — the chat body's markdown-lite render in one inspectable function.
+export { renderRich, formatInline };
+
+// The cue line a "go deeper" list sits under — the closing offer the shape cue asks the talker
+// to write ("Want me to go deeper on:"). Matched loosely so the talker's own wording still trips it.
+const EXPLORE_CUE = /\b(go deeper|dig deeper|dive deeper|explore|want to know more|learn more)\b/i;
+
+// wireExploreChips — turn the trailing "want me to go deeper" list into clickable leads. The
+// answer's LAST list is the candidate; it qualifies only if the element just before it reads as
+// the go-deeper offer. Each item then re-asks as a fresh turn via onExplore. Purely additive: if
+// there is no such list (a plain or pointed answer), nothing changes.
+const wireExploreChips = (body, onExplore) => {
+  const lists = body.querySelectorAll(':scope > ul, :scope > ol');
+  const list = lists[lists.length - 1];
+  if (!list) return;
+  const cue = list.previousElementSibling;
+  if (!cue || !EXPLORE_CUE.test(cue.textContent || '')) return;
+  list.classList.add('explore-leads');
+  for (const li of list.querySelectorAll(':scope > li')) {
+    const q = (li.textContent || '').trim();
+    if (!q) continue;
+    li.setAttribute('role', 'button');
+    li.setAttribute('tabindex', '0');
+    li.classList.add('explore-lead');
+    const ask = () => onExplore(q);
+    li.addEventListener('click', ask);
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ask(); } });
+  }
+};
