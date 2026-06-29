@@ -311,6 +311,13 @@ export const deepResearchReport = (walk, { query = '', turn = null } = {}) => {
     sources,
     byFacet,
     tree: hops,
+    // The proposition audit (factcheck/propositions.js): every office the overview
+    // asserts, checked against the gathered sources at their cursor. `corrections`
+    // names any role the sources have succeeded — the guard against an answer
+    // calling a current mayor a council member off a year-old page.
+    audit: turn?.propositions
+      ? { verdicts: turn.propositions.verdicts || [], corrections: turn.propositions.corrections || [], counts: turn.propositions.counts || null }
+      : null,
     stats: {
       facets: facets.length,
       hops: hops.length,

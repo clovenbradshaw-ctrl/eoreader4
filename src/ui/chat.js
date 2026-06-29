@@ -364,6 +364,17 @@ const finalizeVerbose = (el, text, sources, opts, body, trail) => {
       flagBox.appendChild(pill);
     }
     el.appendChild(flagBox);
+    // The proposition channel's correction is the load-bearing message (a role the
+    // sources have succeeded — "the sources give O'Connell's current office as mayor
+    // [s3]"), not just a pill id. Surface it inline so the reader sees what the answer
+    // got stale, with its citation — flag-and-tell, beside the untouched answer.
+    const corrections = opts.flags.filter(f => f.id === 'proposition-superseded' && f.message).map(f => f.message);
+    if (corrections.length) {
+      const note = document.createElement('div');
+      note.className = 'flag-correction';
+      note.textContent = `Note: ${corrections.join('; ')}.`;
+      el.appendChild(note);
+    }
   }
 
   const parts = [];

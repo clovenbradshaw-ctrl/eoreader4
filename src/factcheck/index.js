@@ -22,3 +22,11 @@ export {
 export {
   NEARNESS_FLOOR, proposeCoref, geometricSecond, corroborateCoref,
 } from './coref.js';
+// The proposition channel — the DEF/claim-grain veto (the P2 sibling of the edge
+// veto). Every proposition the answer asserts is evaluated against the sources'
+// own DEF propositions read at the cursor where each sits; a stale exclusive
+// office (O'Connell "is a council member" against "Mayor O'Connell") is caught as
+// superseded/stale and surfaced, never refused.
+export {
+  auditPropositions, documentOffices, readOffice, personKey,
+} from './propositions.js';

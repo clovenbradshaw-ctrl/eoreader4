@@ -194,6 +194,11 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
     const flags = (ctx.vetoes || []).map(v => ({
       id: v.id, message: v.message, refuses: v.refuses,
     }));
+    // The proposition channel's corrections (a stale/superseded office the sources
+    // succeed) ride out as flag-and-tell flags beside the vetoes — surfaced, never
+    // refusing, the answer untouched. This is the DEF half of the fact-check the
+    // edges-only veto cannot see.
+    for (const f of (ctx.propositions?.fired || [])) flags.push({ id: f.id, message: f.message, refuses: false });
     // A post-answer annotation stage failed: the answer rides, with an honest flag
     // that the grounding check behind it could not complete.
     if (degraded.length) flags.push({
@@ -245,6 +250,10 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
       // they let the UI show the source (or the inaccuracy) behind everything the answer says.
       bound: ctx.bound || [],
       verdicts: ctx.factcheck?.edgeVerdicts || [],
+      // The DEF/claim-grain channel's per-proposition record (every office the answer
+      // asserts, graded corroborated / superseded / stale / unsupported against the
+      // sources at their cursor) — the transparency surface for the proposition veto.
+      propositions: ctx.propositions || null,
       route: ctx.route || 'grounded', grounding, turn,
       // The user stopped this turn mid-decode (the Stop button): the answer is the partial
       // text, and the UI marks it as stopped rather than committing it to the session fold.
