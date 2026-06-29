@@ -50,6 +50,10 @@ export const webRecord = (payload = {}) => {
     excerpt: (payload.excerpt || String(payload.text || '').replace(/\s+/g, ' ').trim().slice(0, 240)) || null,
     retrieval_query: payload.retrieval_query || null, engine: payload.engine || null,
     fetched_at: payload.fetched_at || null,    // stamped by the fetcher; never minted here
+    // When the page WAS PUBLISHED — the date a claim like "is the mayor" is current AS OF.
+    // Distinct from fetched_at (when WE read it); supplied by the fetcher/metadata when known,
+    // so the grounding can re-date a present-tense claim against now rather than assume it holds.
+    published: payload.published || payload.date || payload.published_at || null,
     content_hash, status: 'active',
   });
 };
@@ -127,7 +131,7 @@ export const admitWebSource = (payload = {}) => {
   doc.sourceKind = 'web-source';
   doc.web = {
     url: record.url, final_url: record.final_url, title: record.title,
-    fetched_at: record.fetched_at, content_hash: record.content_hash,
+    fetched_at: record.fetched_at, published: record.published, content_hash: record.content_hash,
     retrieval_query: record.retrieval_query, engine: record.engine,
   };
   doc._webRecord = record;

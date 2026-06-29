@@ -25,7 +25,7 @@ import { bindCitations, renderBound } from '../ground/index.js';
 import { runVetoes, isUnbound, classifyProvenance } from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
 import { projectGraph, VERDICTS } from '../core/index.js';
-import { factCheck }        from '../factcheck/index.js';
+import { factCheck, auditPropositions } from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
 import { buildConceptTokenMap } from '../write/concept-tokens.js';
@@ -683,7 +683,18 @@ export const stages = {
         else bound = ctx.bound;
       }
     }
-    return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, sources, bound, answer };
+    // The PROPOSITION channel (the DEF/claim-grain sibling of the edge veto above).
+    // claimedEdges is edges-only, so a single-argument predication — "O'Connell is a
+    // council member" — produces no edge and is never graded; a stale exclusive office
+    // survives even when the sources say "Mayor O'Connell". This evaluates every DEF
+    // proposition the answer asserts against the sources' own DEF props read at the
+    // cursor where each sits, and flags a superseded/stale office. Flag-and-tell, never
+    // refusing: its corrections ride out as flags, the answer is never gagged. Pure and
+    // additive — it touches neither the edge verdicts the veto battery reads nor `refuse`.
+    let propositions = null;
+    try { propositions = auditPropositions({ prose: ctx.rawOutput, doc: ctx.doc, cursor, now: ctx.now || null }); }
+    catch { propositions = null; }
+    return { ...ctx, edgeVerdicts: fc.edgeVerdicts, factcheck: fc, propositions, sources, bound, answer };
   },
 
   // The regenerate pass — gate-then-rewrite (§5). Two triggers re-prompt the talker once
