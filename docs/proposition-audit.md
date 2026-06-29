@@ -62,6 +62,24 @@ is consulted from the **attribute-conflict oracle** (`core/relation-types.js`
 same discipline `evaluateSameAs` follows. Co-occurring titles (chair, director,
 founder) are recognised but **never** supersede.
 
+## A proposition is not a fact — it is scoped, dated, sourced
+
+"Freddie is a council member" cannot be asserted because it appears once: he is not
+that forever, and he was never that in Salt Lake City. So the unit is not
+`Freddie → council member` but **`Freddie [referent] · council member · in Nashville ·
+current · per N sources`**, and a claim missing or mismatched on any axis is not stated
+as a bare fact. The channel grounds an office claim on four things:
+
+| Axis | How |
+|---|---|
+| **Identity** | The subject is resolved to its **referent** — `parseProps` reads each clause's subject through the document field (the same binding the edge veto uses), not a surface string. The surname `personKey` is only the cross-source bridge when separate admissions leave a referent unmerged. |
+| **Time** | The role is read **at the cursor where it sits**, with its tense — "as a council member he *was* a critic" is former, distinct from "he *is* the mayor". A stale role asserted as current is `superseded` / `stale`. |
+| **Space** | The role carries its **jurisdiction** (`readPlace`: "mayor *of Nashville*", "council member *in Salt Lake City*"). A role placed where the sources never place it is `place-mismatch`; a Salt Lake City mention can never corroborate a Nashville seat. Generic admin words (Metro, City) are not jurisdictions and cannot false-mismatch. |
+| **Corroboration** | A witness is a **(source · text)** pair. Two witnesses are the same when they share a source *or* say the same thing verbatim — syndicated wire copy on three sites is one witness, not three (`meaningfulSupport`, Jaccard ≥ .7). A current role with **one** meaningful witness is `single-source` — surfaced as a hedge and the trigger to go seek a second, never laundered into a flat fact; **≥2** meaningfully-different sources is `corroborated`. |
+
+The `single-source` set (`audit.weak`) is precisely the queue for an active evidence-seeking
+loop: the propositions that have a footing but not yet a *corroborated* one.
+
 ## Flag-and-tell, never refusal
 
 Like the edge-unsupported flag, this only ever **surfaces** — it never gates, rewrites,

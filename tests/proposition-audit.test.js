@@ -8,7 +8,7 @@ import { runTurn } from '../src/turn/pipeline.js';
 import { createAuditLog } from '../src/audit/index.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import {
-  auditPropositions, documentOffices, readOffice, personKey,
+  auditPropositions, documentOffices, readOffice, personKey, meaningfulSupport,
 } from '../src/factcheck/index.js';
 
 // The proposition channel (docs/proposition-audit.md): the DEF/claim-grain sibling
@@ -95,13 +95,75 @@ test('THE OCONNELL CATCH: a stale exclusive office is superseded by the current 
   assert.match(audit.corrections[0], /mayor/);
 });
 
-test('a correct answer corroborates — naming the current office never fires', () => {
+test('a correct answer naming the current office never fires (but a single source is weak)', () => {
   const doc = scope(['OConnell is the mayor of Nashville.']);
   const audit = auditPropositions({ prose: 'OConnell is the mayor.', doc });
   assert.equal(audit.counts.superseded, 0);
   assert.equal(audit.counts.stale, 0);
-  assert.equal(audit.counts.corroborated, 1);
-  assert.equal(audit.fired.length, 0);
+  assert.equal(audit.counts.placeMismatch, 0);
+  assert.equal(audit.fired.length, 0, 'a correct office raises no correction flag');
+  // One mention is not a flat fact — it is single-source, the trigger to seek a second.
+  assert.equal(audit.counts.singleSource, 1);
+  assert.equal(audit.weak[0].support, 1);
+});
+
+// ── Corroboration: ≥2 meaningfully-different sources, not verbatim ─────────────
+
+test('two meaningfully-different sources corroborate; one mention stays single-source', () => {
+  const two = scope(['OConnell is the mayor of Nashville.', 'Mayor OConnell signed the transit budget.']);
+  const a = auditPropositions({ prose: 'OConnell is the mayor.', doc: two });
+  assert.equal(a.counts.corroborated, 1, 'two independent witnesses → corroborated');
+  assert.equal(a.counts.singleSource, 0);
+  assert.equal(a.weak.length, 0);
+});
+
+test('verbatim republication across sources is ONE witness, not two (syndication collapse)', () => {
+  const syndicated = scope(['OConnell is the mayor of Nashville.', 'OConnell is the mayor of Nashville.']);
+  const a = auditPropositions({ prose: 'OConnell is the mayor.', doc: syndicated });
+  assert.equal(a.counts.corroborated, 0, 'the same sentence on two sites is not two supports');
+  assert.equal(a.counts.singleSource, 1);
+});
+
+test('repeated mention within ONE source is one witness', () => {
+  const oneSrc = scope(['OConnell is the mayor. Mayor OConnell signed the budget.']);
+  const a = auditPropositions({ prose: 'OConnell is the mayor.', doc: oneSrc });
+  assert.equal(a.counts.singleSource, 1, 'same source, twice → still one witness');
+  assert.equal(a.weak[0].support, 1);
+});
+
+test('meaningfulSupport collapses same-source and near-duplicate witnesses', () => {
+  const s = (source, text) => ({ source, text });
+  assert.equal(meaningfulSupport([s('a', 'OConnell is the mayor of Nashville')]), 1);
+  assert.equal(meaningfulSupport([s('a', 'OConnell is the mayor of Nashville'), s('a', 'something else entirely about transit')]), 1, 'same source → one');
+  assert.equal(meaningfulSupport([s('a', 'OConnell is the mayor of Nashville'), s('b', 'OConnell is the mayor of Nashville')]), 1, 'verbatim across sources → one');
+  assert.equal(meaningfulSupport([s('a', 'OConnell is the mayor of Nashville'), s('b', 'The council confirmed OConnell took office as mayor last spring')]), 2, 'distinct source + distinct wording → two');
+});
+
+// ── Space: a role is bound to its jurisdiction ────────────────────────────────
+
+test('SPACE: a role placed in the wrong jurisdiction is caught (never in Salt Lake City)', () => {
+  const doc = scope(['OConnell is a council member of Nashville.']);
+  const a = auditPropositions({ prose: 'OConnell is a council member in Salt Lake City.', doc });
+  assert.equal(a.counts.placeMismatch, 1);
+  assert.match(a.corrections[0], /Nashville/);
+  assert.match(a.corrections[0], /Salt Lake City/);
+  assert.equal(a.fired.length, 1);
+  assert.equal(a.fired[0].refuses, false);
+});
+
+test('a matching jurisdiction does not fire a place mismatch', () => {
+  const doc = scope(['OConnell is a council member of Nashville.']);
+  const a = auditPropositions({ prose: 'OConnell is a council member in Nashville.', doc });
+  assert.equal(a.counts.placeMismatch, 0);
+});
+
+test('a generic qualifier (Metro/City) is not a jurisdiction and cannot false-mismatch', () => {
+  const doc = scope(['OConnell is the mayor of Nashville.']);
+  // "a Metro Council member" carries no proper place, so it cannot mismatch "Nashville"
+  // — it is handled by the superseded path (mayor), not a spurious place flag.
+  const a = auditPropositions({ prose: 'OConnell is a Metro Council member.', doc });
+  assert.equal(a.counts.placeMismatch, 0);
+  assert.equal(a.counts.superseded, 1);
 });
 
 test('an HONEST former claim is not flagged as superseded', () => {
