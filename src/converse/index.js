@@ -33,3 +33,9 @@ export { referenceTarget, conversationCast, localeOf } from './reference.js';
 // discussion, carried across turns so a thin follow-up stays on the thing being discussed
 // instead of wandering to the loudest figure. (cast.js, docs/source-activation.md)
 export { createCast } from './cast.js';
+
+// Dialogue state — the conversation read as a reading-line addressed in the nine operators
+// (docs/operators.md). `resolveQuery` is the EO-native retrieval resolver: it anchors a
+// stalled (NUL) or pronoun-bearing turn on the OPEN INTENT and the WARM REFERENT, where
+// resolveRetrievalQuery only carried a vocabulary bag and dropped the dangling subject.
+export { classifyTurn, dialogueState, resolveQuery, groundedThread, isReferentialStall, OP } from './dialogue-state.js';

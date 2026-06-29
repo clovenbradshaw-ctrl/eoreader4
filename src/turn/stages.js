@@ -15,7 +15,7 @@ import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerrainAt } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices, serializeEOT } from '../perceiver/index.js';
-import { foldConversation, resolveRetrievalQuery, referenceTarget } from '../converse/index.js';
+import { foldConversation, resolveQuery, groundedThread, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS, isMetaConversational } from './intent.js';
 import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
 import { answerFormError } from './shape.js';
@@ -183,17 +183,18 @@ export const stages = {
     // back to the hash organ. ctx.embedder (hash) is unchanged for every other stage —
     // only retrieval's semantic vectors are upgraded (turn/pipeline threads the organ).
     const re = pickRetrievalEmbedder(ctx);
-    // Resolve a follow-up against the conversation BEFORE retrieval (§6): a thin,
-    // demonstrative, or self-referential question ("now?", "prove it", "huh?", "what you
-    // are saying about her") retrieves on the topic the user is pursuing, not its literal
-    // words. A self-contained question passes through untouched. Only the user's prior
-    // turns feed this — never the talker's answers (converse/focus.js).
-    //   This runs on EVERY path, the reference-by-reading flag notwithstanding (the audit
-    //   ran with RULES_REV on and "prove it" retrieved the literal token — the broom
-    //   sentence — because the regex query-fold was gated off; §6 brings it back). The
-    //   read path still holds the SUBJECT (the fold's cast); this is the complementary
-    //   NOMINATION channel that finds the EVIDENCE spans the demonstrative points at.
-    const query = resolveRetrievalQuery(ctx.question, ctx.history);
+    // Resolve a follow-up against the conversation BEFORE retrieval (§6), reading the turn
+    // as an operator over the dialogue line (docs/operators.md, converse/dialogue-state.js).
+    // A self-contained EVA passes through untouched; a NUL hold ("now?", "prove it", "huh?",
+    // "find what I'm talking about") resolves to the OPEN INTENT it points at and the WARM
+    // REFERENT, rather than retrieving on its own deictic words — the failure where "find
+    // what I'm talking about" matched "Find a Song by Lyrics". A pronoun-led EVA ("how has
+    // HE…") keeps its topic and binds the dangling subject to the cast. Only the user's
+    // turns and the figures the conversation named feed this — never the talker's answers.
+    //   This runs on EVERY path, the reference-by-reading flag notwithstanding. The read
+    //   path still holds the SUBJECT (the fold's cast); this is the complementary NOMINATION
+    //   channel that finds the EVIDENCE spans the stall points at.
+    const query = resolveQuery(ctx.question, ctx.history);
     // A whole-document task (summary / list / explain) whose question makes no lexical
     // contact with the page is a META-query — "summarize", "what is this about" — and
     // retrieving on it fuzzy-matches the meta-word onto arbitrary fragments (the audit's
@@ -1106,13 +1107,21 @@ const groundedConversation = (ctx) => {
   const olderUser = String(ctx.conversation?.notes || '')
     .split('\n').filter(l => /^#\d+\s*You:/.test(l)).map(l => l.replace(/^#\d+\s*You:\s*/, '').trim());
   const thread = [...olderUser, ...recentUser].filter(Boolean);
-  if (!thread.length) return {};
+  // The SETTLED ground — the facts already given, read off the dialogue line (the
+  // Interpretation column's firm DEFs, converse/dialogue-state.js). Named to the talker as
+  // already-held so it builds on them instead of restating "the mayor is X" every turn.
+  // Only the settled QUESTION rides — never the answer (the firewall stays closed).
+  const settled = groundedThread(ctx.history || [], ctx.question).settled;
+  if (!thread.length && !settled.length) return {};
+  const out = {};
   // Carry only the most recent few. The full thread, fed verbatim as "You asked: …"
   // lines, reads to a small talker as a checklist of open tasks — the audit's t5
   // answered every prior question in a bulleted list and overran its token budget.
   // The recent turns are what continuity ("now?", "prove it") actually needs; the
   // tail only widens the leak surface.
-  return { notes: thread.slice(-3).map(q => `You asked: ${q}`).join('\n') };
+  if (thread.length) out.notes = thread.slice(-3).map(q => `You asked: ${q}`).join('\n');
+  if (settled.length) out.settled = settled;
+  return out;
 };
 
 // The conversation a META-CONVERSATIONAL grounded turn carries: the FULL thread — BOTH the
