@@ -230,9 +230,15 @@ export const groundedThread = (history = [], question = '', { maxSettled = 4, ma
 // EVA passes through (never pollute a strong query). A turn with an open CON (pronoun, or a
 // stall) is anchored on the open intent's topic and the warm referent — so "find what I'm
 // talking about" retrieves the open surveillance question and the figure it is about, and
-// "how has he…" carries the warm subject instead of dropping it. Only the user's own words
-// and the figures the conversation named feed this — never the talker's prior answers
-// (conversationCast withholds them), so no poisoning channel opens.
+// "how has he…" carries the warm subject instead of dropping it.
+//   The witness discipline (reference.js §7): the user's own words and the OPEN-INTENT topic
+// (user-side only) always feed this; the warm referent is read off the cast, which is warmed
+// by both roles — so a figure the talker NAMED in a BOUND reply can ride as a retrieval
+// anchor (a referent, not a claim — it is grounded in the document, and it sharpens the
+// search). What never rides is the answer's propositional CONTENT, and an UNBOUND reply
+// contributes nothing to the cast at all (it is filtered before the parse). So the only
+// talker influence is which grounded figure is in focus — never a claim the model could
+// anchor a wrong fact on. That is the poisoning channel, and it stays closed.
 export const resolveQuery = (question, history = []) => {
   const q = String(question || '');
   const st = dialogueState(history, question);
