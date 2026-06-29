@@ -42,6 +42,21 @@ const citeOriginsOf = (doc, sources) => {
   return out;
 };
 
+// Per-CLAIM source TEXT: each cited sentence index → the verbatim text it was bound to, so the
+// transparency view can show the actual span behind every [sN], not just a pointer to it. Read
+// off the spans the binder saw (idx → text); a cited index always sits among them (binding cites
+// from the spans). Whitespace-collapsed and capped so one span cannot bloat the turn record.
+export const citeSpansOf = (sources, spans, { cap = 240 } = {}) => {
+  const byIdx = new Map((spans || []).filter(s => Number.isFinite(s?.idx)).map(s => [s.idx, s]));
+  const out = {};
+  for (const i of (sources || [])) {
+    const s = byIdx.get(i);
+    const text = String(s?.text || '').replace(/\s+/g, ' ').trim();
+    if (text) out[i] = text.length > cap ? text.slice(0, cap).trimEnd() + '…' : text;
+  }
+  return out;
+};
+
 const round3 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 1000) / 1000 : null);
 
 // The MECHANICAL reading, assembled for the audit: every piece that came through between the
@@ -239,6 +254,7 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
       referential: ctx.referential || null, flags, unbound, webProposal,
       fedGraph: ctx.fedGraph || null,   // the meaning graph fed to the talker (web path); null otherwise
       citeOrigins: citeOriginsOf(groundingDoc, ctx.sources),   // per-claim attribution: [sN] idx → source docId
+      citeSpans: citeSpansOf(ctx.sources, ctx.spans),          // per-claim provenance: [sN] idx → the cited sentence text
       // The per-PROPOSITION record the transparency view reads: every claim the answer makes
       // (`bound` — its text + the sentence it cited) and every relation the fact-check judged
       // against the source (`verdicts` — corroborated / contradicted / unsupported / …). Together

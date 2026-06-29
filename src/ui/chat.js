@@ -946,6 +946,21 @@ export const renderTransparency = (el, opts = {}) => {
       src.title = `Source — ${p.source.label}`;
       row.appendChild(src);
     }
+
+    // The cited span itself — the verbatim sentence the claim was tied to, quoted beneath it, so
+    // the user sees exactly where it came from, not only a pointer. Present only when the pipeline
+    // resolved the text for this citation (a grounded, doc/web-backed claim).
+    if (p.source?.text) {
+      const span = document.createElement('div');
+      span.className = 'prop-span';
+      span.textContent = `“${p.source.text}”`;
+      if (Number.isFinite(citeIdx)) {
+        span.classList.add('cite');           // reuse the delegated [sN] jump-to-source handler
+        span.dataset.idx = String(citeIdx);
+        span.title = 'Jump to this sentence in the document';
+      }
+      row.appendChild(span);
+    }
     panel.appendChild(row);
   }
 

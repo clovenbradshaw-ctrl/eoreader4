@@ -719,6 +719,11 @@ const runQuery = async (rawQuestion) => {
     for (const [idx, docId] of Object.entries(res.citeOrigins || {})) {
       citationSources[idx] = { label: webLabel.get(docId) || docId, url: webUrl.get(docId) || '' };
     }
+    // The verbatim span behind each [sN] — so the transparency view shows the actual sentence the
+    // claim was tied to, not just a pointer. Merged onto the citation source (text + label/url).
+    for (const [idx, span] of Object.entries(res.citeSpans || {})) {
+      (citationSources[idx] || (citationSources[idx] = { label: `s${idx}`, url: '' })).text = span;
+    }
     // The transparency record: every proposition the answer makes, paired with the source it is
     // grounded in (or the verdict that it is unsupported / contradicted). This turns "the answer"
     // into a list of claims each traceable to a page — what the transparency toggle reveals.

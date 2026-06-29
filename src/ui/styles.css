@@ -384,6 +384,13 @@ a.prop-source:hover { text-decoration: underline; }
 /* A document-grounded source is a clickable [sN] chip that jumps to the sentence. */
 .msg.assistant .prop-source.cite { cursor: pointer; text-decoration: underline; }
 .msg.assistant .prop-source.cite:hover { color: #bfdbfe; }
+/* The cited span itself — the verbatim sentence, quoted on its own line beneath the claim. */
+.msg.assistant .prop-span {
+  flex: 1 0 100%; margin-top: .15rem; padding-left: .55rem; border-left: 2px solid #3f3f46;
+  font-size: .68rem; color: #a1a1aa; font-style: italic; line-height: 1.45;
+}
+.msg.assistant .prop-span.cite { cursor: pointer; }
+.msg.assistant .prop-span.cite:hover { color: #cbd5e1; border-left-color: #60a5fa; }
 .msg.assistant .prop.inaccurate { border-color: #7f1d1d; }
 .msg.assistant .prop.unsupported { border-color: #78350f; }
 
