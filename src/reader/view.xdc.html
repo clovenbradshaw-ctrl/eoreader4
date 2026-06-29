@@ -287,7 +287,7 @@
                       </sc-if>
                       <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                       <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                        <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
+                        <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}<sc-if value="{{ en.hasDomain }}" hint-placeholder-val="{{ false }}"><span style="{{ en.domStyle }}">{{ en.domain }}<sc-if value="{{ en.hasExtra }}" hint-placeholder-val="{{ false }}"> {{ en.extraLabel }}</sc-if></span></sc-if></span></sc-for></div>
                       </sc-if>
                     </div>
                   </sc-if>
@@ -835,7 +835,7 @@
                     </sc-if>
                     <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                     <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                      <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
+                      <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}<sc-if value="{{ en.hasDomain }}" hint-placeholder-val="{{ false }}"><span style="{{ en.domStyle }}">{{ en.domain }}<sc-if value="{{ en.hasExtra }}" hint-placeholder-val="{{ false }}"> {{ en.extraLabel }}</sc-if></span></sc-if></span></sc-for></div>
                     </sc-if>
                   </div>
                 </sc-if>
