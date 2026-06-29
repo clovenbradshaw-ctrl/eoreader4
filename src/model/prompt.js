@@ -250,6 +250,13 @@ export const buildGroundedMessages = ({
       blocks.push(`Earlier in this reading:\n${conversation.notes}\n(Those came before — for context only; answer just their latest question below.)`);
     if (conversation.pastTurns?.length)
       blocks.push(`They had asked you:\n${conversation.pastTurns.join('\n')}`);
+    // The COMMON-GROUND cue (converse/dialogue-state.js): the facts already settled between
+    // you and the user. A small talker re-asserts "the mayor is X" every turn because the
+    // thread above reads as a checklist; naming the settled ground as already-held tells it
+    // to build on it instead of restating it. Only the settled QUESTION rides — never the
+    // prior answer (the firewall holds). Empty → no block → byte-identical.
+    if (conversation.settled?.length)
+      blocks.push(`Already settled with them — they know these; build on them, don't restate them:\n${conversation.settled.map(s => `- ${s}`).join('\n')}`);
   }
 
   // A SHAPE exemplar — the nearest sample answer the form library matched (turn/shape.js),

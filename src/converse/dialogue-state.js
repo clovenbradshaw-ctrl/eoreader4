@@ -75,6 +75,11 @@ const REFERENCE_VERB = new Set((
 ).split(/\s+/));
 const DEICTIC = new Set('what that this it those these thing things one ones about of'.split(/\s+/));
 
+// An imperative REQUEST opener — the user asks for new ground (an EVA), not asserts a fact.
+const REQUEST = /^\s*(?:summari[sz]e|explain|describe|list|define|outline|compare|contrast|analy[sz]e|elaborate|expand|clarify|recap|walk\s+me|break\s+(?:it|this|that)\s+down)\b/i;
+// A declarative ASSERTION cue — the user offers something as fact (a DEF on their side).
+const ASSERTION = /^\s*(?:i\s+(?:think|believe|feel|guess|reckon|assume|suspect|claim|know)\b|i'?d\s+say\b|in\s+my\s+(?:view|opinion)\b|imo\b|actually,|that'?s\b|this\s+is\b|it'?s\b|the\b.+\b(?:is|are|was|were)\b)/i;
+
 // The topic-bearing words of a turn once REFERENCE verbs and deictics are also removed —
 // what the turn is actually ASKING ABOUT, beyond the act of asking. Empty ⇒ the turn
 // names no topic of its own and must lean on the conversation (a NUL stall).
@@ -97,17 +102,23 @@ export const classifyTurn = (question) => {
   const q = String(question || '').toLowerCase().trim();
   const topic = topicWords(q);
 
-  // SEG — a correction that redirects the last frame, when its own tail carries no query.
+  // NUL holds that must win over a SEG correction: pure confusion ("wait, what?", "huh?")
+  // and a bare continuation with no content word at all ("now?", "go on", "why?"). These
+  // carry no topic of their own, so they are holds on the prior turn, never redirects.
+  if (CONFUSION.test(q) || contentWords(q).length === 0)
+    return { op: OP.NUL, needsReferent: true, topic };
+
+  // SEG — a correction that redirects the last frame (carrying a possibly-new referent),
+  // when its own tail carries no query of its own ("no, the musician").
   const corr = q.match(CORRECTION);
   if (corr && contentWords(q.slice(corr[0].length)).length <= 1)
     return { op: OP.SEG, needsReferent: true, topic };
 
-  // NUL — a hold/stall: confusion, a clarification of the talker's prior statement, a bare
-  // evidence demand, or a pure deictic with no Figure. ABOUT_PRIOR catches "what do you mean
-  // first round?" — it quotes the prior answer's term, it does not open new ground.
+  // NUL — the remaining holds: a clarification of the talker's prior statement ("what do you
+  // mean first round?" — it quotes the prior answer, it does not open new ground), a bare
+  // evidence demand ("prove it"), or a pure deictic with no Figure ("find what I'm about").
   const ev = q.match(EVIDENCE);
-  if (CONFUSION.test(q) ||
-      ABOUT_PRIOR.test(q) ||
+  if (ABOUT_PRIOR.test(q) ||
       (ev && contentWords(q.slice(ev[0].length)).length <= 1) ||
       isReferentialStall(q))
     return { op: OP.NUL, needsReferent: true, topic };
@@ -121,12 +132,19 @@ export const classifyTurn = (question) => {
   if (PRONOUN.test(q) && topic.length > 0)
     return { op: OP.EVA, needsReferent: true, topic };
 
-  // DEF — a declarative assertion the user offers as fact (no interrogative, not a command).
   const isQuestion = /\?\s*$/.test(q) || /^(who|what|when|where|why|how|which|whose|whom|is|are|was|were|do|does|did|can|could|would|will|should|has|have|had)\b/.test(q);
-  if (!isQuestion && topic.length > 0)
-    return { op: OP.DEF, needsReferent: false, topic };
+  if (!isQuestion) {
+    // An imperative REQUEST ("summarize the document", "explain X", "list the operators")
+    // is an EVA — the user is asking for new ground, not asserting a fact.
+    if (REQUEST.test(q)) return { op: OP.EVA, needsReferent: PRONOUN.test(q), topic };
+    // DEF — a declarative the user offers as fact, with an explicit assertion cue ("I think
+    // …", "the mayor is …"). Only a clear assertion is a DEF; a bare topic phrase defaults
+    // to EVA below (safer — a fragment is far likelier a request than a claim).
+    if (ASSERTION.test(q) && topic.length > 0)
+      return { op: OP.DEF, needsReferent: PRONOUN.test(q), topic };
+  }
 
-  // EVA — the default: an open question seeking new ground.
+  // EVA — the default: an open question (or request) seeking new ground.
   return { op: OP.EVA, needsReferent: PRONOUN.test(q), topic };
 };
 
@@ -188,6 +206,23 @@ export const dialogueState = (history = [], question = '') => {
     delta = { kind: 'standalone', intent: { topic: current.topic, text: brief(question) }, referent: null };
 
   return { current, openIntents, commonGround, activeReferent, delta };
+};
+
+// ── groundedThread — the conversation block for the grounded prompt ───────────────────
+// Splits the prior turns into what is SETTLED (firm DEF — common ground the user already
+// holds) and what is still OPEN (un-collapsed EVA). The grounded prompt restates a settled
+// fact every turn because the bare "You asked: …" thread reads as a checklist; naming the
+// settled ground as already-held — build on it, don't repeat it — is the suppression cue
+// the closing clause alone never enforced. Only the user's own question text rides here,
+// never the talker's answers (the firewall holds): the block says WHAT is settled, never
+// re-feeds the reply the model would anchor on. Deduped, recency-capped.
+export const groundedThread = (history = [], question = '', { maxSettled = 4, maxOpen = 4 } = {}) => {
+  const st = dialogueState(history, question);
+  const uniq = (xs) => [...new Set(xs)];
+  return {
+    settled: uniq(st.commonGround.map(i => i.text)).slice(-maxSettled),
+    open:    uniq(st.openIntents.map(i => i.text)).slice(-maxOpen),
+  };
 };
 
 // ── resolveQuery — the EO-native retrieval query, anchored on the delta ───────────────

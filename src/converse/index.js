@@ -38,4 +38,4 @@ export { createCast } from './cast.js';
 // (docs/operators.md). `resolveQuery` is the EO-native retrieval resolver: it anchors a
 // stalled (NUL) or pronoun-bearing turn on the OPEN INTENT and the WARM REFERENT, where
 // resolveRetrievalQuery only carried a vocabulary bag and dropped the dangling subject.
-export { classifyTurn, dialogueState, resolveQuery, isReferentialStall, OP } from './dialogue-state.js';
+export { classifyTurn, dialogueState, resolveQuery, groundedThread, isReferentialStall, OP } from './dialogue-state.js';

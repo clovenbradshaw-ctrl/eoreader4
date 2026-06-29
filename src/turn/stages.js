@@ -15,7 +15,7 @@ import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerrainAt } from '../surfer/index.js';
 import { namedReferents, referentialConfidence, siteIndices, serializeEOT } from '../perceiver/index.js';
-import { foldConversation, resolveQuery, referenceTarget } from '../converse/index.js';
+import { foldConversation, resolveQuery, groundedThread, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS, isMetaConversational } from './intent.js';
 import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
 import { answerFormError } from './shape.js';
@@ -1103,13 +1103,21 @@ const groundedConversation = (ctx) => {
   const olderUser = String(ctx.conversation?.notes || '')
     .split('\n').filter(l => /^#\d+\s*You:/.test(l)).map(l => l.replace(/^#\d+\s*You:\s*/, '').trim());
   const thread = [...olderUser, ...recentUser].filter(Boolean);
-  if (!thread.length) return {};
+  // The SETTLED ground — the facts already given, read off the dialogue line (the
+  // Interpretation column's firm DEFs, converse/dialogue-state.js). Named to the talker as
+  // already-held so it builds on them instead of restating "the mayor is X" every turn.
+  // Only the settled QUESTION rides — never the answer (the firewall stays closed).
+  const settled = groundedThread(ctx.history || [], ctx.question).settled;
+  if (!thread.length && !settled.length) return {};
+  const out = {};
   // Carry only the most recent few. The full thread, fed verbatim as "You asked: …"
   // lines, reads to a small talker as a checklist of open tasks — the audit's t5
   // answered every prior question in a bulleted list and overran its token budget.
   // The recent turns are what continuity ("now?", "prove it") actually needs; the
   // tail only widens the leak surface.
-  return { notes: thread.slice(-3).map(q => `You asked: ${q}`).join('\n') };
+  if (thread.length) out.notes = thread.slice(-3).map(q => `You asked: ${q}`).join('\n');
+  if (settled.length) out.settled = settled;
+  return out;
 };
 
 // The conversation a META-CONVERSATIONAL grounded turn carries: the FULL thread — BOTH the
