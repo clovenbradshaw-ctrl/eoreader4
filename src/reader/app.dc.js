@@ -989,6 +989,20 @@ class Component extends DCLogic {
       const key='prop|'+e.id;if(seen.has(key))continue;seen.add(key);
       lines.push(this.labelOf(e.id)+' : '+pred);
     }
+    // Data — the key↔value facts the reading bound (parse/datum.js, core/datum.js): a
+    // temperature, a price, a measurement. The same "A : fact" form, and the reason a quick
+    // lookup ("what's the weather right now") can finally be answered — the value rides into
+    // the prompt as a datum instead of being NUL'd as a bare number. Capped so a long table
+    // does not crowd out the entity graph; scoped like everything else above.
+    let dn=0;
+    for(const ev of (this.master&&this.master.events)||[]){
+      if(dn>=12)break;
+      if(ev.op!=='DEF'||ev.kind!=='datum'||!ev.key||ev.value==null)continue;
+      const u=ev.sentIdx!=null?this.master.sentenceSource[ev.sentIdx]:ev.__page;
+      if(scope.length&&!scope.includes(u))continue;
+      const k='datum|'+ev.key+'|'+ev.value;if(seen.has(k))continue;seen.add(k);
+      lines.push(this.norm(ev.key)+' : '+this.norm(String(ev.value)));dn++;
+    }
     return lines.join('\n');
   }
   // Minimal, SAFE markdown → HTML for chat answers (the model replies in markdown:

@@ -17,8 +17,10 @@ import { attributesConflict }   from '../../core/index.js';
 import { segmentSentences }     from './sentences.js';
 import { induceBoundaries }     from './boundaries.js';
 import { isChrome }             from './chrome.js';
+import { scanData }             from './datum.js';
 import { frameSpan }            from './frame.js';
 import { extractMetadata }      from './metadata.js';
+import { makeDatumDef }         from '../../core/index.js';
 import { createEntityAdmission, scanInitialisms, scanFunctionalAttributes }from './entities.js';
 import { parseRelations, scanDescriptors } from './relations.js';
 import { argumentSpanSeg }      from './proposition.js';
@@ -141,6 +143,17 @@ export const createParser = ({
     // holds it; the metadata harvest reads the same front matter from raw lines.
     const frame = frameSpan(sentences);
 
+    // The data the prose grammar would throw away. A line of DATA — a label and a value
+    // set side by side ("High 66°", "Chance of Rain 70%") — is not a sentence; the value
+    // is a bare number chrome.js would hold as NUL and the label, stripped of it, says
+    // nothing. scanData (parse/datum.js) reads the document's data regime BEFORE the cut,
+    // binding each value to its key into the universal DEF datum (core/datum.js). The
+    // per-line pass below consults this FIRST, before the chrome NUL — so a value that
+    // carries meaning is bound, not discarded (the regime switch: when the rigid sentence
+    // rules would break, they yield to data-reading). Empty for a prose document → the
+    // parse is byte-identical there.
+    const data = scanData(sentences);
+
     // Pass 0 (cont.) — front-matter metadata (parse/metadata.js). Read the title
     // block's STRUCTURE — labeled fields, "Title:" / "Author:" / "Release date:" —
     // off the RAW LINES (a header carries no terminal punctuation, so the sentence
@@ -227,6 +240,21 @@ export const createParser = ({
       if (frame.all.has(sentIdx)) {
         log.append({ op: 'NUL', kind: 'chrome', via: 'frame', sentIdx, text: sent });
         log.append({ op: 'DEF', id: `unit:${sentIdx}`, key: 'role', value: 'site', sentIdx });
+        return;
+      }
+      // DATA before chrome (the regime switch). If this line is part of a key↔value datum,
+      // bind the value to its key as a DEF datum (the same currency a front-matter field or
+      // an image attribute commits) and HOLD the line from prose parsing — the meaning is in
+      // the fact, not in a figure called "Feels Like". This runs ahead of the degenerate
+      // guard so a value the prose rules would NUL gets read as data first. The value-line
+      // carries the DEF; the key-line is held (its value is logged by its partner); an
+      // inline datum carries its own. The line stays in `sentences` (retrievable, citable) —
+      // unlike frame, it is not marked a site.
+      const datum = data.get(sentIdx);
+      if (datum) {
+        if (datum.role === 'inline' || datum.role === 'value')
+          log.append(makeDatumDef({ id: `unit:${sentIdx}`, key: datum.key, value: datum.value, sentIdx }));
+        log.append({ op: 'NUL', kind: 'datum', via: datum.role, sentIdx, text: sent });
         return;
       }
       // Chrome-ness is a weight: the mechanical score plus an optional nudge

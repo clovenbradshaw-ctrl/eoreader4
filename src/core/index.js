@@ -23,6 +23,11 @@ export { STANCES, TERRAINS, stanceOf, terrainOf, grainOfStance, grainOfTerrain,
 // meaning). Both frozen as contracts here, in the genome everything depends on.
 export { makeUnit, isUnit, sameUnit, streamDistance, unitStream, isOrdered } from './unit.js';
 export { PROPOSITION_SLOTS, makeProposition, isProposition, propositionOfEdge } from './proposition.js';
+// The datum (datum.js) — a key bound to its value, the proposition a MEASUREMENT makes.
+// The same DEF currency a role or a front-matter field uses, named so the binding of a
+// value to its key is one universal shape across every modality (an image attribute, an
+// EXIF tag, a temperature), recognized at the organ edge, committed here in the interior.
+export { DATUM_KIND, makeDatumDef, isDatumDef } from './datum.js';
 // The generation side's formal notation (SPEC §1/§3): the event op(Site, Resolution,
 // Provenance, t), the two independent tiers of identity (hashId existence + Resolution
 // how-definitely), and the me-ness type law (two doors, indexical reload). The writer
