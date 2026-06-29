@@ -609,7 +609,10 @@ const runQuery = async (rawQuestion) => {
     signal:   ctl.signal,       // the Stop button: halts the model decode and short-circuits the rest of the turn
 
     onStep:   (name, ctx, data) => {
-      updateThinking(thinking, name, data, ctx, { verbose: CHAT_VERBOSE });
+      // When this turn synthesizes over a web gather, tell the thinking bubble how many
+      // sources it is reading/writing from — so the (slow) synthesis pass after the per-hop
+      // research feedback reads as purposeful work over the pages, not a silent "thinking…".
+      updateThinking(thinking, name, data, ctx, { verbose: CHAT_VERBOSE, sources: webGather?.docs?.length || 0 });
       // As soon as the fold has read the passage, type its IMPRESSION into the bubble
       // while the talker warms — model-free streaming during the long time-to-first-
       // token (docs/streaming-answer.md). Cleared when the real answer begins. This
@@ -669,7 +672,11 @@ const runQuery = async (rawQuestion) => {
         webGather = { query: question, docs: walk.docs, research: walk.hops, facets: walk.facets, deep: true };
       }
     } catch { /* network/search/plan failed — fall through to the ungrounded turn */ }
-    setThinkingNote(thinking, '');
+    // Hand off from the per-hop research feedback to the synthesis pass with a note that
+    // names what was read, so the transition isn't a blank "thinking…" (the per-stage labels
+    // below then keep saying "reading/writing from N sources…"). No gather → plain bubble.
+    setThinkingNote(thinking, webGather?.docs?.length
+      ? `✍️ Read ${webGather.docs.length} source${webGather.docs.length === 1 ? '' : 's'} — composing the answer…` : '');
   } else if (webMode === 'auto') {
     setThinkingNote(thinking, '🌐 searching the web…');
     try {
@@ -693,7 +700,10 @@ const runQuery = async (rawQuestion) => {
         webGather = { query: q, docs: webDocs, research: walk.hops };
       }
     } catch { /* network/search failed — fall through to the ungrounded turn */ }
-    setThinkingNote(thinking, '');
+    // Same hand-off as the deep path: name the pages gathered as the synthesis starts, rather
+    // than blanking back to a bare "thinking…" for the slow read-and-write over them.
+    setThinkingNote(thinking, webGather?.docs?.length
+      ? `✍️ Read ${webGather.docs.length} source${webGather.docs.length === 1 ? '' : 's'} — composing the answer…` : '');
   }
 
   let result = await runTurn(turnArgs);
