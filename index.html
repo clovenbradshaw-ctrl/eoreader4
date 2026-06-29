@@ -2282,10 +2282,24 @@ class Component extends DCLogic {
   // ── media / text / code / binary surfaces ─────────────────────────────────────
   _surfaceImage(ctx){const body='<div class="eomedia"><img class="eoimg" src="'+this._esc(ctx.blobUrl)+'" alt="'+this._esc(ctx.title)+'"><div class="eonote">'+this._esc(ctx.fileName)+' · '+this._fmtBytes(ctx.bytes)+'</div></div>';
     return {nativeDoc:this._natDoc({badge:ctx.nat.label,title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:'',readerOk:false,stat:this._fmtBytes(ctx.bytes)};}
-  _surfaceAudio(ctx){const body='<div class="eomedia"><div style="font-size:46px;">🎧</div><audio class="eoaud" controls src="'+this._esc(ctx.blobUrl)+'"></audio>'+
-      '<div class="eopanel" style="max-width:560px;width:100%;"><div style="font-weight:700;margin-bottom:4px;">EO acoustic reading</div><div class="eonote" id="eo-aud-note">Listening to the waveform… the engine reads its overtones and persistent tones, which join the graph as a sub-reading.</div></div>'+
+  _surfaceAudio(ctx){return {nativeDoc:this._audioDoc(ctx,null),eoText:'',readerOk:false,stat:this._fmtBytes(ctx.bytes)};}
+  _audioDoc(ctx,findings){
+    let panel;
+    if(!findings)panel='<div style="font-weight:700;margin-bottom:4px;">EO acoustic reading</div><div class="eonote">Listening to the waveform… the engine reads its overtones and persistent tones, which join the graph as a sub-reading.</div>';
+    else if(findings.error)panel='<div style="font-weight:700;margin-bottom:4px;">EO acoustic reading</div><div class="eonote">'+this._esc(findings.error)+'</div>';
+    else{
+      const tones=findings.tones.map(t=>'<span style="font-size:11px;font-weight:700;color:var(--acc);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 8px;">'+this._esc(t.note)+' · '+Math.round(t.persist*100)+'%</span>').join(' ');
+      const bright=findings.centroid>2500?'bright':findings.centroid>1200?'balanced':'dark';
+      panel='<div style="font-weight:700;margin-bottom:8px;">EO acoustic reading</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">'+(tones||'<span class="eonote">no clear tones found</span>')+'</div>'+
+        '<div class="eonote">'+findings.durationLabel+' · '+findings.sampleRate.toLocaleString()+' Hz · '+(findings.channels===1?'mono':findings.channels+' ch')+' · centroid ~'+Math.round(findings.centroid).toLocaleString()+' Hz ('+bright+') · read from the first '+Math.round(findings.analyzedSec)+'s.<br>These findings are folded into the graph — ask about this file in a chat.</div>';
+    }
+    const body='<div class="eomedia"><div style="font-size:46px;">🎧</div><audio class="eoaud" controls src="'+this._esc(ctx.blobUrl)+'"></audio>'+
+      '<div class="eopanel" style="max-width:600px;width:100%;">'+panel+'</div>'+
       '<div class="eonote">'+this._esc(ctx.fileName)+' · '+this._fmtBytes(ctx.bytes)+'</div></div>';
-    return {nativeDoc:this._natDoc({badge:'Audio',title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:'',readerOk:false,stat:this._fmtBytes(ctx.bytes)};}
+    return this._natDoc({badge:'Audio',title:ctx.title,meta:this._fmtBytes(ctx.bytes),body});
+  }
+  _ctxOf(p){return {url:p.url,title:p.title,nat:p.nature||{label:(p.kind||'File').toUpperCase()},mime:p.mime,fileName:p.fileName,bytes:p.bytes,blobUrl:p.blobUrl,raw:''};}
   _surfaceVideo(ctx){const body='<div class="eomedia"><video class="eovid" controls src="'+this._esc(ctx.blobUrl)+'"></video><div class="eonote">'+this._esc(ctx.fileName)+' · '+this._fmtBytes(ctx.bytes)+'</div></div>';
     return {nativeDoc:this._natDoc({badge:'Video',title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:'',readerOk:false,stat:this._fmtBytes(ctx.bytes)};}
   _surfaceText(ctx,readerOk){const t=String(ctx.raw||'').replace(/\r\n?/g,'\n');const body='<pre class="eocode">'+this._esc(t.length>300000?t.slice(0,300000)+'\n…':t)+'</pre>';
@@ -2300,8 +2314,78 @@ class Component extends DCLogic {
     return {nativeDoc:this._natDoc({badge:ctx.nat.label,title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:'',readerOk:false,stat:this._fmtBytes(ctx.bytes)};}
   _surfacePending(ctx,msg){const body='<div class="eopanel"><div class="eonote">'+this._esc(msg)+'</div></div>';
     return {nativeDoc:this._natDoc({badge:ctx.nat.label,title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:'',readerOk:false,stat:''};}
-  // Stubs replaced by later passes; defined here so imports never throw if they run early.
-  async _analyzeAudio(){}
+  // ── Audio: EO acoustic analysis ───────────────────────────────────────────
+  // Decode the waveform in the browser, run a windowed FFT, and read off the
+  // persistent tones (the pitches sustained across the recording), the spectral
+  // centroid (timbre), and loudness. Those findings become an EO text reading
+  // folded into the graph — the same spine the text reader uses, on sound.
+  async _analyzeAudio(url,file){
+    const page=this.pageOf(url);if(!page)return;
+    let buf;
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('no Web Audio');
+      const ab=await file.arrayBuffer();
+      const ac=new AC();
+      buf=await ac.decodeAudioData(ab.slice(0));
+      try{ac.close();}catch(e){}
+    }catch(e){
+      this._updateFilePage(url,{nativeDoc:this._audioDoc(this._ctxOf(this.pageOf(url)||page),{error:'Could not decode this format for analysis ('+(e&&e.message||e)+'). Playback still works.'})});
+      return;
+    }
+    let findings;try{findings=this._audioFindings(buf);}catch(e){this.feedLine('warn','Audio analysis failed: '+(e&&e.message||e));return;}
+    const eo=this._audioEoText(page.title,findings);
+    this._updateFilePage(url,{nativeDoc:this._audioDoc(this._ctxOf(this.pageOf(url)||page),findings),eoText:eo,stat:findings.durationLabel});
+    this.feedLine('read','Heard “'+page.title+'” · '+findings.tones.slice(0,4).map(t=>t.note).join(' ')+(findings.tones.length>4?'…':''));
+  }
+  // In-place iterative radix-2 Cooley-Tukey FFT (N must be a power of two).
+  _fft(re,im){const n=re.length;
+    for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){const tr=re[i];re[i]=re[j];re[j]=tr;const ti=im[i];im[i]=im[j];im[j]=ti;}}
+    for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len,wr=Math.cos(ang),wi=Math.sin(ang);
+      for(let i=0;i<n;i+=len){let cwr=1,cwi=0;
+        for(let k=0;k<len>>1;k++){const a=i+k,b=i+k+(len>>1);
+          const vr=re[b]*cwr-im[b]*cwi,vi=re[b]*cwi+im[b]*cwr;
+          re[b]=re[a]-vr;im[b]=im[a]-vi;re[a]+=vr;im[a]+=vi;
+          const ncwr=cwr*wr-cwi*wi;cwi=cwr*wi+cwi*wr;cwr=ncwr;}}}
+  }
+  _freqToNote(f){if(!(f>0))return null;const midi=Math.round(69+12*Math.log2(f/440));if(midi<16||midi>120)return null;const names=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];return names[((midi%12)+12)%12]+(Math.floor(midi/12)-1);}
+  _fmtDur(s){s=Math.round(s||0);const m=Math.floor(s/60),ss=s%60;return m+':'+String(ss).padStart(2,'0');}
+  _audioFindings(buf){
+    const sr=buf.sampleRate,ch=buf.numberOfChannels,dur=buf.duration,data=buf.getChannelData(0);
+    const N=4096,hop=N,maxSamples=Math.min(data.length,Math.floor(sr*30));
+    const hann=new Float64Array(N);for(let i=0;i<N;i++)hann[i]=0.5-0.5*Math.cos(2*Math.PI*i/(N-1));
+    const noteCount=new Map(),noteEnergy=new Map();
+    let centroidSum=0,centroidW=0,rmsAcc=0,rmsN=0,windows=0;
+    const lo=Math.max(1,Math.floor(50*N/sr)),hi=Math.min((N>>1)-1,Math.floor(4000*N/sr));
+    for(let start=0;start+N<=maxSamples;start+=hop){
+      const re=new Float64Array(N),im=new Float64Array(N);let e=0;
+      for(let i=0;i<N;i++){const x=data[start+i];re[i]=x*hann[i];e+=x*x;}
+      rmsAcc+=e/N;rmsN++;
+      this._fft(re,im);
+      const half=N>>1,mag=new Float64Array(half);let wc=0,wcW=0;
+      for(let k=1;k<half;k++){const m=Math.hypot(re[k],im[k]);mag[k]=m;const f=k*sr/N;wc+=f*m;wcW+=m;}
+      if(wcW>0){centroidSum+=wc/wcW;centroidW++;}
+      const peaks=[];for(let k=lo+1;k<hi;k++){if(mag[k]>mag[k-1]&&mag[k]>=mag[k+1]&&mag[k]>0)peaks.push([k,mag[k]]);}
+      peaks.sort((a,b)=>b[1]-a[1]);
+      for(const [k,m] of peaks.slice(0,3)){const note=this._freqToNote(k*sr/N);if(!note)continue;noteCount.set(note,(noteCount.get(note)||0)+1);noteEnergy.set(note,(noteEnergy.get(note)||0)+m);}
+      windows++;
+    }
+    const tones=[...noteCount.entries()].map(([note,c])=>({note,count:c,energy:noteEnergy.get(note)||0,persist:c/Math.max(1,windows)}))
+      .sort((a,b)=>b.count-a.count||b.energy-a.energy).slice(0,8);
+    return {sampleRate:sr,channels:ch,duration:dur,durationLabel:this._fmtDur(dur),rms:Math.sqrt(rmsAcc/Math.max(1,rmsN)),centroid:centroidW?centroidSum/centroidW:0,windows,tones,analyzedSec:Math.min(30,dur)};
+  }
+  _audioEoText(title,f){
+    const lines=[];
+    lines.push('Acoustic reading of '+this.norm(title)+'.');
+    lines.push('The recording lasts '+f.durationLabel+' at '+f.sampleRate+' hertz with '+(f.channels===1?'one channel':f.channels+' channels')+'.');
+    if(f.tones.length){
+      lines.push('Its most persistent tones are '+f.tones.map(t=>t.note).join(', ')+'.');
+      f.tones.slice(0,5).forEach(t=>lines.push('The tone '+t.note+' persists across '+Math.round(t.persist*100)+' percent of the recording.'));
+    }
+    const bright=f.centroid>2500?'bright':f.centroid>1200?'balanced':'dark';
+    lines.push('The spectral centroid sits near '+Math.round(f.centroid)+' hertz, a '+bright+' timbre.');
+    lines.push('The overall loudness measures '+f.rms.toFixed(3)+' rms.');
+    return lines.join('\n');
+  }
   async _renderPdf(){}
   // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
   // Each chat is a thread that answers from the read sentences/graph. A chat can be
