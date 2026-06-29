@@ -1946,20 +1946,30 @@ class Component extends DCLogic {
     const W=300,H=232,cx=W/2,cy=H/2;
     const lab=this.labelOf(sel),hov=this.state.hoverEnt;
     const GRAINC={Ground:'#2f6f9e',Figure:'#b06f2a',Pattern:'#2f7d54'};
-    const real=(nbrs||[]).filter(n=>n&&n.id!=null&&!this.isURLish(this.labelOf(n.id))).slice(0,7)
+    const all=(nbrs||[]).filter(n=>n&&n.id!=null&&!this.isURLish(this.labelOf(n.id)));
+    const MAXN=9, extra=Math.max(0,all.length-MAXN);
+    const real=all.slice(0,MAXN)
       .map(n=>({label:this.labelOf(n.id),id:n.id,w:Math.max(0.001,n.w||1),grain:n.grain||'Figure'}));
     if(!real.length)return null;
     const N=real.length, wmax=Math.max.apply(null,real.map(n=>n.w).concat([1]));
-    const rx=Math.min(116,72+N*7), ry=Math.min(84,50+N*6);
+    // Ring radii grow with crowding so neighbours never collide, capped to keep the
+    // centre legible. Labels are free to spill past the ring — the viewBox is grown
+    // at the end to wrap every node and label, so nothing ever clips the card edge.
+    const rx=Math.min(120,76+N*6), ry=Math.min(94,54+N*6);
     real.forEach((nd,i)=>{const ang=-Math.PI/2+i*(2*Math.PI/N);
       nd._ca=Math.cos(ang);nd._sa=Math.sin(ang);nd._x=cx+nd._ca*rx;nd._y=cy+nd._sa*ry;
-      nd._r=Math.max(13,Math.min(20,12+Math.sqrt(nd.w/wmax)*9));});
+      nd._r=Math.max(13,Math.min(21,12+Math.sqrt(nd.w/wmax)*9));});
     const anyHover=real.some(n=>n.id===hov), cc=this.hashColor(lab), layers=[];
+    // Track content bounds as we draw, then fit the viewBox around them.
+    let minX=cx-rx,maxX=cx+rx,minY=cy-ry,maxY=cy+ry;
+    const fit=(x0,y0,x1,y1)=>{if(x0<minX)minX=x0;if(x1>maxX)maxX=x1;if(y0<minY)minY=y0;if(y1>maxY)maxY=y1;};
     layers.push(h('ellipse',{key:'g1',cx,cy,rx,ry,fill:'none',stroke:'#ecebe6',strokeWidth:1}));
+    // Edges: grain-coloured, width by bond strength, curvature alternating per spoke
+    // so a dense fan reads as separate arcs instead of one smudge.
     real.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,gc=GRAINC[nd.grain]||GRAINC.Figure;
       const dx=nd._x-cx,dy=nd._y-cy,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len;
       const sx=cx+ux*28,sy=cy+uy*28,ex=nd._x-ux*nd._r,ey=nd._y-uy*nd._r;
-      const mx=(sx+ex)/2,my=(sy+ey)/2,off=9;
+      const mx=(sx+ex)/2,my=(sy+ey)/2,off=(i%2?9:-9);
       layers.push(h('path',{key:'e'+i,d:'M '+sx+' '+sy+' Q '+(mx-uy*off)+' '+(my+ux*off)+' '+ex+' '+ey,fill:'none',
         stroke:on?'#8a531e':gc,strokeLinecap:'round',strokeWidth:on?2.6:(1+(nd.w/wmax)*1.8),opacity:faded?0.12:0.5}));});
     real.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,c=this.hashColor(nd.label);
@@ -1967,8 +1977,10 @@ class Component extends DCLogic {
       if(side===1){lx=nd._x+nd._r+5;ly=nd._y+3;anchor='start';}
       else if(side===-1){lx=nd._x-nd._r-5;ly=nd._y+3;anchor='end';}
       else{anchor='middle';lx=nd._x;ly=nd._sa>0?nd._y+nd._r+11:nd._y-nd._r-6;}
-      const name=this.truncLabel(nd.label,12),tw=name.length*5.3+8;
+      const name=this.truncLabel(nd.label,16),tw=name.length*5.3+8;
       const hx=anchor==='start'?lx-4:anchor==='end'?lx-tw+4:lx-tw/2;
+      fit(nd._x-nd._r,nd._y-nd._r,nd._x+nd._r,nd._y+nd._r);
+      fit(hx,ly-9,hx+tw,ly+4);
       const els=[];
       if(on)els.push(h('circle',{key:'h',cx:nd._x,cy:nd._y,r:nd._r+4,fill:'none',stroke:c,strokeWidth:1.4,opacity:0.4}));
       els.push(h('circle',{key:'cf',cx:nd._x,cy:nd._y,r:nd._r,fill:c,opacity:0.12}));
@@ -1983,9 +1995,16 @@ class Component extends DCLogic {
       h('circle',{key:'cr',cx,cy,r:27,fill:'none',stroke:cc,strokeWidth:2.2}),
       h('text',{key:'ci',x:cx,y:cy+5,textAnchor:'middle',style:{fontSize:'13px',fontWeight:'800',fill:cc,pointerEvents:'none'}},this.initials(lab))
     ]));
+    // The ring is capped at MAXN; the remainder lives in the full explorer below.
+    if(extra>0){layers.push(h('text',{key:'more',x:cx,y:maxY+13,textAnchor:'middle',
+      style:{fontSize:'9px',fontWeight:'700',fill:'#9aa1ab',letterSpacing:'.03em',pointerEvents:'none'}},'+'+extra+' more'));maxY+=16;}
+    // Grow the viewBox to wrap all content with a small margin, so rim labels never
+    // clip no matter how long they are. Handlers read this._gvb to stay consistent.
+    const pad=8,vbx=minX-pad,vby=minY-pad,vbw=(maxX-minX)+pad*2,vbh=(maxY-minY)+pad*2;
+    this._gvb={x:vbx,y:vby,w:vbw,h:vbh};
     const gz=this.state.gz||{k:1,x:0,y:0};
     const stage=h('g',{key:'stage',transform:'translate('+gz.x+' '+gz.y+') scale('+gz.k+')'},layers);
-    return h('svg',{viewBox:'0 0 '+W+' '+H,preserveAspectRatio:'xMidYMid meet',
+    return h('svg',{viewBox:vbx+' '+vby+' '+vbw+' '+vbh,preserveAspectRatio:'xMidYMid meet',
       onPointerDown:e=>this.gzDown(e),
       ref:el=>{if(el&&!el.__wb){el.__wb=true;el.addEventListener('wheel',this._gzWheel,{passive:false});}},
       style:{display:'block',width:'100%',height:'auto',cursor:this._gzDrag?'grabbing':'grab',touchAction:'none'}},[stage]);
@@ -2698,13 +2717,14 @@ class Component extends DCLogic {
   }
   // ── graph pan/zoom (the "web") ──────────────────────────────────────────────
   gzReset(){this.setState({gz:{k:1,x:0,y:0}});}
-  gzZoom(factor,px,py){this.setState(s=>{const g=s.gz||{k:1,x:0,y:0};const k=Math.max(0.6,Math.min(4,g.k*factor));const cx=(px==null?150:px),cy=(py==null?116:py);const r=k/g.k;return {gz:{k,x:cx-(cx-g.x)*r,y:cy-(cy-g.y)*r}};});}
+  gzZoom(factor,px,py){this.setState(s=>{const g=s.gz||{k:1,x:0,y:0};const vb=this._gvb||{x:0,y:0,w:300,h:232};const k=Math.max(0.6,Math.min(4,g.k*factor));const cx=(px==null?vb.x+vb.w/2:px),cy=(py==null?vb.y+vb.h/2:py);const r=k/g.k;return {gz:{k,x:cx-(cx-g.x)*r,y:cy-(cy-g.y)*r}};});}
   _gzWheel=(e)=>{
     // Don't hijack the page's scroll — zoom only when the user deliberately holds ⌘/Ctrl.
     // A plain scroll over the graph just scrolls the panel like everything else.
     if(!(e.ctrlKey||e.metaKey))return;
     e.preventDefault();const svg=e.currentTarget;const r=svg.getBoundingClientRect();if(!r.width)return;
-    const vx=(e.clientX-r.left)/r.width*300,vy=(e.clientY-r.top)/r.height*232;
+    const vb=this._gvb||{x:0,y:0,w:300,h:232};
+    const vx=vb.x+(e.clientX-r.left)/r.width*vb.w,vy=vb.y+(e.clientY-r.top)/r.height*vb.h;
     this.gzZoom(e.deltaY<0?1.1:1/1.1,vx,vy);};
   // Pan via window listeners — NOT pointer capture. Capturing the pointer on the <svg>
   // stole the gesture from the node <g>, so clicking a node never fired its onClick.
@@ -2713,7 +2733,7 @@ class Component extends DCLogic {
       // Ignore tiny movement so a click on a node isn't swallowed as a pan, and the
       // graph never nudges from hand-jitter. Only start panning past a real drag.
       if(!this._gzMoved&&Math.abs(dx)+Math.abs(dy)<=7)return;this._gzMoved=true;
-      const sc=300/w;this.setState(s=>({gz:{...(s.gz||{k:1,x:0,y:0}),x:ox+dx*sc,y:oy+dy*sc}}));};
+      const sc=((this._gvb&&this._gvb.w)||300)/w;this.setState(s=>({gz:{...(s.gz||{k:1,x:0,y:0}),x:ox+dx*sc,y:oy+dy*sc}}));};
     const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);this._gzDrag=false;this.forceUpdate();setTimeout(()=>{this._gzMoved=false;},30);};
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);this._gzDrag=true;}
   // ── side-panel drag-to-resize ───────────────────────────────────────────────
