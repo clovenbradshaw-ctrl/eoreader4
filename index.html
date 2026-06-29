@@ -223,7 +223,7 @@
             <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
           </div>
         </sc-for>
-        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Read a URL, import a book, or start a chat above.</div></sc-if>
+        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Read a URL, drop in any file (text, CSV, JSON, image, audio, PDF…), or start a chat above.</div></sc-if>
       </div>
     </aside>
     <div onpointerdown="{{ dragLeft }}" style="{{ leftGutStyle }}"><div style="width:1px;height:100%;background:var(--line);"></div></div>
@@ -1726,9 +1726,24 @@ class Component extends DCLogic {
       window.addEventListener('resize',this._onResize,{passive:true});
     }
     this._initCiteHover();
+    // Drag ANY file (or several) anywhere onto the window to import it. A thin overlay
+    // hint appears while a drag is over the page.
+    if(typeof window!=='undefined'){
+      const show=on=>{let el=document.getElementById('eo-drop-veil');if(on){if(!el){el=document.createElement('div');el.id='eo-drop-veil';el.textContent='Drop to import — any file';el.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;font:600 18px system-ui,sans-serif;color:#fff;background:rgba(20,24,30,.55);backdrop-filter:blur(2px);pointer-events:none;';document.body.appendChild(el);}}else if(el){el.remove();}};
+      let depth=0;
+      this._onDragEnter=e=>{if(e.dataTransfer&&[...e.dataTransfer.types||[]].includes('Files')){e.preventDefault();depth++;show(true);}};
+      this._onDragOver=e=>{if(e.dataTransfer&&[...e.dataTransfer.types||[]].includes('Files')){e.preventDefault();e.dataTransfer.dropEffect='copy';}};
+      this._onDragLeave=e=>{depth=Math.max(0,depth-1);if(depth===0)show(false);};
+      this._onDrop=e=>{const f=e.dataTransfer&&e.dataTransfer.files;if(f&&f.length){e.preventDefault();depth=0;show(false);const arr=[];for(let i=0;i<f.length;i++)arr.push(f[i]);arr.reduce((pr,file)=>pr.then(()=>this.importAnyFile(file).catch(()=>{})),Promise.resolve());}};
+      window.addEventListener('dragenter',this._onDragEnter);
+      window.addEventListener('dragover',this._onDragOver);
+      window.addEventListener('dragleave',this._onDragLeave);
+      window.addEventListener('drop',this._onDrop);
+    }
   }
   componentWillUnmount(){
     if(this._onResize&&typeof window!=='undefined') window.removeEventListener('resize',this._onResize);
+    if(typeof window!=='undefined'&&this._onDrop){window.removeEventListener('dragenter',this._onDragEnter);window.removeEventListener('dragover',this._onDragOver);window.removeEventListener('dragleave',this._onDragLeave);window.removeEventListener('drop',this._onDrop);}
     if(this._citeHoverInit){document.removeEventListener('mouseover',this._onCiteOver);document.removeEventListener('mouseout',this._onCiteOut);}
     if(this._citeCard&&this._citeCard.parentNode)this._citeCard.parentNode.removeChild(this._citeCard);
   }
@@ -5975,7 +5990,7 @@ class Component extends DCLogic {
       if(!vu&&!base.chatOn&&!base.gutenOn){
         base.showPrompt=true;
         base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Search the web — or read a URL':'Loading the reading engine…');
-        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type anything to search the web, paste a page URL to open it here, or use 📄 to import your own text. Pages render as HTML; open a result and every entity is read into the graph on the right — then ask about it in a chat.';
+        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type anything to search the web, paste a page URL, or use 📄 (or drag-and-drop) to import any file — text, CSV, JSON, image, audio, video, PDF. Each opens on its native rendering and surfaces its nature; text documents also get the elegant reader. Whatever can be read joins the graph on the right — then ask about it in a chat.';
         base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
         base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
       }
