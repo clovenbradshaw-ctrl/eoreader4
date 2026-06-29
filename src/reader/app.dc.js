@@ -821,41 +821,25 @@ class Component extends DCLogic {
     const chased=new Set(this._researchTerms(subject));
     const leads=this._leads(new Map(),this._profile(text),chased);
     return leads.slice(0,n||3).map(l=>l.term);}
-  // A BATTERY of distinct seed angles for a research turn — so the first pass fans out across
-  // several independent threads instead of chaining off ONE query (the "don't do it one shot" ask).
-  // For a continuation / "this book" turn the strongest angles are the salient threads the in-scope
-  // reading ALREADY raised (real entities/themes of the document, via the walk's own lead ranking);
-  // a few neutral facets fill out the breadth so even a bare one-line topic becomes several searches.
-  // Returns lead TERMS the walk appends to the anchor (never the subject's own words); capped to stay
-  // focused. The seed query (the subject itself) is added by the walk separately.
-  // A SIMPLE FACTUAL LOOKUP — "what's the weather in NYC", "what's the temp", "what time is it" —
-  // versus a research SUBJECT to explore from several angles. A lookup wants the strongest single
-  // answer fast; it must NOT fan out into encyclopedic facets. Appending "analysis"/"history" to a
-  // question phrase yields nonsense queries ("what the temp analysis") that drift the walk straight
-  // off the question (the live transcript wandered into Wikipedia's "Thermal analysis"). Detected by
-  // shape: an explicit live-fact ask (weather/time/price/score), or a short question carrying at most
-  // one distinctive content term. Conservative — a real topic with content terms ("the French
-  // Revolution", "Ryan Coogler's films") is NOT a lookup and still fans out across angles.
-  _isSimpleLookup(q){
-    const s=String(q||'').trim().toLowerCase();
-    if(!s)return false;
-    // live, real-time or point facts a multi-hop "exhaust the threads" walk only muddies
-    if(/\b(weather|temperature|temp|forecast|how (?:hot|cold|warm)|raining|humidity|wind|what time|time is it|today'?s? date|price of|stock price|exchange rate|the score|who won|how much is)\b/.test(s))return true;
-    // otherwise: a short, question-shaped ask carrying ≤1 distinctive content term is a lookup
-    const isQuestion=/^(what|whats|what'?s|who|whose|when|where|which|how|is|are|was|were|does|do|did|can|will)\b/.test(s)||s.endsWith('?');
-    return isQuestion&&this._researchTerms(s).length<=1;
-  }
+  // EXTRA SEED THREADS for a research turn — never a hardcoded "battery" of neutral facets.
+  //
+  // We used to force breadth: append overview/analysis/history/… to the anchor so a one-line topic
+  // became several searches. On a question phrase that produced nonsense ("what the temp" + analysis
+  // → "what the temp analysis" → Wikipedia "Thermal analysis") and over-researched point facts. The
+  // honest signal is PREDICTED GAIN, not question shape: how WIDE to fan out should emerge from how
+  // much surprise a page actually raises (the walk's own lead ranking), not from a fixed list.
+  //
+  // So a FRESH topic seeds nothing extra — it starts with just its own query and the walk decides,
+  // hop by hop, whether any thread is surprising enough to follow (a point fact raises none and stops
+  // at one hop; a rich subject raises several and fans out). The only extra seeds are for a "go
+  // deeper" CONTINUATION: the surprising threads the in-scope reading ALREADY raised — real,
+  // prediction-derived leads — so deepening branches into new angles instead of re-fetching. Capped
+  // by the dial's breadth willingness. Returns lead TERMS the walk appends to the anchor.
   _researchBattery(subject,derived,sources){
-    // A lookup gets no battery — just the seed query, answered shallow (no facet drift).
-    if(!derived&&this._isSimpleLookup(subject))return [];
+    if(!derived)return [];
     const out=[],seen=new Set(this._researchTerms(subject));
-    const add=t=>{t=this.norm(String(t||'')).trim();const k=t.toLowerCase();if(t&&!seen.has(k)){seen.add(k);out.push(t);}};
-    // (1) the document's own salient threads — only when deepening read sources, so a fresh named
-    // topic never seeds from unrelated reading already in memory.
-    const cap=this._depthCfg().facets;   // shallow 2 · deep 4 · obsessive 5 — how wide the battery
-    if(derived)for(const t of this._seedLeadsFromRead(subject,sources,4))add(t);
-    // (2) neutral facets — breadth for any subject, so it's a battery even with nothing read yet.
-    for(const f of ['overview','analysis','history','significance','criticism','examples']){if(out.length>=cap)break;add(f);}
+    const cap=this._depthCfg().breadth+1;
+    for(let t of this._seedLeadsFromRead(subject,sources,cap)){t=this.norm(String(t||'')).trim();const k=t.toLowerCase();if(t&&!seen.has(k)){seen.add(k);out.push(t);}}
     return out.slice(0,cap);}
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
@@ -1090,11 +1074,14 @@ class Component extends DCLogic {
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     // 1) clock questions — no model
     const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
-    // 1b) OPT-IN LONGFORM, offline too: an essay/report/"N words" ask over what's ALREADY been read
-    // (web off, or the reading already covers it) becomes a multi-section grounded piece — the arc
-    // over the in-scope sources — instead of one capped answer. Needs grounded supply; _longformArc
-    // itself falls back to the single answer when supply is thin.
-    if(this._longformIntent(q)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size)))return this._longformArc(id,q,[]);
+    // 1b) LONGFORM, PREDICTED not asked-for: build the section plan over the in-scope reading and
+    // let the arc's own saturation test decide. A multi-section grounded piece only when ≥2 sources
+    // each add coverage the others don't — read off the evidence, never off "did they say 'essay'".
+    // Otherwise the single answer below, budgeted by its bound evidence. (_longformArc still falls
+    // back to single when supply is thin.)
+    {const lfUrls=sources.length?sources:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
+     const lfPlan=lfUrls.length?this._sectionPlan(q,lfUrls):[];
+     if(this._predictsBreadth(lfPlan))return this._longformArc(id,q,[],lfPlan);}
     // 2) the spans that surface for this question, scoped to the chat's sources
     const ground=this.groundNotes(q,sources);
     // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
@@ -1123,7 +1110,8 @@ class Component extends DCLogic {
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
+      // Budget by bound evidence when grounded — the model's EOS is the real stop; a plain chat reply keeps the full room.
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:grounded?this._answerBudget(ground):512,temperature:0.4,onToken});
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       // Surface grounding for EVERY answer, honestly. Matched lines show as citations; a
       // summary that leaned on the source's opening shows those lines, disclosed as such;
@@ -1154,16 +1142,19 @@ class Component extends DCLogic {
   // The web on/off switch (the composer toggle). On is the default; off means the chat answers only
   // from what you've already read, never reaching for the internet. Persisted so the choice sticks.
   toggleWebBrain(){this.setState(s=>{const on=!(s.webBrain!==false);try{localStorage.setItem('eo_webbrain',on?'1':'0');}catch(e){}return {webBrain:on};});}
-  // The research-depth policy (shallow / deep / obsessive) → concrete walk knobs. This is the
-  // arc's coverage cut: how wide the battery, how many hops, how many pages per thread, and how
+  // The research-depth policy (shallow / deep / obsessive) → concrete walk knobs: how many threads a
+  // page may open (breadth), the hard hop backstop (ceiling), how many pages per thread, and how
   // patiently the leash tolerates a dry thread before stopping.
   _depthCfg(){const d=this.state.researchDepth||'deep';
-    if(d==='shallow')  return {key:'shallow',  facets:2, maxHops:3, want:1, wantSeed:1, patience:2};
-    // obsessive used to run up to 14 hops × 2 pages each — minutes of reading on the in-browser
-    // model, "WAY too long". Reined in: more angles than deep, but a bounded walk (≤9 hops, one
-    // page per thread). It exhausts the threads; it does not exhaust the afternoon.
-    if(d==='obsessive')return {key:'obsessive',facets:5, maxHops:9, want:1, wantSeed:2, patience:4};
-    return                    {key:'deep',     facets:4, maxHops:8, want:1, wantSeed:2, patience:3};}
+    // The dial is a WILLINGNESS knob, not a target length. It caps how many fresh threads one page
+    // may open (breadth) and sets the hard hop BACKSTOP (ceiling) — but the ACTUAL depth EMERGES:
+    // the walk stops when surprise dries (no lead clears the gain gate) or it strays off-question,
+    // almost always well short of the ceiling. So "shallow vs obsessive" tunes how far it is ALLOWED
+    // to follow a live thread, never how far it must go — which is why obsessive no longer runs for
+    // minutes on a simple question: a point fact raises no leads and stops at one hop regardless.
+    if(d==='shallow')  return {key:'shallow',  breadth:1, ceiling:4,  want:1, wantSeed:1, patience:2};
+    if(d==='obsessive')return {key:'obsessive',breadth:3, ceiling:12, want:1, wantSeed:2, patience:4};
+    return                    {key:'deep',     breadth:2, ceiling:8,  want:1, wantSeed:1, patience:3};}
   cycleResearchDepth(){const order=['shallow','deep','obsessive'];this.setState(s=>{const i=order.indexOf(s.researchDepth||'deep');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_depth',next);}catch(e){}return {researchDepth:next};});}
   async chatResearch(q){
     if(this._busy)return;
@@ -1173,17 +1164,14 @@ class Component extends DCLogic {
     const cur=this.activeChatObj();
     const seed=this._researchSeed(q,cur);
     const topic=seed.topic, anchor=seed.anchor;
-    // A BATTERY of distinct angles — not one shot. The salient threads the in-scope reading already
-    // raised (for a "this book" / continuation turn) plus a few facets, each its own seed query, so
-    // the walk explores several independent threads around the subject instead of chaining off one.
-    const lookup=!seed.derived&&this._isSimpleLookup(topic);
+    // EXTRA SEED THREADS — only for a "go deeper" continuation, and only the surprising threads the
+    // in-scope reading already raised (prediction-derived, never neutral facets). A fresh topic gets
+    // none: it starts with its own query and the walk's surprise decides how wide to fan out.
     const extraSeeds=this._researchBattery(topic,seed.derived,this.chatSourcesOf(cur));
     const angles=extraSeeds.map(t=>'“'+this._nextQuery(anchor,t)+'”').join(', ');
     const startText=seed.derived
       ? ('Picking up this chat — researching “'+topic+'”'+(angles?(' across '+angles):'')+'. I’ll follow what surprises me while it stays on topic.')
-      : lookup
-      ? ('Looking up “'+topic+'” — a quick fact, so I’ll read the best source and answer straight.')
-      : ('Researching “'+topic+'”'+(angles?(' — also '+angles):'')+'. I’ll follow what surprises me while it stays on topic.');
+      : ('Researching “'+topic+'” — I’ll start here and follow what surprises me, as far as it keeps teaching me something while it stays on topic.');
     // Append the user turn + a pending assistant bubble carrying a live research trail.
     let id=this.state.activeChat;
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
@@ -1199,7 +1187,7 @@ class Component extends DCLogic {
     this._busy=true;this.setState({busy:true});
     const preEnts=(this.graph&&this.graph.entities&&this.graph.entities.size)||0;
     let walk={readUrls:[],hops:[]};
-    try{walk=await this._curiosityWalk(topic,anchor,pushStep,{extraSeeds,lookup});}
+    try{walk=await this._curiosityWalk(topic,anchor,pushStep,{extraSeeds});}
     catch(e){pushStep('warn','Research stopped — '+((e&&e.message)||e));}
     this._busy=false;this.setState({busy:false});
     const readCount=new Set(walk.readUrls).size,hops=walk.hops.length;
@@ -1220,16 +1208,62 @@ class Component extends DCLogic {
   // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
   // UNION the sources just gathered — passed in explicitly because the addChatSource setStates
   // above may not have flushed yet, and the new pages must be in scope for this answer.
-  // An ask for a LONG, multi-part piece — the opt-in trigger for the arc. Length is never the
-  // target (that fights the model's grounded prior); the request only opts INTO the multi-section
-  // shape. How long the answer actually runs is set by how much bindable evidence there is.
-  _longformIntent(q){return /\b(essays?|treatise|report|deep[\s-]?dive|comprehensive(?:ly)?|in[\s-]?depth|at length|long[\s-]?form|thorough(?:ly)?|detailed|\d{3,}\s*words?|write\s+(?:me\s+)?(?:a|an)\b[^.?!]*\b(?:essay|report|overview|account|piece|article|guide|breakdown))\b/i.test(String(q||''));}
+  // HOW LONG THE ANSWER RUNS IS PREDICTED FROM THE EVIDENCE, never asked for. Length was an opt-in
+  // ("write an essay") routed through a keyword regex; it is now read off how much distinct grounded
+  // material the question actually surfaced — the engine's own "length = bindable evidence" rule made
+  // mechanical. The three helpers below are that measurement: the section plan, the saturation test
+  // that predicts a multi-section shape, and the single answer's evidence-proportional token budget.
+  // SEG — the section plan: each in-scope source that actually bears on the question (has groundable
+  // spans), ranked by how much. The shared front-end for the arc AND the longform prediction below.
+  _sectionPlan(q,urls){
+    const plan=[];
+    for(const u of (urls||[])){
+      const g=this.groundNotes(q,[u]);
+      const spans=(g.spans||[]).filter(s=>s.text&&s.text.length>24);
+      if(g.relevant&&spans.length)plan.push({url:u,title:this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),70),
+        spans:spans.slice(0,6),entities:g.entities||[],score:spans.reduce((a,s)=>a+(s.score||0),0)});
+    }
+    plan.sort((a,b)=>b.score-a.score);
+    return plan;
+  }
+  // LENGTH PREDICTION, not a keyword. Replay the arc's OWN saturation test (the EVA→NUL novelty
+  // gate) over the section plan and count the sources that would actually add coverage the earlier
+  // ones didn't. Two or more surviving folds ⇒ the evidence itself predicts a multi-section answer;
+  // one ⇒ a single grounded answer says everything there is to say. The shape is read off what was
+  // bound, never off "did the user say the word essay" — and because research depth is now emergent
+  // too, a point fact arrives with one source and falls here naturally to a single answer.
+  _predictsBreadth(plan){
+    const NOVELTY=0.2;const covered=new Set();let sections=0;
+    for(const sec of (plan||[])){
+      const terms=new Set(sec.spans.flatMap(s=>this._researchTerms(s.text)));
+      const fresh=[...terms].filter(t=>!covered.has(t));
+      if(sections&&terms.size&&fresh.length/terms.size<NOVELTY)continue;
+      for(const t of terms)covered.add(t);
+      if(++sections>=2)return true;
+    }
+    return false;
+  }
+  // The token budget a single answer gets — set by HOW MUCH BINDABLE EVIDENCE the question surfaced,
+  // not a flat cap. This is the predictor's VOID in the chat path's grain: a thin field (a point
+  // fact) gets room for a sentence or two and the model's own end-of-sequence stops it there, so it
+  // can't pad a one-line answer into a paragraph of hedging; a rich field gets room to use what's
+  // bound. Bounded both ends so a void can't truncate a real answer and a flood can't run away.
+  _answerBudget(ground){
+    const spans=(ground&&ground.spans)||[],ents=(ground&&ground.entities)||[];
+    const signal=spans.length+Math.min(ents.length,4)*0.5;
+    return Math.max(160,Math.min(512,Math.round(128+signal*44)));
+  }
   async _answerInto(id,q,gathered){
-    // OPT-IN LONGFORM (the arc, in the reader's own primitives): SEG the gathered evidence into one
-    // section per source (a fold), CON each grounded ONLY in that source's spans (re-prompt per
-    // fold), EVA each fold for new coverage and NUL when it would only re-cite, then assemble. Any
-    // other ask — or thin supply — takes the ordinary single answer. Length stays EMERGENT.
-    if(this._longformIntent(q))return this._longformArc(id,q,gathered);
+    // LENGTH IS EMERGENT, not keyword-triggered. Build the section plan over the in-scope sources and
+    // let the arc's own saturation test PREDICT the shape: a multi-section piece only when ≥2 sources
+    // each add coverage the others don't (the arc, in the reader's primitives — SEG/CON/EVA/NUL).
+    // Anything thinner takes the single grounded answer, itself budgeted by its evidence.
+    const cur=this.state.chats.find(c=>c.id===id);
+    const had=this.chatSourcesOf(cur);
+    const scope=had&&had.length?[...new Set([...had,...(gathered||[])])]:[];
+    const urls=scope.length?scope:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
+    const plan=this._sectionPlan(q,urls);
+    if(this._predictsBreadth(plan))return this._longformArc(id,q,gathered,plan);
     return this._answerSingle(id,q,gathered);
   }
   async _answerSingle(id,q,gathered){
@@ -1252,7 +1286,8 @@ class Component extends DCLogic {
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
+      // Budget by bound evidence (grounded) — the model's own EOS is the real stop; thin field, no room to pad.
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:grounded?this._answerBudget(ground):512,temperature:0.4,onToken});
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       const gr=this._groundReport(ground,grounded);
@@ -1275,22 +1310,15 @@ class Component extends DCLogic {
   //   EVA  does this fold add NEW coverage (terms not already covered)? …
   //   NUL  …if it would only re-cite, skip it. Saturation, not a token target, sets the length.
   // Degrades to the single answer when supply is thin (<2 groundable sources) or anything throws.
-  async _longformArc(id,q,gathered){
+  async _longformArc(id,q,gathered,plan){
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const cur=this.state.chats.find(c=>c.id===id);
     const had=this.chatSourcesOf(cur);
     const scope=had.length?[...new Set([...had,...(gathered||[])])]:[];
     const urls=scope.length?scope:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
-    // SEG — the section plan: each in-scope source that actually bears on the question, ranked.
-    const plan=[];
-    for(const u of urls){
-      const g=this.groundNotes(q,[u]);
-      const spans=(g.spans||[]).filter(s=>s.text&&s.text.length>24);
-      if(g.relevant&&spans.length)plan.push({url:u,title:this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),70),
-        spans:spans.slice(0,6),entities:g.entities||[],score:spans.reduce((a,s)=>a+(s.score||0),0)});
-    }
-    plan.sort((a,b)=>b.score-a.score);
+    // SEG — the ranked section plan (reused from the caller's prediction when it already built one).
+    if(!plan)plan=this._sectionPlan(q,urls);
     if(plan.length<2)return this._answerSingle(id,q,gathered);   // not enough supply for a multi-section piece
     let model=null;try{model=await this.ensureChatModel();}catch(e){model=null;}
     const MAXSEC=6,NOVELTY=0.2;
@@ -1349,14 +1377,11 @@ class Component extends DCLogic {
     // subject so a "go deeper" research turn opens new angles instead of re-reading the same pages.
     const extra=(opts&&opts.extraSeeds)||[];
     for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
-    // BREADTH × DEPTH: the policy caps the hops — shallow stops at the strongest answer, obsessive
-    // exhausts the threads — but never fewer than the seeded battery so every planned angle runs.
-    // A LOOKUP overrides the dial entirely: one hop on the seed, the strongest answer, no fan-out
-    // and no curiosity follow — so even on "obsessive" a "what's the temp" stays a quick lookup.
-    const lookup=!!(opts&&opts.lookup);
-    const maxHops=lookup
-      ? frontier.length
-      : Math.max(frontier.length,Math.min(cfg.maxHops,frontier.length+(cfg.key==='obsessive'?4:2)));
+    // The hop BACKSTOP — a safety ceiling, NOT the plan. The walk normally stops earlier, on its
+    // own: when a page raises no surprising new thread (predicted gain dried up) or it strays off
+    // the question. Never fewer than the seeded threads, so every prediction-derived angle runs at
+    // least once. How many hops actually happen is emergent — a point fact stops at one.
+    const maxHops=Math.max(frontier.length,cfg.ceiling);
     while(hops.length<maxHops&&frontier.length){
       const node=frontier.shift();
       step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching the web for “'+node.query+'”'));
@@ -1393,15 +1418,26 @@ class Component extends DCLogic {
           step('graph','Read “'+(res.title||this.short(url))+'” · +'+grew+' new entit'+(grew===1?'y':'ies'));
         }catch(e){step('warn','Couldn’t read '+this.short(url)+' — '+((e&&e.message)||e));}
       }
-      // CURIOSITY: of everything just kept, what's the most surprising NEW turn? That becomes
-      // the single next thread, sharpened by the anchor so it never drifts into a namesake.
+      // CURIOSITY → EMERGENT BREADTH: of everything just kept, which NEW turns are surprising
+      // enough to follow? `_leads` already gates on genuine novelty (new, repeated terms — not
+      // restatement, not junk), so a non-empty list IS the page's predicted gain. Follow every
+      // lead that clears the gate, up to the dial's breadth willingness — each sharpened by the
+      // anchor so it can't drift into a namesake. A point fact raises none → the thread runs dry
+      // and the walk ends; a rich subject raises several → it fans out. The COUNT is predicted,
+      // never a fixed battery.
       let next=null;
       if(keptText.length){
         const arrival=this._profile(keptText.join('\n'));
         const leads=this._leads(seen,arrival,chased);
         for(const [k,m] of arrival)seen.set(k,(seen.get(k)||0)+m);
-        if(!lookup&&leads.length&&hops.length+1<maxHops){next=leads[0].term;chased.add(next);frontier.push({query:this._nextQuery(anchor,next),term:next});
-          step('lead','The most surprising turn here is “'+next+'” — chasing it next.');}
+        if(leads.length&&hops.length+1<maxHops){
+          const fan=leads.slice(0,cfg.breadth);
+          for(const ld of fan){chased.add(ld.term);frontier.push({query:this._nextQuery(anchor,ld.term),term:ld.term});}
+          next=fan[0].term;
+          step('lead',fan.length>1
+            ? ('Surprising turns here: '+fan.map(l=>'“'+l.term+'”').join(', ')+' — following them while they stay on topic.')
+            : ('The most surprising turn here is “'+next+'” — chasing it next.'));
+        }
       }
       hops.push({query:node.query,term:node.term,got,next});
       if(!got){if(++stray>=cfg.patience)break;}else stray=0;
