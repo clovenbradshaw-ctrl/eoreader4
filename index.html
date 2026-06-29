@@ -1248,26 +1248,39 @@
             </sc-for>
           </sc-if>
           <sc-if value="{{ memTabLog }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size:10.5px;color:var(--ink3);margin-bottom:9px;line-height:1.45;">{{ memNote.shown }} of {{ memNote.count }} propositions in memory · subject <span style="font-style:italic;color:var(--acc);">relation</span> → object · click to open the source line.</div>
-            <sc-for list="{{ memNote.rows }}" as="r" hint-placeholder-count="5">
-              <div style="border-bottom:1px solid var(--line);">
-                <div onclick="{{ r.onToggle }}" title="Show the raw logged JSON" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:7px 8px;cursor:pointer;" style-hover="background:#f7f8fa">
-                  <span style="font-size:9px;color:var(--ink3);flex:0 0 auto;">{{ r.caret }}</span>
-                  <span style="{{ r.srcStyle }}">{{ r.src }}</span>
-                  <span style="font-size:12px;font-weight:600;color:var(--ink);">{{ r.s }}</span>
-                  <span style="font-size:11.5px;font-style:italic;color:var(--acc);">{{ r.v }}</span>
-                  <span style="font-size:12px;color:var(--ink3);flex:0 0 auto;">{{ r.arrow }}</span>
-                  <span style="font-size:12px;font-weight:600;color:var(--ink);">{{ r.o }}</span>
-                  <span style="{{ r.grainStyle }}">{{ r.grain }}</span>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap;">
+              <div style="font-size:10.5px;color:var(--ink3);line-height:1.45;flex:1;min-width:140px;">{{ memNote.shown }} of {{ memNote.count }} propositions in memory · click a row for its raw JSON.</div>
+              <button onclick="{{ onMemExportCSV }}" title="Download every proposition as a CSV table" style="font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:5px 10px;cursor:pointer;flex:0 0 auto;" style-hover="background:var(--card)">⤓ CSV</button>
+              <button onclick="{{ onMemExportJSON }}" title="Download every proposition as JSON" style="font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:5px 10px;cursor:pointer;flex:0 0 auto;" style-hover="background:var(--card)">⤓ JSON</button>
+            </div>
+            <sc-if value="{{ memNote.empty }}" hint-placeholder-val="{{ false }}"><div style="padding:28px 10px;text-align:center;font-size:12.5px;color:var(--ink3);line-height:1.5;">No propositions in memory yet — read a page and its SVO bonds appear here.</div></sc-if>
+            <div style="overflow-x:auto;">
+              <div style="min-width:560px;">
+                <div style="{{ memNote.headStyle }}">
+                  <span></span><span>Src</span><span>Subject</span><span>Relation</span><span>Object</span><span>Grain</span><span>Conf</span><span>Line</span>
                 </div>
-                <sc-if value="{{ r.expanded }}" hint-placeholder-val="{{ false }}">
-                  <div style="padding:0 8px 10px;">
-                    <pre style="margin:0;padding:11px 12px;background:#0f1216;color:#cdd3db;border-radius:9px;font-size:10.5px;line-height:1.5;overflow-x:auto;white-space:pre;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">{{ r.json }}</pre>
-                    <sc-if value="{{ r.hasSrc }}" hint-placeholder-val="{{ false }}"><div onclick="{{ r.onOpenSrc }}" style="font-size:10.5px;font-weight:600;color:var(--acc);cursor:pointer;margin-top:7px;">open the source line →</div></sc-if>
+                <sc-for list="{{ memNote.rows }}" as="r" hint-placeholder-count="5">
+                  <div style="border-bottom:1px solid var(--line);">
+                    <div onclick="{{ r.onToggle }}" title="Show the raw logged JSON" style="{{ r.rowStyle }}" style-hover="background:#f7f8fa">
+                      <span style="font-size:9px;color:var(--ink3);">{{ r.caret }}</span>
+                      <span style="{{ r.srcStyle }}">{{ r.src }}</span>
+                      <span style="font-size:12px;font-weight:600;color:var(--ink);word-break:break-word;">{{ r.s }}</span>
+                      <span style="font-size:11.5px;font-style:italic;color:var(--acc);word-break:break-word;">{{ r.v }}</span>
+                      <span style="font-size:12px;font-weight:600;color:var(--ink);word-break:break-word;">{{ r.o }}</span>
+                      <span style="{{ r.grainStyle }}">{{ r.grain }}</span>
+                      <span style="font-size:11px;color:var(--ink3);font-variant-numeric:tabular-nums;">{{ r.conf }}</span>
+                      <span style="font-size:11px;color:var(--ink3);">{{ r.line }}</span>
+                    </div>
+                    <sc-if value="{{ r.expanded }}" hint-placeholder-val="{{ false }}">
+                      <div style="padding:0 8px 10px;">
+                        <pre style="margin:0;padding:11px 12px;background:#0f1216;color:#cdd3db;border-radius:9px;font-size:10.5px;line-height:1.5;overflow-x:auto;white-space:pre;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;">{{ r.json }}</pre>
+                        <sc-if value="{{ r.hasSrc }}" hint-placeholder-val="{{ false }}"><div onclick="{{ r.onOpenSrc }}" style="font-size:10.5px;font-weight:600;color:var(--acc);cursor:pointer;margin-top:7px;">open the source line →</div></sc-if>
+                      </div>
+                    </sc-if>
                   </div>
-                </sc-if>
+                </sc-for>
               </div>
-            </sc-for>
+            </div>
           </sc-if>
         </div>
       </div>
@@ -1324,6 +1337,8 @@ class Component extends DCLogic {
   constructor(props){
     super(props);
     this.PROXY='https://n8n.intelechia.com/webhook';
+    // Grid template shared by the memory-log table header and every row, so the columns line up.
+    this._MEM_COLS='display:grid;grid-template-columns:16px 36px minmax(96px,1.4fr) minmax(72px,1fr) minmax(96px,1.4fr) 60px 42px 44px;gap:8px;align-items:start;';
     this.MAX_PASSAGE=600;   // a real prose sentence rarely exceeds this; beyond it is a list/table/directory segmentation artifact, never a passage to quote
     this.STOP=new Set('the a an of to in on at for and or but with by from as is are was were be been being this that these those it its their his her our your they we you i he she him them us me year years some most many few what who whom which when where how why than then so if not no nor only also just very more less new over under into out up down off above below'.split(' '));
     this.MONTHS=new Set('january february march april may june july august september october november december jan feb mar apr jun jul aug sept sep oct nov dec'.split(' '));
@@ -4358,27 +4373,80 @@ class Component extends DCLogic {
   }
   // The actual EO notation logged into memory — the SVO propositions on every bond.
   _safeJson(o){try{return JSON.stringify(o,(k,v)=>v===undefined?null:v,2);}catch(e){return String((e&&e.message)||e);}}
-  memoryNotation(){
-    if(!this.master||!this.graph)return {rows:[],count:0,shown:0};
-    const GRAINC={Ground:'#2f6f9e',Figure:'#b06f2a',Pattern:'#2f7d54'};
-    const seen=new Set(),rows=[];
+  // Shared collector: every deduped SVO proposition held in memory, each carried
+  // with its bond edge, its sealed event and its source URL. The memory-log table
+  // (capped for display) and the CSV/JSON exports (uncapped) are both folds of this.
+  _memProps(){
+    if(!this.master||!this.graph)return [];
+    const seen=new Set(),out=[];
     for(const e of this.graph.edges){
       if(e.from===e.to)continue;
       if(this.isURLish(this.labelOf(e.from))||this.isURLish(this.labelOf(e.to)))continue;
       const t=this.edgeTriple(e),k=t.s+'|'+t.v+'|'+t.o+'|'+(t.sent==null?'':t.sent);
       if(seen.has(k))continue;seen.add(k);
-      const i=rows.length,gc=GRAINC[t.grain]||'#6b7280',exp=(this.state.memExpand===i);
       const ev=(e.seq!=null&&this.master.events[e.seq])||null;
       const u=t.sent!=null?this.master.sentenceSource[t.sent]:null;
-      rows.push({idx:i,s:t.s,v:(t.neg?'¬':'')+t.v,o:t.o,arrow:(t.irr?'⤏':'→'),src:t.src||'',grain:t.grain,conf:t.conf.toFixed(2),
+      out.push({t,e,ev,u});
+    }
+    return out;
+  }
+  // The full record for one proposition — flat scalar columns first (CSV-friendly),
+  // then the raw edge/event/sentence, so a row exports the same thing its expansion shows.
+  _memRecord({t,e,ev,u}){
+    return {source:u||null,src:t.src||null,subject:t.s,relation:(t.neg?'¬':'')+t.v,object:t.o,
+      grain:t.grain,confidence:t.conf,polarity:(ev&&ev.polarity)||e.polarity||null,
+      modality:(ev&&ev.modality)||e.modality||null,op:e.op||(ev&&ev.op)||null,reader:t.reader,
+      seq:e.seq!=null?e.seq:null,sentIdx:t.sent!=null?t.sent:null,
+      sentence:t.sent!=null?this.master.sentences[t.sent]:null,
+      edge:{from:e.from,to:e.to,via:e.via,relType:e.relType,kind:e.kind,op:e.op,seq:e.seq,sentIdx:e.sentIdx,weight:e.weight,grain:e.grain,confidence:e.confidence,polarity:e.polarity,modality:e.modality,reader:e.reader},
+      event:ev};
+  }
+  memoryNotation(){
+    if(!this.master||!this.graph)return {rows:[],count:0,shown:0,empty:true,headStyle:this._MEM_COLS};
+    const GRAINC={Ground:'#2f6f9e',Figure:'#b06f2a',Pattern:'#2f7d54'};
+    const props=this._memProps();
+    const rows=props.slice(0,600).map(({t,e,ev,u},i)=>{
+      const gc=GRAINC[t.grain]||'#6b7280',exp=(this.state.memExpand===i);
+      return {idx:i,s:t.s,v:(t.neg?'¬':'')+t.v,o:t.o,src:t.src||'—',grain:t.grain,conf:t.conf.toFixed(2),
+        line:(t.sent!=null?'s'+t.sent:'—'),
         expanded:exp,caret:(exp?'▾':'▸'),
+        rowStyle:this._MEM_COLS+'padding:7px 8px;cursor:pointer;',
         json:exp?this._safeJson({edge:{from:e.from,to:e.to,via:e.via,relType:e.relType,kind:e.kind,op:e.op,seq:e.seq,sentIdx:e.sentIdx,weight:e.weight,grain:e.grain,confidence:e.confidence,polarity:e.polarity,modality:e.modality,reader:e.reader},event:ev,source:u,sentence:t.sent!=null?this.master.sentences[t.sent]:null}):'',
         hasSrc:!!u,onOpenSrc:u?(()=>{this.setState({memOpen:false});this.openSource(u);}):(()=>{}),
-        grainStyle:'font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:'+gc+';background:'+gc+'18;border-radius:4px;padding:1px 5px;flex:0 0 auto;',
-        srcStyle:'font-size:9px;font-weight:800;color:var(--ink3);flex:0 0 auto;min-width:24px;',
-        onToggle:()=>this.setState(s=>({memExpand:s.memExpand===i?null:i}))});
-    }
-    return {rows:rows.slice(0,600),count:rows.length,shown:Math.min(600,rows.length)};
+        grainStyle:'font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:'+gc+';background:'+gc+'18;border-radius:4px;padding:1px 5px;align-self:start;justify-self:start;',
+        srcStyle:'font-size:9px;font-weight:800;color:var(--ink3);',
+        onToggle:()=>this.setState(s=>({memExpand:s.memExpand===i?null:i}))};
+    });
+    return {rows,count:props.length,shown:rows.length,empty:props.length===0,
+      headStyle:this._MEM_COLS+'padding:4px 8px 7px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);'};
+  }
+  // Hand a generated text file to the browser. The anchor must be IN the document
+  // for the click to start a download in Firefox/Safari, so append, click, remove.
+  _download(name,text,mime){
+    try{
+      const blob=new Blob([text],{type:mime||'text/plain'});const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download=name;a.style.display='none';
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(e){}
+  }
+  _csvCell(v){
+    if(v==null)return '';
+    const s=String(v);
+    return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+  }
+  exportMemoryCSV(){
+    const recs=this._memProps().map(p=>this._memRecord(p));
+    if(!recs.length)return;
+    const cols=['src','subject','relation','object','grain','confidence','polarity','modality','op','reader','seq','sentIdx','source','sentence'];
+    const lines=[cols.join(',')];
+    for(const r of recs)lines.push(cols.map(c=>this._csvCell(r[c])).join(','));
+    this._download('eoreader-memory-'+Date.now()+'.csv',lines.join('\r\n'),'text/csv');
+  }
+  exportMemoryJSON(){
+    const recs=this._memProps().map(p=>this._memRecord(p));
+    if(!recs.length)return;
+    this._download('eoreader-memory-'+Date.now()+'.json',this._safeJson(recs),'application/json');
   }
   previewVals(){const p=this.state.previewWiki;if(!p)return null;
     return {title:p.title,loading:!!p.loading&&!p.extract,err:!!p.err,
@@ -5277,9 +5345,10 @@ class Component extends DCLogic {
       memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
       memTab:this.state.memTab||'sources',memTabSources:(this.state.memTab||'sources')==='sources',memTabLog:this.state.memTab==='log',
       onMemSources:()=>this.setState({memTab:'sources'}),onMemLog:()=>this.setState({memTab:'log'}),
+      onMemExportCSV:()=>this.exportMemoryCSV(),onMemExportJSON:()=>this.exportMemoryJSON(),
       memSourcesTabStyle:((this.state.memTab||'sources')==='sources'?'background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);'),
       memLogTabStyle:(this.state.memTab==='log'?'background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);'),
-      memNote:((this.state.memOpen&&this.state.memTab==='log')?this.memoryNotation():{rows:[],count:0,shown:0}),
+      memNote:((this.state.memOpen&&this.state.memTab==='log')?this.memoryNotation():{rows:[],count:0,shown:0,empty:true,headStyle:this._MEM_COLS}),
       themeSwatches:this.THEMES.map(t=>({name:t.name,hex:t.hex,active:t.hex.toLowerCase()===_acc.toLowerCase(),onPick:()=>this.setAccent(t.hex),
         style:'width:26px;height:26px;border-radius:7px;cursor:pointer;background:'+t.hex+';box-shadow:0 0 0 '+(t.hex.toLowerCase()===_acc.toLowerCase()?'2px var(--card),0 0 0 4px '+t.hex:'1px rgba(0,0,0,.12) inset')+';'})),
       hlOptions:['marker','underline','off'].map(k=>({k,label:k==='marker'?'Highlight':k==='underline'?'Underline':'Off',active:this.state.highlightStyle===k,onPick:()=>this.setHighlight(k),
