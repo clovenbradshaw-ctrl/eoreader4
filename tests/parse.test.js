@@ -9,12 +9,27 @@ import { tok } from '../src/perceiver/parse/tokenize.js';
 import { projectGraph } from '../src/core/project.js';
 
 test('chrome gate holds only degenerate structure — roles are semantic', () => {
-  assert.ok(isChrome('42'));            // a bare number
   assert.ok(isChrome('III'));           // a bare roman numeral
   assert.ok(isChrome('---'));           // a separator rule
+  assert.ok(isChrome('[12]'));          // a bracketed footnote marker — a ref, not a datum
   assert.ok(!isChrome('Page 12'));      // a heading is a semantic site role, not a list match
   assert.ok(!isChrome('Alice met Bob at the cafe.'));
   assert.ok(isChrome('Page 12', true)); // ...but a mini-LLM nudge can still hold it
+});
+
+test('a bare number is content, not chrome — data is never censored at parse time', () => {
+  // A forecast/results table serialized to text lands each figure on its own line. Holding
+  // those as chrome censored the very data "what are the numbers?" asks for, so a digit-bearing
+  // line is content now — regardless of length.
+  assert.ok(!isChrome('42'));           // a bare integer (was wrongly held as chrome)
+  assert.ok(!isChrome('72'));           // a two-digit figure the length<3 rule used to sweep up
+  assert.ok(!isChrome('66.9'));         // a decimal
+  assert.ok(!isChrome('1,471'));        // a grouped figure
+  assert.ok(!isChrome('72°'));          // a temperature with a unit
+  assert.ok(!isChrome('$5'));           // a price the length<3 rule used to sweep up
+  // ...but the genuinely contentless stays degenerate.
+  assert.ok(isChrome('ok'));            // a stray non-numeric fragment
+  assert.ok(isChrome(''));              // empty
 });
 
 test('segmentSentences splits on ?.!', () => {
