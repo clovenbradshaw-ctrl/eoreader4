@@ -182,6 +182,21 @@ export const LIBRARIAN_CUE =
   'phrase where it carries the point. Where the reading is silent or thin on something, say so ' +
   'plainly rather than filling the gap from your own authority.';
 
+// THE CURRENCY + COMPETING-LENS register. The reading can predate the current moment (the system
+// prompt's currentMomentLine states it as ambient context), and the sources can disagree with each
+// other. So time-sensitive facts — who currently holds a role, office, or title, someone's present
+// status, anything phrased as "current" or "now" — may have moved on since a source was written;
+// and when sources tell it differently, the honest answer holds the competing accounts up rather
+// than silently picking one. Opt-in (the reader passes it alongside the librarian cue); never rides
+// the default turn prompt, so the golden tests stand.
+export const CURRENCY_CUE =
+  'Read against the clock, and against each other. Facts that change with time — who currently ' +
+  'holds a role, office, or title, someone\'s present status, anything that is "current" or "now" ' +
+  '— may have moved on since a source was written: when a claim like that rests on older material, ' +
+  'say it may be out of date, and where the question is about what is true now, lean on the most ' +
+  'recent source. When the sources disagree, lay out the competing accounts and which source says ' +
+  'which — don\'t silently assert just one.';
+
 // A keyword read of the question's scope, in the same spirit as the turn's register pass: a
 // comparison, a survey, an enumeration, or an open "how/why" wants the sectioned shape; anything
 // else (a pointed lookup) answers straight. A tight length budget also forces straight — a capped

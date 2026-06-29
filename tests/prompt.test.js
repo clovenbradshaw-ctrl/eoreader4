@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildGroundedMessages, buildChatMessages, orientationLine, EXCERPTS_HEADER,
-  orderSpansForFrame, currentMomentLine,
+  orderSpansForFrame, currentMomentLine, CURRENCY_CUE, LIBRARIAN_CUE,
 } from '../src/model/prompt.js';
 import { serializeNotes } from '../src/perceiver/index.js';
 import { parseText } from '../src/perceiver/parse/index.js';
@@ -120,6 +120,23 @@ test('the summary degeneracy guard rides on a summary task only — faithfulness
   assert.doesNotMatch(sum.content, /at most \d+ sentence/, 'the guard is faithfulness, not a length cap');
   const [, ans] = buildGroundedMessages({ question: 'what happened', spans, task: 'answer' });
   assert.doesNotMatch(ans.content, /drawing the excerpts together/, 'not on a default answer task');
+});
+
+// The currency + competing-lens register (the reader passes it via `shape`): facts are weighed
+// against the current moment, and disagreeing sources are held up rather than silently resolved.
+test('CURRENCY_CUE speaks to recency and to competing accounts, and rides via the shape channel', () => {
+  // The cue itself names the two jobs: time-sensitive facts may be out of date, and disagreement
+  // is surfaced rather than silently resolved.
+  assert.match(CURRENCY_CUE, /out of date|current|recent/i, 'the cue weighs facts against the clock');
+  assert.match(CURRENCY_CUE, /disagree|competing/i, 'the cue holds up competing accounts');
+  // The reader composes [LIBRARIAN_CUE, CURRENCY_CUE, …] into `shape`; buildGroundedMessages
+  // carries that into the user block on a substantive (uncapped) grounded answer.
+  const shape = [LIBRARIAN_CUE, CURRENCY_CUE].join('\n\n');
+  const [, user] = buildGroundedMessages({ question: 'who is the mayor now?', spans: [{ idx: 0, text: 'x' }], shape });
+  assert.ok(user.content.includes(CURRENCY_CUE), 'the cue reaches the prompt when the reader passes it');
+  // A capped quick-lookup drops the shape block (a one-line answer needs no lecture) — unchanged behaviour.
+  const [, capped] = buildGroundedMessages({ question: 'q', spans: [{ idx: 0, text: 'x' }], shape, budget: { sentences: 2 } });
+  assert.ok(!capped.content.includes(CURRENCY_CUE), 'a budgeted lookup carries no shape block');
 });
 
 test('the surface discipline holds across the whole prompt: no indices, codes, citation tags, or arrows', () => {

@@ -1161,7 +1161,7 @@ class Component extends DCLogic {
       // FREEFORM mode drops the sectioned overview scaffolding (shapeForScope) but keeps the
       // librarian grounding cue — answers stay sourced and attributed, just written as prose.
       const overview=(this.state.answerMode||'overview')!=='freeform';
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,overview?((this._ME.shapeForScope&&this._ME.shapeForScope(q))||''):''].filter(Boolean).join('\n\n'):'';
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,this._ME.CURRENCY_CUE,overview?((this._ME.shapeForScope&&this._ME.shapeForScope(q))||''):''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
@@ -1312,7 +1312,7 @@ class Component extends DCLogic {
       // FREEFORM mode drops the sectioned overview scaffolding (shapeForScope) but keeps the
       // librarian grounding cue — answers stay sourced and attributed, just written as prose.
       const overview=(this.state.answerMode||'overview')!=='freeform';
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,overview?((this._ME.shapeForScope&&this._ME.shapeForScope(q))||''):''].filter(Boolean).join('\n\n'):'';
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,this._ME.CURRENCY_CUE,overview?((this._ME.shapeForScope&&this._ME.shapeForScope(q))||''):''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});

@@ -6,6 +6,6 @@
 // back to a structural answer if no model is available.
 export { createModel } from '../model/interface.js';
 export { streamPhrase } from '../model/stream.js';
-export { buildChatMessages, buildGroundedMessages, shapeForScope, LIBRARIAN_CUE } from '../model/prompt.js';
+export { buildChatMessages, buildGroundedMessages, shapeForScope, LIBRARIAN_CUE, CURRENCY_CUE } from '../model/prompt.js';
 import '../model/echo.js';
 import '../model/webllm.js';
