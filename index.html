@@ -277,7 +277,13 @@
                   <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.researchStyle }}">
                       <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
-                      <sc-if value="{{ m.researchOpen }}" hint-placeholder-val="{{ true }}">
+                      <sc-if value="{{ m.researchLiveOn }}" hint-placeholder-val="{{ true }}">
+                        <div style="{{ m.researchLiveBox }}">
+                          <sc-for list="{{ m.researchLive }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
+                          <sc-if value="{{ m.researchHasEarlier }}" hint-placeholder-val="{{ false }}"><div style="{{ m.researchEarlierStyle }}">{{ m.researchEarlierLabel }}</div></sc-if>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ m.researchFullOn }}" hint-placeholder-val="{{ false }}">
                         <div style="margin-top:7px;display:flex;flex-direction:column;gap:5px;">
                           <sc-for list="{{ m.researchSteps }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
                         </div>
@@ -285,17 +291,19 @@
                     </div>
                   </sc-if>
                   <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
-                  <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+                  <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
                   </sc-if>
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
-                      <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
-                      <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+                      <sc-if value="{{ m.refsHas }}" hint-placeholder-val="{{ false }}">
+                        <div style="{{ m.refsStyle }}">
+                          <div style="{{ m.refsHeadStyle }}">{{ m.refsLabel }}</div>
+                          <sc-for list="{{ m.refs }}" as="r" hint-placeholder-count="1"><div onclick="{{ r.onOpen }}" style="{{ m.refRowStyle }}" style-hover="background:var(--app)"><span style="{{ m.refNumStyle }}">{{ r.n }}</span><span style="{{ m.refBodyStyle }}"><span style="{{ m.refPreviewStyle }}">{{ r.preview }}</span><span style="{{ m.refSrcStyle }}">{{ r.domain }}</span></span></div></sc-for>
+                        </div>
+                      </sc-if>
                       <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
-                      <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                        <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                          <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
-                        </sc-if>
+                      <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                       </sc-if>
                     </div>
                   </sc-if>
@@ -817,7 +825,13 @@
                 <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.researchStyle }}">
                     <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
-                    <sc-if value="{{ m.researchOpen }}" hint-placeholder-val="{{ true }}">
+                    <sc-if value="{{ m.researchLiveOn }}" hint-placeholder-val="{{ true }}">
+                      <div style="{{ m.researchLiveBox }}">
+                        <sc-for list="{{ m.researchLive }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
+                        <sc-if value="{{ m.researchHasEarlier }}" hint-placeholder-val="{{ false }}"><div style="{{ m.researchEarlierStyle }}">{{ m.researchEarlierLabel }}</div></sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ m.researchFullOn }}" hint-placeholder-val="{{ false }}">
                       <div style="margin-top:7px;display:flex;flex-direction:column;gap:5px;">
                         <sc-for list="{{ m.researchSteps }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
                       </div>
@@ -825,17 +839,19 @@
                   </div>
                 </sc-if>
                 <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
-                <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+                <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
                 </sc-if>
                 <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.groundStyle }}">
-                    <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
-                    <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+                    <sc-if value="{{ m.refsHas }}" hint-placeholder-val="{{ false }}">
+                      <div style="{{ m.refsStyle }}">
+                        <div style="{{ m.refsHeadStyle }}">{{ m.refsLabel }}</div>
+                        <sc-for list="{{ m.refs }}" as="r" hint-placeholder-count="1"><div onclick="{{ r.onOpen }}" style="{{ m.refRowStyle }}" style-hover="background:var(--app)"><span style="{{ m.refNumStyle }}">{{ r.n }}</span><span style="{{ m.refBodyStyle }}"><span style="{{ m.refPreviewStyle }}">{{ r.preview }}</span><span style="{{ m.refSrcStyle }}">{{ r.domain }}</span></span></div></sc-for>
+                      </div>
+                    </sc-if>
                     <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
-                    <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                      <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                        <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
-                      </sc-if>
+                    <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                     </sc-if>
                   </div>
                 </sc-if>
@@ -2431,8 +2447,14 @@ class Component extends DCLogic {
   // Minimal, SAFE markdown → HTML for chat answers (the model replies in markdown:
   // **bold**, lists, `code`, links). Everything is HTML-escaped FIRST, then only a fixed
   // set of tags is emitted, so nothing the model writes can inject raw markup.
-  _md(src){
+  // Render markdown-lite to HTML. `cites` (optional) is an idx→{u,label} registry: any
+  // ⟦cN⟧ sentinel _citeAnnotate left in the text becomes an inline, clickable citation pill
+  // (¶ source) bound to passage N. Clicks are caught by the bubble's onCite delegate (data-u).
+  _md(src,cites){
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // A clean citation glyph — a bare superscript footnote number (no box). Numbered per passage;
+    // hover shows the source name; click opens it (bubble onCite delegate, data-u).
+    const pillStyle='color:var(--acc);font-weight:700;font-size:0.72em;vertical-align:super;line-height:0;cursor:pointer;padding:0 1px;';
     const inline=s=>esc(s)
       .replace(/`([^`]+)`/g,(m,c)=>'<code style="background:rgba(0,0,0,.07);border-radius:4px;padding:1px 4px;font-size:.92em;">'+c+'</code>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);">$1</a>')
@@ -2441,7 +2463,10 @@ class Component extends DCLogic {
       // href="…" (preceded by a quote) so we never double-wrap a link.
       .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);word-break:break-all;">$2</a>')
       .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>')
+      // Citation sentinels → inline numbered glyphs (added AFTER escaping so the span is raw HTML).
+      .replace(/⟦c(\d+)⟧/g,(m,i)=>{const c=cites&&cites[i];if(!c)return '';
+        return '<span data-u="'+esc(String(c.u||'')).replace(/"/g,'&quot;')+'" title="'+esc(c.label||'source').replace(/"/g,'&quot;')+'" style="'+pillStyle+'">'+(c.n||'•')+'</span>';});
     const lines=String(src||'').replace(/\r/g,'').split('\n');
     const out=[];let list=null;
     const flush=()=>{if(list){out.push('<'+list.tag+' style="margin:6px 0;padding-left:20px;">'+list.items.join('')+'</'+list.tag+'>');list=null;}};
@@ -2540,13 +2565,18 @@ class Component extends DCLogic {
       const model=await this.ensureChatModel();
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
+      // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
+      // not an expert holding forth (the librarian cue, every grounded turn). A broad / explanatory
+      // question additionally gets the answer-first, sectioned SHAPE (headings, bold, bullets);
+      // a pointed lookup keeps just the librarian register and answers straight.
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
           question:q, spans:ground.spans||[], graph:this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),
           task:this._isSummaryQ(q)?'summary':'answer',
-          conversation:{pastTurns}, now:new Date(),
+          conversation:{pastTurns}, now:new Date(), shape,
         });
       }else{
         // Nothing read yet — fall back to the plain assistant frame (chat works without a doc).
@@ -2560,7 +2590,8 @@ class Component extends DCLogic {
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
+      // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken});
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       // Surface grounding for EVERY answer, honestly. Matched lines show as citations; a
       // summary that leaned on the source's opening shows those lines, disclosed as such;
@@ -2682,14 +2713,17 @@ class Component extends DCLogic {
       const model=await this.ensureChatModel();
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
+      // The research/web chat path: same librarian register (+ sectioned shape on a broad question).
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
-          orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date()});
+          orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
+      // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken});
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       const gr=this._groundReport(ground,grounded);
@@ -2847,6 +2881,45 @@ class Component extends DCLogic {
   }
   // The content terms that carry a page's topic — lowercased words, function words dropped.
   _researchTerms(s){return (String(s||'').toLowerCase().match(/[a-z][a-z0-9'’-]{2,}/g)||[]).filter(t=>!this.STOP.has(t));}
+  // Bind each PROPOSITION of an answer to the passage it leans on, so the claim links back
+  // inline (the ¶ pill _md renders) instead of dumping a generic passage list at the bottom.
+  // A lightweight lexical match — content-term overlap per sentence against each gathered
+  // passage — line by line so markdown structure (## headings, - bullets) is preserved; a
+  // heading never gets a pill. Returns the text with ⟦cN⟧ sentinels + an idx→{u,label} registry.
+  _citeAnnotate(text,passages){
+    const ps=(passages||[]).filter(p=>p&&p.text&&p.u!=null&&p.i!=null);
+    if(!ps.length)return {text:String(text||''),reg:null};
+    const ptok=ps.map(p=>({p,set:new Set(this._researchTerms(p.text))}));
+    const reg={};const SENT=/(?<=[.!?])\s+/;
+    const out=String(text||'').split('\n').map(line=>{
+      if(!line.trim()||/^\s*#{1,6}\s/.test(line))return line;           // blank or heading → no cite
+      return line.split(SENT).map(sent=>{
+        const toks=this._researchTerms(sent);
+        if(toks.length<3)return sent;                                    // too short to bind confidently
+        const tset=new Set(toks);let best=null,bestScore=0;
+        for(const {p,set} of ptok){
+          if(!set.size)continue;let hit=0;for(const t of tset)if(set.has(t))hit++;
+          const score=hit/tset.size;
+          if(hit>=2&&score>bestScore){bestScore=score;best=p;}
+        }
+        if(best&&bestScore>=0.3){
+          if(!reg[best.i]){
+            // A true footnote number per distinct PASSAGE (first-appearance order): the glyph ⟦cN⟧
+            // and the references list below share this number. The verbatim passage text rides in
+            // `text` so the references can preview the actual source line — the librarian apparatus.
+            const n=Object.keys(reg).length+1;
+            reg[best.i]={u:best.u,n,text:best.text,label:this.truncLabel((((this.pageOf(best.u)||{}).title)||(/^text:/i.test(best.u)?'text':this.short(best.u))),40)};
+          }
+          return sent+'⟦c'+best.i+'⟧';
+        }
+        return sent;
+      }).join(' ');
+    }).join('\n');
+    return {text:out,reg:Object.keys(reg).length?reg:null};
+  }
+  // The bubble's click delegate: a citation pill (data-u) opens its source. Other clicks
+  // inside the answer (markdown links carry their own href) fall through untouched.
+  _onCite(e){let el=e&&(e.target||e.srcElement);for(let d=0;el&&d<6;d++){if(el.getAttribute){const u=el.getAttribute('data-u');if(u){if(e.preventDefault)e.preventDefault();if(e.stopPropagation)e.stopPropagation();this.goWeb(u);return;}}el=el.parentNode;}}
   // A page reduced to its term-frequency profile — the unit the walk measures surprise on.
   _profile(text){const m=new Map();for(const t of this._researchTerms(text))m.set(t,(m.get(t)||0)+1);return m;}
   // The prose of an already-read page, for the surprise / saliency measure.
@@ -2957,6 +3030,24 @@ class Component extends DCLogic {
       // Render the model's markdown LIVE — even while the bubble is still pending — so lists, bold
       // and line breaks form as the answer streams in, not only once it finishes. User turns stay plain.
       const isMd=!isUser&&!!m.text;
+      // Bind each proposition to the passage it leans on → inline ¶ pills in the answer body.
+      // Only once the answer is settled (passages are attached on finish), so streaming stays cheap.
+      const ann=(isMd&&!m.pending&&(m.passages||[]).length)?this._citeAnnotate(m.text,m.passages):null;
+      const bodyHtml=isMd?this._md(ann?ann.text:m.text,ann&&ann.reg):'';
+      // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
+      // line (the librarian apparatus, shown by default). When the binder found no inline match we
+      // still list the passages the answer drew on, so the source text is always in view.
+      // ~40–60 words is the span that carries a claim with its qualifier and reads as complete
+      // (featured-snippet research); longer than the old 46-char chip, clamped in the view so it
+      // stays tidy. Each ref also carries its source identity (favicon + domain) and a hasIcon flag.
+      const refOf=(u,n,text)=>({n,label:titleForUrl(u),domain:this.short(u)||titleForUrl(u),
+        preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.goWeb(u)});
+      let refs=[];
+      if(ann&&ann.reg){
+        refs=Object.keys(ann.reg).map(i=>ann.reg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
+      }else if(!isUser&&!m.pending&&(m.passages||[]).length){
+        refs=(m.passages||[]).slice(0,6).map((p,k)=>refOf(p.u,k+1,p.text));
+      }
       // The grounding mode this turn was tagged with (sendChat/_answerInto via _groundReport):
       // 'matched' (lines that matched), 'opening' (drew on the source's opening), 'model' (the
       // model's own words). Older/structural turns carry none — fall back to the matched look
@@ -2999,12 +3090,24 @@ class Component extends DCLogic {
         iconStyle:'flex:0 0 auto;width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:'+(RCOL[s.kind]||'#9aa1ab')+';background:'+(RCOL[s.kind]||'#9aa1ab')+'1c;margin-top:1px;',
         textStyle:'flex:1;min-width:0;'})):[];
       const researchTitle=researchRunning?'Researching…':('Researched '+((r&&r.readCount)||0)+' source'+(((r&&r.readCount)||0)!==1?'s':'')+' · '+((r&&r.hops)||0)+' hop'+(((r&&r.hops)||0)!==1?'s':''));
+      // WHILE RUNNING: one compact, fixed block showing only the latest few beats (parsing /
+      // reading / following a lead) — not the full list that expands the screen then vanishes.
+      // The earlier beats stay folded into "+N earlier"; the whole trail re-opens once it's done.
+      const RLIVE=3;
+      const researchLiveOn=researchRunning;
+      const researchFullOn=!researchRunning&&resOn;
+      const researchLive=researchRunning?researchSteps.slice(-RLIVE):[];
+      const researchHasEarlier=researchRunning&&researchSteps.length>RLIVE;
+      const researchEarlierLabel='+'+Math.max(0,researchSteps.length-RLIVE)+' earlier step'+((researchSteps.length-RLIVE)!==1?'s':'');
       // While researching with no answer yet, the trail IS the message — suppress the empty
       // pulsing bubble. Once the answer streams in (or for a normal turn) the bubble shows.
       const showBubble=!(researchRunning&&!m.text);
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
-      return {isUser,pending:!!m.pending,showBubble,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
+      return {isUser,pending:!!m.pending,showBubble,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:bodyHtml,onCite:(e)=>this._onCite(e),
         hasResearch,researchRunning,researchSteps,researchOpen:resOn,researchTitle,
+        researchLiveOn,researchFullOn,researchLive,researchHasEarlier,researchEarlierLabel,
+        researchLiveBox:'margin-top:7px;display:flex;flex-direction:column;gap:5px;',
+        researchEarlierStyle:'font-size:10.5px;color:var(--ink3);margin-top:1px;padding-left:23px;',
         researchCaret:researchRunning?'':(resOn?'▾':'▸'),onToggleResearch:()=>{if(!researchRunning)this.toggleGround(resKey);},
         researchStyle:'max-width:80%;margin-bottom:7px;background:var(--app);border:1px solid var(--line2);border-radius:11px;padding:9px 12px;align-self:flex-start;',
         researchHeadStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3);background:transparent;border:none;padding:0;cursor:'+(researchRunning?'default':'pointer')+';',
@@ -3012,6 +3115,15 @@ class Component extends DCLogic {
         sources:cites,hasSources:cites.length>0,entities,hasEntities:entities.length>0,
         hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
         groundLabel,groundCaret:gOn?'▾':'▸',
+        refs,refsHas:refs.length>0,
+        refsLabel:'Sources · '+refs.length,
+        refsStyle:'max-width:88%;margin-top:10px;border-top:1px solid var(--line);padding-top:8px;',
+        refsHeadStyle:'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin:0 0 4px;',
+        refRowStyle:'display:flex;align-items:flex-start;gap:9px;padding:8px 6px;border-radius:8px;cursor:pointer;',
+        refNumStyle:'flex:0 0 auto;font-size:11px;font-weight:700;color:var(--acc);min-width:13px;text-align:right;margin-top:1px;',
+        refBodyStyle:'flex:1;min-width:0;',
+        refPreviewStyle:'font-size:12.5px;line-height:1.5;color:var(--ink);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;',
+        refSrcStyle:'display:block;font-size:10.5px;font-weight:600;color:var(--ink3);margin-top:4px;',
         groundDisclosure:disclosure,hasDisclosure:!!disclosure,
         disclosureStyle:'font-size:11px;line-height:1.45;color:var(--ink3);font-style:italic;margin-top:5px;',
         groundStyle:'max-width:80%;margin-top:7px;',
@@ -3413,20 +3525,30 @@ class Component extends DCLogic {
     const W=300,H=232,cx=W/2,cy=H/2;
     const lab=this.labelOf(sel),hov=this.state.hoverEnt;
     const GRAINC={Ground:'#2f6f9e',Figure:'#b06f2a',Pattern:'#2f7d54'};
-    const real=(nbrs||[]).filter(n=>n&&n.id!=null&&!this.isURLish(this.labelOf(n.id))).slice(0,7)
+    const all=(nbrs||[]).filter(n=>n&&n.id!=null&&!this.isURLish(this.labelOf(n.id)));
+    const MAXN=9, extra=Math.max(0,all.length-MAXN);
+    const real=all.slice(0,MAXN)
       .map(n=>({label:this.labelOf(n.id),id:n.id,w:Math.max(0.001,n.w||1),grain:n.grain||'Figure'}));
     if(!real.length)return null;
     const N=real.length, wmax=Math.max.apply(null,real.map(n=>n.w).concat([1]));
-    const rx=Math.min(116,72+N*7), ry=Math.min(84,50+N*6);
+    // Ring radii grow with crowding so neighbours never collide, capped to keep the
+    // centre legible. Labels are free to spill past the ring — the viewBox is grown
+    // at the end to wrap every node and label, so nothing ever clips the card edge.
+    const rx=Math.min(120,76+N*6), ry=Math.min(94,54+N*6);
     real.forEach((nd,i)=>{const ang=-Math.PI/2+i*(2*Math.PI/N);
       nd._ca=Math.cos(ang);nd._sa=Math.sin(ang);nd._x=cx+nd._ca*rx;nd._y=cy+nd._sa*ry;
-      nd._r=Math.max(13,Math.min(20,12+Math.sqrt(nd.w/wmax)*9));});
+      nd._r=Math.max(13,Math.min(21,12+Math.sqrt(nd.w/wmax)*9));});
     const anyHover=real.some(n=>n.id===hov), cc=this.hashColor(lab), layers=[];
+    // Track content bounds as we draw, then fit the viewBox around them.
+    let minX=cx-rx,maxX=cx+rx,minY=cy-ry,maxY=cy+ry;
+    const fit=(x0,y0,x1,y1)=>{if(x0<minX)minX=x0;if(x1>maxX)maxX=x1;if(y0<minY)minY=y0;if(y1>maxY)maxY=y1;};
     layers.push(h('ellipse',{key:'g1',cx,cy,rx,ry,fill:'none',stroke:'#ecebe6',strokeWidth:1}));
+    // Edges: grain-coloured, width by bond strength, curvature alternating per spoke
+    // so a dense fan reads as separate arcs instead of one smudge.
     real.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,gc=GRAINC[nd.grain]||GRAINC.Figure;
       const dx=nd._x-cx,dy=nd._y-cy,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len;
       const sx=cx+ux*28,sy=cy+uy*28,ex=nd._x-ux*nd._r,ey=nd._y-uy*nd._r;
-      const mx=(sx+ex)/2,my=(sy+ey)/2,off=9;
+      const mx=(sx+ex)/2,my=(sy+ey)/2,off=(i%2?9:-9);
       layers.push(h('path',{key:'e'+i,d:'M '+sx+' '+sy+' Q '+(mx-uy*off)+' '+(my+ux*off)+' '+ex+' '+ey,fill:'none',
         stroke:on?'#8a531e':gc,strokeLinecap:'round',strokeWidth:on?2.6:(1+(nd.w/wmax)*1.8),opacity:faded?0.12:0.5}));});
     real.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,c=this.hashColor(nd.label);
@@ -3434,8 +3556,10 @@ class Component extends DCLogic {
       if(side===1){lx=nd._x+nd._r+5;ly=nd._y+3;anchor='start';}
       else if(side===-1){lx=nd._x-nd._r-5;ly=nd._y+3;anchor='end';}
       else{anchor='middle';lx=nd._x;ly=nd._sa>0?nd._y+nd._r+11:nd._y-nd._r-6;}
-      const name=this.truncLabel(nd.label,12),tw=name.length*5.3+8;
+      const name=this.truncLabel(nd.label,16),tw=name.length*5.3+8;
       const hx=anchor==='start'?lx-4:anchor==='end'?lx-tw+4:lx-tw/2;
+      fit(nd._x-nd._r,nd._y-nd._r,nd._x+nd._r,nd._y+nd._r);
+      fit(hx,ly-9,hx+tw,ly+4);
       const els=[];
       if(on)els.push(h('circle',{key:'h',cx:nd._x,cy:nd._y,r:nd._r+4,fill:'none',stroke:c,strokeWidth:1.4,opacity:0.4}));
       els.push(h('circle',{key:'cf',cx:nd._x,cy:nd._y,r:nd._r,fill:c,opacity:0.12}));
@@ -3450,9 +3574,16 @@ class Component extends DCLogic {
       h('circle',{key:'cr',cx,cy,r:27,fill:'none',stroke:cc,strokeWidth:2.2}),
       h('text',{key:'ci',x:cx,y:cy+5,textAnchor:'middle',style:{fontSize:'13px',fontWeight:'800',fill:cc,pointerEvents:'none'}},this.initials(lab))
     ]));
+    // The ring is capped at MAXN; the remainder lives in the full explorer below.
+    if(extra>0){layers.push(h('text',{key:'more',x:cx,y:maxY+13,textAnchor:'middle',
+      style:{fontSize:'9px',fontWeight:'700',fill:'#9aa1ab',letterSpacing:'.03em',pointerEvents:'none'}},'+'+extra+' more'));maxY+=16;}
+    // Grow the viewBox to wrap all content with a small margin, so rim labels never
+    // clip no matter how long they are. Handlers read this._gvb to stay consistent.
+    const pad=8,vbx=minX-pad,vby=minY-pad,vbw=(maxX-minX)+pad*2,vbh=(maxY-minY)+pad*2;
+    this._gvb={x:vbx,y:vby,w:vbw,h:vbh};
     const gz=this.state.gz||{k:1,x:0,y:0};
     const stage=h('g',{key:'stage',transform:'translate('+gz.x+' '+gz.y+') scale('+gz.k+')'},layers);
-    return h('svg',{viewBox:'0 0 '+W+' '+H,preserveAspectRatio:'xMidYMid meet',
+    return h('svg',{viewBox:vbx+' '+vby+' '+vbw+' '+vbh,preserveAspectRatio:'xMidYMid meet',
       onPointerDown:e=>this.gzDown(e),
       ref:el=>{if(el&&!el.__wb){el.__wb=true;el.addEventListener('wheel',this._gzWheel,{passive:false});}},
       style:{display:'block',width:'100%',height:'auto',cursor:this._gzDrag?'grabbing':'grab',touchAction:'none'}},[stage]);
@@ -4165,13 +4296,14 @@ class Component extends DCLogic {
   }
   // ── graph pan/zoom (the "web") ──────────────────────────────────────────────
   gzReset(){this.setState({gz:{k:1,x:0,y:0}});}
-  gzZoom(factor,px,py){this.setState(s=>{const g=s.gz||{k:1,x:0,y:0};const k=Math.max(0.6,Math.min(4,g.k*factor));const cx=(px==null?150:px),cy=(py==null?116:py);const r=k/g.k;return {gz:{k,x:cx-(cx-g.x)*r,y:cy-(cy-g.y)*r}};});}
+  gzZoom(factor,px,py){this.setState(s=>{const g=s.gz||{k:1,x:0,y:0};const vb=this._gvb||{x:0,y:0,w:300,h:232};const k=Math.max(0.6,Math.min(4,g.k*factor));const cx=(px==null?vb.x+vb.w/2:px),cy=(py==null?vb.y+vb.h/2:py);const r=k/g.k;return {gz:{k,x:cx-(cx-g.x)*r,y:cy-(cy-g.y)*r}};});}
   _gzWheel=(e)=>{
     // Don't hijack the page's scroll — zoom only when the user deliberately holds ⌘/Ctrl.
     // A plain scroll over the graph just scrolls the panel like everything else.
     if(!(e.ctrlKey||e.metaKey))return;
     e.preventDefault();const svg=e.currentTarget;const r=svg.getBoundingClientRect();if(!r.width)return;
-    const vx=(e.clientX-r.left)/r.width*300,vy=(e.clientY-r.top)/r.height*232;
+    const vb=this._gvb||{x:0,y:0,w:300,h:232};
+    const vx=vb.x+(e.clientX-r.left)/r.width*vb.w,vy=vb.y+(e.clientY-r.top)/r.height*vb.h;
     this.gzZoom(e.deltaY<0?1.1:1/1.1,vx,vy);};
   // Pan via window listeners — NOT pointer capture. Capturing the pointer on the <svg>
   // stole the gesture from the node <g>, so clicking a node never fired its onClick.
@@ -4180,7 +4312,7 @@ class Component extends DCLogic {
       // Ignore tiny movement so a click on a node isn't swallowed as a pan, and the
       // graph never nudges from hand-jitter. Only start panning past a real drag.
       if(!this._gzMoved&&Math.abs(dx)+Math.abs(dy)<=7)return;this._gzMoved=true;
-      const sc=300/w;this.setState(s=>({gz:{...(s.gz||{k:1,x:0,y:0}),x:ox+dx*sc,y:oy+dy*sc}}));};
+      const sc=((this._gvb&&this._gvb.w)||300)/w;this.setState(s=>({gz:{...(s.gz||{k:1,x:0,y:0}),x:ox+dx*sc,y:oy+dy*sc}}));};
     const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);this._gzDrag=false;this.forceUpdate();setTimeout(()=>{this._gzMoved=false;},30);};
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);this._gzDrag=true;}
   // ── side-panel drag-to-resize ───────────────────────────────────────────────

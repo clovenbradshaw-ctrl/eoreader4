@@ -994,8 +994,14 @@ class Component extends DCLogic {
   // Minimal, SAFE markdown → HTML for chat answers (the model replies in markdown:
   // **bold**, lists, `code`, links). Everything is HTML-escaped FIRST, then only a fixed
   // set of tags is emitted, so nothing the model writes can inject raw markup.
-  _md(src){
+  // Render markdown-lite to HTML. `cites` (optional) is an idx→{u,label} registry: any
+  // ⟦cN⟧ sentinel _citeAnnotate left in the text becomes an inline, clickable citation pill
+  // (¶ source) bound to passage N. Clicks are caught by the bubble's onCite delegate (data-u).
+  _md(src,cites){
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // A clean citation glyph — a bare superscript footnote number (no box). Numbered per passage;
+    // hover shows the source name; click opens it (bubble onCite delegate, data-u).
+    const pillStyle='color:var(--acc);font-weight:700;font-size:0.72em;vertical-align:super;line-height:0;cursor:pointer;padding:0 1px;';
     const inline=s=>esc(s)
       .replace(/`([^`]+)`/g,(m,c)=>'<code style="background:rgba(0,0,0,.07);border-radius:4px;padding:1px 4px;font-size:.92em;">'+c+'</code>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);">$1</a>')
@@ -1004,7 +1010,10 @@ class Component extends DCLogic {
       // href="…" (preceded by a quote) so we never double-wrap a link.
       .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);word-break:break-all;">$2</a>')
       .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>');
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>')
+      // Citation sentinels → inline numbered glyphs (added AFTER escaping so the span is raw HTML).
+      .replace(/⟦c(\d+)⟧/g,(m,i)=>{const c=cites&&cites[i];if(!c)return '';
+        return '<span data-u="'+esc(String(c.u||'')).replace(/"/g,'&quot;')+'" title="'+esc(c.label||'source').replace(/"/g,'&quot;')+'" style="'+pillStyle+'">'+(c.n||'•')+'</span>';});
     const lines=String(src||'').replace(/\r/g,'').split('\n');
     const out=[];let list=null;
     const flush=()=>{if(list){out.push('<'+list.tag+' style="margin:6px 0;padding-left:20px;">'+list.items.join('')+'</'+list.tag+'>');list=null;}};
@@ -1103,13 +1112,18 @@ class Component extends DCLogic {
       const model=await this.ensureChatModel();
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
+      // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
+      // not an expert holding forth (the librarian cue, every grounded turn). A broad / explanatory
+      // question additionally gets the answer-first, sectioned SHAPE (headings, bold, bullets);
+      // a pointed lookup keeps just the librarian register and answers straight.
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
           question:q, spans:ground.spans||[], graph:this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),
           task:this._isSummaryQ(q)?'summary':'answer',
-          conversation:{pastTurns}, now:new Date(),
+          conversation:{pastTurns}, now:new Date(), shape,
         });
       }else{
         // Nothing read yet — fall back to the plain assistant frame (chat works without a doc).
@@ -1123,7 +1137,8 @@ class Component extends DCLogic {
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
+      // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken});
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       // Surface grounding for EVERY answer, honestly. Matched lines show as citations; a
       // summary that leaned on the source's opening shows those lines, disclosed as such;
@@ -1245,14 +1260,17 @@ class Component extends DCLogic {
       const model=await this.ensureChatModel();
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
+      // The research/web chat path: same librarian register (+ sectioned shape on a broad question).
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
-          orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date()});
+          orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:512,temperature:0.4,onToken});
+      // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken});
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       const gr=this._groundReport(ground,grounded);
@@ -1410,6 +1428,45 @@ class Component extends DCLogic {
   }
   // The content terms that carry a page's topic — lowercased words, function words dropped.
   _researchTerms(s){return (String(s||'').toLowerCase().match(/[a-z][a-z0-9'’-]{2,}/g)||[]).filter(t=>!this.STOP.has(t));}
+  // Bind each PROPOSITION of an answer to the passage it leans on, so the claim links back
+  // inline (the ¶ pill _md renders) instead of dumping a generic passage list at the bottom.
+  // A lightweight lexical match — content-term overlap per sentence against each gathered
+  // passage — line by line so markdown structure (## headings, - bullets) is preserved; a
+  // heading never gets a pill. Returns the text with ⟦cN⟧ sentinels + an idx→{u,label} registry.
+  _citeAnnotate(text,passages){
+    const ps=(passages||[]).filter(p=>p&&p.text&&p.u!=null&&p.i!=null);
+    if(!ps.length)return {text:String(text||''),reg:null};
+    const ptok=ps.map(p=>({p,set:new Set(this._researchTerms(p.text))}));
+    const reg={};const SENT=/(?<=[.!?])\s+/;
+    const out=String(text||'').split('\n').map(line=>{
+      if(!line.trim()||/^\s*#{1,6}\s/.test(line))return line;           // blank or heading → no cite
+      return line.split(SENT).map(sent=>{
+        const toks=this._researchTerms(sent);
+        if(toks.length<3)return sent;                                    // too short to bind confidently
+        const tset=new Set(toks);let best=null,bestScore=0;
+        for(const {p,set} of ptok){
+          if(!set.size)continue;let hit=0;for(const t of tset)if(set.has(t))hit++;
+          const score=hit/tset.size;
+          if(hit>=2&&score>bestScore){bestScore=score;best=p;}
+        }
+        if(best&&bestScore>=0.3){
+          if(!reg[best.i]){
+            // A true footnote number per distinct PASSAGE (first-appearance order): the glyph ⟦cN⟧
+            // and the references list below share this number. The verbatim passage text rides in
+            // `text` so the references can preview the actual source line — the librarian apparatus.
+            const n=Object.keys(reg).length+1;
+            reg[best.i]={u:best.u,n,text:best.text,label:this.truncLabel((((this.pageOf(best.u)||{}).title)||(/^text:/i.test(best.u)?'text':this.short(best.u))),40)};
+          }
+          return sent+'⟦c'+best.i+'⟧';
+        }
+        return sent;
+      }).join(' ');
+    }).join('\n');
+    return {text:out,reg:Object.keys(reg).length?reg:null};
+  }
+  // The bubble's click delegate: a citation pill (data-u) opens its source. Other clicks
+  // inside the answer (markdown links carry their own href) fall through untouched.
+  _onCite(e){let el=e&&(e.target||e.srcElement);for(let d=0;el&&d<6;d++){if(el.getAttribute){const u=el.getAttribute('data-u');if(u){if(e.preventDefault)e.preventDefault();if(e.stopPropagation)e.stopPropagation();this.goWeb(u);return;}}el=el.parentNode;}}
   // A page reduced to its term-frequency profile — the unit the walk measures surprise on.
   _profile(text){const m=new Map();for(const t of this._researchTerms(text))m.set(t,(m.get(t)||0)+1);return m;}
   // The prose of an already-read page, for the surprise / saliency measure.
@@ -1520,6 +1577,24 @@ class Component extends DCLogic {
       // Render the model's markdown LIVE — even while the bubble is still pending — so lists, bold
       // and line breaks form as the answer streams in, not only once it finishes. User turns stay plain.
       const isMd=!isUser&&!!m.text;
+      // Bind each proposition to the passage it leans on → inline ¶ pills in the answer body.
+      // Only once the answer is settled (passages are attached on finish), so streaming stays cheap.
+      const ann=(isMd&&!m.pending&&(m.passages||[]).length)?this._citeAnnotate(m.text,m.passages):null;
+      const bodyHtml=isMd?this._md(ann?ann.text:m.text,ann&&ann.reg):'';
+      // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
+      // line (the librarian apparatus, shown by default). When the binder found no inline match we
+      // still list the passages the answer drew on, so the source text is always in view.
+      // ~40–60 words is the span that carries a claim with its qualifier and reads as complete
+      // (featured-snippet research); longer than the old 46-char chip, clamped in the view so it
+      // stays tidy. Each ref also carries its source identity (favicon + domain) and a hasIcon flag.
+      const refOf=(u,n,text)=>({n,label:titleForUrl(u),domain:this.short(u)||titleForUrl(u),
+        preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.goWeb(u)});
+      let refs=[];
+      if(ann&&ann.reg){
+        refs=Object.keys(ann.reg).map(i=>ann.reg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
+      }else if(!isUser&&!m.pending&&(m.passages||[]).length){
+        refs=(m.passages||[]).slice(0,6).map((p,k)=>refOf(p.u,k+1,p.text));
+      }
       // The grounding mode this turn was tagged with (sendChat/_answerInto via _groundReport):
       // 'matched' (lines that matched), 'opening' (drew on the source's opening), 'model' (the
       // model's own words). Older/structural turns carry none — fall back to the matched look
@@ -1562,12 +1637,24 @@ class Component extends DCLogic {
         iconStyle:'flex:0 0 auto;width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:'+(RCOL[s.kind]||'#9aa1ab')+';background:'+(RCOL[s.kind]||'#9aa1ab')+'1c;margin-top:1px;',
         textStyle:'flex:1;min-width:0;'})):[];
       const researchTitle=researchRunning?'Researching…':('Researched '+((r&&r.readCount)||0)+' source'+(((r&&r.readCount)||0)!==1?'s':'')+' · '+((r&&r.hops)||0)+' hop'+(((r&&r.hops)||0)!==1?'s':''));
+      // WHILE RUNNING: one compact, fixed block showing only the latest few beats (parsing /
+      // reading / following a lead) — not the full list that expands the screen then vanishes.
+      // The earlier beats stay folded into "+N earlier"; the whole trail re-opens once it's done.
+      const RLIVE=3;
+      const researchLiveOn=researchRunning;
+      const researchFullOn=!researchRunning&&resOn;
+      const researchLive=researchRunning?researchSteps.slice(-RLIVE):[];
+      const researchHasEarlier=researchRunning&&researchSteps.length>RLIVE;
+      const researchEarlierLabel='+'+Math.max(0,researchSteps.length-RLIVE)+' earlier step'+((researchSteps.length-RLIVE)!==1?'s':'');
       // While researching with no answer yet, the trail IS the message — suppress the empty
       // pulsing bubble. Once the answer streams in (or for a normal turn) the bubble shows.
       const showBubble=!(researchRunning&&!m.text);
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
-      return {isUser,pending:!!m.pending,showBubble,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:isMd?this._md(m.text):'',
+      return {isUser,pending:!!m.pending,showBubble,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:bodyHtml,onCite:(e)=>this._onCite(e),
         hasResearch,researchRunning,researchSteps,researchOpen:resOn,researchTitle,
+        researchLiveOn,researchFullOn,researchLive,researchHasEarlier,researchEarlierLabel,
+        researchLiveBox:'margin-top:7px;display:flex;flex-direction:column;gap:5px;',
+        researchEarlierStyle:'font-size:10.5px;color:var(--ink3);margin-top:1px;padding-left:23px;',
         researchCaret:researchRunning?'':(resOn?'▾':'▸'),onToggleResearch:()=>{if(!researchRunning)this.toggleGround(resKey);},
         researchStyle:'max-width:80%;margin-bottom:7px;background:var(--app);border:1px solid var(--line2);border-radius:11px;padding:9px 12px;align-self:flex-start;',
         researchHeadStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3);background:transparent;border:none;padding:0;cursor:'+(researchRunning?'default':'pointer')+';',
@@ -1575,6 +1662,15 @@ class Component extends DCLogic {
         sources:cites,hasSources:cites.length>0,entities,hasEntities:entities.length>0,
         hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
         groundLabel,groundCaret:gOn?'▾':'▸',
+        refs,refsHas:refs.length>0,
+        refsLabel:'Sources · '+refs.length,
+        refsStyle:'max-width:88%;margin-top:10px;border-top:1px solid var(--line);padding-top:8px;',
+        refsHeadStyle:'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin:0 0 4px;',
+        refRowStyle:'display:flex;align-items:flex-start;gap:9px;padding:8px 6px;border-radius:8px;cursor:pointer;',
+        refNumStyle:'flex:0 0 auto;font-size:11px;font-weight:700;color:var(--acc);min-width:13px;text-align:right;margin-top:1px;',
+        refBodyStyle:'flex:1;min-width:0;',
+        refPreviewStyle:'font-size:12.5px;line-height:1.5;color:var(--ink);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;',
+        refSrcStyle:'display:block;font-size:10.5px;font-weight:600;color:var(--ink3);margin-top:4px;',
         groundDisclosure:disclosure,hasDisclosure:!!disclosure,
         disclosureStyle:'font-size:11px;line-height:1.45;color:var(--ink3);font-style:italic;margin-top:5px;',
         groundStyle:'max-width:80%;margin-top:7px;',

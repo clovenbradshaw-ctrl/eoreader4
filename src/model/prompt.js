@@ -163,19 +163,43 @@ export const metadataBlock = (metadata = {}, header = 'About this document (its 
 // punctuation, harmlessly. Opt-in: empty `shape` → no block → byte-identical prompt.
 export const STRUCTURE_CUE =
   'Shape your answer like this: open with a direct two- or three-sentence answer to their ' +
-  'question. Then, if the answer has distinct parts, lay each part out under its own short ' +
-  'heading written as "## Heading", and put the few load-bearing terms in **bold**. If worthwhile ' +
-  'threads remain that you did not cover, close with a short list under "Want me to go deeper on:". ' +
-  'Keep it tight — no padding, and no headings for a one-idea answer.';
+  'question. Then lay out the distinct parts of the answer — when there are several, give each its ' +
+  'own short heading written as "## Heading"; when they are a set of short points, write them as a ' +
+  'bulleted list with a **bold lead-in label** on each ("- **The periscope:** …"). Put the few ' +
+  'load-bearing terms in **bold**. Be substantive: cover each distinct angle that bears on the ' +
+  'question rather than stopping at the first one. If worthwhile threads remain that you did not ' +
+  'cover, close with a short list under "Want me to go deeper on:". Keep it tight — no padding, and ' +
+  'no headings for a one-idea answer.';
+
+// THE LIBRARIAN REGISTER. The reader is a research librarian surfacing what the sources hold,
+// not an expert holding forth — so the answer keeps the sources in the foreground, attributes
+// rather than asserts, prefers the source's own telling phrasing, and is honest about silence.
+// Opt-in (the reader passes it); never rides the default turn prompt, so the golden tests stand.
+export const LIBRARIAN_CUE =
+  'Answer as a research librarian, not an expert holding forth. Keep the sources in the ' +
+  'foreground: lead with what the reading actually says, attribute it ("the source notes…", ' +
+  '"one account says…"), and prefer the source\'s own telling phrasing — quote a short verbatim ' +
+  'phrase where it carries the point. Where the reading is silent or thin on something, say so ' +
+  'plainly rather than filling the gap from your own authority.';
 
 // A keyword read of the question's scope, in the same spirit as the turn's register pass: a
 // comparison, a survey, an enumeration, or an open "how/why" wants the sectioned shape; anything
 // else (a pointed lookup) answers straight. A tight length budget also forces straight — a capped
 // reply is by definition a quick lookup. Returns the cue string or '' (→ no shape block).
-const BROAD_SCOPE = /\b(compare|comparison|contrast|differ(?:s|ence|ences)?|versus|vs\.?|summar(?:y|ise|ize)|overview|synthes(?:is|ise|ize)|outline|walk\s+me\s+through|list|enumerate|examples?|exceptions?|what\s+are\s+the|which\s+are\s+the|how\s+(?:does|do|did|can|could)|why\s+(?:does|do|did|is|are|was|were)|overall|in\s+general)\b/i;
+//
+// The trigger words also cover the EXPLANATORY register — "explain", "describe", "tell me about",
+// "break it down", "walk me through" — the asks that most want a Google-AI-Overview-shaped answer
+// (a lead, then the parts under their own headings) rather than a one-line lookup.
+const BROAD_SCOPE = /\b(compare|comparison|contrast|differ(?:s|ence|ences)?|versus|vs\.?|summar(?:y|ise|ize)|overview|synthes(?:is|ise|ize)|outline|walk\s+me\s+through|explain|describe|elaborate|break\s+(?:it|this|that|them)\s+down|tell\s+me\s+(?:about|more)|list|enumerate|examples?|exceptions?|what\s+are\s+the|which\s+are\s+the|how\s+(?:does|do|did|can|could|is|are|was|were)|why\s+(?:does|do|did|is|are|was|were)|overall|in\s+general)\b/i;
+// The "how … <verb>" process question, where the verb does not sit right after "how" —
+// "how did lindbergh see", "how could he see", "how the plane worked". The default BROAD_SCOPE
+// only catches the adjacent form ("how did"); this catches the same intent with the subject in
+// between ("how lindbergh could …"), the phrasing real questions take most often.
+const HOW_PROCESS = /\bhow\b[\w\s,'’-]*?\b(?:could|can|did|does|do|work|works|worked|manage|managed|happen|happened|able)\b/i;
 export const shapeForScope = (question, budget = null) => {
   if (budget && typeof budget === 'object' && budget.sentences && budget.sentences <= 3) return '';
-  return BROAD_SCOPE.test(String(question || '')) ? STRUCTURE_CUE : '';
+  const q = String(question || '');
+  return (BROAD_SCOPE.test(q) || HOW_PROCESS.test(q)) ? STRUCTURE_CUE : '';
 };
 
 const budgetLine = (b) => {

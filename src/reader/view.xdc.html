@@ -261,7 +261,13 @@
                   <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.researchStyle }}">
                       <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
-                      <sc-if value="{{ m.researchOpen }}" hint-placeholder-val="{{ true }}">
+                      <sc-if value="{{ m.researchLiveOn }}" hint-placeholder-val="{{ true }}">
+                        <div style="{{ m.researchLiveBox }}">
+                          <sc-for list="{{ m.researchLive }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
+                          <sc-if value="{{ m.researchHasEarlier }}" hint-placeholder-val="{{ false }}"><div style="{{ m.researchEarlierStyle }}">{{ m.researchEarlierLabel }}</div></sc-if>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{ m.researchFullOn }}" hint-placeholder-val="{{ false }}">
                         <div style="margin-top:7px;display:flex;flex-direction:column;gap:5px;">
                           <sc-for list="{{ m.researchSteps }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
                         </div>
@@ -269,17 +275,19 @@
                     </div>
                   </sc-if>
                   <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
-                  <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+                  <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
                   </sc-if>
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
-                      <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
-                      <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+                      <sc-if value="{{ m.refsHas }}" hint-placeholder-val="{{ false }}">
+                        <div style="{{ m.refsStyle }}">
+                          <div style="{{ m.refsHeadStyle }}">{{ m.refsLabel }}</div>
+                          <sc-for list="{{ m.refs }}" as="r" hint-placeholder-count="1"><div onclick="{{ r.onOpen }}" style="{{ m.refRowStyle }}" style-hover="background:var(--app)"><span style="{{ m.refNumStyle }}">{{ r.n }}</span><span style="{{ m.refBodyStyle }}"><span style="{{ m.refPreviewStyle }}">{{ r.preview }}</span><span style="{{ m.refSrcStyle }}">{{ r.domain }}</span></span></div></sc-for>
+                        </div>
+                      </sc-if>
                       <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
-                      <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                        <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                          <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
-                        </sc-if>
+                      <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                       </sc-if>
                     </div>
                   </sc-if>
@@ -801,7 +809,13 @@
                 <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.researchStyle }}">
                     <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
-                    <sc-if value="{{ m.researchOpen }}" hint-placeholder-val="{{ true }}">
+                    <sc-if value="{{ m.researchLiveOn }}" hint-placeholder-val="{{ true }}">
+                      <div style="{{ m.researchLiveBox }}">
+                        <sc-for list="{{ m.researchLive }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
+                        <sc-if value="{{ m.researchHasEarlier }}" hint-placeholder-val="{{ false }}"><div style="{{ m.researchEarlierStyle }}">{{ m.researchEarlierLabel }}</div></sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ m.researchFullOn }}" hint-placeholder-val="{{ false }}">
                       <div style="margin-top:7px;display:flex;flex-direction:column;gap:5px;">
                         <sc-for list="{{ m.researchSteps }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
                       </div>
@@ -809,17 +823,19 @@
                   </div>
                 </sc-if>
                 <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
-                <div style="{{ m.bubbleStyle }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+                <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
                 </sc-if>
                 <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.groundStyle }}">
-                    <button onclick="{{ m.onToggleGround }}" style="{{ m.groundHeadStyle }}" style-hover="color:var(--acc)"><span>{{ m.groundLabel }}</span><span style="font-size:9px;">{{ m.groundCaret }}</span></button>
-                    <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ true }}"><div style="{{ m.srcRowStyle }}"><sc-for list="{{ m.sources }}" as="sx" hint-placeholder-count="1"><span onclick="{{ sx.onOpen }}" title="{{ sx.title }}" style="{{ m.srcChipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">¶ {{ sx.label }}</span></sc-for></div></sc-if>
+                    <sc-if value="{{ m.refsHas }}" hint-placeholder-val="{{ false }}">
+                      <div style="{{ m.refsStyle }}">
+                        <div style="{{ m.refsHeadStyle }}">{{ m.refsLabel }}</div>
+                        <sc-for list="{{ m.refs }}" as="r" hint-placeholder-count="1"><div onclick="{{ r.onOpen }}" style="{{ m.refRowStyle }}" style-hover="background:var(--app)"><span style="{{ m.refNumStyle }}">{{ r.n }}</span><span style="{{ m.refBodyStyle }}"><span style="{{ m.refPreviewStyle }}">{{ r.preview }}</span><span style="{{ m.refSrcStyle }}">{{ r.domain }}</span></span></div></sc-for>
+                      </div>
+                    </sc-if>
                     <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
-                    <sc-if value="{{ m.groundOpen }}" hint-placeholder-val="{{ false }}">
-                      <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                        <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
-                      </sc-if>
+                    <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                     </sc-if>
                   </div>
                 </sc-if>
