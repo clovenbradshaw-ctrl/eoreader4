@@ -15,13 +15,17 @@
 
 import { buildGroundedMessages } from '../model/index.js';
 
-export const generateSection = async (section, { doc = null, model, corrective = '', signal = null } = {}) => {
+export const generateSection = async (section, { doc = null, model, corrective = '', signal = null, conversation = {} } = {}) => {
   const messages = buildGroundedMessages({
     question:    section.subClaim,
     spans:       section.spans || [],
     orientation: orientationOf(doc),
     task:        'answer',
     corrective,
+    // The conversation fold (tail + surfed recap) — null on a plain arc section
+    // (buildGroundedMessages defaults it away), the continuation's context when a
+    // long generation rides over the session (docs/long-generation.md).
+    conversation,
   });
   const raw = await model.phrase(messages, {
     maxTokens: section.ceiling,
