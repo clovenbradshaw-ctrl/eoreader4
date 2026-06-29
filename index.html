@@ -326,6 +326,7 @@
             <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
               <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
               <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
+              <button onclick="{{ onToggleAnswerMode }}" title="{{ answerModeTitle }}" style="{{ answerModeStyle }}" style-hover="border-color:var(--accline)">{{ answerModeLabel }}</button>
               <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -874,6 +875,7 @@
           <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
             <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
               <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
+              <button onclick="{{ onToggleAnswerMode }}" title="{{ answerModeTitle }}" style="{{ answerModeStyle }}" style-hover="border-color:var(--accline)">{{ answerModeLabel }}</button>
             <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -1504,6 +1506,11 @@ class Component extends DCLogic {
       // answer; deep covers the subject from several angles; obsessive exhausts the threads.
       // It scales the battery size, the hop budget, pages-per-thread, and leash patience.
       researchDepth:(()=>{try{return localStorage.getItem('eo_depth')||'deep';}catch(e){return 'deep';}})(),
+      // ANSWER SHAPE — 'overview' (the default) gives a broad question the structured digest: a
+      // direct lead, the parts under their own headings, a "go deeper" list. 'freeform' drops that
+      // scaffolding and answers in natural prose — still grounded in and attributed to the sources,
+      // just not laid out as a report. The toggle lets a chat NOT always come back as an overview.
+      answerMode:(()=>{try{return localStorage.getItem('eo_answermode')||'overview';}catch(e){return 'overview';}})(),
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
       // Temporal cursor on the entity summary. Keyed by entity id → a fraction in
       // [0,1] of the way through that entity's attested record. Undefined means the
@@ -2606,7 +2613,10 @@ class Component extends DCLogic {
       // not an expert holding forth (the librarian cue, every grounded turn). A broad / explanatory
       // question additionally gets the answer-first, sectioned SHAPE (headings, bold, bullets);
       // a pointed lookup keeps just the librarian register and answers straight.
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||''].filter(Boolean).join('\n\n'):'';
+      // FREEFORM mode drops the sectioned overview scaffolding (shapeForScope) but keeps the
+      // librarian grounding cue — answers stay sourced and attributed, just written as prose.
+      const overview=(this.state.answerMode||'overview')!=='freeform';
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,overview?((this._ME.shapeForScope&&this._ME.shapeForScope(q))||''):''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
@@ -2670,6 +2680,9 @@ class Component extends DCLogic {
     if(d==='obsessive')return {key:'obsessive',facets:5, maxHops:9, want:1, wantSeed:2, patience:4};
     return                    {key:'deep',     facets:4, maxHops:8, want:1, wantSeed:2, patience:3};}
   cycleResearchDepth(){const order=['shallow','deep','obsessive'];this.setState(s=>{const i=order.indexOf(s.researchDepth||'deep');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_depth',next);}catch(e){}return {researchDepth:next};});}
+  // The answer-shape switch (the composer toggle). 'overview' is the default structured digest;
+  // 'freeform' answers in plain grounded prose, with no imposed sections or "go deeper" list. Persisted.
+  toggleAnswerMode(){this.setState(s=>{const next=(s.answerMode||'overview')==='overview'?'freeform':'overview';try{localStorage.setItem('eo_answermode',next);}catch(e){}return {answerMode:next};});}
   async chatResearch(q){
     if(this._busy)return;
     // The SUBJECT to chase — named outright when the message carries its own topic, or DERIVED
@@ -2751,7 +2764,10 @@ class Component extends DCLogic {
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
       // The research/web chat path: same librarian register (+ sectioned shape on a broad question).
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||''].filter(Boolean).join('\n\n'):'';
+      // FREEFORM mode drops the sectioned overview scaffolding (shapeForScope) but keeps the
+      // librarian grounding cue — answers stay sourced and attributed, just written as prose.
+      const overview=(this.state.answerMode||'overview')!=='freeform';
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,overview?((this._ME.shapeForScope&&this._ME.shapeForScope(q))||''):''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
@@ -5334,6 +5350,12 @@ class Component extends DCLogic {
       depthBtnLabel:'🔬 '+(this.state.researchDepth||'deep'),
       depthTitle:'How much research per question: shallow (the strongest answer) · deep (several angles) · obsessive (exhaust the threads). Click to cycle.',
       depthStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
+      // ANSWER SHAPE — Overview (the structured digest) vs Freeform (plain grounded prose). A chat
+      // shouldn't always come back as a sectioned overview; this lets the reader answer naturally.
+      onToggleAnswerMode:()=>this.toggleAnswerMode(),
+      answerModeLabel:(this.state.answerMode||'overview')==='freeform'?'¶ Freeform':'☰ Overview',
+      answerModeTitle:(this.state.answerMode||'overview')==='freeform'?'Freeform — answers in natural prose, grounded in your sources but without the sectioned digest or a “go deeper” list. Click for the structured Overview shape.':'Overview — a broad question comes back as a structured digest: a direct lead, the parts under their own headings, then a “go deeper” list. Click for plain Freeform prose.',
+      answerModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+((this.state.answerMode||'overview')==='overview'?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       backend:this.state.backend||'webllm',
       backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},{v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
