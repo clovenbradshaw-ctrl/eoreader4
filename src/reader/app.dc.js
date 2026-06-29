@@ -2698,9 +2698,22 @@ class Component extends DCLogic {
     if((t.match(/[a-z][A-Z]/g)||[]).length>=2)return false;      // camelCase smash
     if(/[A-Za-z]#\d|\d[A-Za-z]{3,}|[a-z]\?[A-Z]/.test(t))return false; // letter/digit smash
     if(/\b(view\s+\d+\s+photos?|yes\s*no|add to list|belongs on list|sign in|log in|subscribe|cookies?)\b/i.test(t))return false;
+    // A leading SECTION LABEL marks a tag/category rail or a teaser/loading widget, not prose
+    // ("Tags Nashville Banner Fusus …", "Please wait Browse and read the latest fact-check"). These
+    // pack the page's proper nouns, so a keyword ranker scores them ABOVE the article body and the
+    // answer grounds on furniture — the observed bad result. Drop them as candidate passages.
+    if(/^(tags?|tagged|topics?|categor(?:y|ies)|filed under|posted in|related|more (?:from|on|stories|news|articles?)|read (?:more|next)|browse|please wait|share this|trending|most read|recommended|advertisement|sponsored)\b/i.test(t))return false;
     const words=t.trim().split(/\s+/); if(words.length<6)return false;
     if(Math.max.apply(null,words.map(w=>w.length))>28)return false; // long spaceless run
     if(!/[a-z]\s+[a-z]/i.test(t))return false;
+    // A CAPITALIZED KEYWORD BAG — a run of Title-Case words with no lowercase function word to bind
+    // them into a clause — is a link/tag list masquerading as a sentence. Real prose threads its
+    // names with "the/of/is/and"; a bag like "Nashville Banner Fusus Mayor Freddie O'Connell" has
+    // none, yet outscores prose on keyword overlap. Reject when most words are Title-Case AND no
+    // function word appears (so ordinary capitalized-lead sentences, which do, pass untouched).
+    const titleish=words.filter(w=>/^[A-Z][a-z'’.À-ɏ-]*$/.test(w)).length;
+    const FUNC=/\b(the|a|an|of|to|in|on|for|and|or|nor|but|with|as|by|at|from|that|this|these|those|is|was|were|are|am|be|been|being|has|have|had|he|she|it|they|we|you|his|her|their|its|our|who|whom|which|whose|when|where|while|will|would|shall|should|can|could|may|might|must|do|does|did|not|no|about|into|onto|over|under|after|before|than|then|so|if|because|though|although|between|during)\b/i;
+    if(titleish>=Math.max(4,words.length*0.7)&&!FUNC.test(t))return false;
     return true;
   }
   sourceGist(id,onlyUrl){
