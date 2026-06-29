@@ -2259,6 +2259,60 @@ class Component extends DCLogic {
         ? 'Drawn from the overall shape of what you’ve read, not any one passage — the wording is the model’s own.'
         : 'The model’s own answer — nothing you’ve read bears on it, so it isn’t grounded in a source.'};
   }
+  // ── The office veto — a stale role the SOURCES have succeeded ─────────────────
+  // The reader's claim-grain check (docs/proposition-audit.md; the engine sibling lives
+  // in src/factcheck/propositions.js). The model can call a current mayor "a council
+  // member" off a year-old page — and the grounding it has is relation-shaped, so a
+  // one-place "X is a council member" is never checked. After the answer is composed we
+  // read the OFFICE claims it makes and the offices the IN-SCOPE sources attest (each at
+  // the line it sits on, so "as a council member he WAS a critic" reads former, distinct
+  // from "he IS the mayor"); if the answer gives a stale EXCLUSIVE seat (mayor, council
+  // member, governor, …) as current while the sources currently witness a DIFFERENT one,
+  // the correction is appended beside the answer. Flag-and-tell — the model's words ride.
+  _ox(){
+    if(this._oxCache)return this._oxCache;
+    // canonical head → exclusive? (1 = a seat held one-at-a-time, so a transition between
+    // two of them is the supersession we catch; 0 = a co-occurring title that never does).
+    const O=new Map([['council member',['councilmember',1]],['councilmember',['councilmember',1]],['councilman',['councilmember',1]],['councilwoman',['councilmember',1]],['councilor',['councilmember',1]],['councillor',['councilmember',1]],['alderman',['alderman',1]],['alderwoman',['alderman',1]],['mayor',['mayor',1]],['governor',['governor',1]],['senator',['senator',1]],['president',['president',1]],['vice president',['vice-president',1]],['prime minister',['prime-minister',1]],['representative',['representative',1]],['congressman',['representative',1]],['congresswoman',['representative',1]],['chancellor',['chancellor',1]],['premier',['premier',1]],['sheriff',['sheriff',1]],['attorney general',['attorney-general',1]],['chief executive',['ceo',1]],['ceo',['ceo',1]],['supervisor',['supervisor',1]],['ambassador',['ambassador',1]],['king',['king',1]],['queen',['queen',1]],['pope',['pope',1]],['chair',['chair',0]],['chairman',['chair',0]],['chairwoman',['chair',0]],['director',['director',0]],['founder',['founder',0]],['owner',['owner',0]],['editor',['editor',0]],['secretary',['secretary',0]],['minister',['minister',0]],['coach',['coach',0]],['professor',['professor',0]],['chief',['chief',0]]]);
+    // A case-insensitive class for a word WITHOUT a /i flag — /i would let the [A-Z] name
+    // pattern match lowercase and swallow "signed the order" into a name. Offices/qualifiers
+    // match either case here; names stay strictly Capitalized.
+    const ci=w=>w.split('').map(ch=>/[a-z]/i.test(ch)?('['+ch.toLowerCase()+ch.toUpperCase()+']'):(ch===' '?'\\s+':ch)).join('');
+    const OFFICE_ALT=[...O.keys()].sort((a,b)=>b.length-a.length).map(ci).join('|');   // longest first: "vice president" before "president"
+    const FORMER_PFX=['former','ex-?','onetime','then-?','outgoing','incoming','previous'].map(ci).join('|');
+    const NAME="[A-Z][A-Za-z.'’-]+(?:\\s+[A-Z][A-Za-z.'’-]+){0,3}";
+    const appos=new RegExp('\\b((?:'+FORMER_PFX+')\\s+)?((?:'+OFFICE_ALT+'))\\s+('+NAME+')','g');                                               // "[former] Mayor Freddie O’Connell"
+    const cop=new RegExp('\\b('+NAME+')\\s+(?:[Ii]s|[Ww]as|[Aa]re|[Ww]ere|[Bb]ecame|serves\\s+as|served\\s+as)\\s+(?:now\\s+)?(?:[aA]n?|[tT]he)?\\s*((?:'+FORMER_PFX+')\\s+)?(?:[A-Za-z]+\\s+){0,2}?((?:'+OFFICE_ALT+'))\\b','g');   // "Freddie O’Connell is a [former] [Metro] council member"
+    return this._oxCache={O,appos,cop};
+  }
+  _personKey(name){const ts=String(name).toLowerCase().replace(/['’]/g,'').split(/[^a-z0-9]+/).filter(Boolean);return ts.length?ts[ts.length-1]:null;}   // surname, apostrophes stripped so O’Connell == OConnell
+  _canonOffice(p){const x=this._ox().O;const k=String(p).toLowerCase().replace(/\s+/g,' ').trim();return x.get(k)||x.get(k.replace('council member','councilmember'))||null;}
+  _officeClaims(text){
+    const out=[],s=String(text||''),L=this._ox();
+    for(const m of s.matchAll(L.appos)){const c=this._canonOffice(m[2]);if(!c)continue;out.push({name:m[3],pk:this._personKey(m[3]),head:c[0],exclusive:!!c[1],former:!!m[1]});}
+    for(const m of s.matchAll(L.cop)){const c=this._canonOffice(m[3]);if(!c)continue;const former=!!m[2]||(/\b[Ww]as\b|\b[Ww]ere\b/.test(m[0])&&!/\b[Ii]s\b|\b[Aa]re\b|\bnow\b/.test(m[0]));out.push({name:m[1],pk:this._personKey(m[1]),head:c[0],exclusive:!!c[1],former});}
+    return out;
+  }
+  _auditOffices(text,sources){
+    try{
+      if(!text||!this.master||!this.master.sentences||!this.master.sentences.length)return null;
+      const scope=new Set((sources||[]).map(u=>typeof u==='string'?u:(u&&(u.url||u.u))).filter(Boolean));
+      const inScope=u=>!scope.size||scope.has(u);
+      const facts=new Map(),at=pk=>facts.get(pk)||facts.set(pk,{current:new Set(),former:new Set()}).get(pk);
+      for(let i=0;i<this.master.sentences.length;i++){if(!inScope(this.master.sentenceSource[i]))continue;for(const f of this._officeClaims(this.master.sentences[i])){if(!f.pk||!f.head)continue;(f.former?at(f.pk).former:at(f.pk).current).add(f.head);}}
+      if(!facts.size)return null;
+      const corr=[];
+      for(const c of this._officeClaims(text)){
+        if(!c.exclusive||c.former||!c.pk)continue;                       // only a CURRENT exclusive office can be stale
+        const fa=facts.get(c.pk);if(!fa||fa.current.has(c.head))continue; // the answer's office IS attested current → fine
+        const succ=[...fa.current].filter(h=>h!==c.head);                // a different current seat → it was succeeded
+        if(succ.length){corr.push('The sources give '+c.name+'’s current office as '+succ[0].replace(/-/g,' ')+', not '+c.head.replace(/-/g,' ')+'.');continue;}
+        if(fa.former.has(c.head))corr.push('The sources mark '+c.name+' as a former '+c.head.replace(/-/g,' ')+', not a current one.');
+      }
+      return corr.length?corr.join(' '):null;
+    }catch(e){return null;}
+  }
+  _withOfficeNote(text,sources){try{const c=this._auditOffices(text,sources);return c?(text+'\n\n> **Note:** '+c):text;}catch(e){return text;}}
   // Other read documents OUTSIDE the chat's scope, ranked by how well they match the
   // question (content-word overlap). The "related" set offered alongside an answer —
   // especially when the in-scope sources didn't ground it well. Empty if nothing else
@@ -2508,7 +2562,7 @@ class Component extends DCLogic {
       // summary that leaned on the source's opening shows those lines, disclosed as such;
       // an answer with no read footing says plainly it's the model's own (_groundReport).
       const gr=this._groundReport(ground,grounded);
-      finish({text,entities:ground.entities,sources:gr.sources,passages:gr.passages,
+      finish({text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
       this._pivotChatPanel(q+' '+text);
     }catch(e){
@@ -2638,7 +2692,7 @@ class Component extends DCLogic {
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       const gr=this._groundReport(ground,grounded);
-      finish({text,entities:ground.entities,sources:gr.sources,passages:gr.passages,
+      finish({text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
     }catch(e){
       const fb=this.answerQuestion(q,sources);

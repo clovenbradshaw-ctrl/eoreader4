@@ -154,7 +154,10 @@ export const readOffice = (value) => {
 // key on different ids. Conservative: a shared surname is taken as the same person,
 // which is the honest seam (two distinct people sharing a surname would merge here).
 export const personKey = (label) => {
-  const ts = tokens(label).filter(t => t.length > 1 && !NAME_NOISE.has(t) && !ALL_OFFICE_TOKENS.has(t));
+  // Apostrophes are stripped, not split on, so "O'Connell" / "O’Connell" (curly) /
+  // "OConnell" all key on one surname — the variant the real failure turned on.
+  const ts = lower(label).replace(/['’]/g, '').split(/[^a-z0-9]+/)
+    .filter(t => t.length > 1 && !NAME_NOISE.has(t) && !ALL_OFFICE_TOKENS.has(t));
   return ts.length ? ts[ts.length - 1] : null;
 };
 
