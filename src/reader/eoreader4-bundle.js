@@ -1970,20 +1970,19 @@ var induceBoundaries = (text, { isAbbreviation, thresholds, confirmBand } = {}) 
 };
 
 // src/perceiver/parse/chrome.js
-var DEGENERATE = [
-  /^\d+\s*$/,
-  // a bare number
-  /^[ivxlcdm]{1,7}\.?$/i,
-  // a bare roman numeral: "III", "iv."
-  /^\[\d{1,3}\]$/,
-  // a bracketed footnote marker
-  /^[\W_]+$/
-  // only punctuation/symbols — a separator rule
-];
+var FOOTNOTE = /^\[\d{1,3}\]$/;
+// "[12]" — a reference marker, not a datum
+var ROMAN = /^[ivxlcdm]{1,7}\.?$/i;
+// a bare roman numeral: "III", "iv."
+var SEPARATOR = /^[\W_]+$/;
+// only punctuation/symbols — a separator rule
 var isDegenerate = (sentence) => {
   const s = String(sentence || "").trim();
+  if (!s) return true;
+  if (FOOTNOTE.test(s)) return true;
+  if (/\d/.test(s)) return false;
   if (s.length < 3) return true;
-  return DEGENERATE.some((p) => p.test(s));
+  return ROMAN.test(s) || SEPARATOR.test(s);
 };
 var isChrome = (sentence, hint = 0) => {
   const nudge = typeof hint === "boolean" ? hint ? 1 : 0 : Number(hint) || 0;

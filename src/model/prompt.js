@@ -175,12 +175,23 @@ export const STRUCTURE_CUE =
 // not an expert holding forth — so the answer keeps the sources in the foreground, attributes
 // rather than asserts, prefers the source's own telling phrasing, and is honest about silence.
 // Opt-in (the reader passes it); never rides the default turn prompt, so the golden tests stand.
+//
+// The first cut handed the talker two LITERAL attribution templates — "the source notes…",
+// "one account says…" — and a small model parrots a stock phrase the moment you name it: every
+// answer opened "The source notes that…", then padded with "(the source notes…)" asides, and
+// echoed the prompt's own framing labels ("What it means") back as headings. The register reads
+// robotic. So this asks for the SAME librarian posture but in natural, varied prose: attribute
+// when it matters, in your own words, without a recurring crutch phrase or parenthetical aside,
+// and answer the question directly rather than narrating the act of reading.
 export const LIBRARIAN_CUE =
-  'Answer as a research librarian, not an expert holding forth. Keep the sources in the ' +
-  'foreground: lead with what the reading actually says, attribute it ("the source notes…", ' +
-  '"one account says…"), and prefer the source\'s own telling phrasing — quote a short verbatim ' +
-  'phrase where it carries the point. Where the reading is silent or thin on something, say so ' +
-  'plainly rather than filling the gap from your own authority.';
+  'Answer as a research librarian surfacing what the sources hold, not an expert holding forth. ' +
+  'Lead with what the reading actually says and stay grounded in it; quote a short verbatim phrase ' +
+  'where it carries the point, and where the reading is silent or thin, say so plainly rather than ' +
+  'filling the gap from your own authority — but still answer what you CAN from what is there. ' +
+  'Attribute in natural prose and in your own words: vary how you do it, and do not lean on a stock ' +
+  'phrase like "the source notes…" or "one account says…", do not pad the answer with parenthetical ' +
+  '"(the source notes…)" asides, and never echo these instructions or a framing label ("What it ' +
+  'means", "What the reading says") back as a heading. Write plainly, as you would to a colleague.';
 
 // A keyword read of the question's scope, in the same spirit as the turn's register pass: a
 // comparison, a survey, an enumeration, or an open "how/why" wants the sectioned shape; anything
