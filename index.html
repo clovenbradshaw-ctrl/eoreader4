@@ -2448,7 +2448,9 @@ class Component extends DCLogic {
   // (¶ source) bound to passage N. Clicks are caught by the bubble's onCite delegate (data-u).
   _md(src,cites){
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const pillStyle='display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:5px;padding:0 5px;margin:0 1px;cursor:pointer;vertical-align:baseline;white-space:nowrap;';
+    // A compact citation glyph — a small numbered superscript badge, not a text pill. Numbered
+    // per source; hover shows the source name; click opens it (bubble onCite delegate, data-u).
+    const pillStyle='display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;font-size:9px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:4px;padding:0 2px;margin:0 1px;cursor:pointer;vertical-align:super;line-height:1;';
     const inline=s=>esc(s)
       .replace(/`([^`]+)`/g,(m,c)=>'<code style="background:rgba(0,0,0,.07);border-radius:4px;padding:1px 4px;font-size:.92em;">'+c+'</code>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);">$1</a>')
@@ -2458,9 +2460,9 @@ class Component extends DCLogic {
       .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,'$1<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);word-break:break-all;">$2</a>')
       .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>')
-      // Citation sentinels → inline source pills (added AFTER escaping so the span is raw HTML).
+      // Citation sentinels → inline numbered glyphs (added AFTER escaping so the span is raw HTML).
       .replace(/⟦c(\d+)⟧/g,(m,i)=>{const c=cites&&cites[i];if(!c)return '';
-        return '<span data-u="'+esc(String(c.u||'')).replace(/"/g,'&quot;')+'" title="Open this source" style="'+pillStyle+'">¶ '+esc(c.label||'source')+'</span>';});
+        return '<span data-u="'+esc(String(c.u||'')).replace(/"/g,'&quot;')+'" title="'+esc(c.label||'source').replace(/"/g,'&quot;')+'" style="'+pillStyle+'">'+(c.n||'•')+'</span>';});
     const lines=String(src||'').replace(/\r/g,'').split('\n');
     const out=[];let list=null;
     const flush=()=>{if(list){out.push('<'+list.tag+' style="margin:6px 0;padding-left:20px;">'+list.items.join('')+'</'+list.tag+'>');list=null;}};
@@ -2884,7 +2886,7 @@ class Component extends DCLogic {
     const ps=(passages||[]).filter(p=>p&&p.text&&p.u!=null&&p.i!=null);
     if(!ps.length)return {text:String(text||''),reg:null};
     const ptok=ps.map(p=>({p,set:new Set(this._researchTerms(p.text))}));
-    const reg={};const SENT=/(?<=[.!?])\s+/;
+    const reg={};const srcNum=new Map();const SENT=/(?<=[.!?])\s+/;
     const out=String(text||'').split('\n').map(line=>{
       if(!line.trim()||/^\s*#{1,6}\s/.test(line))return line;           // blank or heading → no cite
       return line.split(SENT).map(sent=>{
@@ -2897,8 +2899,13 @@ class Component extends DCLogic {
           if(hit>=2&&score>bestScore){bestScore=score;best=p;}
         }
         if(best&&bestScore>=0.3){
-          if(!reg[best.i])reg[best.i]={u:best.u,label:this.truncLabel((((this.pageOf(best.u)||{}).title)||(/^text:/i.test(best.u)?'text':this.short(best.u))),22)};
-          return sent+' ⟦c'+best.i+'⟧';
+          if(!reg[best.i]){
+            // Number citations per distinct SOURCE (first-appearance order), so repeat cites to
+            // the same source share one glyph — the small superscript ⟦cN⟧ becomes (¹ ² …).
+            let n=srcNum.get(best.u);if(n==null){n=srcNum.size+1;srcNum.set(best.u,n);}
+            reg[best.i]={u:best.u,n,label:this.truncLabel((((this.pageOf(best.u)||{}).title)||(/^text:/i.test(best.u)?'text':this.short(best.u))),40)};
+          }
+          return sent+'⟦c'+best.i+'⟧';
         }
         return sent;
       }).join(' ');
