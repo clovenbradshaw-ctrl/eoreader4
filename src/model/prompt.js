@@ -300,7 +300,11 @@ export const buildGroundedMessages = ({
     if (conversation.notes)
       blocks.push(`Earlier in this reading:\n${conversation.notes}\n(Those came before — for context only; answer just their latest question below.)`);
     if (conversation.pastTurns?.length)
-      blocks.push(`They had asked you:\n${conversation.pastTurns.join('\n')}`);
+      blocks.push(`They had asked you:\n${conversation.pastTurns.join('\n')}` +
+        // When `notes` rode above it already carried the firewall; a pastTurns-only
+        // thread (the reader chat) gets it here, so the prior turns read as already-handled
+        // context and not a checklist the talker re-answers (the "restated the old one" bug).
+        (conversation.notes ? '' : '\n(Those came before — for context only; answer just their latest question below.)'));
     // The COMMON-GROUND cue (converse/dialogue-state.js): the facts already settled between
     // you and the user. A small talker re-asserts "the mayor is X" every turn because the
     // thread above reads as a checklist; naming the settled ground as already-held tells it
@@ -352,7 +356,7 @@ export const buildGroundedMessages = ({
     ? `Answer their question now — “${question}” — about the conversation above. Draw on those ` +
       'prior topics as its subject, grounded in what came to mind from the reading where it bears ' +
       'on the answer; say which part is from the reading and which from general knowledge.'
-    : conversation.notes
+    : (conversation.notes || conversation.pastTurns?.length)
     ? `Answer their latest question now — “${question}” — in your own words. If what came to mind ` +
       'doesn\'t cover it, answer from general knowledge and say that part isn\'t from the reading.'
     : 'Answer them now, in your own words. If what came to mind doesn\'t cover it, answer from ' +

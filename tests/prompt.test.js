@@ -164,6 +164,21 @@ test('a carried thread is framed as context and the closing clause anchors the l
   assert.doesNotMatch(noConv.content, /latest question/, 'no thread → no anchor rephrase');
 });
 
+// The reader-chat shape (index.html sendChat) carries a pastTurns-only thread — no `notes`.
+// It must get the SAME firewall + live-question anchor as a notes thread, or the prior
+// question rides bare and the small talker re-answers it ("it restated the old one").
+test('a pastTurns-only thread (reader chat) still gets the firewall and anchors the live question', () => {
+  const [, withPast] = buildGroundedMessages({
+    question: 'is he still a council member?', spans: [{ idx: 0, text: 'x' }],
+    conversation: { pastTurns: ["What's the deal with Freddie O'Connell and Fusus?"] },
+  });
+  assert.match(withPast.content, /They had asked you:/);
+  assert.match(withPast.content, /for context only; answer just their latest question/i,
+    'pastTurns-only thread is framed as context, not a checklist');
+  assert.match(withPast.content, /Answer their latest question now — “is he still a council member\?”/,
+    'the closing clause anchors the live follow-up, not the prior question');
+});
+
 // ---------------------------------------------------------------------------
 // The grounded window under the subjective frame: the talker is handed the verbatim
 // lines it read — and ONLY those, no arrows (§2), no recognition (§3). The fold still
