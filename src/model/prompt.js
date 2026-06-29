@@ -171,6 +171,17 @@ export const STRUCTURE_CUE =
   'cover, close with a short list under "Want me to go deeper on:". Keep it tight — no padding, and ' +
   'no headings for a one-idea answer.';
 
+// THE LIBRARIAN REGISTER. The reader is a research librarian surfacing what the sources hold,
+// not an expert holding forth — so the answer keeps the sources in the foreground, attributes
+// rather than asserts, prefers the source's own telling phrasing, and is honest about silence.
+// Opt-in (the reader passes it); never rides the default turn prompt, so the golden tests stand.
+export const LIBRARIAN_CUE =
+  'Answer as a research librarian, not an expert holding forth. Keep the sources in the ' +
+  'foreground: lead with what the reading actually says, attribute it ("the source notes…", ' +
+  '"one account says…"), and prefer the source\'s own telling phrasing — quote a short verbatim ' +
+  'phrase where it carries the point. Where the reading is silent or thin on something, say so ' +
+  'plainly rather than filling the gap from your own authority.';
+
 // A keyword read of the question's scope, in the same spirit as the turn's register pass: a
 // comparison, a survey, an enumeration, or an open "how/why" wants the sectioned shape; anything
 // else (a pointed lookup) answers straight. A tight length budget also forces straight — a capped

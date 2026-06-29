@@ -1112,10 +1112,11 @@ class Component extends DCLogic {
       const model=await this.ensureChatModel();
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
-      // A broad / explanatory question ("how did he see", "explain …") gets the answer-first,
-      // sectioned SHAPE — the Google-AI-Overview layout the chat body renders as headings, bold
-      // and bullets. A pointed lookup ('' → no block) still answers straight.
-      const shape=(grounded&&this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
+      // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
+      // not an expert holding forth (the librarian cue, every grounded turn). A broad / explanatory
+      // question additionally gets the answer-first, sectioned SHAPE (headings, bold, bullets);
+      // a pointed lookup keeps just the librarian register and answers straight.
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
@@ -1259,9 +1260,8 @@ class Component extends DCLogic {
       const model=await this.ensureChatModel();
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
-      // The research/web chat path: a broad question gets the same answer-first, sectioned SHAPE
-      // (Google-AI-Overview layout) as the in-doc chat; a pointed lookup ('' → no block) answers straight.
-      const shape=(grounded&&this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
+      // The research/web chat path: same librarian register (+ sectioned shape on a broad question).
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
@@ -1437,7 +1437,7 @@ class Component extends DCLogic {
     const ps=(passages||[]).filter(p=>p&&p.text&&p.u!=null&&p.i!=null);
     if(!ps.length)return {text:String(text||''),reg:null};
     const ptok=ps.map(p=>({p,set:new Set(this._researchTerms(p.text))}));
-    const reg={};const srcNum=new Map();const SENT=/(?<=[.!?])\s+/;
+    const reg={};const SENT=/(?<=[.!?])\s+/;
     const out=String(text||'').split('\n').map(line=>{
       if(!line.trim()||/^\s*#{1,6}\s/.test(line))return line;           // blank or heading → no cite
       return line.split(SENT).map(sent=>{
@@ -1451,10 +1451,11 @@ class Component extends DCLogic {
         }
         if(best&&bestScore>=0.3){
           if(!reg[best.i]){
-            // Number citations per distinct SOURCE (first-appearance order), so repeat cites to
-            // the same source share one glyph — the small superscript ⟦cN⟧ becomes (¹ ² …).
-            let n=srcNum.get(best.u);if(n==null){n=srcNum.size+1;srcNum.set(best.u,n);}
-            reg[best.i]={u:best.u,n,label:this.truncLabel((((this.pageOf(best.u)||{}).title)||(/^text:/i.test(best.u)?'text':this.short(best.u))),40)};
+            // A true footnote number per distinct PASSAGE (first-appearance order): the glyph ⟦cN⟧
+            // and the references list below share this number. The verbatim passage text rides in
+            // `text` so the references can preview the actual source line — the librarian apparatus.
+            const n=Object.keys(reg).length+1;
+            reg[best.i]={u:best.u,n,text:best.text,label:this.truncLabel((((this.pageOf(best.u)||{}).title)||(/^text:/i.test(best.u)?'text':this.short(best.u))),40)};
           }
           return sent+'⟦c'+best.i+'⟧';
         }
@@ -1580,6 +1581,16 @@ class Component extends DCLogic {
       // Only once the answer is settled (passages are attached on finish), so streaming stays cheap.
       const ann=(isMd&&!m.pending&&(m.passages||[]).length)?this._citeAnnotate(m.text,m.passages):null;
       const bodyHtml=isMd?this._md(ann?ann.text:m.text,ann&&ann.reg):'';
+      // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
+      // line (the librarian apparatus, shown by default). When the binder found no inline match we
+      // still list the passages the answer drew on, so the source text is always in view.
+      let refs=[];
+      if(ann&&ann.reg){
+        refs=Object.keys(ann.reg).map(i=>ann.reg[i]).sort((a,b)=>a.n-b.n)
+          .map(c=>({n:c.n,label:c.label,preview:this.truncLabel(this.norm(c.text),220),onOpen:()=>this.goWeb(c.u)}));
+      }else if(!isUser&&!m.pending&&(m.passages||[]).length){
+        refs=(m.passages||[]).slice(0,6).map((p,k)=>({n:k+1,label:titleForUrl(p.u),preview:this.truncLabel(this.norm(p.text),220),onOpen:()=>this.goWeb(p.u)}));
+      }
       // The grounding mode this turn was tagged with (sendChat/_answerInto via _groundReport):
       // 'matched' (lines that matched), 'opening' (drew on the source's opening), 'model' (the
       // model's own words). Older/structural turns carry none — fall back to the matched look
@@ -1647,6 +1658,12 @@ class Component extends DCLogic {
         sources:cites,hasSources:cites.length>0,entities,hasEntities:entities.length>0,
         hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
         groundLabel,groundCaret:gOn?'▾':'▸',
+        refs,refsHas:refs.length>0,
+        refsHeadStyle:'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin:2px 0 6px;',
+        refRowStyle:'display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:5px;max-width:80%;background:var(--app);border:1px solid var(--line2);border-radius:9px;cursor:pointer;',
+        refNumStyle:'flex:0 0 auto;width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);margin-top:1px;',
+        refPreviewStyle:'flex:1;min-width:0;font-size:12px;line-height:1.45;color:var(--ink2);',
+        refSrcStyle:'display:block;font-size:10.5px;font-weight:600;color:var(--ink3);margin-top:3px;',
         groundDisclosure:disclosure,hasDisclosure:!!disclosure,
         disclosureStyle:'font-size:11px;line-height:1.45;color:var(--ink3);font-style:italic;margin-top:5px;',
         groundStyle:'max-width:80%;margin-top:7px;',
