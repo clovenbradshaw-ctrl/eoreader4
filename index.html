@@ -4563,6 +4563,20 @@ class Component extends DCLogic {
   // marks, returned as strings so they can be located in a live DOM for the native view.
   _pageFlags(p){const paras=this._pageParas(p);
     return this.detectBookmarks(p,paras).map(m=>({text:paras[m.paraIndex]||'',why:m.why||''})).filter(f=>f.text.length>=24);}
+  // A standalone chapter marker, recognised by SHAPE not vocabulary: a short line that is
+  // a lone numeral (roman or arabic) or a lead word + numeral ("Chapter 1", "Part II",
+  // "Book Three"). The engine's structure detector ignores bare numerals on purpose (no
+  // lead word), so this presentation-only pass arms the per-chapter drop cap for books like
+  // those — purely visual, it never feeds the record. Returns the clean label or null.
+  _chapMarker(t){
+    const s=this.norm(t||'').trim();
+    if(!s||s.length>40)return null;
+    if(/^[IVXLCDM]{1,7}\.?$/.test(s))return s.replace(/\.$/,'');                 // I, II, XIV
+    if(/^\d{1,3}\.?$/.test(s))return s.replace(/\.$/,'');                        // 1, 12
+    if(/^(chapter|part|book|canto|section|act|scene|volume)\b[\s.:—-]*([0-9]+|[ivxlcdm]+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)?\.?$/i.test(s))
+      return s.replace(/\s*[.:]\s*$/,'');
+    return null;
+  }
   _bookHtml(p){
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     let paras=this._pageParas(p);
@@ -4579,10 +4593,16 @@ class Component extends DCLogic {
     // start and is re-armed after each heading, so the first paragraph of each chapter
     // gets the ::first-letter drop cap. A prose section anchor IS its chapter's opening
     // paragraph, so it always drop-caps.
-    const bookmarks=[],toc=[],parts=[];let chapStart=true;
+    const bookmarks=[],toc=[],parts=[];let chapStart=true,rc=0;
     paras.forEach((t,i)=>{
       const hit=secAt.get(i),bm=bmAt.get(i);
       const bmAttr=bm?' data-eo-why="'+esc(bm.why||'')+'"':'';
+      // A bare chapter marker the engine didn't flag: render it as a chapter number and arm
+      // the drop cap for the paragraph that follows (so every chapter opens with a drop cap).
+      if(!hit){const cm=this._chapMarker(t);
+        if(cm){const id='eo-ch-r'+(rc++);toc.push({id,label:cm,level:1});
+          if(bm)bookmarks.push({id,why:bm.why,paraIndex:i});
+          parts.push('<h2 class="eo-chap eo-chapnum'+(bm?' eo-bm':'')+'" id="'+id+'"'+bmAttr+'>'+esc(cm)+'</h2>');chapStart=true;return;}}
       if(hit){const id='eo-ch-'+hit.n,lv=hit.s.level||1;toc.push({id,label:this.norm(hit.s.label),level:lv});
         if(bm)bookmarks.push({id,why:bm.why,paraIndex:i});
         // Markdown headings carry their #'s in the source line — show the clean title.
@@ -4613,6 +4633,7 @@ class Component extends DCLogic {
       '.eo-author .eo-life{font-style:normal;font-weight:400;color:var(--eo-fg2);}'+
       '.eo-byline{font:.72em/1.5 -apple-system,BlinkMacSystemFont,sans-serif;color:var(--eo-fg2);margin:0 0 34px;border-bottom:1px solid var(--eo-rule);padding-bottom:18px;}'+
       'h2.eo-chap{font:700 2.15em/1.12 var(--eo-ff);letter-spacing:-.02em;color:var(--eo-fg);margin:2.6em 0 .7em;scroll-margin-top:16px;}'+
+      'h2.eo-chapnum{text-align:center;font-size:1.5em;font-weight:700;letter-spacing:.16em;color:var(--eo-fg2);text-transform:uppercase;margin:2.9em 0 1.2em;}'+
       'h2.eo-emergent{font-size:1.4em;font-weight:600;font-style:italic;letter-spacing:0;color:var(--eo-fg2);padding-left:.7em;border-left:2px solid var(--eo-acc);}'+
       'p{margin:0 0 1.15em;}p.eo-first::first-letter{font-size:3.1em;line-height:.86;float:left;padding:6px 10px 0 0;font-weight:700;color:var(--eo-acc);font-family:Georgia,serif;}'+
       // Bookmarks: inert until the reader turns the mode on (html.eo-bm-on), then the
