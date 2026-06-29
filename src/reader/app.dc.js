@@ -740,6 +740,21 @@ class Component extends DCLogic {
     if(!words.length)return true;
     const content=words.filter(w=>!this._metaWords.has(w)&&!this.STOP.has(w));
     return content.length===0;}
+  // Is this turn a CORRECTION / CONTRADICTION of the standing answer — the user telling us the
+  // reading is wrong or out of date ("he is no longer a council member", "no, she's the CEO now",
+  // "that's outdated", "actually he's the mayor now")? When such a turn rides over a reading that
+  // already "covers" the topic, re-asserting that reading is exactly the wrong move (the audit: a
+  // year-old article still calls O'Connell a councilmember after he became mayor) — so _shouldWeb
+  // sends it to the web to settle the CURRENT fact instead of doubling down. Tight on purpose: a
+  // correction opener, a negated / changed state, or a staleness flag. Bare "no" / "nope" acks are
+  // caught by _shouldWeb's pleasantry guard before this is ever consulted.
+  _isCorrection(q){
+    const s=String(q||'').trim();if(!s)return false;
+    const isQ=/\?\s*$/.test(s);
+    return /^\s*(?:no|nope|nah)\s*[,;:.!]\s*\S/i.test(s)
+      || /^\s*(?:wrong|incorrect|false|untrue|not\s+quite|that'?s\s+(?:wrong|incorrect|false|not\s+(?:right|true)|outdated|out\s+of\s+date|old))\b/i.test(s)
+      || /\b(?:no\s+longer|not\s+any\s?more|isn'?t\s+any\s?more|aren'?t\s+any\s?more|used\s+to\s+be|not\s+(?:true|correct|right|the\s+case)|out\s+of\s+date|outdated)\b/i.test(s)
+      || (!isQ&&/\b(?:actually|in\s+fact|in\s+reality)\b[^?]*\b(?:is|are|was|were|now|isn'?t|aren'?t|not)\b/i.test(s));}
   // Is this string a real subject worth searching, or a bare id / slug / filename ("pg5200",
   // "doc12", "untitled-3") that would send the walk chasing nonsense? A usable subject needs at
   // least one real word — alphabetic, vowel-bearing, length ≥ 3 — and isn't just an id+number.
@@ -804,6 +819,15 @@ class Component extends DCLogic {
   _researchSeed(q,cur){
     const intent=this._researchIntent(q);
     const candidate=(intent&&intent.topic)||q;
+    // A CORRECTION turn ("he is no longer a council member") names no subject of its own — the
+    // figure lives in the conversation. Treat it like a continuation: chase the chat's SUBJECT,
+    // sharpened with the correction's own content words (the disputed attribute), so the walk
+    // researches the figure's CURRENT status rather than the bare correcting sentence.
+    if(!intent&&this._isCorrection(q)){
+      const subject=this._chatSubject(cur);
+      if(subject){const cue=this._researchTerms(q).slice(0,4).join(' ');
+        return {topic:this.norm((subject+(cue?(' '+cue):'')).trim()),anchor:subject,derived:true};}
+    }
     if(!this._isMetaResearch(candidate)){
       const topic=this.norm(candidate).replace(/[?.!]+$/,'').trim();
       return {topic,anchor:topic||q,derived:false};
@@ -1086,6 +1110,10 @@ class Component extends DCLogic {
     // A bare pleasantry / acknowledgement names no subject — don't go research "thanks".
     if(/^(?:thanks?|thank you|thx|ty|ok|okay|k|cool|nice|great|awesome|got it|sounds good|sure|yep|yes|no|yeah|nope|lol|haha|hi|hey|hello|yo|sup|np|no problem|cheers|bye|goodbye|good (?:morning|night))[\s.!?]*$/i.test(q))return false;
     if(!this._researchTerms(q).length)return false;         // nothing contentful to chase
+    // A CORRECTION / CONTRADICTION ("he is no longer a council member", "actually she's CEO now")
+    // disputes the in-scope reading itself — so even when that reading "covers" the topic, don't
+    // re-assert it offline; go to the web to settle the CURRENT fact (research-accuracy fix).
+    if(this._isCorrection(q))return true;
     return !this.groundNotes(q,sources).relevant;           // not covered by matched reading → go read
   }
   async sendChat(){
