@@ -1362,7 +1362,9 @@ class Component extends DCLogic {
       // prose, chrome/ads gone, engine TOC + flagged passages); 'native' is the real fetched
       // page with its own layout, given the same contents nav + highlighted passages on top.
       // A toolbar toggle flips it; an UNread URL always shows native (no prose to strip yet).
-      viewMode:(savedViewMode==='native'?'native':'reader'),
+      // Default is 'native' — render the real page as HTML first; switch to the stripped
+      // reader view only on request (the toggle persists 'reader' for those who prefer it).
+      viewMode:(savedViewMode==='reader'?'reader':'native'),
       accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false,
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
@@ -4541,7 +4543,7 @@ class Component extends DCLogic {
   goToHist(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hpos=i;this._applyLoc(this._hist[i]);}
   closeTab(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hist.splice(i,1);if(this._hpos>=i&&this._hpos>0)this._hpos--;if(this._hpos>=this._hist.length)this._hpos=this._hist.length-1;if(this._hpos>=0)this._applyLoc(this._hist[this._hpos]);else this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
   newTab(){this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
-  tabLabel(loc,g){if(loc.t==='web')return /^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url);return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
+  tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?('🔎 '+this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
   buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';return {label:lab,i,active,isWeb,dotStyle:'width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';',onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};});return all.slice(-6);}
   // ---- live embed of the page shown in the CENTER viewport ----
   // A readable "book" rendering of an imported text source. The author's own
@@ -4682,6 +4684,7 @@ class Component extends DCLogic {
       '</style></head><body><div class="eo-book">'+parts.join('\n')+'</div></body></html>';
   }
   loadCenter(url){
+    if(/^search:/i.test(url)){this._renderSearch(url.slice(7));return;}
     if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){this._renderBook(url,p);}else{this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
     if(!url){this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
     // A web page we've read can render two ways (the toolbar toggle picks). READER —
@@ -4722,11 +4725,92 @@ class Component extends DCLogic {
   onDirInput(ev){this.setState({direction:ev&&ev.target?ev.target.value:''});}
   onUrlInput(ev){this.setState({url:ev&&ev.target?ev.target.value:''});}
   onUrlKey(ev){if(ev&&ev.key==='Enter')this.doReadUrl();}
-  // A URL (or bare domain) is opened directly; anything else is a Project Gutenberg
-  // book search — type a title or author to find a book to read.
+  // The bar is a general search engine. A URL (or bare domain) is opened directly;
+  // anything else is a WEB SEARCH — the query goes to a general search engine and the
+  // results render as an HTML page in the center, every hit a link that opens (as HTML)
+  // when clicked. (Project Gutenberg book search still runs via searchBooks for callers
+  // that want it, e.g. the home-screen suggestions.)
   doReadUrl(){const u=this.state.url.trim();if(!u)return;this.setState({url:''});
     if(/^https?:\/\//i.test(u)||/^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(\/|$|\?)/i.test(u)){this.goWeb(u);}
-    else{this.searchBooks(u);}}
+    else{this.doSearch(u);}}
+  // Run a general web search — render the results as an HTML page in the center viewport.
+  // The pseudo-URL `search:<query>` becomes a normal history location (back/forward and the
+  // tab strip treat it like any web page); loadCenter routes it to _renderSearch.
+  doSearch(query){query=this.norm(query);if(!query)return;
+    const vu='search:'+query;this._srcUrl=null;this._pushLoc({t:'web',url:vu});
+    this.setState(s=>({viewUrl:vu,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,gutenResults:null,gutenQuery:'',histRev:(s.histRev||0)+1}));
+    this.loadCenter(vu);}
+  // Fetch the results page (cached per query so back/forward re-renders without re-fetching)
+  // and paint it into the center iframe as themed HTML.
+  _renderSearch(query){
+    query=this.norm(query);const vu='search:'+query;this._pageUrl=vu;
+    const cache=this._searchCache||(this._searchCache=new Map());
+    if(cache.has(query)){this.setState({bookView:false,pageDoc:this._searchResultsDoc(query,cache.get(query)),bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
+    this.setState({bookView:false,pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false});
+    this.webSearchResults(query).then(results=>{
+      cache.set(query,results);
+      if(this.state.viewUrl!==vu)return;
+      this.setState({pageDoc:this._searchResultsDoc(query,results),pageLoading:false,pageErr:null});
+    }).catch(e=>{ if(this.state.viewUrl===vu)this.setState({pageLoading:false,pageErr:String(e&&e.message||e)}); });
+  }
+  // Search-engine results with title + snippet. PRIMARY: DuckDuckGo's HTML endpoint
+  // (parsed for title/snippet/url) through the proxy. FALLBACK: Wikipedia's search API
+  // (CORS-direct) so a DDG hiccup or bot-wall never leaves the bar empty.
+  async webSearchResults(query,n){
+    n=n||12;
+    try{const r=await this._searchDDGRich(query,n);if(r.length)return r;}catch(e){}
+    try{return await this._searchWikiRich(query,n);}catch(e){return [];}
+  }
+  async _searchDDGRich(query,n){
+    const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)));
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const doc=new DOMParser().parseFromString(await r.text(),'text/html');const out=[];const seen=new Set();
+    doc.querySelectorAll('.result, .web-result').forEach(res=>{
+      const a=res.querySelector('a.result__a, .result__title a');if(!a)return;
+      let h=a.getAttribute('href')||'';const m=h.match(/[?&]uddg=([^&]+)/);if(m)h=decodeURIComponent(m[1]);
+      if(!/^https?:\/\//i.test(h)||/duckduckgo\.com/i.test(h))return;if(seen.has(h))return;seen.add(h);
+      const sn=res.querySelector('.result__snippet');
+      out.push({url:h,title:this.norm(a.textContent)||this.short(h),snippet:this.norm(sn?sn.textContent:''),host:this.short(h)});
+    });
+    return out.slice(0,n);
+  }
+  async _searchWikiRich(query,n){
+    const u='https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch='+encodeURIComponent(query)+'&srlimit='+(n||10)+'&format=json&origin=*';
+    const data=await this._wikiJSON(u);const hits=(data&&data.query&&data.query.search)||[];
+    return hits.map(h=>{const url='https://en.wikipedia.org/wiki/'+encodeURIComponent(String(h.title).replace(/ /g,'_'));
+      return {url,title:h.title,snippet:this.norm(String(h.snippet||'').replace(/<[^>]+>/g,'')),host:'en.wikipedia.org'};}).slice(0,n);
+  }
+  // The results page itself — themed to match the reader, every hit a plain <a href> the
+  // center iframe's click handler routes through goWeb (so a result opens as HTML in-app).
+  _searchResultsDoc(query,results){
+    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
+    const rows=(results||[]).map(r=>
+      '<li class="eo-r"><a class="eo-r-t" href="'+esc(r.url)+'">'+esc(r.title||r.url)+'</a>'+
+      '<div class="eo-r-h">'+esc(r.host||'')+'</div>'+
+      (r.snippet?'<div class="eo-r-s">'+esc(r.snippet)+'</div>':'')+'</li>').join('');
+    const body=results&&results.length
+      ? '<ol class="eo-rs">'+rows+'</ol>'
+      : '<p class="eo-empty">No results for “'+esc(query)+'”.</p>';
+    return '<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer">'+
+      '<style>'+
+      ':root{--bg:'+tm.bg+';--fg:'+tm.fg+';--acc:'+a+';}'+
+      'html,body{margin:0;background:var(--bg);}'+
+      'body{font:15px/1.55 '+(this.READ_FONTS.sans||'-apple-system,system-ui,sans-serif')+';color:var(--fg);}'+
+      '.eo-wrap{max-width:680px;margin:0 auto;padding:30px 28px 120px;}'+
+      '.eo-q{font-size:13px;color:var(--fg);opacity:.6;margin:0 0 22px;}'+
+      '.eo-q b{opacity:1;}'+
+      '.eo-rs{list-style:none;margin:0;padding:0;}'+
+      '.eo-r{margin:0 0 22px;}'+
+      '.eo-r-t{display:inline;font-size:18px;font-weight:600;color:var(--acc);text-decoration:none;cursor:pointer;}'+
+      '.eo-r-t:hover{text-decoration:underline;}'+
+      '.eo-r-h{font-size:12px;opacity:.55;margin:2px 0 4px;}'+
+      '.eo-r-s{font-size:13.5px;opacity:.85;}'+
+      '.eo-empty{opacity:.6;}'+
+      '</style></head><body><div class="eo-wrap">'+
+      '<p class="eo-q">Web results for <b>'+esc(query)+'</b></p>'+body+
+      '</div></body></html>';
+  }
   setHover(s){this.setState({hoverSrc:s});}
   // Provenance: open a source as a dock inspector on its Propositions (the receipts are text
   // and fit dock width). Reading the live page is a separate intent — "Read live" promotes it
@@ -5382,7 +5466,7 @@ class Component extends DCLogic {
           btnStyle:'flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:'+(reading?'#9aa1ab':'var(--acc)')+';border:none;border-radius:9px;padding:8px 14px;cursor:'+(reading?'default':'pointer')+';'};})};
 
     const vu=this.state.viewUrl;
-    base.askPageOn=!!vu&&!base.chatOn;   // the discoverable "Ask about this page" FAB
+    base.askPageOn=!!vu&&!/^search:/i.test(vu)&&!base.chatOn;   // the discoverable "Ask about this page" FAB
     // Reading toolbar. Over a stripped book (isBook) it carries the full e-reader typography
     // controls; over a NATIVE read page it carries just the contents nav, flagged passages,
     // and the Reader/Page mode toggle. Both render the same Contents + ❖ marks.
@@ -5417,7 +5501,7 @@ class Component extends DCLogic {
     }
     if(vu){
       base.showWeb=true;
-      base.web={url:vu,host:/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu),loading:!!this.state.pageLoading&&!this.state.pageDoc,
+      base.web={url:vu,host:/^search:/i.test(vu)?('Search · '+this.norm(vu.slice(7))):(/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu)),loading:!!this.state.pageLoading&&!this.state.pageDoc,
         err:(this.state.pageErr&&!this.state.pageDoc)?this.state.pageErr:null,hasDoc:!!this.state.pageDoc,doc:this.state.pageDoc||'',
         onReloadPage:()=>this.loadCenter(vu),detecting:this.state.detect&&this.state.busy};
     }
@@ -5431,8 +5515,8 @@ class Component extends DCLogic {
     if(!ready||!g||this.state.pages.length===0){
       if(!vu&&!base.chatOn&&!base.gutenOn){
         base.showPrompt=true;
-        base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Read a URL — or find a book':'Loading the reading engine…');
-        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Paste a page URL to read it here, type a title or author to find a book on Project Gutenberg, or use 📄 to import your own. Every entity is read into the graph on the right — then ask about it in a chat.';
+        base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Search the web — or read a URL':'Loading the reading engine…');
+        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type anything to search the web, paste a page URL to open it here, or use 📄 to import your own text. Pages render as HTML; open a result and every entity is read into the graph on the right — then ask about it in a chat.';
         base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
         base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
       }
