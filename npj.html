@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101d1c">
+<title>NPJ · Front Page</title>
+<meta name="description" content="The Newsroom-of-Public-Journal front page — one lead record over the newsroom feed, every claim standing on an archived source.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+  /* ──────────────────────────────────────────────────────────────────────
+     NPJ FRONT PAGE — STYLESHEET (visual source of truth)
+
+     This file is the standalone preview. The render spec governs ONLY the
+     markup structure (§2, §3) and image sizing (§4). The selectors it is
+     allowed to touch are listed in §6 and are grouped together below under
+     "SPEC-SCOPED SELECTORS". Everything above that line — tokens, header,
+     footer, body type stack — is out of the spec's scope.
+     ────────────────────────────────────────────────────────────────────── */
+
+  /* ── OUT OF SPEC SCOPE: tokens / chrome / type stack ─────────────────── */
+  :root{
+    --ground:#101d1c; --panel:#152625; --panel-2:#1a2e2c;
+    --ink:#e9e3d4; --ink-dim:#9aa6a0; --ink-faint:#62716b; --rule:#243634;
+    --wake:#e0a23c;          /* accent — kickers, links */
+    --rest:#6fb0a8;          /* verified / archive accent */
+    --placeholder:#1d302e;   /* empty image frame fill */
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --serif:"Newsreader",Georgia,"Times New Roman",serif;
+    --maxw:1080px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:var(--ground); color:var(--ink);
+    font-family:var(--serif); line-height:1.5;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:clamp(16px,3.2vw,40px)}
+  .label{font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-faint)}
+
+  /* site masthead (chrome) */
+  .masthead{display:flex; align-items:baseline; justify-content:space-between;
+    gap:16px; flex-wrap:wrap; border-bottom:2px solid var(--rule);
+    padding-bottom:16px; margin-bottom:6px}
+  .masthead .brand{font-size:clamp(28px,5vw,44px); font-weight:600;
+    letter-spacing:-.02em; margin:0; line-height:1}
+  .masthead .brand span{color:var(--wake)}
+  .masthead .tag{font-family:var(--mono); font-size:11px; color:var(--ink-faint);
+    text-align:right; max-width:34ch}
+  footer.site{margin-top:48px; padding-top:18px; border-top:1px solid var(--rule);
+    font-family:var(--mono); font-size:11px; color:var(--ink-faint);
+    display:flex; gap:14px; flex-wrap:wrap; justify-content:space-between}
+
+  /* ════════════════════════════════════════════════════════════════════════
+     SPEC-SCOPED SELECTORS (§6) — the only selectors this spec may touch
+     ════════════════════════════════════════════════════════════════════════ */
+
+  /* §1 page model — the eyebrow + feed divider */
+  .eyebrow{font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-faint);
+    display:flex; gap:10px; align-items:center; margin:22px 0 14px}
+  .eyebrow::after{content:""; flex:1; height:1px; background:var(--rule)}
+
+  .feed-label{font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-faint);
+    display:flex; gap:10px; align-items:center; margin:40px 0 20px}
+  .feed-label::after{content:""; flex:1; height:1px; background:var(--rule)}
+
+  /* §2 LEAD ─────────────────────────────────────────────────────────────── */
+  article.lead{
+    display:grid; grid-template-columns:1.55fr 1fr; gap:clamp(20px,3vw,40px);
+    align-items:start;
+    padding-bottom:30px; border-bottom:1px solid var(--rule);
+  }
+  /* image frame owns dimensions; the img only fills it (§4) */
+  .lead-figure{
+    aspect-ratio:4/3; overflow:hidden; border-radius:3px;
+    background:var(--placeholder); /* gray placeholder if no img */
+  }
+  .lead-figure img{width:100%; height:100%; object-fit:cover; display:block}
+
+  .lead-body{min-width:0}
+  .kicker{font-family:var(--mono); font-size:11px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--wake); display:inline-block;
+    margin-bottom:10px}
+  .lead h1{font-size:clamp(30px,4.4vw,48px); line-height:1.04; font-weight:600;
+    letter-spacing:-.02em; margin:0 0 12px}
+  .dek{font-size:clamp(17px,1.6vw,20px); line-height:1.45; color:var(--ink-dim);
+    margin:0 0 18px}
+  .byline{font-family:var(--mono); font-size:12px; color:var(--ink-dim);
+    line-height:1.9; margin-bottom:16px}
+  .byline b{font-weight:500; color:var(--ink)}
+  .byline .sep{color:var(--ink-faint); margin:0 6px}
+  .av{display:inline-flex; align-items:center; justify-content:center;
+    width:20px; height:20px; border-radius:50%; margin-right:5px;
+    background:var(--panel-2); border:1px solid var(--rule);
+    font-family:var(--mono); font-size:10px; font-weight:500; color:var(--rest);
+    vertical-align:-5px}
+  .av.sm{width:16px; height:16px; font-size:9px; vertical-align:-3px;
+    margin-right:4px}
+
+  .sources{display:inline-flex; align-items:center; gap:7px;
+    font-family:var(--mono); font-size:12px; color:var(--rest);
+    text-decoration:none; padding:6px 11px 6px 9px; border-radius:999px;
+    border:1px solid var(--rule); background:var(--panel);
+    transition:border-color .15s ease, background .15s ease}
+  .sources:hover{border-color:var(--rest); background:var(--panel-2)}
+  .sources svg{width:15px; height:15px; flex:none; stroke:var(--rest)}
+  .sources span{color:var(--ink-faint)}
+  .lead .date{font-family:var(--mono); font-size:11px; color:var(--ink-faint);
+    margin-top:16px}
+
+  /* §1 FEED + §3 CARD ───────────────────────────────────────────────────── */
+  .feed{display:flex; flex-direction:column; gap:0}
+  article.card{
+    display:grid; grid-template-columns:300px 1fr; gap:24px;
+    padding:24px 0; border-bottom:1px solid var(--rule);
+  }
+  article.card:last-child{border-bottom:none}
+  .card-fig{
+    aspect-ratio:3/2; overflow:hidden; border-radius:3px;
+    background:var(--placeholder);
+  }
+  .card-fig img{width:100%; height:100%; object-fit:cover; display:block}
+
+  .card-body{min-width:0; height:100%; display:flex; flex-direction:column}
+  .card h2{font-size:clamp(20px,2.4vw,26px); line-height:1.12; font-weight:600;
+    letter-spacing:-.01em; margin:2px 0 8px}
+  .cdek{font-size:16px; line-height:1.45; color:var(--ink-dim); margin:0 0 14px}
+  .cfoot{margin-top:auto; font-family:var(--mono); font-size:11px;
+    color:var(--ink-dim); display:flex; align-items:center; gap:8px;
+    flex-wrap:wrap}
+  .cby{display:inline-flex; align-items:center}
+  .cfoot .dot{color:var(--ink-faint)}
+  .src-mini{display:inline-flex; align-items:center; gap:5px; color:var(--rest)}
+  .src-mini svg{width:13px; height:13px; flex:none; stroke:var(--rest)}
+
+  /* §4 responsive image behavior (lives here, not duplicated elsewhere) */
+  @media (max-width:900px){
+    article.lead{grid-template-columns:1fr; gap:20px}
+    .lead-figure{aspect-ratio:auto; height:300px}     /* capped, full width */
+    article.card{grid-template-columns:200px 1fr; gap:18px} /* stays 2-col */
+  }
+  @media (max-width:600px){
+    .lead-figure{height:300px}
+    article.card{grid-template-columns:120px 1fr; gap:14px} /* stays 2-col */
+    .card h2{font-size:18px}
+    .cdek{font-size:14px; -webkit-line-clamp:3}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- masthead is chrome (out of spec scope) -->
+  <header class="masthead">
+    <h1 class="brand">N<span>P</span>J</h1>
+    <div class="tag">The newsroom of public record — every underlined claim
+      stands on an archived source.</div>
+  </header>
+
+  <!-- The spec governs everything inside <main>. It is rendered from data. -->
+  <main id="front"></main>
+
+  <footer class="site">
+    <span>© 2026 NPJ · Newsroom of Public Record</span>
+    <span>Sources mirrored via Archive.org</span>
+  </footer>
+
+</div>
+
+<script type="module">
+/* ════════════════════════════════════════════════════════════════════════
+   NPJ FRONT PAGE — RENDERER
+
+   Implements the render spec: article→DOM contracts (§2, §3), image
+   mechanics (§4), and source-count derivation (§5). The records below stand
+   in for the CMS feed; image `src` values are base64 data URIs so this
+   preview renders with no external assets (§4.3).
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── base64 placeholder images (preview only — production serves R2/CDN) ── */
+function placeholder(h1, h2, label){
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="${h1}"/><stop offset="1" stop-color="${h2}"/>
+      </linearGradient></defs>
+      <rect width="800" height="600" fill="url(#g)"/>
+      <text x="40" y="556" font-family="monospace" font-size="26"
+        fill="rgba(255,255,255,.62)" letter-spacing="3">${label}</text>
+    </svg>`;
+  return 'data:image/svg+xml;base64,' + btoa(svg);
+}
+
+/* ── the feed (most-recent-first; one may be `pinned`) ──────────────────── */
+const RECORDS = [
+  {
+    id: 'r-2207',
+    pinned: true,
+    section: 'Investigation',
+    headline: 'The water board met 41 times. The minutes show 6.',
+    dek: 'A two-year reconstruction of a rural utility’s vanishing paper trail — built entirely from snapshots its own website tried to forget.',
+    author: { handle: '@m.rosen' },
+    editor:  { name: 'Dana Okafor' },
+    publish_date: 'June 28, 2026',
+    image: { src: placeholder('#1a3a44','#0d2530','RIVER OUTFALL · 2026'),
+             alt: 'A concrete water-treatment outfall photographed at dawn, pipes draining into a low river.' },
+    body: `
+      <p>The board <a class="claim" data-archive="https://web.archive.org/web/20240112/utilminutes/jan">approved the rate increase</a>
+      without a recorded vote, and <a class="claim" data-archive="https://web.archive.org/web/20240118/utilminutes/jan">struck the line item</a>
+      from the published agenda. A later revision
+      <a class="claim" data-archive="https://web.archive.org/web/20240522/utilminutes/may">reinstated the figure</a>,
+      then <a class="claim" data-archive="https://web.archive.org/web/20240601/utilbudget/fy25">moved it to the capital budget</a>.
+      The state filing <a class="claim" data-archive="https://web.archive.org/web/20240730/stateauditor/fy25">flagged the gap</a>,
+      and a duplicate of the same January snapshot
+      <a class="claim" data-archive="https://web.archive.org/web/20240112/utilminutes/jan">confirms the original wording</a>.</p>`
+  },
+  {
+    id: 'r-2206',
+    section: 'Housing',
+    headline: 'A landlord, a shell company, and 19 deleted listings',
+    dek: 'The units were never off the market. They were off the record.',
+    author: { handle: '@priya' },
+    editor:  { name: 'Sam Vance' },
+    publish_date: 'June 27, 2026',
+    image: { src: placeholder('#3a2a44','#1d1230','BLOCK 14 · WALK-UP'),
+             alt: 'A row of brick walk-up apartment buildings under flat overcast light.' },
+    body: `
+      <p><a class="claim" data-archive="https://web.archive.org/web/20260301/listings/a14">Listing A</a>,
+      <a class="claim" data-archive="https://web.archive.org/web/20260301/listings/b14">Listing B</a>, and
+      <a class="claim" data-archive="https://web.archive.org/web/20260302/listings/c14">Listing C</a>
+      shared a registered agent, per the
+      <a class="claim" data-archive="https://web.archive.org/web/20260310/secstate/agent">corporate filing</a>.</p>`
+  },
+  {
+    id: 'r-2205',
+    section: 'Climate',
+    headline: 'The heat map the county stopped publishing',
+    dek: 'Three summers of asphalt readings, archived the week before the dashboard went dark.',
+    author: { handle: '@lee' },
+    editor:  null,                          /* no editor → byline omits the run */
+    publish_date: 'June 26, 2026',
+    image: { src: placeholder('#44321a','#301d0d','SURFACE TEMP · JUL'),
+             alt: 'A thermal-camera view of a parking lot rendered in oranges and deep reds.' },
+    body: `
+      <p>The <a class="claim" data-archive="https://web.archive.org/web/20250801/heat/dash">2025 dashboard</a>
+      and its <a class="claim" data-archive="https://web.archive.org/web/20250801/heat/dash">cached duplicate</a>
+      both record the <a class="claim" data-archive="https://web.archive.org/web/20250815/heat/csv">raw CSV</a>.</p>`
+  },
+  {
+    id: 'r-2204',
+    section: 'Courts',
+    headline: 'A sealed settlement, reopened by its own footnote',
+    dek: 'The amount was redacted. The exhibit index was not.',
+    author: { handle: '@okonkwo' },
+    editor:  { name: 'Dana Okafor' },
+    publish_date: 'June 25, 2026',
+    image: null,                            /* missing image → empty gray frame */
+    body: `
+      <p>The <a class="claim" data-archive="https://web.archive.org/web/20260210/docket/exh">exhibit index</a>
+      named the figure the <a class="claim" data-archive="https://web.archive.org/web/20260210/docket/seal">sealed order</a>
+      tried to hide.</p>`
+  }
+];
+
+/* ── §5 source count: distinct archived-snapshot URLs in the record body ── */
+function sourceCount(record){
+  const tpl = document.createElement('template');
+  tpl.innerHTML = record.body || '';
+  const urls = new Set();
+  tpl.content.querySelectorAll('[data-archive]').forEach(el => {
+    const u = el.getAttribute('data-archive');
+    if (u) urls.add(u);
+  });
+  return urls.size;                         // dedup by snapshot URL; always ≥1 to publish
+}
+function sourcesUrl(record){ return `/sources?record=${record.id}`; }
+
+/* ── small DOM helpers ──────────────────────────────────────────────────── */
+function el(tag, cls, text){
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+function initial(s){
+  const m = (s || '').match(/[a-z0-9]/i);   // first alphanumeric, e.g. "@m.rosen" → "M"
+  return m ? m[0].toUpperCase() : '?';
+}
+const ARCHIVE_GLYPH_LEAD =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h11l5 5v11H4z"/><path d="M15 4v5h5"/><path d="M8 13h8M8 16h8"/></svg>';
+const ARCHIVE_GLYPH_CARD =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h11l5 5v11H4z"/><path d="M15 4v5h5"/></svg>';
+
+/* image frame: the frame owns dimensions, the img only fills it (§4).
+   A missing image leaves the frame empty (gray placeholder) — never a
+   broken <img> (§4.4). No width/height attrs or inline sizing (§4.1). */
+function figure(frameClass, image){
+  const fig = el('div', frameClass);
+  if (image && image.src){
+    const img = el('img');
+    img.src = image.src;
+    img.alt = image.alt || '';             // alt is required + non-empty (§4.4)
+    fig.appendChild(img);
+  }
+  return fig;
+}
+
+/* ── §2 LEAD → DOM ──────────────────────────────────────────────────────── */
+function renderLead(rec){
+  const art = el('article', 'lead');
+  art.appendChild(figure('lead-figure', rec.image));
+
+  const body = el('div', 'lead-body');
+  body.appendChild(el('span', 'kicker', rec.section));
+  body.appendChild(el('h1', null, rec.headline));
+  body.appendChild(el('p', 'dek', rec.dek));
+
+  const by = el('div', 'byline');
+  by.append('by ');
+  by.appendChild(el('span', 'av', initial(rec.author.handle)));
+  by.appendChild(el('b', null, rec.author.handle));
+  if (rec.editor){                          // omit the whole run when no editor (§2 note)
+    const sep = el('span', 'sep', '·');
+    by.appendChild(sep);
+    sep.after(' edited by ');
+    by.appendChild(el('span', 'av', initial(rec.editor.name)));
+    by.appendChild(el('b', null, rec.editor.name));
+  }
+  body.appendChild(by);
+
+  const a = el('a', 'sources');
+  a.href = sourcesUrl(rec);
+  a.insertAdjacentHTML('beforeend', ARCHIVE_GLYPH_LEAD);   // emit glyph verbatim (§2 note)
+  a.append(` ${sourceCount(rec)} sources archived `);
+  a.appendChild(el('span', null, '· verified via Archive.org'));
+  body.appendChild(a);
+
+  body.appendChild(el('div', 'date', rec.publish_date));
+  art.appendChild(body);
+  return art;
+}
+
+/* ── §3 CARD → DOM ──────────────────────────────────────────────────────── */
+function renderCard(rec){
+  const art = el('article', 'card');
+  art.appendChild(figure('card-fig', rec.image));
+
+  const body = el('div', 'card-body');
+  body.appendChild(el('span', 'kicker', rec.section));
+  body.appendChild(el('h2', null, rec.headline));
+  body.appendChild(el('p', 'cdek', rec.dek));
+
+  /* footer: author · sources · date — dots only between present items (§3) */
+  const foot = el('div', 'cfoot');
+  const parts = [];
+
+  if (rec.author){
+    const cby = el('span', 'cby');
+    cby.appendChild(el('span', 'av sm', initial(rec.author.handle)));
+    cby.append(rec.author.handle);
+    parts.push(cby);
+  }
+  const count = sourceCount(rec);
+  if (count > 0){
+    const src = el('span', 'src-mini');
+    src.insertAdjacentHTML('beforeend', ARCHIVE_GLYPH_CARD);
+    src.append(`${count} sources`);
+    parts.push(src);
+  }
+  if (rec.publish_date){
+    parts.push(document.createTextNode(rec.publish_date));
+  }
+  parts.forEach((p, i) => {
+    if (i) foot.appendChild(el('span', 'dot', '·'));   // separator between, not around
+    foot.appendChild(p);
+  });
+  body.appendChild(foot);
+
+  art.appendChild(body);
+  return art;
+}
+
+/* ── §1 page assembly: eyebrow · lead · feed-label · feed ───────────────── */
+function render(records){
+  const main = document.getElementById('front');
+  main.textContent = '';
+
+  const published = records.slice();        // (already published-only in this preview)
+  const leadIdx = published.findIndex(r => r.pinned);
+  const lead = leadIdx >= 0 ? published[leadIdx] : published[0];
+  const feed = published.filter(r => r !== lead);   // no record in both (§1)
+
+  const eyebrow = el('div', 'eyebrow');
+  eyebrow.append('Front Page');
+  eyebrow.appendChild(el('span', null, lead ? lead.publish_date : ''));
+  main.appendChild(eyebrow);
+
+  if (lead) main.appendChild(renderLead(lead));
+
+  main.appendChild(el('div', 'feed-label', 'More from the newsroom'));
+
+  const feedEl = el('div', 'feed');
+  feed.forEach(r => feedEl.appendChild(renderCard(r)));
+  main.appendChild(feedEl);
+}
+
+render(RECORDS);
+</script>
+</body>
+</html>
