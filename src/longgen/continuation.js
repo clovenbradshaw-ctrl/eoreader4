@@ -1,31 +1,32 @@
-// runContinuation — long generation across messages, the closure run forward.
+// runContinuation — long generation across messages, the closure run forward, with
+// the planner's faces wired in (docs/long-generation.md, docs/spec-planner.md).
 //
-// docs/long-generation.md. The arc's spine with the source switched from a
-// document to the generation's SELF and the supply from retrieval to a fold of
-// the conversation plus a ground pool. One step is the four-part sketch made
-// literal:
+// The arc's spine with the source switched from a document to the generation's SELF
+// and the supply from retrieval to a fold of the conversation plus a ground pool.
+// One step is the act seen three ways (spec-planner.md §4):
 //
 //   reconstruct  feed back the tail (verbatim window) and the fold (surfed recap)
-//   direction    p(next) over the self → the move-type to make next
-//   resolve      that move-type → a concrete proposition from uncovered ground
-//   realize      the talker renders it, with the fold as context
+//   gate         (§3) before the first step: does the ground answer the TYPE asked?
+//   navigate     (§4.1) p(next) over the self, leaned by the significance arc (§8)
+//   resolve      (§4.2) that move-type → a concrete proposition, operator HONORED
+//   realize      (§4.3) the talker renders it, with the fold + read-window as context
 //   floor        bind+veto the rendering against its span (the arc's gate)
-//   weld         append the JUDGED unit; its verdict becomes the next step's strain
+//   weld         (§7) append the JUDGED unit; its verdict becomes the next step's strain
 //
-// Termination is emergent (the arc's law, §5.7): the loop stops when the ground
-// is spent, when the predictor goes flat (its VOID), or on sustained drift —
-// never at a token count. A `maxSteps` backstop is a runaway guard, not policy.
-//
-// Across messages: the returned `state` (accepted units + covered ground) is a
-// sufficient statistic. Persist it, pass it back with the next message, and the
-// loop resumes — the fold widens, the self move-log lengthens, generation
-// continues where it stopped.
+// Termination is emergent (spec-planner.md §10): the loop stops when the ground
+// saturates (uncovered mass below `epsilon`), when the ground is spent, when the
+// predictor QUIESCES (§2 — the flat posterior, NOT a VOID-site move), when the arc
+// lands a SYN, or on sustained drift — never at a token count. `maxSteps` is a
+// runaway guard.
 
 import { foldConversation } from '../converse/history.js';
-import { generateSection, stripUnboundCorrective, REBIND_THRESHOLD } from '../arc/index.js';
+import { generateSection, stripUnboundCorrective, REBIND_THRESHOLD, groundSaturation } from '../arc/index.js';
 import { bindAndVeto } from '../ground/index.js';
 import { predictDirection } from './direction.js';
 import { resolveProposition } from './resolve.js';
+import { answerabilityGate, followUpOffer } from './answerable.js';
+import { arcPhase, phaseBias } from './shape.js';
+import { speculateNext, readWindow } from './prompt.js';
 
 const MAX_STEPS = 24;            // runaway backstop; saturation should bind first
 const MAX_DRIFT = 2;             // consecutive drops that read as "the frame is gone"
@@ -43,16 +44,37 @@ export const runContinuation = async ({
   history = [],           // the conversation; folded to tail + recap each call
   model,
   doc = null,             // optional, only for the neutral orientation line
+  graph = null,           // optional referent-and-relation graph; refines the resolver
+  question = '',          // optional; when given, the §3 answerability gate runs first
   auditLog = null,        // optional; records the step trace when given
   state = null,           // resumable closure state from a prior message
   maxSteps = MAX_STEPS,
   temperature = 0,        // the surprise quantile the direction draw reaches up
+  arc = false,            // §8 — lean the draw by the significance arc (planner-ON)
+  epsilon = undefined,    // §10 — the saturation knob; default is the arc's EPSILON
+  speculate = false,      // §9 — pre-resolve the next move on a clean-verdict assumption
   signal = null,
 } = {}) => {
-  // RECONSTRUCT — the tail and the fold, reused wholesale. Computed once: it is
-  // the same for every step of this message (the history does not change mid-run).
+  // RECONSTRUCT — the tail and the fold, reused wholesale. Computed once: the same
+  // for every step of this message (the history does not change mid-run).
   const fold = foldConversation(history);
   const conversation = { notes: fold.notes, pastTurns: fold.pastTurns };
+
+  // GATE (§3) — does the ground answer the TYPE the question wants? A licensed walk
+  // proceeds; an unlicensed one returns the refusal atom and NOTHING more (no walk,
+  // no follow-up offer). The walk is licensed, not assumed.
+  const gate = answerabilityGate({ question, ground, graph });
+  if (!gate.licensed) {
+    const r = gate.refusal;
+    const unit = { i: 0, move: 'VOID', subClaim: r.reason, text: r.text,
+      sources: r.sources, boundFraction: 1, vetoes: [], action: 'refuse', refusal: true };
+    return {
+      answer: r.text, units: [unit], sources: [...r.sources].sort((a, b) => a - b),
+      stop: 'unanswerable', wantedType: gate.wantedType, followUp: '',
+      trace: [{ step: 0, kind: 'refuse', wantedType: gate.wantedType, reason: r.reason }],
+      state: { units: [], covered: [] }, fold: fold.stats,
+    };
+  }
 
   // Resume from prior state, or start fresh. `units` are the accepted self-units
   // (the move-log substrate and the weld's carrier); `covered` is the spent ground.
@@ -62,21 +84,45 @@ export const runContinuation = async ({
   const trace = [];
   let stop = null;
   let drift = 0;
+  let lastClean = true;
+  let spec = null;        // the speculated next {move, proposition}, when speculate is on
 
   for (let step = 0; step < maxSteps; step++) {
     if (signal?.aborted) { stop = 'aborted'; break; }
 
-    // DIRECTION — p(next) over the self. A flat posterior is the predictor's VOID:
-    // no grounded expectation of what comes next, so the honest move is to stop.
-    const dir = predictDirection(units, { temperature });
-    if (dir.flat) { stop = 'void:no-expectation'; trace.push({ step, kind: 'void', sharpness: dir.sharpness }); break; }
+    // SATURATION (§10) — read the uncovered budget off the ground pool every step.
+    const sat = groundSaturation(ground, covered, epsilon != null ? { epsilon } : {});
 
-    // RESOLVE — the drawn move-type → a proposition from uncovered ground.
-    const prop = resolveProposition({ move: dir.move, ground, covered });
+    // NAVIGATE (§4.1) — p(next) over the self, leaned by the significance arc (§8)
+    // when the planner is on. A flat posterior is the predictor QUIESCING (§2): no
+    // grounded expectation of what comes next, so the honest move is to stop.
+    const phase = arc ? arcPhase({ stepIndex: step, units, remainingFrac: sat.remainingFrac }) : null;
+    const dir = predictDirection(units, { temperature, phaseBias: arc ? phaseBias(phase) : undefined });
+    if (dir.flat) { stop = 'quiesce'; trace.push({ step, kind: 'quiesce', sharpness: dir.sharpness }); break; }
+
+    // RESOLVE (§4.2) — the drawn move-type → a proposition, operator honored. Reuse
+    // the clean-verdict speculation when it is live and the last unit bound clean
+    // (§9); otherwise resolve fresh.
+    let prop;
+    if (speculate && spec && lastClean && spec.move === dir.move) {
+      prop = spec.proposition;
+    } else {
+      prop = resolveProposition({ move: dir.move, ground, covered, graph });
+    }
     if (!prop) { stop = 'ground-exhausted'; trace.push({ step, kind: 'exhausted', move: dir.move }); break; }
 
-    // REALIZE — the talker renders the proposition, with the fold as context.
-    let gen = await generateSection(prop, { doc, model, signal, conversation });
+    // The budget is spent — the next deposit only re-cites the dregs. Stop, UNLESS
+    // this is the closing SYN that lands the arc (it cites already-covered spans).
+    if (sat.saturated && !prop.closes) {
+      stop = 'saturated';
+      trace.push({ step, kind: 'saturated', remainingFrac: round3(sat.remainingFrac) });
+      break;
+    }
+
+    // REALIZE (§4.3) — the talker renders the proposition, with the fold + the
+    // read-window (the prose tail, witnessed not re-bound, §5) as context.
+    const window = readWindow(units, 2);
+    let gen = await generateSection(prop, { doc, model, signal, conversation, tail: window });
     let gated = bindAndVeto(gen.rawOutput, prop.spans, { doc, question: prop.subClaim, task: 'answer' });
     let action = 'append';
 
@@ -91,7 +137,7 @@ export const runContinuation = async ({
       else action = 'drop';
     } else {
       const corrective = stripUnboundCorrective(gated.bound);
-      const gen2 = await generateSection(prop, { doc, model, corrective, signal, conversation });
+      const gen2 = await generateSection(prop, { doc, model, corrective, signal, conversation, tail: window });
       const gated2 = bindAndVeto(gen2.rawOutput, prop.spans, { doc, question: prop.subClaim, task: 'answer' });
       if (gated2.boundFraction >= REBIND_THRESHOLD) {
         const prefix2 = boundPrefixText(gated2.bound);
@@ -104,23 +150,28 @@ export const runContinuation = async ({
 
     // A span is spent whether the unit appended or dropped — a drop does not get
     // retried against the same ground (that would loop), so coverage stays monotone.
+    // A SYN close cites already-covered spans, so it adds nothing here.
     for (const idx of prop.spanSet) covered.add(idx);
 
     if (action === 'drop' || !gated.sources.length) {
       drift += 1;
+      lastClean = false;
+      spec = null;
       trace.push({ step, kind: 'drop', move: dir.move, boundFraction: round3(gated.boundFraction) });
       if (drift >= MAX_DRIFT) { stop = 'drift'; break; }
       continue;
     }
     drift = 0;
+    lastClean = gated.boundFraction >= 1;
 
-    // WELD — append the JUDGED unit. The verdict (boundFraction, vetoes) travels
-    // with it, so the next direction read sees self-output with its verdict, never
-    // the bare assertion: an evaluation of self orients the next step, never grounds
-    // it. boundFraction is the strain selfMoveLog reads back (direction.js).
+    // WELD (§7) — append the JUDGED unit. The verdict (boundFraction, vetoes) travels
+    // with it, so the next direction read sees self-output with its verdict, never the
+    // bare assertion: an evaluation of self orients the next step, never grounds it.
     const unit = {
       i: units.length,
       move: dir.move,
+      stance: prop.stance,
+      band: prop.band,
       subClaim: prop.subClaim,
       text: gated.answer,
       sources: gated.sources,
@@ -129,13 +180,22 @@ export const runContinuation = async ({
       action,
     };
     units.push(unit);
-    trace.push({ step, kind: 'append', move: dir.move, action, cited: gated.sources.length,
-      boundFraction: round3(gated.boundFraction), sharpness: dir.sharpness });
+    trace.push({ step, kind: 'append', move: dir.move, stance: prop.stance, action,
+      phase, cited: gated.sources.length, boundFraction: round3(gated.boundFraction), sharpness: dir.sharpness });
 
     if (auditLog?.event) {
       try { auditLog.event('longgen:unit', { i: unit.i, move: unit.move, action, boundFraction: round3(unit.boundFraction) }); }
       catch { /* the audit is a projection; a logging slip never fails the run */ }
     }
+
+    // The arc lands: a successful SYN close ends the walk (§8).
+    if (prop.closes) { stop = 'arc-closed'; break; }
+
+    // SPECULATE (§9) — pre-resolve the next move assuming THIS verdict was clean, so
+    // the symbolic resolve is overlapped with witnessing. Discarded on a drift.
+    spec = (speculate && lastClean)
+      ? speculateNext({ units, proposition: prop, ground, covered, graph, temperature })
+      : null;
   }
 
   if (!stop) stop = 'max-steps';
@@ -148,6 +208,10 @@ export const runContinuation = async ({
     units,
     sources,
     stop,
+    wantedType: gate.wantedType,
+    // The follow-up offer, gated by the same §3 test — only regions the field can
+    // actually develop, or '' (no offer is better than an offer to confabulate).
+    followUp: followUpOffer(ground, covered),
     trace,
     // The resumable closure state — feed this back with the next message.
     state: { units, covered: [...covered] },

@@ -257,6 +257,7 @@ export const buildGroundedMessages = ({
   now = null,
   graph = '',
   shape = '',              // the answer-first/sectioned shape cue (shapeForScope); '' → no block, byte-identical
+  tail = '',              // the planner's read-window — the prose written so far this turn (spec-planner.md §5/§6)
 } = {}) => {
   const blocks = [];
   // A META-CONVERSATIONAL turn (the question is ABOUT the conversation) carries the full
@@ -277,6 +278,15 @@ export const buildGroundedMessages = ({
     blocks.push(`What it means — the relations that come to mind, as EOT triples ` +
       `(“A -> B : rel” is a relationship; “A : fact” is a property; a “not-” prefix is negation). ` +
       `Reason over THESE; the lines below are their grounding, not a list to recite:\n${graph}`);
+
+  // The planner's READ-WINDOW (spec-planner.md §5/§6): the prose written so far this
+  // turn, fed back so the next sentence opens with a real transition instead of cold.
+  // It is context for the SEAM only — already witnessed, NOT to be repeated or
+  // re-grounded — so it rides just BEFORE the source lines, the prose then the
+  // material then the ask. Empty (→ no block) on every non-planner caller, so
+  // byte-identical there.
+  if (tail)
+    blocks.push(`The answer so far (continue from it; do not repeat it, and add no new fact):\n${tail}`);
 
   // What comes to mind — the verbatim lines that surfaced, ordered for the frame (§3). The ONE channel.
   if (spans.length)

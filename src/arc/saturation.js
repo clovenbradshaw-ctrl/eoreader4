@@ -17,6 +17,25 @@
 
 import { EPSILON, NOVELTY_FLOOR } from './constants.js';
 
+// The ground-pool form of the gate, for the planner's atom walk (spec-planner.md
+// §10). A section arc plans clusters; the planner deposits one span at a time, so it
+// reads saturation directly off the ranked ground pool: stop when the UNCOVERED mass
+// falls below `epsilon` of the total. This is the single knob that now does what a
+// length target used to do — the one number that sets response shape — so it is
+// exposed and recorded, never a hidden backstop.
+export const groundSaturation = (ground = [], covered = new Set(), { epsilon = EPSILON } = {}) => {
+  const cov = covered instanceof Set ? covered : new Set(covered || []);
+  let total = 0, coveredMass = 0;
+  for (const [i, s] of (ground || []).entries()) {
+    const idx = s.idx ?? i;
+    const mass = s.score || 0;
+    total += mass;
+    if (cov.has(idx)) coveredMass += mass;
+  }
+  const remainingFrac = total > 0 ? (total - coveredMass) / total : 0;
+  return { saturated: remainingFrac < epsilon, remainingFrac, total, coveredMass };
+};
+
 // The fraction of a section's spans that are already covered.
 export const overlap = (spanSet = [], coveredSpans) => {
   if (!spanSet.length) return 1;            // a section with no evidence adds nothing

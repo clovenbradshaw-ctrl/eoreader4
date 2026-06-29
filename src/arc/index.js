@@ -12,7 +12,7 @@ export { runArc } from './pipeline.js';
 export { classifyScope, isPointScope } from './scope.js';
 export { bindableSpans, clusterByEmbedding } from './cluster.js';
 export { planSections, reconcile } from './plan.js';
-export { evaCoverageGate, overlap } from './saturation.js';
+export { evaCoverageGate, overlap, groundSaturation } from './saturation.js';
 export { generateSection, stripUnboundCorrective } from './generate.js';
 export { assembleArc, arcSources } from './assemble.js';
 export {

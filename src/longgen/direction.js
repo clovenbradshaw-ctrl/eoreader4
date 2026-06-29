@@ -14,6 +14,7 @@
 
 import { predictNextMove } from '../predict/predictor.js';
 import { MOVE_ALPHABET } from '../predict/movelog.js';
+import { applyPhaseBias } from './shape.js';
 
 // The move the loop opens with when there is no self-history yet: CON, the
 // workhorse grounded move (assert a relation tied to a span). A draw cannot run
@@ -48,13 +49,20 @@ export const selfMoveLog = (units = []) => {
 };
 
 // Predict the next move from the self-history. Returns the drawn move, the ranked
-// posterior, the sharpness, and `flat` — the predictor's VOID, the honest "no
-// grounded expectation of what comes next" that terminates the loop.
+// posterior, the sharpness, and `flat` — the predictor's flat posterior, the honest
+// "no grounded expectation of what comes next" that QUIESCES the loop (spec-planner.md
+// §2: quiesce is the navigation declining to deposit, NOT a VOID-site move).
 //
 // temperature is the quantile up the surprise distribution (spec-generation.md):
 // 0 (default) is argmax — the low-surprise draw that stays in frame; > 0 reaches
 // further up for a deliberate move. The reach is a rank index into the posterior,
 // so "more surprising" is calibrated, not a guess.
+//
+// `phaseBias` (spec-planner.md §8) is the significance arc's lean — a multiplicative
+// reweighting of the posterior toward the current phase's operators (open→DEF/INS,
+// develop→CON/EVA, land→SYN) applied BEFORE the temperature reach, so the phase
+// shapes which operator the reach lands on. The operator is still drawn, never
+// dictated: a near-zero move stays near zero and a dominant weld signal survives.
 export const predictDirection = (units = [], opts = {}) => {
   if (units.length === 0) {
     return { move: SEED_MOVE, seeded: true, flat: false, sharpness: null, posterior: null };
@@ -63,11 +71,16 @@ export const predictDirection = (units = [], opts = {}) => {
   const i = log.moves.length - 1;            // predict the move AFTER the last unit
   const pred = predictNextMove(log, i, { weights: opts.weights });
 
+  // The significance-arc lean, when a phase bias is given (§8) — reweight, renormalise.
+  const posterior = opts.phaseBias
+    ? applyPhaseBias(pred.posterior, opts.phaseBias)
+    : pred.posterior;
+
   // The temperature draw: reach `temperature` ranks up the (descending) posterior,
   // clamped to the alphabet. T=0 → rank 0 → argmax. Deterministic given T, so a
   // run is reproducible (no RNG in this layer — Math.random is unavailable here).
-  const reach = Math.max(0, Math.min(pred.posterior.length - 1, Math.round(opts.temperature || 0)));
-  const move = pred.posterior[reach][0];
+  const reach = Math.max(0, Math.min(posterior.length - 1, Math.round(opts.temperature || 0)));
+  const move = posterior[reach][0];
 
   return {
     move,
@@ -75,8 +88,8 @@ export const predictDirection = (units = [], opts = {}) => {
     flat: pred.flat,
     sharpness: pred.sharpness,
     concentration: pred.concentration,
-    posterior: pred.posterior,
-    top: pred.top,
+    posterior,
+    top: posterior[0][0],
   };
 };
 
