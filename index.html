@@ -303,7 +303,7 @@
                       </sc-if>
                       <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                       <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                        <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
+                        <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}<sc-if value="{{ en.hasDomain }}" hint-placeholder-val="{{ false }}"><span style="{{ en.domStyle }}">{{ en.domain }}<sc-if value="{{ en.hasExtra }}" hint-placeholder-val="{{ false }}"> {{ en.extraLabel }}</sc-if></span></sc-if></span></sc-for></div>
                       </sc-if>
                     </div>
                   </sc-if>
@@ -851,7 +851,7 @@
                     </sc-if>
                     <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                     <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                      <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
+                      <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}<sc-if value="{{ en.hasDomain }}" hint-placeholder-val="{{ false }}"><span style="{{ en.domStyle }}">{{ en.domain }}<sc-if value="{{ en.hasExtra }}" hint-placeholder-val="{{ false }}"> {{ en.extraLabel }}</sc-if></span></sc-if></span></sc-for></div>
                     </sc-if>
                   </div>
                 </sc-if>
@@ -3025,8 +3025,23 @@ class Component extends DCLogic {
       const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this.goWeb(p.u)}));
       const sources=(m.sources||[]).map(u=>({label:titleForUrl(u),title:u,onOpen:()=>this.goWeb(u)}));
       const cites=passages.length?passages:sources;   // prefer passages; fall back to bare sources
-      const entities=(m.entities||[]).map(id=>({label:this.labelOf(id),onClick:()=>this.clickEntity(id),
-        style:'display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;'}));
+      // Each entity carries the DOMAIN it was read from — the source provenance, shown as a muted
+      // suffix on the chip. The primary source is the one that mentions the entity most (stable,
+      // meaningful when an entity spans several); a "+N" trails when more than one source has it.
+      // This is what surfaces the entity-collision case at a glance — "Dolphin · ifaw.org" reads
+      // apart from "Dolphins · miamidolphins.com" without opening either.
+      const entities=(m.entities||[]).map(id=>{
+        let dom='',extra=0;
+        if(this.master&&this.graph){
+          const cnt={};
+          for(const i of this.mentionsOf(id)){const u=this.master.sentenceSource[i];if(u)cnt[u]=(cnt[u]||0)+1;}
+          const srcs=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
+          if(srcs.length){dom=this.short(srcs[0]);extra=srcs.length-1;}
+        }
+        return {label:this.labelOf(id),domain:dom,hasDomain:!!dom,hasExtra:extra>0,extraLabel:'+'+extra,onClick:()=>this.clickEntity(id),
+          style:'display:inline-flex;align-items:baseline;gap:5px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;',
+          domStyle:'font-size:9px;font-weight:500;color:var(--acc);opacity:.55;letter-spacing:.02em;white-space:nowrap;'};
+      });
       // Render the model's markdown LIVE — even while the bubble is still pending — so lists, bold
       // and line breaks form as the answer streams in, not only once it finishes. User turns stay plain.
       const isMd=!isUser&&!!m.text;
