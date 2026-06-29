@@ -152,6 +152,32 @@ export const metadataBlock = (metadata = {}, header = 'About this document (its 
   return lines.length ? `${header}\n${lines.join('\n')}` : '';
 };
 
+// THE SHAPE CUE — answer-first, then sectioned. A broad question ("how did he see", "compare
+// A and B", "what are the exceptions") wants the shape of a good reference answer: a direct
+// lead, then the parts laid out under their own headings, the load-bearing terms in bold, and
+// the threads left unexplored offered as next steps. A pointed lookup wants none of that — it
+// answers straight (the "quick lookups answer straight" posture). So this rides only when the
+// question reads as broad, and it is a SOFT cue ("no headings for a one-idea answer") so the
+// talker keeps discretion. The marks it asks for (## / **) are exactly what the chat body's
+// markdown-lite render turns into headings and bold; off the chat path they degrade to plain
+// punctuation, harmlessly. Opt-in: empty `shape` → no block → byte-identical prompt.
+export const STRUCTURE_CUE =
+  'Shape your answer like this: open with a direct two- or three-sentence answer to their ' +
+  'question. Then, if the answer has distinct parts, lay each part out under its own short ' +
+  'heading written as "## Heading", and put the few load-bearing terms in **bold**. If worthwhile ' +
+  'threads remain that you did not cover, close with a short list under "Want me to go deeper on:". ' +
+  'Keep it tight — no padding, and no headings for a one-idea answer.';
+
+// A keyword read of the question's scope, in the same spirit as the turn's register pass: a
+// comparison, a survey, an enumeration, or an open "how/why" wants the sectioned shape; anything
+// else (a pointed lookup) answers straight. A tight length budget also forces straight — a capped
+// reply is by definition a quick lookup. Returns the cue string or '' (→ no shape block).
+const BROAD_SCOPE = /\b(compare|comparison|contrast|differ(?:s|ence|ences)?|versus|vs\.?|summar(?:y|ise|ize)|overview|synthes(?:is|ise|ize)|outline|walk\s+me\s+through|list|enumerate|examples?|exceptions?|what\s+are\s+the|which\s+are\s+the|how\s+(?:does|do|did|can|could)|why\s+(?:does|do|did|is|are|was|were)|overall|in\s+general)\b/i;
+export const shapeForScope = (question, budget = null) => {
+  if (budget && typeof budget === 'object' && budget.sentences && budget.sentences <= 3) return '';
+  return BROAD_SCOPE.test(String(question || '')) ? STRUCTURE_CUE : '';
+};
+
 const budgetLine = (b) => {
   if (!b) return '';
   if (typeof b === 'string') return b;
@@ -206,6 +232,7 @@ export const buildGroundedMessages = ({
   strict = false,
   now = null,
   graph = '',
+  shape = '',              // the answer-first/sectioned shape cue (shapeForScope); '' → no block, byte-identical
 } = {}) => {
   const blocks = [];
   // A META-CONVERSATIONAL turn (the question is ABOUT the conversation) carries the full
@@ -273,6 +300,11 @@ export const buildGroundedMessages = ({
   // No length line by default (budget empty); a caller may re-impose a cap for a turn.
   const budgetStr = budgetLine(budget);
   if (budgetStr) blocks.push(budgetStr);
+
+  // The shape cue, just before the answer clause — a broad question gets the answer-first,
+  // sectioned layout; a pointed one (empty `shape`) answers straight. Soft, so the talker keeps
+  // discretion, and never on a budgeted (capped, quick-lookup) reply.
+  if (shape && !budgetStr) blocks.push(shape);
 
   // Strict mode with nothing to read: the reader had no lines on this at all. Name that
   // absence so the talker says it plainly rather than reaching past the frame for outside
