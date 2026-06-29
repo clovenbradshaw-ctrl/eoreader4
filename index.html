@@ -296,12 +296,14 @@
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
                       <sc-if value="{{ m.refsHas }}" hint-placeholder-val="{{ false }}">
-                        <div style="{{ m.refsHeadStyle }}">Sources</div>
-                        <sc-for list="{{ m.refs }}" as="r" hint-placeholder-count="1"><div onclick="{{ r.onOpen }}" style="{{ m.refRowStyle }}" style-hover="border-color:var(--accline)"><span style="{{ m.refNumStyle }}">{{ r.n }}</span><span style="{{ m.refPreviewStyle }}">{{ r.preview }}<span style="{{ m.refSrcStyle }}">{{ r.label }}</span></span></div></sc-for>
+                        <div style="{{ m.refsStyle }}">
+                          <div style="{{ m.refsHeadStyle }}">{{ m.refsLabel }}</div>
+                          <sc-for list="{{ m.refs }}" as="r" hint-placeholder-count="1"><div onclick="{{ r.onOpen }}" style="{{ m.refRowStyle }}" style-hover="background:var(--app)"><span style="{{ m.refNumStyle }}">{{ r.n }}</span><span style="{{ m.refBodyStyle }}"><span style="{{ m.refPreviewStyle }}">{{ r.preview }}</span><span style="{{ m.refSrcStyle }}">{{ r.domain }}</span></span></div></sc-for>
+                        </div>
                       </sc-if>
                       <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                       <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                        <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
+                        <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                       </sc-if>
                     </div>
                   </sc-if>
@@ -842,12 +844,14 @@
                 <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.groundStyle }}">
                     <sc-if value="{{ m.refsHas }}" hint-placeholder-val="{{ false }}">
-                      <div style="{{ m.refsHeadStyle }}">Sources</div>
-                      <sc-for list="{{ m.refs }}" as="r" hint-placeholder-count="1"><div onclick="{{ r.onOpen }}" style="{{ m.refRowStyle }}" style-hover="border-color:var(--accline)"><span style="{{ m.refNumStyle }}">{{ r.n }}</span><span style="{{ m.refPreviewStyle }}">{{ r.preview }}<span style="{{ m.refSrcStyle }}">{{ r.label }}</span></span></div></sc-for>
+                      <div style="{{ m.refsStyle }}">
+                        <div style="{{ m.refsHeadStyle }}">{{ m.refsLabel }}</div>
+                        <sc-for list="{{ m.refs }}" as="r" hint-placeholder-count="1"><div onclick="{{ r.onOpen }}" style="{{ m.refRowStyle }}" style-hover="background:var(--app)"><span style="{{ m.refNumStyle }}">{{ r.n }}</span><span style="{{ m.refBodyStyle }}"><span style="{{ m.refPreviewStyle }}">{{ r.preview }}</span><span style="{{ m.refSrcStyle }}">{{ r.domain }}</span></span></div></sc-for>
+                      </div>
                     </sc-if>
                     <sc-if value="{{ m.hasDisclosure }}" hint-placeholder-val="{{ false }}"><div style="{{ m.disclosureStyle }}">{{ m.groundDisclosure }}</div></sc-if>
                     <sc-if value="{{ m.hasEntities }}" hint-placeholder-val="{{ false }}">
-                      <div style="margin-top:4px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
+                      <div style="margin-top:6px;"><sc-for list="{{ m.entities }}" as="en" hint-placeholder-count="1"><span onclick="{{ en.onClick }}" style="{{ en.style }}">{{ en.label }}</span></sc-for></div>
                     </sc-if>
                   </div>
                 </sc-if>
@@ -2448,9 +2452,9 @@ class Component extends DCLogic {
   // (¶ source) bound to passage N. Clicks are caught by the bubble's onCite delegate (data-u).
   _md(src,cites){
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    // A compact citation glyph — a small numbered superscript badge, not a text pill. Numbered
-    // per source; hover shows the source name; click opens it (bubble onCite delegate, data-u).
-    const pillStyle='display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;font-size:9px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:4px;padding:0 2px;margin:0 1px;cursor:pointer;vertical-align:super;line-height:1;';
+    // A clean citation glyph — a bare superscript footnote number (no box). Numbered per passage;
+    // hover shows the source name; click opens it (bubble onCite delegate, data-u).
+    const pillStyle='color:var(--acc);font-weight:700;font-size:0.72em;vertical-align:super;line-height:0;cursor:pointer;padding:0 1px;';
     const inline=s=>esc(s)
       .replace(/`([^`]+)`/g,(m,c)=>'<code style="background:rgba(0,0,0,.07);border-radius:4px;padding:1px 4px;font-size:.92em;">'+c+'</code>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);">$1</a>')
@@ -3033,12 +3037,16 @@ class Component extends DCLogic {
       // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
       // line (the librarian apparatus, shown by default). When the binder found no inline match we
       // still list the passages the answer drew on, so the source text is always in view.
+      // ~40–60 words is the span that carries a claim with its qualifier and reads as complete
+      // (featured-snippet research); longer than the old 46-char chip, clamped in the view so it
+      // stays tidy. Each ref also carries its source identity (favicon + domain) and a hasIcon flag.
+      const refOf=(u,n,text)=>({n,label:titleForUrl(u),domain:this.short(u)||titleForUrl(u),
+        preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.goWeb(u)});
       let refs=[];
       if(ann&&ann.reg){
-        refs=Object.keys(ann.reg).map(i=>ann.reg[i]).sort((a,b)=>a.n-b.n)
-          .map(c=>({n:c.n,label:c.label,preview:this.truncLabel(this.norm(c.text),220),onOpen:()=>this.goWeb(c.u)}));
+        refs=Object.keys(ann.reg).map(i=>ann.reg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
       }else if(!isUser&&!m.pending&&(m.passages||[]).length){
-        refs=(m.passages||[]).slice(0,6).map((p,k)=>({n:k+1,label:titleForUrl(p.u),preview:this.truncLabel(this.norm(p.text),220),onOpen:()=>this.goWeb(p.u)}));
+        refs=(m.passages||[]).slice(0,6).map((p,k)=>refOf(p.u,k+1,p.text));
       }
       // The grounding mode this turn was tagged with (sendChat/_answerInto via _groundReport):
       // 'matched' (lines that matched), 'opening' (drew on the source's opening), 'model' (the
@@ -3108,11 +3116,14 @@ class Component extends DCLogic {
         hasGround,groundOpen:gOn,onToggleGround:()=>this.toggleGround(gKey),
         groundLabel,groundCaret:gOn?'▾':'▸',
         refs,refsHas:refs.length>0,
-        refsHeadStyle:'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin:2px 0 6px;',
-        refRowStyle:'display:flex;align-items:flex-start;gap:8px;padding:7px 10px;margin-bottom:5px;max-width:80%;background:var(--app);border:1px solid var(--line2);border-radius:9px;cursor:pointer;',
-        refNumStyle:'flex:0 0 auto;width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);margin-top:1px;',
-        refPreviewStyle:'flex:1;min-width:0;font-size:12px;line-height:1.45;color:var(--ink2);',
-        refSrcStyle:'display:block;font-size:10.5px;font-weight:600;color:var(--ink3);margin-top:3px;',
+        refsLabel:'Sources · '+refs.length,
+        refsStyle:'max-width:88%;margin-top:10px;border-top:1px solid var(--line);padding-top:8px;',
+        refsHeadStyle:'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin:0 0 4px;',
+        refRowStyle:'display:flex;align-items:flex-start;gap:9px;padding:8px 6px;border-radius:8px;cursor:pointer;',
+        refNumStyle:'flex:0 0 auto;font-size:11px;font-weight:700;color:var(--acc);min-width:13px;text-align:right;margin-top:1px;',
+        refBodyStyle:'flex:1;min-width:0;',
+        refPreviewStyle:'font-size:12.5px;line-height:1.5;color:var(--ink);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;',
+        refSrcStyle:'display:block;font-size:10.5px;font-weight:600;color:var(--ink3);margin-top:4px;',
         groundDisclosure:disclosure,hasDisclosure:!!disclosure,
         disclosureStyle:'font-size:11px;line-height:1.45;color:var(--ink3);font-style:italic;margin-top:5px;',
         groundStyle:'max-width:80%;margin-top:7px;',
