@@ -94,10 +94,16 @@ opts)` is the pure, synchronous core over already-embedded propositions;
 - **Wire polarity from the parse.** `propositionOfEdge` (core) already derives a sign;
   feeding it in turns the veto live on real text. (Note: the parser cuts `−` U+2212 while
   the proposition slot uses `-`; `propositionPolarity` is tolerant of both.)
-- **A `same_as?` proposition void.** `asterisk.js` holds *entity* identity open as a
-  first-class void on the graph; the proposition asterisk is currently returned in `held`
-  but not yet projected as a void (that touches `projectGraph`, golden-sensitive — left
-  for a deliberate, flagged step).
+- **A `same_as?` proposition void — built.** `asterisk.js` holds *entity* identity open as
+  a first-class void on the graph; the proposition asterisk is now its meaning-level twin.
+  `projectGraph` recognises the `NUL kind:'held-equivalence'` a held pair emits and surfaces
+  it both as `propositionAsterisks` (each `{a, b, kind:'same-proposition?', sim}`) and as a
+  void on the `proposition` relation, node-anchored to both ids — exactly the entity
+  asterisk's shape (`src/core/project.js`). The block is inert and the projection
+  byte-identical where no such events exist (golden parity, `tests/proposition-asterisk.test.js`);
+  the correspondence veto skips it the same way it skips the identity void
+  (`factcheck/correspond.js`), since it holds open *which two assertions are one*, not what a
+  relation denies.
 - **Fold the classes into the projection** so a downstream reader sees one referent
   proposition where the document said it twice — the same collapse `discoverEquivalences`
   drives for tones.

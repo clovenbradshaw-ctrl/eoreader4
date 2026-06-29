@@ -78,6 +78,11 @@ const computeProjection = (log, frame) => {
   const voidsRaw  = [];
   const sameAsRaw = [];   // held cross-source identity candidates — a SIDE structure,
                           // never `parent` (asterisk.js; do not touch find()).
+  const propHeldRaw = []; // held PROPOSITION equivalence candidates — "these two assertions
+                          // might be one and nothing has established it." The proposition
+                          // asterisk, the meaning-level twin of the entity same_as? above
+                          // (perceiver/proposition-equivalence.js emits NUL kind:'held-equivalence';
+                          // docs/proposition-equivalence.md "a same_as? proposition void").
   const parent    = new Map();
   const retracted = new Set();
 
@@ -115,6 +120,15 @@ const computeProjection = (log, frame) => {
         sentIdx: e.sentIdx ?? null,
         seq: e.seq,
       });
+      continue;
+    }
+    // A held proposition equivalence — the proposition asterisk. Identity between two
+    // assertions is unestablished (the cosine did not clear the null, or the embedder is
+    // dark and everything holds). Like the entity same_as? it is a SIDE structure, never an
+    // edge or a merge; it is surfaced below as a first-class void. Inert (and the whole block
+    // golden-identical) where no such events exist.
+    if (e.op === 'NUL' && e.kind === 'held-equivalence') {
+      propHeldRaw.push({ a: e.src, b: e.tgt, seq: e.seq, sentIdx: e.sentIdx ?? null, sim: e.sim ?? null });
       continue;
     }
     switch (e.op) {
@@ -261,7 +275,22 @@ const computeProjection = (log, frame) => {
     idVoids.push(Object.freeze({ ...base, node: c.a, counter: c.b }));
     idVoids.push(Object.freeze({ ...base, node: c.b, counter: c.a }));
   }
-  const voids = [...voidsRaw.map(v => Object.freeze({ ...v, node: find(v.node) })), ...idVoids];
+
+  // The proposition asterisk, exactly as the entity asterisk above: each held equivalence
+  // stands a void on the proposition-identity relation, node-anchored to BOTH proposition ids
+  // so a query from either side finds it. Proposition ids are their own namespace (never the
+  // entity union-find), so they are carried verbatim — `find()` is not theirs to canonicalise.
+  // Empty (and `voids` byte-identical) unless held-equivalence events exist.
+  const propositionAsterisks = [];
+  const propVoids = [];
+  for (const c of propHeldRaw) {
+    const base = { rel: 'proposition', kind: 'same-proposition?', seq: c.seq, sentIdx: c.sentIdx, sim: c.sim };
+    propositionAsterisks.push(Object.freeze({ a: c.a, b: c.b, ...base }));
+    propVoids.push(Object.freeze({ ...base, node: c.a, counter: c.b }));
+    propVoids.push(Object.freeze({ ...base, node: c.b, counter: c.a }));
+  }
+
+  const voids = [...voidsRaw.map(v => Object.freeze({ ...v, node: find(v.node) })), ...idVoids, ...propVoids];
 
   return Object.freeze({
     entities: merged,
@@ -280,6 +309,10 @@ const computeProjection = (log, frame) => {
     sameAs:   Object.freeze(sameAs),
     splits:   Object.freeze(splits),
     idMerges: Object.freeze(idMerges),
+    // The proposition asterisk: held equivalences whose identity is unestablished — each also
+    // a void above (kind:'same-proposition?'). Empty unless the log carries held-equivalence
+    // events (perceiver/proposition-equivalence.js).
+    propositionAsterisks: Object.freeze(propositionAsterisks),
     frame: Object.freeze({ ...frame }),
     rev: events.length,
   });
