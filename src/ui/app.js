@@ -741,6 +741,9 @@ const runQuery = async (rawQuestion) => {
         setTab('text');
       },
       onRetry: () => runQuery(rawQuestion),
+      // Clicking a "want me to go deeper" lead asks it as a fresh turn (renders the lead as the
+      // new user message and runs it). Only the trailing go-deeper list is made clickable.
+      onExplore: (q) => runQuery(q),
     });
     // Highlight only when grounding a single document — composite indices don't map onto
     // one doc pane (clicking a source chip switches to that document instead).

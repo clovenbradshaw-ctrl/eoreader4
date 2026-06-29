@@ -174,6 +174,18 @@ section h2 {
 .msg.assistant .body li { margin: .2rem 0; }
 .msg.assistant .body strong { font-weight: 650; color: #f4f4f5; }
 
+/* Explore leads — the trailing "want me to go deeper" list, made clickable. Each item re-asks
+   as a fresh turn, so it reads as a chip-row of next steps rather than plain bullets. */
+.msg.assistant .body ul.explore-leads { list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: .35rem; }
+.msg.assistant .body ul.explore-leads .explore-lead,
+.msg.assistant .body ol.explore-leads .explore-lead {
+  cursor: pointer; border: 1px solid #3f3f46; border-radius: .55rem;
+  padding: .4rem .6rem; background: #1f1f23; transition: background .12s, border-color .12s;
+}
+.msg.assistant .body .explore-lead:hover,
+.msg.assistant .body .explore-lead:focus-visible { background: #27272c; border-color: #60a5fa; outline: none; }
+.msg.assistant .body .explore-lead::after { content: " →"; color: #60a5fa; }
+
 /* Per-message actions — copy · reply/quote · fork. Quiet until the message is
    hovered or focused, so the chat stays spare; always shown on touch. */
 .msg-actions {

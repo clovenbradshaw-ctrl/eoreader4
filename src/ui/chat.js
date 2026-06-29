@@ -270,7 +270,13 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   el.classList.remove('streaming');     // the live stream is replaced by the cited answer
   const body  = el.querySelector('.body');
   const trail = el.querySelector('.trail');
-  if (body) body.innerHTML = renderRich(text || '', opts.citationSources);
+  if (body) {
+    body.innerHTML = renderRich(text || '', opts.citationSources);
+    // EXPLORE CHIPS: when the answer closes with a "want me to go deeper" list, make those
+    // leads clickable — each re-asks as a fresh turn. Defensive: a no-op when the cue/list is
+    // absent, so a plain answer is untouched. (The shape cue produces this list on broad turns.)
+    if (typeof opts.onExplore === 'function') wireExploreChips(body, opts.onExplore);
+  }
 
   // CHATBOT SURFACE (default): the answer is the whole message. The coverage
   // verdict, doc-source chips, veto pills, the route/timing meta line, and the
@@ -989,3 +995,30 @@ const escapeHtml = (s) =>
 // Exported for the renderer's regression test (rich-render.test.js). Pure string → HTML string,
 // no DOM — the chat body's markdown-lite render in one inspectable function.
 export { renderRich, formatInline };
+
+// The cue line a "go deeper" list sits under — the closing offer the shape cue asks the talker
+// to write ("Want me to go deeper on:"). Matched loosely so the talker's own wording still trips it.
+const EXPLORE_CUE = /\b(go deeper|dig deeper|dive deeper|explore|want to know more|learn more)\b/i;
+
+// wireExploreChips — turn the trailing "want me to go deeper" list into clickable leads. The
+// answer's LAST list is the candidate; it qualifies only if the element just before it reads as
+// the go-deeper offer. Each item then re-asks as a fresh turn via onExplore. Purely additive: if
+// there is no such list (a plain or pointed answer), nothing changes.
+const wireExploreChips = (body, onExplore) => {
+  const lists = body.querySelectorAll(':scope > ul, :scope > ol');
+  const list = lists[lists.length - 1];
+  if (!list) return;
+  const cue = list.previousElementSibling;
+  if (!cue || !EXPLORE_CUE.test(cue.textContent || '')) return;
+  list.classList.add('explore-leads');
+  for (const li of list.querySelectorAll(':scope > li')) {
+    const q = (li.textContent || '').trim();
+    if (!q) continue;
+    li.setAttribute('role', 'button');
+    li.setAttribute('tabindex', '0');
+    li.classList.add('explore-lead');
+    const ask = () => onExplore(q);
+    li.addEventListener('click', ask);
+    li.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ask(); } });
+  }
+};
