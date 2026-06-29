@@ -398,8 +398,13 @@ class Component extends DCLogic {
       this._onResize=()=>{const w=window.innerWidth;if(Math.abs(w-(this.state.vw||0))>=40)this.setState({vw:w});};
       window.addEventListener('resize',this._onResize,{passive:true});
     }
+    this._initCiteHover();
   }
-  componentWillUnmount(){ if(this._onResize&&typeof window!=='undefined') window.removeEventListener('resize',this._onResize); }
+  componentWillUnmount(){
+    if(this._onResize&&typeof window!=='undefined') window.removeEventListener('resize',this._onResize);
+    if(this._citeHoverInit){document.removeEventListener('mouseover',this._onCiteOver);document.removeEventListener('mouseout',this._onCiteOut);}
+    if(this._citeCard&&this._citeCard.parentNode)this._citeCard.parentNode.removeChild(this._citeCard);
+  }
   // ── Responsive tiers ──────────────────────────────────────────────────────
   // Wide (≥1180): chat can dock as its own column. Mid (760–1179): chat reverts to the
   // overlay drawer. Phone (<760): single pane with a bottom nav. One source of truth.
@@ -1012,8 +1017,12 @@ class Component extends DCLogic {
       .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
       .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g,'$1<em>$2</em>')
       // Citation sentinels → inline numbered glyphs (added AFTER escaping so the span is raw HTML).
+      // The verbatim passage, source label and host ride along as data-* so the hover-card can show
+      // the cited section and the click delegate can scroll the source to it (_goToPassage).
       .replace(/⟦c(\d+)⟧/g,(m,i)=>{const c=cites&&cites[i];if(!c)return '';
-        return '<span data-u="'+esc(String(c.u||'')).replace(/"/g,'&quot;')+'" title="'+esc(c.label||'source').replace(/"/g,'&quot;')+'" style="'+pillStyle+'">'+(c.n||'•')+'</span>';});
+        const att=s=>esc(String(s==null?'':s)).replace(/"/g,'&quot;');
+        const u=String(c.u||'');const host=/^text:/i.test(u)?'':this.short(u);const quote=this.truncLabel(this.norm(c.text||''),300);
+        return '<span class="eo-cite" data-u="'+att(u)+'" data-quote="'+att(quote)+'" data-label="'+att(c.label||'source')+'" data-host="'+att(host)+'" title="'+att(c.label||'source')+'" style="'+pillStyle+'">'+(c.n||'•')+'</span>';});
     const lines=String(src||'').replace(/\r/g,'').split('\n');
     const out=[];let list=null;
     const flush=()=>{if(list){out.push('<'+list.tag+' style="margin:6px 0;padding-left:20px;">'+list.items.join('')+'</'+list.tag+'>');list=null;}};
@@ -1464,9 +1473,72 @@ class Component extends DCLogic {
     }).join('\n');
     return {text:out,reg:Object.keys(reg).length?reg:null};
   }
-  // The bubble's click delegate: a citation pill (data-u) opens its source. Other clicks
-  // inside the answer (markdown links carry their own href) fall through untouched.
-  _onCite(e){let el=e&&(e.target||e.srcElement);for(let d=0;el&&d<6;d++){if(el.getAttribute){const u=el.getAttribute('data-u');if(u){if(e.preventDefault)e.preventDefault();if(e.stopPropagation)e.stopPropagation();this.goWeb(u);return;}}el=el.parentNode;}}
+  // The bubble's click delegate: a citation pill (data-u) opens its source and scrolls to the
+  // cited section (data-quote). Other clicks inside the answer (markdown links carry their own
+  // href) fall through untouched.
+  _onCite(e){let el=e&&(e.target||e.srcElement);for(let d=0;el&&d<6;d++){if(el.getAttribute){const u=el.getAttribute('data-u');if(u){if(e.preventDefault)e.preventDefault();if(e.stopPropagation)e.stopPropagation();this._hideCiteCard(true);this._goToPassage(u,el.getAttribute('data-quote')||'');return;}}el=el.parentNode;}}
+  // Open a cited source and scroll it to the exact passage the citation marks — "go to the
+  // section of the page it's from". If the source is already open we just scroll; otherwise we
+  // load it, then poll for the iframe to render before scrolling to the verbatim passage.
+  _goToPassage(u,quote){
+    if(!u)return;
+    const already=this.state.viewUrl===this.norm(u);
+    if(!already)this.goWeb(u);
+    if(!quote)return;
+    let tries=0;
+    const tick=()=>{const ifr=document.querySelector('iframe[data-eo-center]');const d=ifr&&ifr.contentDocument;
+      if(d&&d.body&&d.body.childNodes.length){this._scrollToText(quote);}
+      else if(tries++<60){setTimeout(tick,80);}};
+    setTimeout(tick,already?0:140);
+  }
+  // ── Citation hover-card ───────────────────────────────────────────────────
+  // Hovering an inline citation pill in a chat answer floats a small card with the source title
+  // and the verbatim passage it cites; a "Go to the section" action opens that source scrolled to
+  // the passage. Wired as ONE delegated pair of native listeners — mouseover/mouseout bubble, while
+  // React's onMouse* synthetic props would not delegate across the answer's raw-HTML children.
+  _initCiteHover(){
+    if(this._citeHoverInit||typeof document==='undefined')return;
+    this._citeHoverInit=true;
+    this._onCiteOver=(e)=>{const p=this._closestCite(e.target);if(p)this._showCiteCard(p);};
+    this._onCiteOut=(e)=>{const p=this._closestCite(e.target);if(!p)return;const to=e.relatedTarget;if(to&&this._citeCard&&this._citeCard.contains(to))return;this._hideCiteCard();};
+    document.addEventListener('mouseover',this._onCiteOver);
+    document.addEventListener('mouseout',this._onCiteOut);
+  }
+  _closestCite(el){for(let d=0;el&&el.getAttribute&&d<4;d++){if(el.classList&&el.classList.contains('eo-cite'))return el;el=el.parentNode;}return null;}
+  _citeCardEl(){
+    if(this._citeCard)return this._citeCard;
+    const el=document.createElement('div');
+    el.className='eo-cite-card';el.setAttribute('role','tooltip');
+    el.style.cssText='position:fixed;z-index:9000;max-width:330px;display:none;background:#1b1f26;color:#e7eaef;border:1px solid #2c333d;border-radius:11px;box-shadow:0 12px 34px rgba(0,0,0,.42);padding:12px 13px;font-size:12.5px;line-height:1.5;font-family:inherit;';
+    el.addEventListener('mouseenter',()=>{clearTimeout(this._citeCardHideT);});
+    el.addEventListener('mouseleave',()=>this._hideCiteCard());
+    document.body.appendChild(el);this._citeCard=el;return el;
+  }
+  _showCiteCard(pill){
+    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const quote=pill.getAttribute('data-quote')||'',label=pill.getAttribute('data-label')||'source',host=pill.getAttribute('data-host')||'',u=pill.getAttribute('data-u')||'';
+    const card=this._citeCardEl();
+    card.innerHTML=
+      '<div style="display:flex;align-items:baseline;gap:7px;margin-bottom:7px;">'
+        +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#7c8696;flex:0 0 auto;">Source</span>'
+        +'<span style="font-weight:700;color:#fff;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(label)+'</span>'
+      +'</div>'
+      +(quote?'<div style="color:#cfd5de;border-left:2px solid #5b34d6;padding-left:9px;margin-bottom:9px;max-height:140px;overflow:auto;">“'+esc(quote)+'”</div>':'')
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">'
+        +(host?'<span style="font-size:10.5px;color:#7c8696;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(host)+'</span>':'<span></span>')
+        +'<button type="button" data-cite-go style="flex:0 0 auto;font-size:11px;font-weight:700;color:#fff;background:#5b34d6;border:none;border-radius:7px;padding:5px 11px;cursor:pointer;">Go to the section →</button>'
+      +'</div>';
+    const go=card.querySelector('[data-cite-go]');
+    if(go)go.onclick=(e)=>{e.preventDefault();e.stopPropagation();this._hideCiteCard(true);this._goToPassage(u,quote);};
+    // Position near the pill, flipping above and clamping horizontally to stay on-screen.
+    card.style.visibility='hidden';card.style.display='block';
+    const r=pill.getBoundingClientRect(),cw=card.offsetWidth,ch=card.offsetHeight,vw=window.innerWidth,vh=window.innerHeight;
+    const left=Math.min(Math.max(8,r.left),Math.max(8,vw-cw-8));
+    let top=r.bottom+8;if(top+ch>vh-8)top=Math.max(8,r.top-ch-8);
+    card.style.left=left+'px';card.style.top=top+'px';card.style.visibility='visible';
+    clearTimeout(this._citeCardHideT);
+  }
+  _hideCiteCard(now){clearTimeout(this._citeCardHideT);const el=this._citeCard;if(!el)return;if(now){el.style.display='none';}else{this._citeCardHideT=setTimeout(()=>{el.style.display='none';},180);}}
   // A page reduced to its term-frequency profile — the unit the walk measures surprise on.
   _profile(text){const m=new Map();for(const t of this._researchTerms(text))m.set(t,(m.get(t)||0)+1);return m;}
   // The prose of an already-read page, for the surprise / saliency measure.
