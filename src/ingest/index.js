@@ -4,6 +4,10 @@
 // model already knows, lowered losslessly to EO events with operator recovery, anchor minting,
 // site derivation, and provenance. RDF/OWL imports lower THROUGH this same surface (§10).
 export { parseEOT, eotDoc } from './eot.js';
+// The inverse: render a reading (the live engine log, or canonical tuples) BACK into EOT surface
+// — every ready event read out in the same line syntax a model writes, deduped, no-ops dropped,
+// only vocabulary-remap RECs surfaced; what EOT cannot express is reported, never silently lost.
+export { emitEot, eotText, tupleToEotLine, tuplesToEot, valueLiteral } from './eot-emit.js';
 // Web pages as groundable sources: admit a fetched payload as a provenance-tagged prose doc
 // that drops into the answer scope, cited + veto-checked like any source (docs/web-search.md).
 export { admitWebSource, createWebStore, webRecord, webContentHash,
