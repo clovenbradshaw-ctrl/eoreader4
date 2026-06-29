@@ -2265,12 +2265,31 @@ class Component extends DCLogic {
   // a few neutral facets fill out the breadth so even a bare one-line topic becomes several searches.
   // Returns lead TERMS the walk appends to the anchor (never the subject's own words); capped to stay
   // focused. The seed query (the subject itself) is added by the walk separately.
+  // A SIMPLE FACTUAL LOOKUP — "what's the weather in NYC", "what's the temp", "what time is it" —
+  // versus a research SUBJECT to explore from several angles. A lookup wants the strongest single
+  // answer fast; it must NOT fan out into encyclopedic facets. Appending "analysis"/"history" to a
+  // question phrase yields nonsense queries ("what the temp analysis") that drift the walk straight
+  // off the question (the live transcript wandered into Wikipedia's "Thermal analysis"). Detected by
+  // shape: an explicit live-fact ask (weather/time/price/score), or a short question carrying at most
+  // one distinctive content term. Conservative — a real topic with content terms ("the French
+  // Revolution", "Ryan Coogler's films") is NOT a lookup and still fans out across angles.
+  _isSimpleLookup(q){
+    const s=String(q||'').trim().toLowerCase();
+    if(!s)return false;
+    // live, real-time or point facts a multi-hop "exhaust the threads" walk only muddies
+    if(/\b(weather|temperature|temp|forecast|how (?:hot|cold|warm)|raining|humidity|wind|what time|time is it|today'?s? date|price of|stock price|exchange rate|the score|who won|how much is)\b/.test(s))return true;
+    // otherwise: a short, question-shaped ask carrying ≤1 distinctive content term is a lookup
+    const isQuestion=/^(what|whats|what'?s|who|whose|when|where|which|how|is|are|was|were|does|do|did|can|will)\b/.test(s)||s.endsWith('?');
+    return isQuestion&&this._researchTerms(s).length<=1;
+  }
   _researchBattery(subject,derived,sources){
+    // A lookup gets no battery — just the seed query, answered shallow (no facet drift).
+    if(!derived&&this._isSimpleLookup(subject))return [];
     const out=[],seen=new Set(this._researchTerms(subject));
     const add=t=>{t=this.norm(String(t||'')).trim();const k=t.toLowerCase();if(t&&!seen.has(k)){seen.add(k);out.push(t);}};
     // (1) the document's own salient threads — only when deepening read sources, so a fresh named
     // topic never seeds from unrelated reading already in memory.
-    const cap=this._depthCfg().facets;   // shallow 2 · deep 4 · obsessive 6 — how wide the battery
+    const cap=this._depthCfg().facets;   // shallow 2 · deep 4 · obsessive 5 — how wide the battery
     if(derived)for(const t of this._seedLeadsFromRead(subject,sources,4))add(t);
     // (2) neutral facets — breadth for any subject, so it's a battery even with nothing read yet.
     for(const f of ['overview','analysis','history','significance','criticism','examples']){if(out.length>=cap)break;add(f);}
@@ -2576,9 +2595,12 @@ class Component extends DCLogic {
   // arc's coverage cut: how wide the battery, how many hops, how many pages per thread, and how
   // patiently the leash tolerates a dry thread before stopping.
   _depthCfg(){const d=this.state.researchDepth||'deep';
-    if(d==='shallow')  return {key:'shallow',  facets:2, maxHops:3,  want:1, wantSeed:1, patience:2};
-    if(d==='obsessive')return {key:'obsessive',facets:6, maxHops:14, want:2, wantSeed:3, patience:5};
-    return                    {key:'deep',     facets:4, maxHops:8,  want:1, wantSeed:2, patience:3};}
+    if(d==='shallow')  return {key:'shallow',  facets:2, maxHops:3, want:1, wantSeed:1, patience:2};
+    // obsessive used to run up to 14 hops × 2 pages each — minutes of reading on the in-browser
+    // model, "WAY too long". Reined in: more angles than deep, but a bounded walk (≤9 hops, one
+    // page per thread). It exhausts the threads; it does not exhaust the afternoon.
+    if(d==='obsessive')return {key:'obsessive',facets:5, maxHops:9, want:1, wantSeed:2, patience:4};
+    return                    {key:'deep',     facets:4, maxHops:8, want:1, wantSeed:2, patience:3};}
   cycleResearchDepth(){const order=['shallow','deep','obsessive'];this.setState(s=>{const i=order.indexOf(s.researchDepth||'deep');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_depth',next);}catch(e){}return {researchDepth:next};});}
   async chatResearch(q){
     if(this._busy)return;
@@ -2591,10 +2613,13 @@ class Component extends DCLogic {
     // A BATTERY of distinct angles — not one shot. The salient threads the in-scope reading already
     // raised (for a "this book" / continuation turn) plus a few facets, each its own seed query, so
     // the walk explores several independent threads around the subject instead of chaining off one.
+    const lookup=!seed.derived&&this._isSimpleLookup(topic);
     const extraSeeds=this._researchBattery(topic,seed.derived,this.chatSourcesOf(cur));
     const angles=extraSeeds.map(t=>'“'+this._nextQuery(anchor,t)+'”').join(', ');
     const startText=seed.derived
       ? ('Picking up this chat — researching “'+topic+'”'+(angles?(' across '+angles):'')+'. I’ll follow what surprises me while it stays on topic.')
+      : lookup
+      ? ('Looking up “'+topic+'” — a quick fact, so I’ll read the best source and answer straight.')
       : ('Researching “'+topic+'”'+(angles?(' — also '+angles):'')+'. I’ll follow what surprises me while it stays on topic.');
     // Append the user turn + a pending assistant bubble carrying a live research trail.
     let id=this.state.activeChat;
@@ -2611,7 +2636,7 @@ class Component extends DCLogic {
     this._busy=true;this.setState({busy:true});
     const preEnts=(this.graph&&this.graph.entities&&this.graph.entities.size)||0;
     let walk={readUrls:[],hops:[]};
-    try{walk=await this._curiosityWalk(topic,anchor,pushStep,{extraSeeds});}
+    try{walk=await this._curiosityWalk(topic,anchor,pushStep,{extraSeeds,lookup});}
     catch(e){pushStep('warn','Research stopped — '+((e&&e.message)||e));}
     this._busy=false;this.setState({busy:false});
     const readCount=new Set(walk.readUrls).size,hops=walk.hops.length;
@@ -2763,7 +2788,12 @@ class Component extends DCLogic {
     for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
     // BREADTH × DEPTH: the policy caps the hops — shallow stops at the strongest answer, obsessive
     // exhausts the threads — but never fewer than the seeded battery so every planned angle runs.
-    const maxHops=Math.max(frontier.length,Math.min(cfg.maxHops,frontier.length+(cfg.key==='obsessive'?8:2)));
+    // A LOOKUP overrides the dial entirely: one hop on the seed, the strongest answer, no fan-out
+    // and no curiosity follow — so even on "obsessive" a "what's the temp" stays a quick lookup.
+    const lookup=!!(opts&&opts.lookup);
+    const maxHops=lookup
+      ? frontier.length
+      : Math.max(frontier.length,Math.min(cfg.maxHops,frontier.length+(cfg.key==='obsessive'?4:2)));
     while(hops.length<maxHops&&frontier.length){
       const node=frontier.shift();
       step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching the web for “'+node.query+'”'));
@@ -2807,7 +2837,7 @@ class Component extends DCLogic {
         const arrival=this._profile(keptText.join('\n'));
         const leads=this._leads(seen,arrival,chased);
         for(const [k,m] of arrival)seen.set(k,(seen.get(k)||0)+m);
-        if(leads.length&&hops.length+1<maxHops){next=leads[0].term;chased.add(next);frontier.push({query:this._nextQuery(anchor,next),term:next});
+        if(!lookup&&leads.length&&hops.length+1<maxHops){next=leads[0].term;chased.add(next);frontier.push({query:this._nextQuery(anchor,next),term:next});
           step('lead','The most surprising turn here is “'+next+'” — chasing it next.');}
       }
       hops.push({query:node.query,term:node.term,got,next});
