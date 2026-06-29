@@ -543,6 +543,47 @@ export const setThinkingNote = (el, msg) => {
 
 // host → just the domain, for a compact, honest source chip ("en.wikipedia.org").
 const domainOf = (url) => { try { return new URL(url).host.replace(/^www\./, ''); } catch { return ''; } };
+
+// A rich-media source card (video/image), the kind the screenshot shows above its text sources.
+// SCAFFOLD — DARK by default: nothing in the current retrieval path emits `s.media`, so this never
+// renders today. It lights up the moment a media-returning source attaches `media:{type,
+// thumbnail, embedUrl}` to a source, with no further UI change. We link OUT to the page rather than
+// embedding an iframe — the strict, safe choice (no third-party frame, no autoplay). Returns the
+// card element, or null when the source carries no usable media.
+const renderSourceMedia = (s) => {
+  const m = s && s.media;
+  if (!m || (!m.thumbnail && !m.embedUrl)) return null;
+  const href = m.embedUrl || s.url;
+  const card = document.createElement(href ? 'a' : 'div');
+  card.className = 'wr-media';
+  if (href) { card.href = href; card.target = '_blank'; card.rel = 'noopener'; card.title = href; }
+  if (m.type) card.dataset.mediaType = m.type;
+  if (m.thumbnail) {
+    const thumb = document.createElement('span');
+    thumb.className = 'wr-media-thumb';
+    const img = document.createElement('img');
+    img.src = m.thumbnail; img.alt = s.title || 'media'; img.loading = 'lazy';
+    thumb.appendChild(img);
+    if (m.type === 'video') {
+      const play = document.createElement('span');
+      play.className = 'wr-media-play';
+      play.textContent = '▶';
+      thumb.appendChild(play);
+    }
+    if (m.duration) {
+      const dur = document.createElement('span');
+      dur.className = 'wr-media-dur';
+      dur.textContent = m.duration;
+      thumb.appendChild(dur);
+    }
+    card.appendChild(thumb);
+  }
+  const cap = document.createElement('span');
+  cap.className = 'wr-media-cap';
+  cap.textContent = s.title || domainOf(href) || 'media';
+  card.appendChild(cap);
+  return card;
+};
 // ISO → a short local date/time, so each source carries WHEN it was fetched (provenance).
 const whenOf = (iso) => { if (!iso) return ''; try { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(); } catch { return ''; } };
 
@@ -659,6 +700,10 @@ export const renderWebResult = (el, fetched) => {
   const sources = fetched.augmented?.sources || fetched.sources || [];
   for (const s of sources) {
     if (!s) continue;
+    // A media source (video/image) renders as a card; everything else as a text source row.
+    // Dark today — no retrieval path emits `s.media` yet (renderSourceMedia).
+    const media = renderSourceMedia(s);
+    if (media) { box.appendChild(media); continue; }
     const item = document.createElement(s.url ? 'a' : 'div');
     item.className = 'wr-source';
     if (s.url) { item.href = s.url; item.target = '_blank'; item.rel = 'noopener'; item.title = s.url; }
