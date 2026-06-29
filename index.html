@@ -79,9 +79,9 @@
         <input value="{{ url }}" oninput="{{ onUrlInput }}" onkeydown="{{ onUrlKey }}" placeholder="Search or read a URL into memory…" style="flex:1;min-width:0;font-size:12.5px;color:var(--ink);background:transparent;border:none;padding:7px 10px;outline:none;">
         <button onclick="{{ onReadUrl }}" style="{{ readBtnStyle }}">{{ readBtnLabel }}</button>
       </div>
-      <input type="file" data-eo-import="" accept=".txt,.md,.markdown,.text,text/plain" onchange="{{ onImportFile }}" style="display:none;">
+      <input type="file" data-eo-import="" multiple onchange="{{ onImportFile }}" style="display:none;">
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
-        <button onclick="{{ onImportClick }}" title="Import a book or text file — read it as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">📄</button>
+        <button onclick="{{ onImportClick }}" title="Import any file — text, CSV, JSON, image, audio, video, PDF… It opens on its native rendering; text gets the elegant reader too." style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">📄</button>
       </sc-if>
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
         <div title="Layout presets" style="display:flex;gap:2px;background:#eef0f3;border-radius:8px;padding:3px;flex:0 0 auto;">
@@ -215,7 +215,7 @@
             <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
             <div onclick="{{ s.onOpen }}" style="min-width:0;flex:1;cursor:pointer;">
               <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.label }}</div>
-              <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ s.host }} · {{ s.count }} entities</div>
+              <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ s.sub }}</div>
             </div>
             <sc-if value="{{ s.hasKids }}" hint-placeholder-val="{{ false }}">
               <button onclick="{{ s.onToggleCollapse }}" title="{{ s.collapseTitle }}" style="{{ s.caretStyle }}" style-hover="background:#eef0f3;color:var(--ink)">{{ s.caret }}</button>
@@ -223,7 +223,7 @@
             <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
           </div>
         </sc-for>
-        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Read a URL, import a book, or start a chat above.</div></sc-if>
+        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Read a URL, drop in any file (text, CSV, JSON, image, audio, PDF…), or start a chat above.</div></sc-if>
       </div>
     </aside>
     <div onpointerdown="{{ dragLeft }}" style="{{ leftGutStyle }}"><div style="width:1px;height:100%;background:var(--line);"></div></div>
@@ -1741,9 +1741,24 @@ class Component extends DCLogic {
       window.addEventListener('resize',this._onResize,{passive:true});
     }
     this._initCiteHover();
+    // Drag ANY file (or several) anywhere onto the window to import it. A thin overlay
+    // hint appears while a drag is over the page.
+    if(typeof window!=='undefined'){
+      const show=on=>{let el=document.getElementById('eo-drop-veil');if(on){if(!el){el=document.createElement('div');el.id='eo-drop-veil';el.textContent='Drop to import — any file';el.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;font:600 18px system-ui,sans-serif;color:#fff;background:rgba(20,24,30,.55);backdrop-filter:blur(2px);pointer-events:none;';document.body.appendChild(el);}}else if(el){el.remove();}};
+      let depth=0;
+      this._onDragEnter=e=>{if(e.dataTransfer&&[...e.dataTransfer.types||[]].includes('Files')){e.preventDefault();depth++;show(true);}};
+      this._onDragOver=e=>{if(e.dataTransfer&&[...e.dataTransfer.types||[]].includes('Files')){e.preventDefault();e.dataTransfer.dropEffect='copy';}};
+      this._onDragLeave=e=>{depth=Math.max(0,depth-1);if(depth===0)show(false);};
+      this._onDrop=e=>{const f=e.dataTransfer&&e.dataTransfer.files;if(f&&f.length){e.preventDefault();depth=0;show(false);const arr=[];for(let i=0;i<f.length;i++)arr.push(f[i]);arr.reduce((pr,file)=>pr.then(()=>this.importAnyFile(file).catch(()=>{})),Promise.resolve());}};
+      window.addEventListener('dragenter',this._onDragEnter);
+      window.addEventListener('dragover',this._onDragOver);
+      window.addEventListener('dragleave',this._onDragLeave);
+      window.addEventListener('drop',this._onDrop);
+    }
   }
   componentWillUnmount(){
     if(this._onResize&&typeof window!=='undefined') window.removeEventListener('resize',this._onResize);
+    if(typeof window!=='undefined'&&this._onDrop){window.removeEventListener('dragenter',this._onDragEnter);window.removeEventListener('dragover',this._onDragOver);window.removeEventListener('dragleave',this._onDragLeave);window.removeEventListener('drop',this._onDrop);}
     if(this._citeHoverInit){document.removeEventListener('mouseover',this._onCiteOver);document.removeEventListener('mouseout',this._onCiteOut);}
     if(this._citeCard&&this._citeCard.parentNode)this._citeCard.parentNode.removeChild(this._citeCard);
   }
@@ -1956,7 +1971,8 @@ class Component extends DCLogic {
           if(ne.subject&&ne.subject.id!=null)ne.subject={...ne.subject,id:fix(ne.subject.id)};if(ne.object&&ne.object.id!=null)ne.object={...ne.object,id:fix(ne.object.id)};}
         m.events.push(ne);}
       pg.sentences.forEach(s=>{m.sentences.push(s);m.sentenceSource.push(pg.url);});
-      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,author:pg.author||null,authorDates:pg.authorDates||null,published:pg.published||null,seqStart:so,sentStart:no});
+      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,author:pg.author||null,authorDates:pg.authorDates||null,published:pg.published||null,seqStart:so,sentStart:no,
+        kind:pg.kind||null,nature:pg.nature||null,mime:pg.mime||null,fileName:pg.fileName||null,bytes:pg.bytes||0,nativeDoc:pg.nativeDoc||null,blobUrl:pg.blobUrl||null,readerOk:!!pg.readerOk,stat:pg.stat||''});
     }
     // The sense that distinguishes a forked referent ("a 1995 film") is a DEFEASIBLE DEF on
     // the referent — not part of its identity. Appended after the body so the INS exists.
@@ -1993,11 +2009,460 @@ class Component extends DCLogic {
   }
   onImportClick(){const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
   onImportFile(ev){
-    const f=ev&&ev.target&&ev.target.files&&ev.target.files[0];if(!f)return;
-    const fr=new FileReader();
-    fr.onload=()=>{this.importText(String(fr.result||''),f.name.replace(/\.(txt|md|markdown|text)$/i,''));if(ev.target)ev.target.value='';};
-    fr.onerror=()=>{this.feedLine('warn','Could not read that file.');};
-    fr.readAsText(f);
+    const files=ev&&ev.target&&ev.target.files;if(!files||!files.length)return;
+    const arr=[];for(let i=0;i<files.length;i++)arr.push(files[i]);
+    // Import one at a time so the sources tree (and each file's sub-sources) settles between files.
+    arr.reduce((pr,f)=>pr.then(()=>this.importAnyFile(f).catch(()=>{})),Promise.resolve())
+       .then(()=>{if(ev.target)ev.target.value='';});
+  }
+  // ── Universal file import ──────────────────────────────────────────────────
+  // ANY file can come in. We surface its NATURE (what kind of thing it is) and open
+  // it on its NATIVE rendering — a table for a CSV, a collapsible tree for JSON, the
+  // image itself, an audio/video player, the page for HTML. For a TEXT document the
+  // elegant reader is offered as a toggle, but we always start native. The center
+  // iframe is sandboxed WITHOUT scripts, so every native surface is pure HTML/CSS:
+  // <details> for the JSON tree, <table> for tabular data, <img>/<audio>/<video> for
+  // media. A JSON file additionally fans out into one sub-source per entity type.
+  CODE_EXT={js:'JavaScript',mjs:'JavaScript',cjs:'JavaScript',ts:'TypeScript',tsx:'TypeScript',jsx:'JavaScript',py:'Python',rb:'Ruby',go:'Go',rs:'Rust',java:'Java',c:'C',h:'C',cpp:'C++',cc:'C++',hpp:'C++',cs:'C#',php:'PHP',swift:'Swift',kt:'Kotlin',scala:'Scala',sh:'Shell',bash:'Shell',zsh:'Shell',pl:'Perl',lua:'Lua',r:'R',sql:'SQL',yaml:'YAML',yml:'YAML',toml:'TOML',ini:'INI',cfg:'Config',css:'CSS',scss:'SCSS',less:'LESS',vue:'Vue',svelte:'Svelte'};
+  fileNature(file){
+    const name=(file&&file.name)||'untitled';
+    const ext=((String(name).match(/\.([A-Za-z0-9]+)$/)||[])[1]||'').toLowerCase();
+    const mime=String((file&&file.type)||'').toLowerCase();
+    const has=(...x)=>x.includes(ext);
+    const M=(kind,label,glyph,opt)=>Object.assign({kind,label,glyph,ext,mime},opt||{});
+    if(mime.indexOf('image/')===0||has('png','jpg','jpeg','gif','webp','avif','bmp','ico','svg','tif','tiff','heic'))
+      return M('image','Image',(ext||'IMG').toUpperCase(),{readAs:'blob'});
+    if(mime.indexOf('audio/')===0||has('mp3','wav','ogg','oga','flac','m4a','aac','opus','weba','aiff','aif','wma'))
+      return M('audio','Audio',(ext||'AUD').toUpperCase(),{readAs:'blob'});
+    if(mime.indexOf('video/')===0||has('mp4','webm','mov','m4v','mkv','avi','ogv','wmv'))
+      return M('video','Video',(ext||'VID').toUpperCase(),{readAs:'blob'});
+    if(mime==='application/pdf'||has('pdf'))
+      return M('pdf','PDF','PDF',{readAs:'blob'});
+    if(has('json','jsonl','geojson','ndjson')||/\bjson\b/.test(mime))
+      return M('json','JSON','{ }',{readAs:'text'});
+    if(has('csv'))         return M('csv','CSV','CSV',{readAs:'text'});
+    if(has('tsv','tab'))   return M('tsv','TSV','TSV',{readAs:'text'});
+    if(has('md','markdown','mdown','mkd','mdx')) return M('markdown','Markdown','MD',{readAs:'text'});
+    if(has('html','htm','xhtml')||/html/.test(mime)) return M('html','HTML','</>',{readAs:'text'});
+    if(has('xml','svgz')||/xml/.test(mime)) return M('xml','XML','XML',{readAs:'text'});
+    if(this.CODE_EXT[ext]) return M('code',this.CODE_EXT[ext],(ext||'').toUpperCase(),{readAs:'text',lang:this.CODE_EXT[ext]});
+    if(has('txt','text','log','rtf','')||mime.indexOf('text/')===0) return M('text','Text','TXT',{readAs:'text'});
+    return M('binary','File',(ext||'BIN').toUpperCase(),{readAs:'blob'});
+  }
+  _readFileText(file){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result||''));fr.onerror=()=>rej(new Error('read failed'));fr.readAsText(file);});}
+  async importAnyFile(file){
+    if(!this.E){this.feedLine('warn','Engine not ready yet — try again in a moment.');return false;}
+    const nat=this.fileNature(file);
+    const id=Date.now().toString(36)+Math.floor(Math.random()*1e6).toString(36);
+    const url='file:'+id;
+    const title=String(file.name||'Untitled').replace(/\.[^.]+$/,'')||String(file.name||'Untitled');
+    try{
+      if(nat.readAs==='text'){ const text=await this._readFileText(file); return this._buildFilePage(url,title,nat,file,{text}); }
+      const blobUrl=URL.createObjectURL(file);
+      return this._buildFilePage(url,title,nat,file,{blobUrl});
+    }catch(e){ this.feedLine('warn','Could not import '+(file.name||'file')+' — '+(e&&e.message||e)); return false; }
+  }
+  _fmtBytes(n){n=+n||0;if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(1)+' MB';}
+  _esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  // The themed wrapper every native surface shares: a nature badge, title + meta, then the body.
+  _natDoc(opt){
+    const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent(),dark=rp.theme==='dark';
+    const esc=s=>this._esc(s);
+    const maxw=opt.wide?'min(1180px,97vw)':((rp.w||720)+'px');
+    const card=dark?'#1b1f27':'#ffffff',mut=tm.fg2||'#6b7280',line=dark?'rgba(255,255,255,.12)':'rgba(20,24,30,.12)';
+    return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+
+      ':root{--bg:'+tm.bg+';--fg:'+tm.fg+';--acc:'+a+';--mut:'+mut+';--line:'+line+';--card:'+card+';}'+
+      'html,body{margin:0;background:var(--bg);color:var(--fg);}body{font:15px/1.6 '+(this.READ_FONTS[rp.font==='serif'?'serif':'sans']||this.READ_FONTS.sans)+';-webkit-font-smoothing:antialiased;}'+
+      '.wrap{max-width:'+maxw+';margin:0 auto;padding:'+(opt.pad||'24px 26px 130px')+';}'+
+      '.eohead{display:flex;align-items:center;gap:10px;margin:4px 0 18px;flex-wrap:wrap;}'+
+      '.eobadge{font-size:10.5px;font-weight:800;letter-spacing:.05em;color:#fff;background:var(--acc);border-radius:6px;padding:3px 8px;text-transform:uppercase;flex:0 0 auto;}'+
+      '.eotitle{font-size:17px;font-weight:700;margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'+
+      '.eometa{font-size:12px;color:var(--mut);flex:0 0 auto;}'+
+      '.eonote{font-size:12.5px;color:var(--mut);line-height:1.65;}'+
+      'table.eo{border-collapse:collapse;width:100%;font-size:12.5px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}'+
+      'table.eo th,table.eo td{text-align:left;padding:7px 11px;border-bottom:1px solid var(--line);vertical-align:top;white-space:nowrap;max-width:380px;overflow:hidden;text-overflow:ellipsis;}'+
+      'table.eo thead th{position:sticky;top:0;background:var(--acc);color:#fff;font-weight:700;z-index:2;}'+
+      'table.eo tbody tr:nth-child(even){background:rgba(127,127,127,.06);}'+
+      'table.eo td.eonum{text-align:right;font-variant-numeric:tabular-nums;}'+
+      '.eorownum{color:var(--mut);font-variant-numeric:tabular-nums;width:1%;}'+
+      'details.eojson{margin:1px 0 1px 13px;border-left:1px solid var(--line);padding-left:7px;}'+
+      'details.eojson>summary{cursor:pointer;list-style:none;outline:none;}details.eojson>summary::-webkit-details-marker{display:none;}'+
+      'details.eojson>summary:before{content:"\\25B8";color:var(--mut);font-size:9px;margin-right:5px;display:inline-block;transition:transform .1s;}'+
+      'details.eojson[open]>summary:before{transform:rotate(90deg);}'+
+      '.eorow{margin:1px 0 1px 13px;}'+
+      '.eok{color:var(--acc);font-weight:600;}.eopunc{color:var(--mut);}'+
+      '.eos{color:'+(dark?'#9ece6a':'#0a7d33')+';}.eonum2{color:#c0700a;}.eob{color:#8a5cd6;}.eonull{color:var(--mut);font-style:italic;}'+
+      'pre.eocode{white-space:pre-wrap;word-break:break-word;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto;}'+
+      '.eomedia{display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px 0;}'+
+      'img.eoimg{max-width:100%;height:auto;border-radius:10px;box-shadow:0 6px 26px rgba(0,0,0,.18);}'+
+      'audio.eoaud{width:100%;max-width:560px;}video.eovid{width:100%;max-width:760px;border-radius:10px;background:#000;}'+
+      '.eotypecard{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--card);margin:7px 0;text-decoration:none;color:inherit;}'+
+      '.eotypecard:hover{border-color:var(--acc);}'+
+      '.eopanel{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px 16px;margin:10px 0;}'+
+      '</style></head><body><div class="wrap">'+
+      '<div class="eohead"><span class="eobadge">'+esc(opt.badge||'File')+'</span><h1 class="eotitle">'+esc(opt.title||'')+'</h1>'+(opt.meta?'<span class="eometa">'+esc(opt.meta)+'</span>':'')+'</div>'+
+      (opt.body||'')+'</div></body></html>';
+  }
+  // Dispatch a file to its surface builder, register the page(s), and open it native.
+  _buildFilePage(url,title,nat,file,data){
+    const ctx={url,title,nat,mime:nat.mime||file.type||'',fileName:file.name||title,bytes:file.size||0,blobUrl:data.blobUrl||null,raw:data.text||''};
+    let built;
+    switch(nat.kind){
+      case 'csv': built=this._surfaceTable(ctx,','); break;
+      case 'tsv': built=this._surfaceTable(ctx,'\t'); break;
+      case 'json': built=this._surfaceJSON(ctx); break;
+      case 'image': built=this._surfaceImage(ctx); break;
+      case 'audio': built=this._surfaceAudio(ctx); break;
+      case 'video': built=this._surfaceVideo(ctx); break;
+      case 'html': built=this._surfaceHTML(ctx); break;
+      case 'markdown': built=this._surfaceText(ctx,true); break;
+      case 'text': built=this._surfaceText(ctx,true); break;
+      case 'code': built=this._surfaceCode(ctx,nat,null); break;
+      case 'xml': built=this._surfaceCode(ctx,nat,null); break;
+      case 'pdf': built=this._surfacePending(ctx,'Preparing the PDF…'); break;
+      default: built=this._surfaceBinary(ctx);
+    }
+    const page=this._mkFilePage(ctx,nat,built,null);
+    const newPages=[page];
+    (built.children||[]).forEach((ch,i)=>{
+      const cu=url+'#'+(ch.slug||('part'+i));
+      const cnat=ch.nat||nat;
+      newPages.push(this._mkFilePage({url:cu,title:ch.title,nat:cnat,mime:ctx.mime,fileName:ctx.fileName,bytes:0,blobUrl:null,raw:''},cnat,ch,url));
+    });
+    this._commitFilePages(newPages);
+    this._srcUrl=null;this._pushLoc({t:'web',url});
+    this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));
+    this.loadCenter(url);
+    this.feedSep('imported a file');
+    const kids=(built.children||[]).length;
+    this.feedLine('read','Imported '+nat.label+' “'+title+'”'+(built.stat?' · '+built.stat:'')+(kids?(' · '+kids+' entity type'+(kids>1?'s':'')):''));
+    if(nat.kind==='audio')this._analyzeAudio(url,file).catch(()=>{});
+    if(nat.kind==='pdf')this._renderPdf(url,file).catch(e=>{this.feedLine('warn','PDF: '+(e&&e.message||e));});
+    return {url,title};
+  }
+  _mkFilePage(ctx,nat,built,parent){
+    const readerOk=!!built.readerOk,eoText=built.eoText||'';
+    let doc=null,sentences=[],events=[],propCount=0;
+    if(eoText&&this.norm(eoText).length>=40){
+      try{doc=this.E.parseText(eoText,{coordSubjects:true});sentences=doc.sentences;events=doc.log.snapshot();propCount=this.countPropositions(sentences);}catch(e){}
+    }
+    return {url:ctx.url,title:ctx.title,
+      text:readerOk?(ctx.raw||eoText||''):'',
+      events,sentences,propCount,ts:Date.now(),via:'file',_doc:doc,svo:0,image:null,parent:parent||null,wikiLinks:null,
+      author:null,authorDates:null,published:null,
+      kind:nat.kind,nature:{kind:nat.kind,label:nat.label,glyph:nat.glyph},mime:ctx.mime,fileName:ctx.fileName,bytes:ctx.bytes,
+      nativeDoc:built.nativeDoc||'',blobUrl:ctx.blobUrl||null,readerOk:readerOk,stat:built.stat||''};
+  }
+  _commitFilePages(newPages){
+    const pages=[...this.state.pages,...newPages];
+    this.rebuild(pages);
+    this.setState(s=>({pages,rev:s.rev+1,selId:s.selId||this.topEntity()}));
+    if(this.state.llm&&this.state.llmAvail&&this.SVO)newPages.forEach(p=>{if(p._doc)this.runSVO(p);});
+  }
+  // Replace a page's native surface (and optionally its EO text) in place, then re-render
+  // if it is the page on screen. Used by async passes (audio analysis, PDF rendering).
+  _updateFilePage(url,patch){
+    const apply=p=>{if(p.url!==url)return p;const np=Object.assign({},p,patch);return np;};
+    const pages=this.state.pages.map(apply);
+    let reparse=false;
+    if(patch.eoText){const tgt=pages.find(p=>p.url===url);if(tgt){try{const d=this.E.parseText(patch.eoText,{coordSubjects:true});tgt._doc=d;tgt.sentences=d.sentences;tgt.events=d.log.snapshot();tgt.propCount=this.countPropositions(d.sentences);reparse=true;}catch(e){}}}
+    this.rebuild(pages);
+    this.setState(s=>({pages,rev:s.rev+1}));
+    if(this.state.viewUrl===url)this.loadCenter(url);
+  }
+  // ── CSV / TSV ──────────────────────────────────────────────────────────────
+  _parseDelimited(text,delim){
+    let t=String(text||'').replace(/\r\n?/g,'\n');
+    if(delim===','){const head=t.slice(0,2000);if(head.indexOf(',')<0&&head.indexOf(';')>=0)delim=';';else if(head.indexOf(',')<0&&head.indexOf('\t')>=0)delim='\t';}
+    const rows=[];let row=[],cur='',i=0,q=false;
+    while(i<t.length){const c=t[i];
+      if(q){ if(c==='"'){ if(t[i+1]==='"'){cur+='"';i+=2;continue;} q=false;i++;continue; } cur+=c;i++;continue; }
+      if(c==='"'){q=true;i++;continue;}
+      if(c===delim){row.push(cur);cur='';i++;continue;}
+      if(c==='\n'){row.push(cur);rows.push(row);row=[];cur='';i++;continue;}
+      cur+=c;i++;
+    }
+    if(cur!==''||row.length){row.push(cur);rows.push(row);}
+    return rows.filter(r=>r.length>1||(r.length===1&&String(r[0]).trim()!==''));
+  }
+  _surfaceTable(ctx,delim){
+    const rows=this._parseDelimited(ctx.raw,delim);
+    if(rows.length<1)return this._surfaceText(ctx,true);
+    const head=rows[0].map((h,i)=>String(h).trim()||('col'+(i+1))),body=rows.slice(1);
+    const esc=s=>this._esc(s);
+    const isNum=c=>body.length>0&&body.slice(0,80).every(r=>r[c]===undefined||String(r[c]).trim()===''||/^[-+]?[\d.,$%\s]+$/.test(String(r[c]).trim()));
+    const numCols=head.map((_,c)=>isNum(c));
+    const cap=Math.min(body.length,3000);
+    let th='<tr><th class="eorownum">#</th>'+head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr>';
+    let trs='';for(let r=0;r<cap;r++){const row=body[r];trs+='<tr><td class="eorownum">'+(r+1)+'</td>'+head.map((_,c)=>{const v=row[c]==null?'':String(row[c]);return '<td'+(numCols[c]?' class="eonum"':'')+' title="'+esc(v)+'">'+esc(v)+'</td>';}).join('')+'</tr>';}
+    const more=body.length>cap?('<div class="eonote" style="margin-top:10px;">Showing '+cap.toLocaleString()+' of '+body.length.toLocaleString()+' rows.</div>'):'';
+    const tbl='<div style="overflow:auto;">'+'<table class="eo"><thead>'+th+'</thead><tbody>'+trs+'</tbody></table></div>'+more;
+    const stat=body.length.toLocaleString()+' rows · '+head.length+' cols';
+    const nativeDoc=this._natDoc({badge:ctx.nat.label,title:ctx.title,meta:stat+' · '+this._fmtBytes(ctx.bytes),body:tbl,wide:true});
+    return {nativeDoc,eoText:this._tableEoText(head,body),readerOk:false,stat};
+  }
+  _tableEoText(head,body){
+    const lines=[];const cap=Math.min(body.length,600);
+    for(let r=0;r<cap;r++){const row=body[r];const parts=head.map((h,c)=>{const v=(row[c]==null?'':String(row[c]).trim());return v?(this.norm(String(h).replace(/[_\-.]+/g,' '))+' '+v):null;}).filter(Boolean);if(parts.length)lines.push(parts.join('; ')+'.');}
+    return lines.join('\n');
+  }
+  // ── JSON ─────────────────────────────────────────────────────────────────────
+  _surfaceJSON(ctx){
+    const raw=String(ctx.raw||'').trim();let data,err=null;
+    try{data=JSON.parse(raw);}catch(e){
+      const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);let arr=[],ok=lines.length>0;
+      for(const l of lines){try{arr.push(JSON.parse(l));}catch(_){ok=false;break;}}
+      if(ok&&arr.length)data=arr;else err=(e&&e.message)||'parse error';
+    }
+    if(err)return this._surfaceCode(ctx,{label:'JSON'},'Could not parse as JSON: '+err);
+    const stat=this._jsonStat(data);
+    const groups=this._jsonEntityTypes(data);
+    let head='';
+    if(groups.length){
+      head='<div class="eopanel"><div style="font-weight:700;margin-bottom:8px;">Entity types in this file</div>';
+      groups.forEach((g,i)=>{head+='<a class="eotypecard" href="#etype-'+i+'"><span class="eobadge">'+this._esc(g.label)+'</span><span style="flex:1;min-width:0;">'+this._esc(g.title)+'</span><span class="eometa">'+g.count.toLocaleString()+' item'+(g.count!==1?'s':'')+'</span></a>';});
+      head+='<div class="eonote" style="margin-top:8px;">Each is its own sub-source under this file — open one for its table and reading.</div></div>';
+    }
+    const body=head+'<div style="font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;margin-top:6px;">'+this._jsonTreeHtml(data,null,0,true)+'</div>';
+    const nativeDoc=this._natDoc({badge:'JSON',title:ctx.title,meta:stat+' · '+this._fmtBytes(ctx.bytes),body});
+    const children=groups.map((g,i)=>{
+      const tbl=this._objArrayTable(g.items);
+      const cdoc=this._natDoc({badge:g.label,title:g.title,meta:g.count.toLocaleString()+' items · from '+this._esc(ctx.fileName),body:tbl.html,wide:true});
+      return {title:g.title,slug:('etype-'+i),nat:{kind:'jsontype',label:g.label,glyph:'{}'},nativeDoc:cdoc,eoText:tbl.eoText,readerOk:false,stat:g.count.toLocaleString()+' items'};
+    });
+    return {nativeDoc,eoText:groups.length?'':this._jsonEoText(data),readerOk:false,stat,children};
+  }
+  _jsonStat(d){if(Array.isArray(d))return d.length.toLocaleString()+' items';if(d&&typeof d==='object')return Object.keys(d).length+' keys';return typeof d;}
+  _jsonEntityTypes(data){
+    const out=[],isObj=v=>v&&typeof v==='object'&&!Array.isArray(v);
+    const titleCase=s=>String(s).replace(/[_\-]+/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/\b\w/g,c=>c.toUpperCase()).trim();
+    const objArray=a=>Array.isArray(a)&&a.length>0&&a.filter(isObj).length>=Math.max(1,a.length*0.5);
+    if(Array.isArray(data)){
+      const items=data.filter(x=>x!=null);if(!items.length)return out;
+      const discKeys=['type','kind','category','_type','@type','entityType','entity_type','model','table','__typename'];
+      const disc=discKeys.find(k=>items.filter(isObj).length>0&&items.some(it=>isObj(it)&&typeof it[k]==='string')&&items.every(it=>!isObj(it)||it[k]===undefined||typeof it[k]==='string'));
+      if(disc){
+        const by=new Map();items.forEach(it=>{const k=(isObj(it)&&it[disc]!=null)?String(it[disc]):'(untyped)';if(!by.has(k))by.set(k,[]);by.get(k).push(it);});
+        if(by.size>1){for(const [k,arr] of by)out.push({label:String(k).slice(0,20),title:titleCase(k),count:arr.length,items:arr});return out;}
+      }
+      if(objArray(data))out.push({label:'Items',title:'Items',count:items.length,items});
+      return out;
+    }
+    if(isObj(data)){
+      for(const k of Object.keys(data)){const v=data[k];
+        if(Array.isArray(v)&&objArray(v)){const items=v.filter(x=>x!=null);out.push({label:k.slice(0,20),title:titleCase(k),count:items.length,items});}
+        else if(isObj(v)){const vals=Object.values(v).filter(x=>x!=null);if(vals.length>=2&&vals.filter(isObj).length>=Math.max(1,vals.length*0.5))out.push({label:k.slice(0,20),title:titleCase(k),count:vals.length,items:vals});}
+      }
+      // Root that is itself a map of objects (id → record) and yielded no nested collections:
+      // treat the whole map as a single entity type.
+      if(!out.length){const vals=Object.values(data).filter(x=>x!=null);if(vals.length>=2&&vals.filter(isObj).length>=Math.max(2,vals.length*0.5))out.push({label:'Items',title:'Items',count:vals.length,items:vals});}
+      return out;
+    }
+    return out;
+  }
+  _jsonTreeHtml(v,key,depth,open){
+    const esc=s=>this._esc(s);
+    const kl=key!=null?'<span class="eok">'+esc(key)+'</span><span class="eopunc">: </span>':'';
+    if(v===null)return '<div class="eorow">'+kl+'<span class="eonull">null</span></div>';
+    const t=typeof v;
+    if(t==='number')return '<div class="eorow">'+kl+'<span class="eonum2">'+esc(v)+'</span></div>';
+    if(t==='boolean')return '<div class="eorow">'+kl+'<span class="eob">'+esc(v)+'</span></div>';
+    if(t==='string')return '<div class="eorow">'+kl+'<span class="eos">"'+esc(v.length>240?v.slice(0,240)+'…':v)+'"</span></div>';
+    if(t!=='object')return '<div class="eorow">'+kl+esc(String(v))+'</div>';
+    if(depth>7)return '<div class="eorow">'+kl+'<span class="eonull">…</span></div>';
+    const arr=Array.isArray(v),ks=arr?v.map((_,i)=>i):Object.keys(v),n=ks.length;
+    const sum='<summary>'+kl+'<span class="eopunc">'+(arr?'[':'{')+'</span> <span class="eometa">'+n+(arr?' items':' keys')+'</span> <span class="eopunc">'+(arr?']':'}')+'</span></summary>';
+    const cap=300;let kids='';
+    for(let i=0;i<Math.min(n,cap);i++){const k=ks[i];kids+=this._jsonTreeHtml(arr?v[k]:v[k],arr?null:k,depth+1,false);}
+    if(n>cap)kids+='<div class="eonull eorow">… '+(n-cap).toLocaleString()+' more</div>';
+    return '<details class="eojson"'+(open&&depth<1?' open':'')+'>'+sum+kids+'</details>';
+  }
+  _flatten(obj,pre,out){out=out||{};pre=pre||'';
+    if(obj==null||typeof obj!=='object'){out[pre||'value']=obj;return out;}
+    if(Array.isArray(obj)){out[pre||'value']=obj.every(x=>x==null||typeof x!=='object')?obj.join(', '):JSON.stringify(obj).slice(0,200);return out;}
+    for(const k of Object.keys(obj)){const nk=pre?pre+'.'+k:k,v=obj[k];
+      if(v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).length<=6&&pre.split('.').length<3)this._flatten(v,nk,out);
+      else if(Array.isArray(v)&&v.every(x=>x==null||typeof x!=='object'))out[nk]=v.join(', ');
+      else if(v&&typeof v==='object')out[nk]=JSON.stringify(v).slice(0,180);
+      else out[nk]=v;}
+    return out;
+  }
+  _objArrayTable(items){
+    const esc=s=>this._esc(s);
+    const flat=items.map(it=>this._flatten(it));
+    const cols=[],seen=new Set();flat.forEach(o=>Object.keys(o).forEach(k=>{if(!seen.has(k)){seen.add(k);cols.push(k);}}));
+    const use=cols.slice(0,40);
+    const cell=v=>v==null?'':(typeof v==='object'?JSON.stringify(v):String(v));
+    const cap=Math.min(flat.length,3000);
+    let th='<tr><th class="eorownum">#</th>'+use.map(k=>'<th>'+esc(k)+'</th>').join('')+'</tr>';
+    let trs='';for(let r=0;r<cap;r++){const o=flat[r];trs+='<tr><td class="eorownum">'+(r+1)+'</td>'+use.map(k=>{const v=cell(o[k]);return '<td title="'+esc(v)+'">'+esc(v)+'</td>';}).join('')+'</tr>';}
+    const more=flat.length>cap?'<div class="eonote" style="margin-top:10px;">Showing '+cap.toLocaleString()+' of '+flat.length.toLocaleString()+'.</div>':'';
+    const html='<div style="overflow:auto;"><table class="eo"><thead>'+th+'</thead><tbody>'+trs+'</tbody></table></div>'+more;
+    const lines=[];const ecap=Math.min(flat.length,700);
+    for(let r=0;r<ecap;r++){const o=flat[r];const parts=use.map(k=>{const v=cell(o[k]).trim();return v?(this.norm(k.replace(/[._]+/g,' '))+' '+v):null;}).filter(Boolean);if(parts.length)lines.push(parts.join('; ')+'.');}
+    return {html,eoText:lines.join('\n')};
+  }
+  _jsonEoText(data){
+    const lines=[];const walk=(v,path)=>{if(lines.length>400)return;
+      if(v==null||typeof v!=='object'){if(path&&v!=null&&String(v).trim())lines.push(this.norm(path.replace(/[._]+/g,' '))+' '+String(v)+'.');return;}
+      const ks=Array.isArray(v)?v.slice(0,40).map((_,i)=>i):Object.keys(v).slice(0,80);
+      ks.forEach(k=>walk(Array.isArray(v)?v[k]:v[k],path?path+' '+k:String(k)));};
+    walk(data,'');return lines.join('\n');
+  }
+  // ── media / text / code / binary surfaces ─────────────────────────────────────
+  _surfaceImage(ctx){const body='<div class="eomedia"><img class="eoimg" src="'+this._esc(ctx.blobUrl)+'" alt="'+this._esc(ctx.title)+'"><div class="eonote">'+this._esc(ctx.fileName)+' · '+this._fmtBytes(ctx.bytes)+'</div></div>';
+    return {nativeDoc:this._natDoc({badge:ctx.nat.label,title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:'',readerOk:false,stat:this._fmtBytes(ctx.bytes)};}
+  _surfaceAudio(ctx){return {nativeDoc:this._audioDoc(ctx,null),eoText:'',readerOk:false,stat:this._fmtBytes(ctx.bytes)};}
+  _audioDoc(ctx,findings){
+    let panel;
+    if(!findings)panel='<div style="font-weight:700;margin-bottom:4px;">EO acoustic reading</div><div class="eonote">Listening to the waveform… the engine reads its overtones and persistent tones, which join the graph as a sub-reading.</div>';
+    else if(findings.error)panel='<div style="font-weight:700;margin-bottom:4px;">EO acoustic reading</div><div class="eonote">'+this._esc(findings.error)+'</div>';
+    else{
+      const tones=findings.tones.map(t=>'<span style="font-size:11px;font-weight:700;color:var(--acc);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:3px 8px;">'+this._esc(t.note)+' · '+Math.round(t.persist*100)+'%</span>').join(' ');
+      const bright=findings.centroid>2500?'bright':findings.centroid>1200?'balanced':'dark';
+      panel='<div style="font-weight:700;margin-bottom:8px;">EO acoustic reading</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">'+(tones||'<span class="eonote">no clear tones found</span>')+'</div>'+
+        '<div class="eonote">'+findings.durationLabel+' · '+findings.sampleRate.toLocaleString()+' Hz · '+(findings.channels===1?'mono':findings.channels+' ch')+' · centroid ~'+Math.round(findings.centroid).toLocaleString()+' Hz ('+bright+') · read from the first '+Math.round(findings.analyzedSec)+'s.<br>These findings are folded into the graph — ask about this file in a chat.</div>';
+    }
+    const body='<div class="eomedia"><div style="font-size:46px;">🎧</div><audio class="eoaud" controls src="'+this._esc(ctx.blobUrl)+'"></audio>'+
+      '<div class="eopanel" style="max-width:600px;width:100%;">'+panel+'</div>'+
+      '<div class="eonote">'+this._esc(ctx.fileName)+' · '+this._fmtBytes(ctx.bytes)+'</div></div>';
+    return this._natDoc({badge:'Audio',title:ctx.title,meta:this._fmtBytes(ctx.bytes),body});
+  }
+  _ctxOf(p){return {url:p.url,title:p.title,nat:p.nature||{label:(p.kind||'File').toUpperCase()},mime:p.mime,fileName:p.fileName,bytes:p.bytes,blobUrl:p.blobUrl,raw:''};}
+  _surfaceVideo(ctx){const body='<div class="eomedia"><video class="eovid" controls src="'+this._esc(ctx.blobUrl)+'"></video><div class="eonote">'+this._esc(ctx.fileName)+' · '+this._fmtBytes(ctx.bytes)+'</div></div>';
+    return {nativeDoc:this._natDoc({badge:'Video',title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:'',readerOk:false,stat:this._fmtBytes(ctx.bytes)};}
+  _surfaceText(ctx,readerOk){const t=String(ctx.raw||'').replace(/\r\n?/g,'\n');const body='<pre class="eocode">'+this._esc(t.length>300000?t.slice(0,300000)+'\n…':t)+'</pre>';
+    return {nativeDoc:this._natDoc({badge:ctx.nat.label,title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:t,readerOk:!!readerOk,stat:this._fmtBytes(ctx.bytes)};}
+  _surfaceCode(ctx,nat,note){const t=String(ctx.raw||'').replace(/\r\n?/g,'\n'),lines=t.split('\n'),cap=6000;
+    const body=(note?'<div class="eonote" style="margin-bottom:10px;">'+this._esc(note)+'</div>':'')+'<pre class="eocode">'+this._esc(lines.slice(0,cap).join('\n'))+(lines.length>cap?'\n…':'')+'</pre>';
+    return {nativeDoc:this._natDoc({badge:nat.label||'Code',title:ctx.title,meta:lines.length+' lines · '+this._fmtBytes(ctx.bytes),body,wide:true}),eoText:t,readerOk:false,stat:lines.length+' lines'};}
+  _surfaceHTML(ctx){let doc=String(ctx.raw||'');doc=doc.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*>/gi,'');
+    return {nativeDoc:doc,eoText:this._htmlToText(ctx.raw),readerOk:true,stat:this._fmtBytes(ctx.bytes)};}
+  _htmlToText(html){try{const d=new DOMParser().parseFromString(String(html||''),'text/html');d.querySelectorAll('script,style,noscript,template').forEach(n=>n.remove());return this.norm(d.body?d.body.textContent:'');}catch(e){return this.norm(String(html||'').replace(/<[^>]+>/g,' '));}}
+  _surfaceBinary(ctx){const body='<div class="eopanel"><div style="font-weight:700;margin-bottom:6px;">'+this._esc(ctx.fileName)+'</div><div class="eonote">A binary file — its nature is surfaced, but there is no text or media preview to render.<br>'+this._esc(ctx.mime||'unknown type')+' · '+this._fmtBytes(ctx.bytes)+'</div></div>';
+    return {nativeDoc:this._natDoc({badge:ctx.nat.label,title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:'',readerOk:false,stat:this._fmtBytes(ctx.bytes)};}
+  _surfacePending(ctx,msg){const body='<div class="eopanel"><div class="eonote">'+this._esc(msg)+'</div></div>';
+    return {nativeDoc:this._natDoc({badge:ctx.nat.label,title:ctx.title,meta:this._fmtBytes(ctx.bytes),body}),eoText:'',readerOk:false,stat:''};}
+  // ── Audio: EO acoustic analysis ───────────────────────────────────────────
+  // Decode the waveform in the browser, run a windowed FFT, and read off the
+  // persistent tones (the pitches sustained across the recording), the spectral
+  // centroid (timbre), and loudness. Those findings become an EO text reading
+  // folded into the graph — the same spine the text reader uses, on sound.
+  async _analyzeAudio(url,file){
+    const page=this.pageOf(url);if(!page)return;
+    let buf;
+    try{
+      const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('no Web Audio');
+      const ab=await file.arrayBuffer();
+      const ac=new AC();
+      buf=await ac.decodeAudioData(ab.slice(0));
+      try{ac.close();}catch(e){}
+    }catch(e){
+      this._updateFilePage(url,{nativeDoc:this._audioDoc(this._ctxOf(this.pageOf(url)||page),{error:'Could not decode this format for analysis ('+(e&&e.message||e)+'). Playback still works.'})});
+      return;
+    }
+    let findings;try{findings=this._audioFindings(buf);}catch(e){this.feedLine('warn','Audio analysis failed: '+(e&&e.message||e));return;}
+    const eo=this._audioEoText(page.title,findings);
+    this._updateFilePage(url,{nativeDoc:this._audioDoc(this._ctxOf(this.pageOf(url)||page),findings),eoText:eo,stat:findings.durationLabel});
+    this.feedLine('read','Heard “'+page.title+'” · '+findings.tones.slice(0,4).map(t=>t.note).join(' ')+(findings.tones.length>4?'…':''));
+  }
+  // In-place iterative radix-2 Cooley-Tukey FFT (N must be a power of two).
+  _fft(re,im){const n=re.length;
+    for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){const tr=re[i];re[i]=re[j];re[j]=tr;const ti=im[i];im[i]=im[j];im[j]=ti;}}
+    for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len,wr=Math.cos(ang),wi=Math.sin(ang);
+      for(let i=0;i<n;i+=len){let cwr=1,cwi=0;
+        for(let k=0;k<len>>1;k++){const a=i+k,b=i+k+(len>>1);
+          const vr=re[b]*cwr-im[b]*cwi,vi=re[b]*cwi+im[b]*cwr;
+          re[b]=re[a]-vr;im[b]=im[a]-vi;re[a]+=vr;im[a]+=vi;
+          const ncwr=cwr*wr-cwi*wi;cwi=cwr*wi+cwi*wr;cwr=ncwr;}}}
+  }
+  _freqToNote(f){if(!(f>0))return null;const midi=Math.round(69+12*Math.log2(f/440));if(midi<16||midi>120)return null;const names=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];return names[((midi%12)+12)%12]+(Math.floor(midi/12)-1);}
+  _fmtDur(s){s=Math.round(s||0);const m=Math.floor(s/60),ss=s%60;return m+':'+String(ss).padStart(2,'0');}
+  _audioFindings(buf){
+    const sr=buf.sampleRate,ch=buf.numberOfChannels,dur=buf.duration,data=buf.getChannelData(0);
+    const N=4096,hop=N,maxSamples=Math.min(data.length,Math.floor(sr*30));
+    const hann=new Float64Array(N);for(let i=0;i<N;i++)hann[i]=0.5-0.5*Math.cos(2*Math.PI*i/(N-1));
+    const noteCount=new Map(),noteEnergy=new Map();
+    let centroidSum=0,centroidW=0,rmsAcc=0,rmsN=0,windows=0;
+    const lo=Math.max(1,Math.floor(50*N/sr)),hi=Math.min((N>>1)-1,Math.floor(4000*N/sr));
+    for(let start=0;start+N<=maxSamples;start+=hop){
+      const re=new Float64Array(N),im=new Float64Array(N);let e=0;
+      for(let i=0;i<N;i++){const x=data[start+i];re[i]=x*hann[i];e+=x*x;}
+      rmsAcc+=e/N;rmsN++;
+      this._fft(re,im);
+      const half=N>>1,mag=new Float64Array(half);let wc=0,wcW=0;
+      for(let k=1;k<half;k++){const m=Math.hypot(re[k],im[k]);mag[k]=m;const f=k*sr/N;wc+=f*m;wcW+=m;}
+      if(wcW>0){centroidSum+=wc/wcW;centroidW++;}
+      const peaks=[];for(let k=lo+1;k<hi;k++){if(mag[k]>mag[k-1]&&mag[k]>=mag[k+1]&&mag[k]>0)peaks.push([k,mag[k]]);}
+      peaks.sort((a,b)=>b[1]-a[1]);
+      for(const [k,m] of peaks.slice(0,3)){const note=this._freqToNote(k*sr/N);if(!note)continue;noteCount.set(note,(noteCount.get(note)||0)+1);noteEnergy.set(note,(noteEnergy.get(note)||0)+m);}
+      windows++;
+    }
+    const tones=[...noteCount.entries()].map(([note,c])=>({note,count:c,energy:noteEnergy.get(note)||0,persist:c/Math.max(1,windows)}))
+      .sort((a,b)=>b.count-a.count||b.energy-a.energy).slice(0,8);
+    return {sampleRate:sr,channels:ch,duration:dur,durationLabel:this._fmtDur(dur),rms:Math.sqrt(rmsAcc/Math.max(1,rmsN)),centroid:centroidW?centroidSum/centroidW:0,windows,tones,analyzedSec:Math.min(30,dur)};
+  }
+  _audioEoText(title,f){
+    const lines=[];
+    lines.push('Acoustic reading of '+this.norm(title)+'.');
+    lines.push('The recording lasts '+f.durationLabel+' at '+f.sampleRate+' hertz with '+(f.channels===1?'one channel':f.channels+' channels')+'.');
+    if(f.tones.length){
+      lines.push('Its most persistent tones are '+f.tones.map(t=>t.note).join(', ')+'.');
+      f.tones.slice(0,5).forEach(t=>lines.push('The tone '+t.note+' persists across '+Math.round(t.persist*100)+' percent of the recording.'));
+    }
+    const bright=f.centroid>2500?'bright':f.centroid>1200?'balanced':'dark';
+    lines.push('The spectral centroid sits near '+Math.round(f.centroid)+' hertz, a '+bright+' timbre.');
+    lines.push('The overall loudness measures '+f.rms.toFixed(3)+' rms.');
+    return lines.join('\n');
+  }
+  // ── PDF: render pages to images (native) + extract text (EO + reader) ─────────
+  // The center iframe is script-sandboxed, so pdf.js runs HERE in the parent: each
+  // page is drawn to a canvas and embedded as an image for the native surface, and
+  // the text layer is pulled out to feed the graph and the elegant reader.
+  async _loadPdfJs(){
+    if(this._pdfjs)return this._pdfjs;
+    const base='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/';
+    const mod=await Promise.race([import(base+'pdf.min.mjs'),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out reaching the CDN')),20000))]);
+    const lib=(mod&&mod.getDocument)?mod:(mod.default||mod);
+    if(!lib||!lib.getDocument)throw new Error('pdf.js did not load');
+    try{lib.GlobalWorkerOptions.workerSrc=base+'pdf.worker.min.mjs';}catch(e){}
+    this._pdfjs=lib;return lib;
+  }
+  async _renderPdf(url,file){
+    const page=this.pageOf(url);if(!page)return;
+    let lib;
+    try{lib=await this._loadPdfJs();}catch(e){this._updateFilePage(url,{nativeDoc:this._pdfDoc(this._ctxOf(this.pageOf(url)||page),{error:'Could not load the PDF renderer ('+(e&&e.message||e)+'). It needs network access to a CDN.'})});return;}
+    let pdf;
+    try{const ab=await file.arrayBuffer();pdf=await lib.getDocument({data:new Uint8Array(ab)}).promise;}
+    catch(e){this._updateFilePage(url,{nativeDoc:this._pdfDoc(this._ctxOf(this.pageOf(url)||page),{error:'Could not open this PDF ('+(e&&e.message||e)+').'})});return;}
+    const maxPages=Math.min(pdf.numPages,40),imgs=[],texts=[];
+    for(let i=1;i<=maxPages;i++){
+      try{
+        const p=await pdf.getPage(i);
+        let vp=p.getViewport({scale:1.6});
+        const targetW=Math.min(1400,vp.width),scale=1.6*(targetW/vp.width);
+        vp=p.getViewport({scale});
+        const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
+        await p.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+        imgs.push(canvas.toDataURL('image/jpeg',0.82));
+        const tc=await p.getTextContent();texts.push(tc.items.map(it=>it.str).join(' '));
+      }catch(e){texts.push('');}
+    }
+    const fullText=texts.join('\n\n'),reader=this.norm(fullText).length>=60;
+    this._updateFilePage(url,{nativeDoc:this._pdfDoc(this._ctxOf(this.pageOf(url)||page),{pages:pdf.numPages,rendered:imgs.length,imgs}),eoText:reader?fullText:'',text:reader?fullText:'',readerOk:reader,stat:pdf.numPages+' pages'});
+    this.feedLine('read','Rendered PDF “'+page.title+'” · '+pdf.numPages+' pages');
+  }
+  _pdfDoc(ctx,findings){
+    let body;
+    if(!findings)body='<div class="eopanel"><div class="eonote">Rendering the PDF…</div></div>';
+    else if(findings.error)body='<div class="eopanel"><div class="eonote">'+this._esc(findings.error)+'</div></div>';
+    else{
+      const pages=findings.imgs.map((src,i)=>'<div style="margin:0 auto 16px;max-width:920px;"><img src="'+src+'" style="display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:6px;box-shadow:0 3px 14px rgba(0,0,0,.12);"><div class="eonote" style="text-align:center;margin-top:4px;">'+(i+1)+'</div></div>').join('');
+      const more=findings.rendered<findings.pages?'<div class="eonote" style="text-align:center;margin-top:6px;">Showing the first '+findings.rendered+' of '+findings.pages+' pages — switch to the Reader for the full text.</div>':'';
+      body='<div>'+pages+more+'</div>';
+    }
+    return this._natDoc({badge:'PDF',title:ctx.title,meta:(findings&&findings.pages?findings.pages+' pages · ':'')+this._fmtBytes(ctx.bytes),body,wide:true});
   }
   // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
   // Each chat is a thread that answers from the read sentences/graph. A chat can be
@@ -4611,7 +5076,7 @@ class Component extends DCLogic {
   goToHist(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hpos=i;this._applyLoc(this._hist[i]);}
   closeTab(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hist.splice(i,1);if(this._hpos>=i&&this._hpos>0)this._hpos--;if(this._hpos>=this._hist.length)this._hpos=this._hist.length-1;if(this._hpos>=0)this._applyLoc(this._hist[this._hpos]);else this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
   newTab(){this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
-  tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?('🔎 '+this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
+  tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?('🔎 '+this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):(/^file:/i.test(loc.url)?this.truncLabel((this.pageOf(loc.url)||{}).title||'File',20):this.short(loc.url)));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
   buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';return {label:lab,i,active,isWeb,dotStyle:'width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';',onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};});return all.slice(-6);}
   // ---- live embed of the page shown in the CENTER viewport ----
   // A readable "book" rendering of an imported text source. The author's own
@@ -4754,6 +5219,12 @@ class Component extends DCLogic {
   loadCenter(url){
     if(/^search:/i.test(url)){this._renderSearch(url.slice(7));return;}
     if(/^text:/i.test(url)){const p=this.pageOf(url);if(p){this._renderBook(url,p);}else{this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'Text not found'});}return;}
+    // An imported FILE renders from the surface we built at ingest. It opens NATIVE; a text
+    // document (readerOk) can flip to the elegant reader via the toolbar toggle.
+    if(/^file:/i.test(url)){const p=this.pageOf(url);this._pageUrl=url;
+      if(!p){this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:'File not found'});return;}
+      if(p.readerOk&&this.state.viewMode==='reader'&&this._bookReady(p)){this._renderBook(url,p);return;}
+      this.setState({bookView:false,pageDoc:p.nativeDoc||'<!doctype html><meta charset=utf-8><body style="font:14px sans-serif;color:#777;padding:24px;">Nothing to preview.</body>',bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
     if(!url){this.setState({bookView:false,pageDoc:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,pageLoading:false,pageErr:null});return;}
     // A web page we've read can render two ways (the toolbar toggle picks). READER —
     // the stripped book view, TOC + flagged passages over the cleaned prose. NATIVE —
@@ -5541,7 +6012,10 @@ class Component extends DCLogic {
     // and the Reader/Page mode toggle. Both render the same Contents + ❖ marks.
     { const rp=this.state.readPrefs||this._defaultRead,toc=this.state.bookToc||[],isBook=!!(vu&&this.state.bookView);
       const isWebUrl=!!(vu&&!/^text:/i.test(vu));
-      const canToggleMode=isWebUrl&&this._bookReady(this.pageOf(vu));   // both renderings available once read
+      const _curP=this.pageOf(vu);
+      // Both renderings available once read — but an imported file only offers the reader if it
+      // is a TEXT document (readerOk); a CSV/JSON/image/audio stays on its native surface only.
+      const canToggleMode=isWebUrl&&this._bookReady(_curP)&&(!_curP||!_curP.nature||_curP.readerOk);
       const nativeNow=isWebUrl&&!this.state.bookView;                   // the live page is what's showing
       const pill=on=>'display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:28px;padding:0 9px;border:1px solid var(--line2);background:'+(on?'var(--accbg)':'var(--app)')+';color:'+(on?'var(--acc)':'var(--ink2)')+';border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1;';
       base.reading={isBook,
@@ -5570,7 +6044,7 @@ class Component extends DCLogic {
     }
     if(vu){
       base.showWeb=true;
-      base.web={url:vu,host:/^search:/i.test(vu)?('Search · '+this.norm(vu.slice(7))):(/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu)),loading:!!this.state.pageLoading&&!this.state.pageDoc,
+      base.web={url:vu,host:/^search:/i.test(vu)?('Search · '+this.norm(vu.slice(7))):(/^(text|file):/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported file'):this.short(vu)),loading:!!this.state.pageLoading&&!this.state.pageDoc,
         err:(this.state.pageErr&&!this.state.pageDoc)?this.state.pageErr:null,hasDoc:!!this.state.pageDoc,doc:this.state.pageDoc||'',
         onReloadPage:()=>this.loadCenter(vu),detecting:this.state.detect&&this.state.busy};
     }
@@ -5585,7 +6059,7 @@ class Component extends DCLogic {
       if(!vu&&!base.chatOn&&!base.gutenOn){
         base.showPrompt=true;
         base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Search the web — or read a URL':'Loading the reading engine…');
-        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type anything to search the web, paste a page URL to open it here, or use 📄 to import your own text. Pages render as HTML; open a result and every entity is read into the graph on the right — then ask about it in a chat.';
+        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type anything to search the web, paste a page URL, or use 📄 (or drag-and-drop) to import any file — text, CSV, JSON, image, audio, video, PDF. Each opens on its native rendering and surfaces its nature; text documents also get the elegant reader. Whatever can be read joins the graph on the right — then ask about it in a chat.';
         base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
         base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
       }
@@ -5636,13 +6110,18 @@ class Component extends DCLogic {
       else kids.forEach(c=>pushP(c,Math.min(depth+1,2)));};
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
-    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=entInSrc.get(p.url)||0;
-      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
-        hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
+    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(p.nature?(p.nature.label+p.url):this.short(p.url)),isA=vu===p.url,cnt=entInSrc.get(p.url)||0;
+      // An imported file shows its NATURE in place of a hostname: "CSV · 1,240 rows", "JSON · users",
+      // "Image · 2.1 MB". Other sources keep the hostname + entity count.
+      const isFile=!!p.nature;
+      const sub=isFile?(p.nature.label+(p.stat?' · '+p.stat:(cnt?' · '+cnt+' entities':''))):(this.short(p.url)+' · '+cnt+' entities');
+      const fileGlyph=isFile?(p.nature.kind==='jsontype'?'↳':(p.nature.glyph||'•')):null;
+      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),sub:sub,url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
+        hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' '+(isFile?'entity type':'source')+(kids!==1?'s':'')+(isFile?' in this file':' found from this one'),
         onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
         caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
-        dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?8:9)+'px;font-weight:800;',
-        glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
+        dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?(fileGlyph&&fileGlyph.length>2?7:8):(fileGlyph&&fileGlyph.length>2?8:9))+'px;font-weight:800;',
+        glyph:fileGlyph||(depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase())),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0;
 
