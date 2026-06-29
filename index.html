@@ -697,15 +697,18 @@
             <div style="min-width:0;flex:1;font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.title }}</div>
             <button onclick="{{ onCloseChat }}" title="Close chat" style="width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:14px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
           </div>
-          <div style="padding:0 12px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;">
-            <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:1px;">About</span>
-            <sc-for list="{{ chat.about }}" as="ab" hint-placeholder-count="1">
-              <span style="{{ ab.chipStyle }}"><span onclick="{{ ab.onOpen }}" title="Open this source" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ab.label }}</span><button onclick="{{ ab.onRemove }}" title="Remove from this chat" style="{{ ab.xStyle }}" style-hover="background:var(--accline)">✕</button></span>
-            </sc-for>
-            <sc-if value="{{ chat.aboutEmpty }}" hint-placeholder-val="{{ false }}">
-              <span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:3px 9px;">Everything you’ve read</span>
-            </sc-if>
-            <button onclick="{{ chat.onToggleAdd }}" title="Add a source to chat with" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px dashed var(--line2);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">+ Add source</button>
+          <div style="{{ chat.aboutRowStyle }}">
+            <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:1px;flex:0 0 auto;">About</span>
+            <div style="{{ chat.aboutChipsStyle }}">
+              <sc-for list="{{ chat.about }}" as="ab" hint-placeholder-count="1">
+                <span style="{{ ab.chipStyle }}"><span onclick="{{ ab.onOpen }}" title="Open this source" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ab.label }}</span><button onclick="{{ ab.onRemove }}" title="Remove from this chat" style="{{ ab.xStyle }}" style-hover="background:var(--accline)">✕</button></span>
+              </sc-for>
+              <sc-if value="{{ chat.aboutEmpty }}" hint-placeholder-val="{{ false }}">
+                <span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:3px 9px;white-space:nowrap;flex:0 0 auto;">Everything you’ve read</span>
+              </sc-if>
+            </div>
+            <sc-if value="{{ chat.aboutHasMore }}" hint-placeholder-val="{{ false }}"><button onclick="{{ chat.onToggleAbout }}" title="Show all sources in this chat" style="{{ chat.aboutMoreStyle }}">{{ chat.aboutMoreLabel }}</button></sc-if>
+            <button onclick="{{ chat.onToggleAdd }}" title="Add a source to chat with" style="flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px dashed var(--line2);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">+ Add source</button>
             <sc-if value="{{ chat.addOpen }}" hint-placeholder-val="{{ false }}">
               <div style="position:absolute;top:100%;left:18px;right:18px;z-index:30;margin-top:4px;background:var(--card);border:1px solid var(--line2);border-radius:11px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:6px;max-height:260px;overflow-y:auto;">
                 <sc-for list="{{ chat.addable }}" as="ad" hint-placeholder-count="0">
@@ -2000,7 +2003,7 @@ class Component extends DCLogic {
     // A chat is ABOUT a set of sources. One to start (the source you opened it from),
     // and you can add more to chat across them; an empty set ranges over everything read.
     const sources=scopeUrl?[scopeUrl]:[];
-    this.setState(s=>({chats:[{id,title,sources,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false,rightOpen:true}));
+    this.setState(s=>({chats:[{id,title,sources,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false,chatAboutOpen:false,rightOpen:true}));
     return id;
   }
   // The sources a chat is ABOUT, as a URL list. Empty → it ranges over everything read.
@@ -2015,10 +2018,11 @@ class Component extends DCLogic {
   removeChatSource(url){this.setState(s=>({chats:s.chats.map(c=>{
     if(c.id!==s.activeChat)return c;return {...c,sources:this.chatSourcesOf(c).filter(u=>u!==url)};})}));}
   toggleChatAdd(){this.setState(s=>({chatAddOpen:!s.chatAddOpen}));}
+  toggleChatAbout(){this.setState(s=>({chatAboutOpen:!s.chatAboutOpen}));}
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
-  openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false,rightOpen:true});}
-  closeChat(){this.setState({activeChat:null,chatAddOpen:false});}
+  openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false,chatAboutOpen:false,rightOpen:true});}
+  closeChat(){this.setState({activeChat:null,chatAddOpen:false,chatAboutOpen:false});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
   // Per-answer grounding strip: collapsed by default (not overwhelming), one tap reveals
@@ -3134,17 +3138,26 @@ class Component extends DCLogic {
     // still add. An empty set is shown as the "everything you've read" chip (not removable).
     const ss=this.chatSourcesOf(cur);
     const titleOf=u=>this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),26);
-    const aboutChips=ss.map(u=>({label:titleOf(u),url:u,onOpen:()=>this.goWeb(u),
+    const aboutAll=ss.map(u=>({label:titleOf(u),url:u,onOpen:()=>this.goWeb(u),
       onRemove:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.removeChatSource(u);},
-      chipStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:3px 4px 3px 9px;max-width:200px;',
+      chipStyle:'display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:3px 4px 3px 9px;max-width:200px;',
       xStyle:'border:none;background:transparent;color:var(--acc);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;border-radius:4px;'}));
+    // Keep the About row to a single line by default: show the first couple of sources
+    // and fold the rest behind a "+N more" toggle (mirrors the Related-chips disclosure).
+    const ABOUT_LIM=2, aboutOpen=!!this.state.chatAboutOpen, aboutHasMore=aboutAll.length>ABOUT_LIM;
+    const aboutChips=(aboutOpen||!aboutHasMore)?aboutAll:aboutAll.slice(0,ABOUT_LIM);
     const pages=(this.master&&this.master.pages)||[];
     const addable=pages.filter(p=>!ss.includes(p.url)).map(p=>({label:this.truncLabel(p.title||this.short(p.url),34),host:this.short(p.url),
       onAdd:()=>this.addChatSource(p.url),
       rowStyle:'display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 11px;border-radius:8px;cursor:pointer;'}));
     base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,docked,
       scopeLabel:ss.length?(ss.length===1?titleOf(ss[0]):(ss.length+' sources')):'everything you have read',
-      about:aboutChips,hasAbout:aboutChips.length>0,aboutEmpty:aboutChips.length===0,
+      about:aboutChips,hasAbout:aboutAll.length>0,aboutEmpty:aboutAll.length===0,
+      aboutHasMore,onToggleAbout:()=>this.toggleChatAbout(),
+      aboutMoreLabel:aboutOpen?'Show fewer':('+'+(aboutAll.length-ABOUT_LIM)+' more'),
+      aboutMoreStyle:'flex:0 0 auto;white-space:nowrap;font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
+      aboutRowStyle:'padding:0 12px 8px;display:flex;align-items:center;gap:6px;position:relative;'+(aboutOpen?'flex-wrap:wrap;':'flex-wrap:nowrap;'),
+      aboutChipsStyle:'display:flex;align-items:center;gap:6px;min-width:0;flex:1 1 auto;'+(aboutOpen?'flex-wrap:wrap;':'flex-wrap:nowrap;overflow:hidden;'),
       addOpen:!!this.state.chatAddOpen,addable,hasAddable:addable.length>0,noAddable:addable.length===0,onToggleAdd:()=>this.toggleChatAdd(),
       addEmptyMsg:pages.length?'All your sources are already in this chat.':'Read a URL or import a book to add a source.',
       messages:msgs,empty:msgs.length===0,modelStatus:this.state.modelStatus||'',hasStatus:!!this.state.modelStatus,
