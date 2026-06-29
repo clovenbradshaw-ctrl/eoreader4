@@ -15,13 +15,16 @@
 
 import { buildGroundedMessages } from '../model/index.js';
 
-export const generateSection = async (section, { doc = null, model, corrective = '', signal = null, conversation = {} } = {}) => {
+export const generateSection = async (section, { doc = null, model, corrective = '', signal = null, conversation = {}, tail = '' } = {}) => {
   const messages = buildGroundedMessages({
     question:    section.subClaim,
     spans:       section.spans || [],
     orientation: orientationOf(doc),
     task:        'answer',
     corrective,
+    // The planner's read-window (spec-planner.md §5/§6) — the prose so far this turn,
+    // for the seam only. '' on a plain arc section, byte-identical there.
+    tail,
     // The conversation fold (tail + surfed recap) — null on a plain arc section
     // (buildGroundedMessages defaults it away), the continuation's context when a
     // long generation rides over the session (docs/long-generation.md).
