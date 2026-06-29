@@ -2386,7 +2386,54 @@ class Component extends DCLogic {
     lines.push('The overall loudness measures '+f.rms.toFixed(3)+' rms.');
     return lines.join('\n');
   }
-  async _renderPdf(){}
+  // ── PDF: render pages to images (native) + extract text (EO + reader) ─────────
+  // The center iframe is script-sandboxed, so pdf.js runs HERE in the parent: each
+  // page is drawn to a canvas and embedded as an image for the native surface, and
+  // the text layer is pulled out to feed the graph and the elegant reader.
+  async _loadPdfJs(){
+    if(this._pdfjs)return this._pdfjs;
+    const base='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.7.76/';
+    const mod=await Promise.race([import(base+'pdf.min.mjs'),new Promise((_,rej)=>setTimeout(()=>rej(new Error('timed out reaching the CDN')),20000))]);
+    const lib=(mod&&mod.getDocument)?mod:(mod.default||mod);
+    if(!lib||!lib.getDocument)throw new Error('pdf.js did not load');
+    try{lib.GlobalWorkerOptions.workerSrc=base+'pdf.worker.min.mjs';}catch(e){}
+    this._pdfjs=lib;return lib;
+  }
+  async _renderPdf(url,file){
+    const page=this.pageOf(url);if(!page)return;
+    let lib;
+    try{lib=await this._loadPdfJs();}catch(e){this._updateFilePage(url,{nativeDoc:this._pdfDoc(this._ctxOf(this.pageOf(url)||page),{error:'Could not load the PDF renderer ('+(e&&e.message||e)+'). It needs network access to a CDN.'})});return;}
+    let pdf;
+    try{const ab=await file.arrayBuffer();pdf=await lib.getDocument({data:new Uint8Array(ab)}).promise;}
+    catch(e){this._updateFilePage(url,{nativeDoc:this._pdfDoc(this._ctxOf(this.pageOf(url)||page),{error:'Could not open this PDF ('+(e&&e.message||e)+').'})});return;}
+    const maxPages=Math.min(pdf.numPages,40),imgs=[],texts=[];
+    for(let i=1;i<=maxPages;i++){
+      try{
+        const p=await pdf.getPage(i);
+        let vp=p.getViewport({scale:1.6});
+        const targetW=Math.min(1400,vp.width),scale=1.6*(targetW/vp.width);
+        vp=p.getViewport({scale});
+        const canvas=document.createElement('canvas');canvas.width=vp.width;canvas.height=vp.height;
+        await p.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+        imgs.push(canvas.toDataURL('image/jpeg',0.82));
+        const tc=await p.getTextContent();texts.push(tc.items.map(it=>it.str).join(' '));
+      }catch(e){texts.push('');}
+    }
+    const fullText=texts.join('\n\n'),reader=this.norm(fullText).length>=60;
+    this._updateFilePage(url,{nativeDoc:this._pdfDoc(this._ctxOf(this.pageOf(url)||page),{pages:pdf.numPages,rendered:imgs.length,imgs}),eoText:reader?fullText:'',text:reader?fullText:'',readerOk:reader,stat:pdf.numPages+' pages'});
+    this.feedLine('read','Rendered PDF “'+page.title+'” · '+pdf.numPages+' pages');
+  }
+  _pdfDoc(ctx,findings){
+    let body;
+    if(!findings)body='<div class="eopanel"><div class="eonote">Rendering the PDF…</div></div>';
+    else if(findings.error)body='<div class="eopanel"><div class="eonote">'+this._esc(findings.error)+'</div></div>';
+    else{
+      const pages=findings.imgs.map((src,i)=>'<div style="margin:0 auto 16px;max-width:920px;"><img src="'+src+'" style="display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:6px;box-shadow:0 3px 14px rgba(0,0,0,.12);"><div class="eonote" style="text-align:center;margin-top:4px;">'+(i+1)+'</div></div>').join('');
+      const more=findings.rendered<findings.pages?'<div class="eonote" style="text-align:center;margin-top:6px;">Showing the first '+findings.rendered+' of '+findings.pages+' pages — switch to the Reader for the full text.</div>':'';
+      body='<div>'+pages+more+'</div>';
+    }
+    return this._natDoc({badge:'PDF',title:ctx.title,meta:(findings&&findings.pages?findings.pages+' pages · ':'')+this._fmtBytes(ctx.bytes),body,wide:true});
+  }
   // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
   // Each chat is a thread that answers from the read sentences/graph. A chat can be
   // scoped to one source (a fully-read book/page) or range over everything read. The
