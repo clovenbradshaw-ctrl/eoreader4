@@ -214,7 +214,7 @@ export const updateThinking = (el, stageName, data, ctx, opts = {}) => {
   // the bubble — they are recorded in the Audit pane instead. Pass
   // opts.verbose to restore the inline trail for debugging.
   const label = el.querySelector('.body .label');
-  if (label) label.textContent = stageLabel(stageName, data);
+  if (label) label.textContent = stageLabel(stageName, data, opts);
 
   if (!opts.verbose) return;
   const trail = el.querySelector('.trail');
@@ -768,17 +768,27 @@ const coverageSummary = (route, flags, sources, text) => {
 // phases — not the engine's stage names or counts. The precise per-stage
 // record (route, span counts, char lengths, veto flags) lives in the Audit
 // pane; here the user just sees that something is happening.
-const stageLabel = (name) => {
+//
+// AFTER A RESEARCH GATHER the slowest beat of the turn is this synthesis pass —
+// the model reading and writing over the pages just fetched, with no per-hop
+// note to watch any more. So when `opts.sources` says the answer is being
+// composed from N gathered sources, the labels SAY that ("reading 8 sources…",
+// "writing from 8 sources…") instead of a bare "reading…/writing…", so the
+// "while it's talking" stretch reads as purposeful work over the research, not
+// a silent wait. With no gather (opts.sources falsy) the labels are unchanged.
+const stageLabel = (name, _data, opts = {}) => {
+  const n = opts && opts.sources > 0 ? opts.sources : 0;
+  const srcs = `${n} source${n === 1 ? '' : 's'}`;
   switch (name) {
-    case 'route':    return 'thinking…';
-    case 'retrieve': return 'reading…';
-    case 'fold':     return 'reading…';
-    case 'prompt':   return 'thinking…';
-    case 'llm':      return 'writing…';
-    case 'bind':     return 'writing…';
+    case 'route':    return n ? `synthesizing from ${srcs}…` : 'thinking…';
+    case 'retrieve': return n ? `reading ${srcs}…`           : 'reading…';
+    case 'fold':     return n ? `reading ${srcs}…`           : 'reading…';
+    case 'prompt':   return n ? `synthesizing from ${srcs}…` : 'thinking…';
+    case 'llm':      return n ? `writing from ${srcs}…`      : 'writing…';
+    case 'bind':     return n ? `writing from ${srcs}…`      : 'writing…';
     case 'veto':     return 'checking…';
     case 'settle':   return 'finishing…';
-    default:         return 'thinking…';
+    default:         return n ? `synthesizing from ${srcs}…` : 'thinking…';
   }
 };
 
