@@ -376,6 +376,11 @@ class Component extends DCLogic {
     const __res=(typeof window!=='undefined'&&window.__resources)||{};
     try{ this.E=await import(__res.eoEngine||'./eoreader4-bundle.js'); }
     catch(e){ this.setState({ready:true,engineErr:String(e)}); return; }
+    // Seed an EMPTY memory so this.master/this.graph exist before anything is read. Without it
+    // the graph is undefined on a fresh session, and any path that reads it before the first
+    // page is folded (the curiosity walk's entity-count, feed research) throws. rebuild([]) is
+    // the same call tossPage makes when the last source is removed, so it is known-safe empty.
+    try{ this.rebuild([]); }catch(e){}
     try{ this.SVO=await import(__res.eoSvo||'./svo-llm.js'); }catch(e){ this.SVO=null; }
     const llmAvail=!!(this.SVO && typeof window!=='undefined' && window.claude && typeof window.claude.complete==='function');
     this.setState({ready:true, llmAvail, llm:llmAvail});
@@ -1333,19 +1338,30 @@ class Component extends DCLogic {
       links=(links||[]).filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u));
       if(!links.length){step('warn','No fresh sources on that thread.');hops.push({query:node.query,term:node.term,got:0,next:null,empty:true});if(++stray>=cfg.patience)break;continue;}
       const want=node.term?cfg.want:cfg.wantSeed;let got=0,attempts=0;const keptText=[];
+      // entCount() — the graph is undefined until the FIRST page is folded (rebuild builds it),
+      // and a fresh chat ("everything you've read", nothing read yet) reaches this loop with no
+      // graph at all. Reading `this.graph.entities.size` unguarded then threw on the first read,
+      // and the throw discarded the ENTIRE walk (chatResearch's catch leaves walk empty) — so the
+      // web silently "didn't trigger" and the model answered from bare general knowledge. Guard it
+      // the same way every other graph read in this file does.
+      const entCount=()=>(this.graph&&this.graph.entities&&this.graph.entities.size)||0;
       for(let i=0;i<links.length&&got<want&&attempts<5;i++){
         const url=links[i];attempts++;
         step('read','Reading '+this.short(url)+' …');
-        const preEnts=this.graph.entities.size;
-        const res=await this.readURL(url,'REAFFERENCE',this.state.viewUrl||null);
-        if(!res)continue;   // blocked / too little text — readURL already logged why; try the next candidate
-        const arrival=this._profile(this._pageText(url));
-        const sal=this._saliency(topic,arrival);
-        if(!topicFrozen){baseline=sal;for(const t of arrival.keys())topic.set(t,(topic.get(t)||0)+1);topicFrozen=true;}
-        else if(baseline>0&&sal<0.34*baseline){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
-        got++;readUrls.push(url);keptText.push(this._pageText(url));
-        const grew=Math.max(0,this.graph.entities.size-preEnts);
-        step('graph','Read “'+(res.title||this.short(url))+'” · +'+grew+' new entit'+(grew===1?'y':'ies'));
+        // A single bad page (a parse/ingest throw) must not kill the walk and lose every hop
+        // already gathered — isolate each read so the walk degrades to skipping that candidate.
+        try{
+          const preEnts=entCount();
+          const res=await this.readURL(url,'REAFFERENCE',this.state.viewUrl||null);
+          if(!res)continue;   // blocked / too little text — readURL already logged why; try the next candidate
+          const arrival=this._profile(this._pageText(url));
+          const sal=this._saliency(topic,arrival);
+          if(!topicFrozen){baseline=sal;for(const t of arrival.keys())topic.set(t,(topic.get(t)||0)+1);topicFrozen=true;}
+          else if(baseline>0&&sal<0.34*baseline){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+          got++;readUrls.push(url);keptText.push(this._pageText(url));
+          const grew=Math.max(0,entCount()-preEnts);
+          step('graph','Read “'+(res.title||this.short(url))+'” · +'+grew+' new entit'+(grew===1?'y':'ies'));
+        }catch(e){step('warn','Couldn’t read '+this.short(url)+' — '+((e&&e.message)||e));}
       }
       // CURIOSITY: of everything just kept, what's the most surprising NEW turn? That becomes
       // the single next thread, sharpened by the anchor so it never drifts into a namesake.
