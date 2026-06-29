@@ -3298,13 +3298,20 @@ class Component extends DCLogic {
       acc=(parts.join('\n\n')+(parts.length?'\n\n':'')+header+'\n\n');paint();
       let body='';
       if(model){
+        // ACCUMULATE the streamed tokens (`streamed`), don't REPLACE — each onToken piece is
+        // one token, so `acc=base+streamed` grows the live view left-to-right (the same shape
+        // _answerSingle uses with `acc+=s`). The old `acc=base+t` showed only the latest token,
+        // so the essay flashed "one token at a time" and never built up. Kept outside the try so
+        // a late hiccup (streamPhrase returns empty or throws AFTER streaming real prose) keeps
+        // what was already written instead of dropping back to a bare source fragment.
+        let streamed='';
         try{
           const msgs=this._ME.buildGroundedMessages({question:q,spans:sec.spans,graph:this.meaningGraph([sec.url]),
             orientation:this.chatOrientation([sec.url]),task:'answer',conversation:{pastTurns:[]},now:new Date()});
           const base=acc;
-          const onToken=(piece)=>{const t=String(piece||'');if(!t)return;acc=base+t;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-          body=this.normMd(await this._ME.streamPhrase(model,msgs,{maxTokens:384,temperature:0.4,onToken}));
-        }catch(e){body='';}
+          const onToken=(piece)=>{const t=String(piece||'');if(!t)return;streamed+=t;acc=base+streamed;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+          body=this.normMd(await this._ME.streamPhrase(model,msgs,{maxTokens:384,temperature:0.4,onToken}))||this.normMd(streamed);
+        }catch(e){body=this.normMd(streamed);}
       }
       if(!body)body=sec.spans.slice(0,3).map(s=>this._clipPassage(s.text)).join(' ');   // structural fallback, bounded
       parts.push(header+'\n\n'+body);
