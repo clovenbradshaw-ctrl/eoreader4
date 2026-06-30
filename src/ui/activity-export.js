@@ -4,7 +4,7 @@
 // this is the "give me everything, in one file" export, so a session can be
 // archived, replayed, or audited end-to-end without grabbing four downloads.
 //
-// One JSON document carries all three streams the session keeps:
+// One JSON document carries the streams the session keeps:
 //
 //   • transcript — the chat window as it reads: each message, who spoke.
 //   • audit      — every turn through the pipeline, the full machine-readable
@@ -12,6 +12,17 @@
 //                  back): prompt, raw output, reading, bindings, vetoes, flags.
 //   • documents  — every loaded document's reading log: the append-only event
 //                  log the graph is a fold of, verbatim, one entry per document.
+//   • webSources — POINTERS to the web pages the session imported, NOT their text.
+//                  The full bytes of every fetched page are kept as binary in OPFS
+//                  (ingest/opfs-store.js); the export references each page by its
+//                  url and its OPFS location (dir/file + content hash), so the
+//                  artifact stays small and the page is re-readable from the web
+//                  or the local cache — "don't include the full text it imported,
+//                  but pointers to it on the web."
+//
+// A web-source document never carries its full reading log here either: in the
+// documents stream it collapses to the same pointer (see webDocPointer), because
+// its text is what OPFS holds and the export points at, not embeds.
 //
 // The builder is pure (data → object) and DOM-free, so the shape is unit-testable
 // without a browser. The orchestrator is the only part that touches the session
@@ -33,24 +44,63 @@ const parseJSONL = (text) =>
       catch (err) { return { parse_error: String(err?.message || err), raw: line }; }
     });
 
-// Pure fold: take the three streams as plain data and assemble the single
-// bundle. `counts` is a header so a reader can see the shape without walking the
-// whole file. Versioned so a downstream replay can branch on the schema.
+// True when a loaded document originated on the web (websource.js stamps both).
+// Such a document is exported as a pointer, never as its full reading log.
+export const isWebDoc = (doc) =>
+  !!doc && (doc.sourceKind === 'web-source' || !!doc.web);
+
+// Build a pointer to a web-imported page from a loaded doc — the metadata an
+// export carries IN PLACE of the page's text: where it lives on the web (url),
+// where its full bytes are cached (the OPFS content hash), and its identity.
+// `events` is the count of reading-log events DROPPED by reference, so the
+// header stays honest about what the pointer stands in for. No page text.
+export const webDocPointer = (docId, doc) => {
+  const w = doc?.web || {};
+  const events = doc?.log?.events?.length ?? doc?.log?.length ?? 0;
+  return {
+    docId, sourceKind: 'web-source', kind: 'web-pointer',
+    pointer: {
+      url: w.url || null, final_url: w.final_url || null, title: w.title || null,
+      content_hash: w.content_hash || null,
+      fetched_at: w.fetched_at || null, published: w.published || null,
+      retrieval_query: w.retrieval_query || null, engine: w.engine || null,
+    },
+    events_omitted: events,    // the reading log lives in OPFS / on the web, referenced not embedded
+  };
+};
+
+// Normalise a raw-store pointer (opfs-store.js `list()`) into the export shape —
+// url + the OPFS location of the cached bytes (dir/file) + the content hash +
+// byte count. Metadata only; the bytes stay in OPFS.
+export const webSourcePointer = (p = {}) => ({
+  content_hash: p.content_hash || p.key || null,
+  url: p.url || null, final_url: p.final_url || null, title: p.title || null,
+  fetched_at: p.fetched_at || null,
+  bytes: p.bytes ?? null,
+  opfs: (p.dir && p.file) ? `${p.dir}/${p.file}` : (p.file || null),
+  persisted: p.persisted ?? null,
+});
+
+// Pure fold: take the streams as plain data and assemble the single bundle.
+// `counts` is a header so a reader can see the shape without walking the whole
+// file. Versioned so a downstream replay can branch on the schema.
 export const buildActivityBundle = ({
-  transcript = [], audit = [], documents = [], exportedAt = null,
+  transcript = [], audit = [], documents = [], webSources = [], exportedAt = null,
 } = {}) => ({
   kind: 'eoreader4-activity',
-  version: 1,
+  version: 2,
   exportedAt,
   counts: {
-    messages:  transcript.length,
-    turns:     audit.length,
-    documents: documents.length,
-    events:    documents.reduce((n, d) => n + (d.events?.length || 0), 0),
+    messages:    transcript.length,
+    turns:       audit.length,
+    documents:   documents.length,
+    events:      documents.reduce((n, d) => n + (d.events?.length || 0), 0),
+    webSources:  webSources.length,
   },
   transcript,
   audit,
   documents,
+  webSources,
 });
 
 // Serialise the bundle to a single pretty-printed JSON string. Resilient: a
@@ -64,27 +114,42 @@ export const serializeActivity = (bundle) => {
 };
 
 // True when there is nothing to export yet — so the caller can refuse to hand
-// back an empty file (matching exportAudit / exportLog / exportChat).
+// back an empty file (matching exportAudit / exportLog / exportChat). A web
+// pointer counts as content (a session that only gathered the web still has
+// something to export).
 const isEmpty = (b) =>
-  !b.transcript.length && !b.audit.length && !b.documents.some((d) => d.events.length);
+  !b.transcript.length && !b.audit.length && !b.webSources.length &&
+  !b.documents.some((d) => (d.events?.length || d.events_omitted || 0));
 
 // Orchestrate the single-file export. Gathers the live session: the chat
-// transcript (STATE.history), the full audit (STATE.audit), and every loaded
-// document's reading log (STATE.docs, a docId→doc Map). Returns false when
+// transcript (STATE.history), the full audit (STATE.audit), every loaded
+// document's reading log (STATE.docs, a docId→doc Map), and the pointer manifest
+// of imported web pages (the OPFS raw store). A web-source document collapses to
+// a pointer; its bytes are kept in OPFS and referenced, never embedded. Async
+// because the raw store reads its manifest from OPFS. Resolves to false when
 // nothing has happened yet, so the menu can report "nothing to export".
-export const exportActivity = ({ history = [], audit = null, docs = null } = {}) => {
+export const exportActivity = async ({ history = [], audit = null, docs = null, rawStore = null } = {}) => {
   const transcript = (history || [])
     .filter((m) => m && m.content)
     .map((m) => ({ role: m.role || 'note', content: String(m.content) }));
   const auditRecords = audit ? parseJSONL(audit.exportJSONL()) : [];
   const documents = [];
   for (const [docId, doc] of (docs || [])) {
-    documents.push({ docId, events: parseJSONL(serializeLog(doc)) });
+    // A web-imported document is referenced by pointer (its text is in OPFS / on
+    // the web); a local document carries its full reading log as before.
+    documents.push(isWebDoc(doc) ? webDocPointer(docId, doc) : { docId, events: parseJSONL(serializeLog(doc)) });
+  }
+  // The pointer manifest of every page the session fetched — url + OPFS location,
+  // never the page text. Best-effort: a store fault yields no web sources.
+  let webSources = [];
+  if (rawStore && typeof rawStore.list === 'function') {
+    try { webSources = (await rawStore.list()).map(webSourcePointer); }
+    catch { webSources = []; }
   }
 
   const stamp = new Date();
   const bundle = buildActivityBundle({
-    transcript, audit: auditRecords, documents, exportedAt: stamp.toLocaleString(),
+    transcript, audit: auditRecords, documents, webSources, exportedAt: stamp.toLocaleString(),
   });
   if (isEmpty(bundle)) return false;   // nothing read or said yet — no empty file
 

@@ -1095,14 +1095,15 @@ if (els.exportChatBtn && els.exportChatMenu) {
     els.exportChatMenu.hidden = !open;
     els.exportChatBtn.setAttribute('aria-expanded', String(open));
   });
-  els.exportChatMenu.addEventListener('click', (e) => {
+  els.exportChatMenu.addEventListener('click', async (e) => {
     const b = e.target.closest('button[data-mode]');
     if (!b) return;
-    // "activity" is the single-file, all-the-activity export: the transcript,
-    // the full audit, AND every loaded document's reading log in one JSON file.
-    // The other two modes export just the chat window (Markdown).
+    // "activity" is the single-file, all-the-activity export: the transcript, the
+    // full audit, every loaded document's reading log, AND pointers to the web
+    // pages imported (their bytes stay in OPFS; the export references them). The
+    // other two modes export just the chat window (Markdown).
     const ok = b.dataset.mode === 'activity'
-      ? exportActivity({ history: STATE.history, audit: STATE.audit, docs: STATE.docs })
+      ? await exportActivity({ history: STATE.history, audit: STATE.audit, docs: STATE.docs, rawStore: rawStoreOf() })
       : exportChat(b.dataset.mode, { history: STATE.history, turns: STATE.audit.turns });
     setStatus(ok
       ? (b.dataset.mode === 'activity' ? 'exported all activity (.json)'
