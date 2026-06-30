@@ -21,13 +21,23 @@
 //     long answer" — which a small model fumbles — into a forest of one-bite
 //     generations it can each do well.
 //
-// `view` is a read-only descriptor: { id, goal, depth, parentId, ancestry } where
-// ancestry is the goal chain root→parent, the context a leaf sits inside.
+// `view` is a read-only descriptor: { id, goal, depth, parentId, ancestry, grain,
+// object, cell } where ancestry is the goal chain root→parent, and the cube
+// fields tell each face what grain it is operating at — the decomposer sees the
+// goal's declared grain, the leaf generator KNOWS it is a Figure-maker (INS at
+// Figure), so neither has to guess its place on the cube.
 
 import { MAX_DEPTH, MAX_FANOUT, MAX_NODES } from './constants.js';
 import { openEvent, decomposeEvent, stepEvent, completeEvent, failEvent } from './events.js';
 import { projectTaskGraph } from './project.js';
 import { assembleOutput, assembleSources, progressOf } from './node.js';
+import { cellOf, GRAINS } from '../core/index.js';
+import { TASK_OPS, FIGURE } from './grain.js';
+
+// The leaf's cube identity, fixed: a single generation MAKES a specific thing —
+// INS at Figure, the Making/Entity cell. Handed to the generator so it knows the
+// grain it works at.
+const FIGURE_CELL = cellOf(TASK_OPS.generate, FIGURE);
 
 const throwIfAborted = (signal) => {
   if (signal && signal.aborted) {
@@ -37,13 +47,15 @@ const throwIfAborted = (signal) => {
   }
 };
 
-// Accept the two return shapes a planner may use — bare strings or { goal } —
-// and drop the empties, the way the arc drops a sub-claim with no spans.
+// Accept the two return shapes a planner may use — bare strings or { goal, grain }
+// — and drop the empties, the way the arc drops a sub-claim with no spans. A
+// cube-aware planner may declare each sub-goal's Object grain; a plain one omits
+// it and the grain is read structurally.
 const normalizeSubGoals = (raw) =>
   (Array.isArray(raw) ? raw : [])
-    .map((g) => (typeof g === 'string' ? g : g && g.goal))
-    .map((g) => String(g ?? '').trim())
-    .filter(Boolean);
+    .map((g) => (typeof g === 'string' ? { goal: g, grain: null } : (g && { goal: g.goal, grain: g.grain ?? null })))
+    .map((g) => g && { goal: String(g.goal ?? '').trim(), grain: GRAINS.includes(g.grain) ? g.grain : null })
+    .filter((g) => g && g.goal);
 
 // Accept the two return shapes a generator may use — a bare string or
 // { output, sources } — so the simplest leaf is just `() => 'text'`.
@@ -78,16 +90,23 @@ export const runTaskGraph = async ({
     return event;
   };
 
-  const expand = async (id, nodeGoal, depth, parentId, ancestry) => {
+  const expand = async (id, nodeGoal, depth, parentId, ancestry, declaredGrain = null) => {
     throwIfAborted(signal);
-    emit(openEvent({ id, parentId, goal: nodeGoal, depth, t: seq++ }));
 
-    // Should this node split? Only while there is depth and node budget left; at
-    // the floor it is forced to be a leaf so a runaway planner cannot fork past
-    // the guards.
+    // A guard FORCES a leaf when depth or node budget is spent — the planner is
+    // not even consulted. A forced leaf is the cube's confab risk: a goal that may
+    // be Pattern-grained, jammed into a single Figure-making generation because we
+    // ran out of room, not because the goal was small enough. The open event
+    // records it so the projection's grain-coherence flags the Figure-maker.
+    const forced = depth >= maxDepth || nodeCount >= maxNodes;
+    emit(openEvent({ id, parentId, goal: nodeGoal, depth, grain: declaredGrain, forced, t: seq++ }));
+
     let subGoals = [];
-    if (depth < maxDepth && nodeCount < maxNodes) {
-      subGoals = normalizeSubGoals(await decompose({ id, goal: nodeGoal, depth, parentId, ancestry }));
+    if (!forced) {
+      subGoals = normalizeSubGoals(await decompose({
+        id, goal: nodeGoal, depth, parentId, ancestry,
+        grain: declaredGrain,                  // what the parent asked this goal to be
+      }));
     }
 
     // Demand caps supply: truncate to the fanout, and again to whatever node
@@ -110,16 +129,20 @@ export const runTaskGraph = async ({
         // Depth-first, left-to-right: a leaf completes and every ancestor's
         // rollup recomputes on the next projection before the next leaf starts —
         // so the graph fills in the order a reader would read it.
-        await expand(childIds[i], subGoals[i], depth + 1, id, [...ancestry, nodeGoal]);
+        await expand(childIds[i], subGoals[i].goal, depth + 1, id, [...ancestry, nodeGoal], subGoals[i].grain);
       }
       return;
     }
 
-    // A leaf: the small-LLM reach. step → (complete | fail).
+    // A leaf: the small-LLM reach. It is a FIGURE-MAKER (INS at Figure) — that
+    // cube identity is handed to the generator so it knows the grain it works at.
     emit(stepEvent({ id, note: 'generating', t: seq++ }));
     try {
       const { output, sources } = normalizeGen(
-        await generate({ id, goal: nodeGoal, depth, parentId, ancestry }),
+        await generate({
+          id, goal: nodeGoal, depth, parentId, ancestry,
+          grain: declaredGrain, object: FIGURE, cell: FIGURE_CELL, holonGrain: 0,
+        }),
       );
       emit(completeEvent({ id, output, sources, t: seq++ }));
     } catch (err) {
@@ -132,10 +155,20 @@ export const runTaskGraph = async ({
   await expand(rootId, String(goal ?? ''), 0, null, []);
 
   const graph = projectTaskGraph(log);
+
+  // The confab flags: Figure-makers handed Pattern/Ground goals (a guard forced a
+  // leaf, or the planner declared a grain it then didn't honour). Surfaced beside
+  // `dropped` so a caller can see where the decomposition stopped too coarse.
+  const incoherent = [];
+  for (const node of graph.byId.values()) {
+    if (node.coherent === false) incoherent.push({ id: node.id, goal: node.goal, reason: node.grainNote });
+  }
+
   return {
     graph,
     log,
     dropped,
+    incoherent,
     output: assembleOutput(graph.root),
     sources: assembleSources(graph.root),
     progress: progressOf(graph.root),

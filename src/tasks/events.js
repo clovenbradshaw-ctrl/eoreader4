@@ -38,10 +38,17 @@ const freeze = (e) => Object.freeze(e);
 
 // A node enters the graph. `parentId` is null for the root. `depth` is the
 // nesting level (root = 0), carried so the runner's depth guard and the UI's
-// indent read it straight off the event.
-export const openEvent = ({ id, parentId = null, goal, depth = 0, t = 0 }) => {
+// indent read it straight off the event. `grain` is the planner's DECLARED cube
+// Object grain for this goal ('Ground' | 'Figure' | 'Pattern' | null) — the
+// projection checks it against the node's structural grain (tasks/grain.js).
+// `forced` marks a leaf a guard made out of a still-splitting goal: structurally
+// a Figure, declared a Pattern, so the confab guard flags it.
+export const openEvent = ({ id, parentId = null, goal, depth = 0, grain = null, forced = false, t = 0 }) => {
   if (!id) throw new TypeError('openEvent: id required');
-  return freeze({ kind: KIND.OPEN, id, parentId, goal: String(goal ?? ''), depth: depth | 0, t });
+  return freeze({
+    kind: KIND.OPEN, id, parentId, goal: String(goal ?? ''), depth: depth | 0,
+    grain: grain ?? null, forced: !!forced, t,
+  });
 };
 
 // A node is declared internal — these are the children it owns. The children are

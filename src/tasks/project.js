@@ -13,6 +13,7 @@
 
 import { KIND } from './events.js';
 import { STATUS, rollupStatus, assembleOutput, assembleSources } from './node.js';
+import { annotateGrain } from './grain.js';
 
 const memo = new WeakMap(); // log → { length, result }
 
@@ -28,7 +29,8 @@ const computeProjection = (log) => {
     let m = meta.get(id);
     if (!m) {
       m = { id, parentId: null, goal: '', depth: 0, childIds: null,
-            note: '', output: '', sources: [], failed: false, stepped: false, completed: false };
+            note: '', output: '', sources: [], failed: false, stepped: false, completed: false,
+            grain: null, forced: false };
       meta.set(id, m);
     }
     return m;
@@ -41,6 +43,8 @@ const computeProjection = (log) => {
         m.parentId = e.parentId ?? null;
         m.goal = e.goal;
         m.depth = e.depth | 0;
+        m.grain = e.grain ?? null;
+        m.forced = !!e.forced;
         if (!order.includes(e.id)) order.push(e.id);
         break;
       case KIND.DECOMPOSE:
@@ -103,11 +107,29 @@ const computeProjection = (log) => {
       node.output = m.output;
       node.sources = m.sources;
     }
+
+    // The cube reading — object grain, holonic grain, the cell, coherence. A
+    // forced leaf carries a declared Pattern grain (it wanted to keep splitting),
+    // so the confab guard flags the Figure-maker that swallowed a Pattern goal.
+    const declaredGrain = m.forced ? 'Pattern' : m.grain;
+    annotateGrain(node, declaredGrain);
     return node;
   };
 
   const builtRoots = roots.map(build).filter(Boolean);
-  const root = builtRoots.length === 1 ? builtRoots[0] : { id: 'forest', goal: '', depth: -1, status: rollupStatus(builtRoots.map((r) => r.status)), children: builtRoots, note: '', output: assembleOutput({ children: builtRoots }), sources: assembleSources({ children: builtRoots }), parentId: null };
+  let root;
+  if (builtRoots.length === 1) {
+    root = builtRoots[0];
+  } else {
+    root = {
+      id: 'forest', goal: '', depth: -1, parentId: null, note: '',
+      status: rollupStatus(builtRoots.map((r) => r.status)),
+      children: builtRoots,
+      output: assembleOutput({ children: builtRoots }),
+      sources: assembleSources({ children: builtRoots }),
+    };
+    annotateGrain(root, null);   // a forest of roots is itself a Pattern over them
+  }
 
   // A flat id→node index over the built tree, for callers that want random access
   // (the UI keys its rendered rows on it) without re-walking.

@@ -5,6 +5,7 @@ import {
   runTaskGraph, projectTaskGraph,
   openEvent, decomposeEvent, stepEvent, completeEvent, failEvent,
   STATUS, rollupStatus, isTerminal, assembleOutput, assembleSources, progressOf,
+  FIGURE, PATTERN, objectGrainOf, holonGrainOf, cubeCellOf, actsOf, grainCoherence,
 } from '../src/tasks/index.js';
 
 // ── node.js — the rollup is the whole "graph updates as steps complete" claim ──
@@ -206,6 +207,113 @@ test('maxFanout truncates a wide decomposition and records the drop', async () =
   assert.equal(res.graph.root.children.length, 3, 'kept only the fanout');
   assert.equal(res.dropped.length, 1);
   assert.deepEqual(res.dropped[0], { id: 'root', guard: 'fanout', kept: 3, asked: 5 });
+});
+
+// ── grain.js — the task graph read onto the EO cube ───────────────────────────
+test('objectGrainOf: a leaf is a Figure, a branch is a Pattern', () => {
+  assert.equal(objectGrainOf({ children: [] }), FIGURE);
+  assert.equal(objectGrainOf({ children: [{ id: 'k' }] }), PATTERN);
+});
+
+test('holonGrainOf is the SYN-promotion height above the leaves', () => {
+  const leaf = { children: [] };
+  const branch = { children: [leaf, leaf] };
+  const root = { children: [branch, leaf] };
+  assert.equal(holonGrainOf(leaf), 0, 'a leaf is grain 0 (first appearance)');
+  assert.equal(holonGrainOf(branch), 1, 'one promotion over leaves');
+  assert.equal(holonGrainOf(root), 2, 'max child height + 1');
+});
+
+test('cubeCellOf places each act on the cube: leaf INS@Figure, branch SYN@Pattern', () => {
+  const leaf = cubeCellOf({ children: [] });
+  assert.deepEqual([leaf.op, leaf.grain, leaf.stance, leaf.terrain], ['INS', FIGURE, 'Making', 'Entity']);
+  const branch = cubeCellOf({ children: [{ id: 'k' }] });
+  assert.deepEqual([branch.op, branch.grain, branch.stance, branch.terrain], ['SYN', PATTERN, 'Composing', 'Network']);
+});
+
+test('actsOf: a branch both unravels (SEG) and composes (SYN); a leaf only makes (INS)', () => {
+  const branch = actsOf({ children: [{ id: 'k' }] });
+  assert.equal(branch.decompose.op, 'SEG');
+  assert.equal(branch.assemble.op, 'SYN');
+  const leaf = actsOf({ children: [] });
+  assert.equal(leaf.generate.op, 'INS');
+  assert.equal(leaf.decompose, undefined);
+});
+
+test('grainCoherence: a Figure-maker handed a Pattern goal is the confab the cube forbids', () => {
+  const ok = grainCoherence({ children: [] }, FIGURE);
+  assert.equal(ok.ok, true, 'a Figure goal made by a Figure-maker is on the diagonal');
+  const confab = grainCoherence({ children: [] }, PATTERN);
+  assert.equal(confab.ok, false, 'a Pattern goal jammed into a leaf is off-diagonal');
+  assert.match(confab.reason, /keep decomposing/);
+  // a branch composing a Pattern is coherent
+  assert.equal(grainCoherence({ children: [{ id: 'k' }] }, PATTERN).ok, true);
+});
+
+test('projection annotates every node with its cube reading', () => {
+  const res = projectTaskGraph([
+    openEvent({ id: 'root', goal: 'doc', depth: 0 }),
+    decomposeEvent({ id: 'root', childIds: ['root.0'] }),
+    openEvent({ id: 'root.0', parentId: 'root', goal: 'point', depth: 1 }),
+    completeEvent({ id: 'root.0', output: 'x' }),
+  ]);
+  assert.equal(res.root.object, PATTERN);
+  assert.equal(res.root.holonGrain, 1);
+  assert.equal(res.root.cell.stance, 'Composing');
+  assert.equal(res.root.children[0].object, FIGURE);
+  assert.equal(res.root.children[0].cell.terrain, 'Entity');
+  assert.equal(res.root.children[0].coherent, true);
+});
+
+test('runTaskGraph hands each leaf its Figure-maker cube identity', async () => {
+  const seen = [];
+  await runTaskGraph({
+    goal: 'doc',
+    decompose: ({ goal }) => (goal === 'doc' ? ['a', 'b'] : []),
+    generate: (v) => { seen.push({ object: v.object, op: v.cell.op, grain: v.holonGrain }); return v.goal; },
+  });
+  for (const s of seen) assert.deepEqual(s, { object: FIGURE, op: 'INS', grain: 0 });
+});
+
+test('a planner that declares a Pattern grain but stops splitting is flagged incoherent', async () => {
+  const res = await runTaskGraph({
+    goal: 'doc',
+    // declares both children Pattern-grained, then refuses to split 'b'
+    decompose: ({ goal }) => {
+      if (goal === 'doc') return [{ goal: 'a', grain: PATTERN }, { goal: 'b', grain: PATTERN }];
+      if (goal === 'a') return ['a1', 'a2'];   // 'a' honours its Pattern grain → branch
+      return [];                                // 'b' does not → a Figure leaf for a Pattern goal
+    },
+    generate: ({ goal }) => goal.toUpperCase(),
+  });
+  assert.deepEqual(res.incoherent.map((x) => x.id), ['root.1'], 'only the unsplit Pattern goal');
+  assert.equal(res.graph.byId.get('root.0').coherent, true, 'the split Pattern goal is coherent');
+  assert.equal(res.graph.byId.get('root.1').coherent, false);
+});
+
+test('a depth cap that forces a still-splitting goal into a leaf is a flagged confab', async () => {
+  const res = await runTaskGraph({
+    goal: 'g',
+    maxDepth: 1,
+    decompose: () => ['always split'],   // never quiesces
+    generate: ({ goal }) => goal,
+  });
+  // the forced leaf is structurally a Figure but was a Pattern goal → off-diagonal
+  assert.equal(res.incoherent.length, 1);
+  const leaf = res.graph.root.children[0];
+  assert.equal(leaf.object, FIGURE);
+  assert.equal(leaf.coherent, false);
+  assert.match(leaf.grainNote, /Pattern goal/);
+});
+
+test('a planner that stops on its own (genuine Figure leaf) is coherent — no false alarm', async () => {
+  const res = await runTaskGraph({
+    goal: 'doc',
+    decompose: ({ goal }) => (goal === 'doc' ? ['a', 'b'] : []),   // no declared grain
+    generate: ({ goal }) => goal,
+  });
+  assert.deepEqual(res.incoherent, [], 'undeclared leaves are coherent Figures');
+  assert.ok(res.graph.root.children.every((c) => c.coherent));
 });
 
 test('assembleOutput is a pure projection any caller can re-run', () => {

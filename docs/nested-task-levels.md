@@ -116,6 +116,58 @@ the same language as a turn, exactly as `arc/generate.js` already arranges. The
 ceiling scales with that leaf's evidence; you cannot faithfully say more than the
 spans support.
 
+## Cube-aware — a task knows its grain
+
+A task is a holon, and every holon operates **at a grain**. The tasks holon reads
+each node onto the [EO cube](cube.md), reusing `core/cube.js` as the authority
+rather than minting a second vocabulary (`src/tasks/grain.js`). **The three task
+acts are cube operators** on the Act face:
+
+| task act | operator | Mode × Domain |
+| --- | --- | --- |
+| decompose a goal into parts | **SEG** | Differentiate × Structure |
+| generate the one specific thing | **INS** | Generate × Existence |
+| compose the children into a whole | **SYN** | Generate × Structure |
+
+Two senses of grain, both already in the vocabulary:
+
+- **Object grain** (the cube's third axis: Ground / Figure / Pattern) — the
+  categorical role. A **leaf is a Figure**: a specific thing one generation
+  *makes*. `INS` at Figure is the **Making / Entity** cell — "the gravity well,
+  the densest cell" (`cube.js`), the single small-LLM reach that produces text. A
+  **branch is a Pattern**: a regularity *composed* from its children (`SYN` at
+  Pattern → **Composing / Network**) and *unravelled* into them (`SEG` at Pattern
+  → **Unravelling / Network**). The ambient goal the whole tree rides in is the
+  **Ground** — the document, the conversation field; the frame, not a node.
+- **Holonic grain** (the integer of `core/event.js`: 0 at first appearance, +1
+  each `SYN` promotion) — a leaf is grain 0; each assembly up the tree is a `SYN`
+  that promotes one grain, so a node's holonic grain is its **height above the
+  leaves**, the number of promotions it took to build it.
+
+Every projected node carries `object`, `holonGrain`, `cell` (its primary cube
+cell), and `acts` (every cell it operates in). The runner hands each face its
+grain: the **decomposer sees the goal's declared grain**, and the **leaf
+generator knows it is a Figure-maker** (`object: 'Figure'`, `cell:` INS @ Figure,
+`holonGrain: 0`) — neither has to guess its place on the cube.
+
+### The confabulation guard becomes the stopping rule
+
+The cube's highest-leverage rule is *"the grain of the move must match the grain
+of the terrain"* — `INS` asked to make a **Ground** (Making at a Void) is the
+Kafka confab `coherence()` rejects off-diagonal. For tasks that is exactly: **a
+Figure-maker handed a goal that is really Pattern/Ground-grained** — a goal too
+big for one reach, jammed into a single generation because a guard capped the
+decomposition or the planner stopped splitting too early.
+
+`grainCoherence` flags it, and the projection sets `node.coherent = false` with a
+`grainNote`; `runTaskGraph` collects them in `result.incoherent`. The decomposer
+reads this as a **stopping rule**: keep splitting while a goal is Pattern-grained,
+make a leaf only once it is Figure-grained. A cube-aware planner can declare each
+sub-goal's grain — `decompose` may return `{ goal, grain }` — and if it labels a
+goal `Pattern` then fails to split it, the confab is surfaced. A plain planner
+omits the grain and its genuine (self-chosen) leaves stay coherent Figures, so
+the guard never raises a false alarm.
+
 ## The guards (runaway only)
 
 Length and shape are emergent — the tree is as deep and wide as `decompose`
