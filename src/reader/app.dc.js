@@ -1354,10 +1354,37 @@ class Component extends DCLogic {
   // "…". Narrate that gap instead: set a short status on the still-pending, still-empty assistant
   // bubble so the reader sees WHAT it's doing, not an opaque ellipsis. Cleared for free the moment
   // a real token streams in (the bubble then carries m.text, never the think line).
-  _setThink(id,text){this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;
-    const m=c.messages.slice(),li=m.length-1;
-    if(li>=0&&m[li].role==='asst'&&m[li].pending&&!m[li].text)m[li]={...m[li],think:String(text||'')};
-    return {...c,messages:m};})}));}
+  _setThink(id,text){const t=String(text||'');
+    this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;
+      const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst'&&m[li].pending&&!m[li].text)m[li]={...m[li],think:t};
+      return {...c,messages:m};})}));
+    // The status line is also a BEAT in the live thinking trail, so the reader watches the turn
+    // work in real time — every "re-reading", "composing", "writing on …" stacks up as it happens
+    // instead of a single label flickering above a bare spinner.
+    this._beat(id,'think',t);}
+  // Append a beat to the pending turn's live thinking trail — the real-time record of what the
+  // assistant is doing this turn. Creates a lightweight 'think'-mode trail when none exists yet,
+  // so EVERY pending turn shows its work (not just web-research turns). Consecutive identical beats
+  // coalesce, and the elapsed clock starts ticking on the first beat.
+  _beat(id,kind,text){const t=String(text||'');if(!t)return;
+    this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li<0||m[li].role!=='asst'||!m[li].pending)return {...c,messages:m};
+      const r=m[li].research||{steps:[],done:false,mode:'think',t0:Date.now()};
+      const last=r.steps[r.steps.length-1];
+      if(last&&last.kind===kind&&last.text===t)return {...c,messages:m};   // don't repeat the same beat
+      m[li]={...m[li],research:{...r,steps:[...r.steps,{kind,text:t}]}};
+      return {...c,messages:m};})}));
+    this._thinkClock();}
+  // A once-a-second re-render while any turn is pending, so the live trail's elapsed clock ticks even
+  // when the model is mid-decode with no fresh beat. Self-stops the instant nothing is pending, so the
+  // timer never leaks across turns.
+  _thinkClock(){if(this._thinkTimer)return;if(typeof setInterval==='undefined')return;
+    this._thinkTimer=setInterval(()=>{
+      const pending=(this.state.chats||[]).some(c=>(c.messages||[]).some(m=>m.role==='asst'&&m.pending));
+      if(!pending){clearInterval(this._thinkTimer);this._thinkTimer=null;return;}
+      this.setState(s=>({_clk:((s._clk||0)+1)%1000000}));
+    },1000);}
   // The first beat of thinking, phrased from the matched supply: how much grounded reading the
   // answer has to work from. No matches → it's reasoning from the meaning graph / its own read.
   _thinkGround(ground){const n=(ground&&ground.spans&&ground.spans.length)||0;
@@ -1437,9 +1464,9 @@ class Component extends DCLogic {
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
       // Seed the bubble with a thinking status so the spinner is up from the very first frame —
       // no bare-"…" flash before routing/grounding sets the real status a beat later.
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Thinking…'}]};
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Thinking…',research:{steps:[{kind:'think',text:'Thinking…'}],done:false,mode:'think',t0:Date.now()}}]};
       return {chats,activeChat:id,chatInput:''};});
-    this._scrollChat();
+    this._scrollChat();this._thinkClock();
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     // 1) clock questions — no model
     const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
@@ -1559,10 +1586,10 @@ class Component extends DCLogic {
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
       if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(topic,40);
-      const research={steps:[{kind:'start',text:startText}],done:false};
+      const research={steps:[{kind:'start',text:startText}],done:false,mode:'research',t0:Date.now()};
       chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,research}]};
       return {chats,activeChat:id,chatInput:''};});
-    this._scrollChat();
+    this._scrollChat();this._thinkClock();
     const pushStep=(kind,text)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].role==='asst'&&m[li].research){const r=m[li].research;m[li]={...m[li],research:{...r,steps:[...r.steps,{kind,text}]}};}
       return {...c,messages:m};})}),()=>this._scrollChat());
@@ -2235,36 +2262,65 @@ class Component extends DCLogic {
       // walk runs it stays open and grows; once done it collapses to a one-line summary the user
       // can re-open. Makes "it actually went and researched" legible, the way a research-mode
       // chat shows its work.
-      const RICON={start:'✦',search:'⌕',read:'▤',graph:'＋',lead:'↳',warn:'⚠',done:'✓'};
-      const RCOL ={start:'var(--acc)',search:'#2563eb',read:'#b45309',graph:'#15803d',lead:'var(--acc)',warn:'#dc2626',done:'#15803d'};
+      const RICON={start:'✦',search:'⌕',read:'▤',graph:'＋',lead:'↳',warn:'⚠',done:'✓',think:'◌'};
+      const RCOL ={start:'var(--acc)',search:'#2563eb',read:'#b45309',graph:'#15803d',lead:'var(--acc)',warn:'#dc2626',done:'#15803d',think:'#7c8088'};
       const r=m.research;
-      const hasResearch=!!(r&&r.steps&&r.steps.length);
-      const researchRunning=hasResearch&&!r.done;
-      const resKey=cur.id+':'+mi+':res', resOn=hasResearch&&(researchRunning||!!gOpen[resKey]);
+      const pendingTurn=!!m.pending;
+      const mode=(r&&r.mode)||'research';
+      // The walk runs (mode 'research', not yet done); the trail also covers the COMPOSE phase that
+      // follows — and plain 'think'-mode turns that never hit the web — so the live view stays up the
+      // whole time the turn is working, never collapsing to a bare spinner mid-thought.
+      const walkRunning=!!(r&&!r.done&&pendingTurn&&mode==='research');
+      // Freeze the elapsed clock on the first render after the turn settles, so a later re-render
+      // never recomputes a stale, ballooning "Thought for …" off the original start.
+      if(r&&!pendingTurn&&r.t0&&!r.tEnd)r.tEnd=Date.now();
+      const t0=r&&r.t0,tEnd=(r&&r.tEnd)||Date.now();
+      const secs=t0?Math.max(0,Math.floor((tEnd-t0)/1000)):0;
+      const fmtSecs=(n)=>n>=60?(Math.floor(n/60)+':'+String(n%60).padStart(2,'0')):(n+'s');
+      // Keep the chip while the turn works (always), for a real web walk (its provenance is worth
+      // keeping), or for any think-turn that took more than one beat. A trivial instant answer (one
+      // 'Thinking…' beat) leaves no chip behind.
+      const hasResearch=!!(r&&r.steps&&r.steps.length)&&(pendingTurn||mode==='research'||r.steps.length>1);
+      const researchRunning=hasResearch&&pendingTurn;
+      const resKey=cur.id+':'+mi+':res', resOn=hasResearch&&(pendingTurn||!!gOpen[resKey]);
       const researchSteps=hasResearch?r.steps.map(s=>({icon:RICON[s.kind]||'·',text:s.text,
         rowStyle:'display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.45;color:var(--ink2);',
         iconStyle:'flex:0 0 auto;width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:'+(RCOL[s.kind]||'#9aa1ab')+';background:'+(RCOL[s.kind]||'#9aa1ab')+'1c;margin-top:1px;',
         textStyle:'flex:1;min-width:0;'})):[];
-      const researchTitle=researchRunning?'Researching…':('Researched '+((r&&r.readCount)||0)+' source'+(((r&&r.readCount)||0)!==1?'s':'')+' · '+((r&&r.hops)||0)+' hop'+(((r&&r.hops)||0)!==1?'s':''));
-      // WHILE RUNNING: one compact, fixed block showing only the latest few beats (parsing /
-      // reading / following a lead) — not the full list that expands the screen then vanishes.
-      // The earlier beats stay folded into "+N earlier"; the whole trail re-opens once it's done.
+      const rc=(r&&r.readCount)||0,hp=(r&&r.hops)||0;
+      // The header reads as a LIVE status while working — the current beat plus a ticking clock — then
+      // settles into a one-line summary (sources·hops for a walk, "Thought for Ns" for a plain turn).
+      const researchTitle=pendingTurn
+        ? ((m.think||(walkRunning?'Researching…':(mode==='research'?'Composing the answer…':'Thinking…')))+(secs?(' · '+fmtSecs(secs)):''))
+        : (mode==='research'
+            ? ('Researched '+rc+' source'+(rc!==1?'s':'')+' · '+hp+' hop'+(hp!==1?'s':''))
+            : ('Thought'+(secs?(' for '+fmtSecs(secs)):'')));
+      // WHILE WORKING: one compact, fixed block showing only the latest few beats (searching /
+      // reading / following a lead / composing) — not the full list that expands the screen then
+      // vanishes. Earlier beats fold into "+N earlier"; the whole trail re-opens once it's done.
       const RLIVE=3;
       const researchLiveOn=researchRunning;
       const researchFullOn=!researchRunning&&resOn;
       const researchLive=researchRunning?researchSteps.slice(-RLIVE):[];
       const researchHasEarlier=researchRunning&&researchSteps.length>RLIVE;
       const researchEarlierLabel='+'+Math.max(0,researchSteps.length-RLIVE)+' earlier step'+((researchSteps.length-RLIVE)!==1?'s':'');
+      const researchCaret=pendingTurn?'':(resOn?'▾':'▸');
+      // A spinner in the chip header keeps constant motion while the turn works (the model can decode
+      // for seconds between beats); it swaps to the expand caret once the turn settles.
+      const traceSpinStyle=pendingTurn?'flex:0 0 auto;width:11px;height:11px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;':'display:none;';
       // While researching with no answer yet, the trail IS the message — suppress the empty
       // pulsing bubble. Once the answer streams in (or for a normal turn) the bubble shows.
       // Until the first token, show the live "thinking" line (what the model is doing right now)
       // as its OWN row — a continuously spinning loader + steady text — not the answer bubble.
       // A spinner gives motion at every instant (CSS runs even between re-renders); the old
       // opacity pulse read as the feedback "fading out", which is the opposite of reassuring.
-      const thinking=!!m.pending&&!m.text&&!!m.think;
-      // While researching with no answer, the trail is the message; while thinking, the spinner
-      // row is — either way suppress the empty bubble. Once a token streams in, the bubble shows.
-      const showBubble=!(researchRunning&&!m.text)&&!thinking;
+      // The live thinking trail now carries the "what it's doing right now" status (with its own
+      // header spinner), so the standalone spinner row is only a fallback for the rare pending turn
+      // that has no trail at all.
+      const thinking=!!m.pending&&!m.text&&!!m.think&&!hasResearch;
+      // While the turn is still working with no answer text yet, the live trail IS the message —
+      // suppress the empty pulsing bubble. Once a token streams in (or the turn settles) it shows.
+      const showBubble=!thinking&&!(pendingTurn&&!m.text);
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
       return {isUser,pending:!!m.pending,thinking,think:m.think||'',showBubble,text:m.pending?(m.text||m.think||'…'):m.text,isMd:isMd||hasSvg,plain:!(isMd||hasSvg),html:bodyHtml,onCite:(e)=>this._onCite(e),
         thinkRowStyle:'max-width:80%;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;color:var(--ink2);',
@@ -2273,7 +2329,7 @@ class Component extends DCLogic {
         researchLiveOn,researchFullOn,researchLive,researchHasEarlier,researchEarlierLabel,
         researchLiveBox:'margin-top:7px;display:flex;flex-direction:column;gap:5px;',
         researchEarlierStyle:'font-size:10.5px;color:var(--ink3);margin-top:1px;padding-left:23px;',
-        researchCaret:researchRunning?'':(resOn?'▾':'▸'),onToggleResearch:()=>{if(!researchRunning)this.toggleGround(resKey);},
+        researchCaret,traceSpinStyle,onToggleResearch:()=>{if(!pendingTurn)this.toggleGround(resKey);},
         researchStyle:'max-width:80%;margin-bottom:7px;background:var(--app);border:1px solid var(--line2);border-radius:11px;padding:9px 12px;align-self:flex-start;',
         researchHeadStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3);background:transparent;border:none;padding:0;cursor:'+(researchRunning?'default':'pointer')+';',
         hasMeta:!isUser&&!m.pending&&(sources.length>0||entities.length>0),
