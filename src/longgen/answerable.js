@@ -124,6 +124,82 @@ export const groundSupplies = (wantedType, ground = [], graph = null) => {
   }
 };
 
+// ── The named-subject test ───────────────────────────────────────────────────
+//
+// The hole the wanted-type test alone does not close. "Write a long essay about
+// Grok" against a corpus that holds only Errol Musk types as a whole-document task
+// (essay / summary / explain), and those are LENIENT by design — any content
+// supplies them, because "summarize this" must never come back "the document does
+// not say." But an essay ABOUT a named subject is not a summary of whatever is
+// there: it asserts the subject is in the corpus. When the corpus never names it,
+// the lenient pass becomes a licence to confabulate a whole essay about a figure
+// the ground has never heard of — the observed Grok failure, where the model
+// narrated its own void ("I don't have any information about Grok from the
+// reading") and then invented a Robert E. Howard novel anyway.
+//
+// So when the question names a subject, the subject must be a figure the corpus
+// knows before the walk is licensed. This is the SAME absence test as the void
+// gate, lifted from the token to the topic: a name with no node behind it is
+// struck before generation, not after.
+
+// Subjects the question names, drawn from its capitalised content words (the same
+// proper-noun shape figureSurface labels carry). Question words and the leading
+// word are dropped so "Write about Grok" yields {Grok}, not {Write}.
+const STOPWORDS = new Set([
+  'write', 'tell', 'give', 'explain', 'describe', 'summarize', 'summarise', 'discuss',
+  'what', 'who', 'when', 'where', 'why', 'how', 'is', 'are', 'was', 'were', 'the', 'a',
+  'an', 'about', 'me', 'long', 'short', 'essay', 'on', 'of', 'for', 'and', 'or',
+]);
+export const namedSubjects = (question = '') => {
+  const out = new Set();
+  for (const m of String(question || '').match(/\b[A-Z][A-Za-z'’-]{2,}\b/g) || []) {
+    if (!STOPWORDS.has(m.toLowerCase())) out.add(m);
+  }
+  return [...out];
+};
+
+// The corpus's known figure labels. From the graph the gate is handed — projectGraph's
+// `entities` Map (label per id), plus any explicit relation surfaces — lowercased for a
+// case-insensitive contains test. Empty when no graph is available (the test then no-ops
+// and the wanted-type test alone governs, which is the conservative default).
+export const knownFigures = (graph = null, ground = []) => {
+  const labels = new Set();
+  const add = (s) => { const t = String(s || '').trim().toLowerCase(); if (t) labels.add(t); };
+  if (graph) {
+    const ents = graph.entities;
+    if (ents && typeof ents.values === 'function') for (const e of ents.values()) add(e?.label || e?.id);
+    for (const r of (graph.relations || graph.edges || [])) {
+      add(r?.src?.label ?? r?.subject ?? r?.from); add(r?.tgt?.label ?? r?.object ?? r?.to);
+    }
+  }
+  // Fall back to the ground text itself when no graph is threaded — every capitalised
+  // token the spans actually contain is a figure the corpus names.
+  for (const s of ground || []) for (const m of String(s?.text || '').match(/\b[A-Z][A-Za-z'’-]{2,}\b/g) || []) add(m);
+  return labels;
+};
+
+// Does the corpus know the subjects the question names? A subject is known when its
+// surface appears in (or contains, or is contained by) a known figure label — so
+// "Musk" matches "Errol Musk" and vice versa. Returns { ok, missing } where `missing`
+// is the named subjects with no figure behind them. When the question names nothing
+// (a bare "summarize this"), there is no subject to be absent → ok.
+export const subjectsKnown = (question = '', graph = null, ground = []) => {
+  const subjects = namedSubjects(question);
+  if (!subjects.length) return { ok: true, missing: [] };
+  const figures = knownFigures(graph, ground);
+  if (!figures.size) return { ok: true, missing: [] };   // no graph to test against → no-op
+  const known = (s) => {
+    const t = s.toLowerCase();
+    for (const f of figures) if (f === t || f.includes(t) || t.includes(f)) return true;
+    return false;
+  };
+  const missing = subjects.filter((s) => !known(s));
+  // Licensed when at least one named subject is known. A question that names a known
+  // figure AND an unknown aside still walks (the aside is caught downstream); only a
+  // question whose subjects are ALL absent is refused — the Grok case.
+  return { ok: missing.length < subjects.length, missing };
+};
+
 // ── The gate ─────────────────────────────────────────────────────────────────
 
 // The phrasing for each unmet type, used in the refusal atom.
@@ -133,6 +209,7 @@ const MISSING_PHRASE = Object.freeze({
   'no-comparison': 'a comparison',
   'no-definition': 'a definition',
   'no-ground': 'anything on this',
+  'no-subject': 'anything on what was asked',
 });
 
 // The licensing decision. When a `question` is given, type it and test the ground
@@ -142,6 +219,22 @@ const MISSING_PHRASE = Object.freeze({
 export const answerabilityGate = ({ question = '', ground = [], graph = null } = {}) => {
   if (!question) return { licensed: true, wantedType: null, reason: null, refusal: null };
   const wantedType = classifyWantedType(question);
+
+  // The named-subject test runs FIRST: a question whose every named subject is absent
+  // from the corpus is unanswerable whatever its wanted type, and this is the one the
+  // lenient whole-document types (essay / summary / explain) would otherwise wave
+  // through. The Grok case is caught here, not by groundSupplies.
+  const subj = subjectsKnown(question, graph, ground);
+  if (!subj.ok) {
+    return {
+      licensed: false,
+      wantedType,
+      reason: 'no-subject',
+      missing: subj.missing,
+      refusal: refusalAtom('no-subject', ground, subj.missing),
+    };
+  }
+
   const supply = groundSupplies(wantedType, ground, graph);
   if (supply.ok) return { licensed: true, wantedType, reason: null, refusal: null };
   return {
@@ -155,8 +248,10 @@ export const answerabilityGate = ({ question = '', ground = [], graph = null } =
 // The refusal atom — one unit: the sources do not contain <wanted type>, here is
 // what they DO hold. Grounded on the held spans (so it cites, never invents), and
 // short by construction (the honest one-sentence answer).
-export const refusalAtom = (reason, ground = []) => {
-  const phrase = MISSING_PHRASE[reason] || 'what was asked';
+export const refusalAtom = (reason, ground = [], missing = []) => {
+  const phrase = reason === 'no-subject' && missing.length
+    ? `anything about ${missing.join(' or ')}`
+    : (MISSING_PHRASE[reason] || 'what was asked');
   const held = (ground || [])
     .filter(s => String(s?.text || '').trim())
     .sort((a, b) => (b.score || 0) - (a.score || 0))

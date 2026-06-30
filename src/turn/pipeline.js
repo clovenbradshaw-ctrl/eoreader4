@@ -101,7 +101,7 @@ const llmBrief = (ctx) => {
 // retrieved spans keep mentioning but that never acts — and folds the results in as citable
 // spans before the fold builds the reading (turn/stages.js, write/think.js).
 const PIPELINE = [
-  'route', 'expect', 'converse', 'retrieve', 'inquire', 'fold', 'predict', 'answerable', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
+  'route', 'expect', 'converse', 'retrieve', 'inquire', 'fold', 'predict', 'answerable', 'gate', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
 ];
 
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
