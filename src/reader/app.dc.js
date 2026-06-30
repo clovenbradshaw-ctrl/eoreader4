@@ -1450,6 +1450,12 @@ class Component extends DCLogic {
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
     if(/^\/svg\b/i.test(q))return this._limnChat(q);
+    // COMPOSE — a generative artifact ("write an emily dickinson poem", "compose a sonnet about
+    // the sea") is a make-this, not a question. It must be caught BEFORE _shouldWeb, or the web
+    // routing strips it to its subject and researches it — which is exactly why "write an emily
+    // dickinson poem" came back as a memory of Dickinson instead of a poem. composeArtifact does
+    // the three steps the request asks for: read examples of the form, then WRITE an original one.
+    if(this._composeIntent(q))return this.composeArtifact(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
     // a question it can't ground in what's been read+folded sends the engine to the web first — it
@@ -1625,6 +1631,120 @@ class Component extends DCLogic {
   // target (that fights the model's grounded prior); the request only opts INTO the multi-section
   // shape. How long the answer actually runs is set by how much bindable evidence there is.
   _longformIntent(q){return /\b(essays?|treatise|report|deep[\s-]?dive|comprehensive(?:ly)?|in[\s-]?depth|at length|long[\s-]?form|thorough(?:ly)?|detailed|\d{3,}\s*words?|write\s+(?:me\s+)?(?:a|an)\b[^.?!]*\b(?:essay|report|overview|account|piece|article|guide|breakdown))\b/i.test(String(q||''));}
+  // ── COMPOSE: make an artifact, don't research a subject ───────────────────────────────────
+  // The reader's whole posture is to READ and ANSWER, so a generative request fell through to the
+  // research walk and came back as a write-up ABOUT the subject. _composeIntent catches a request to
+  // MAKE a creative artifact — a poem, a story, a song — where the right move is to study the form
+  // and then write one. It deliberately does NOT claim essays/reports: those stay the grounded arc
+  // (_longformArc), which composes them from read sources. The gate is a compose VERB plus a creative
+  // KIND, so a plain question or a bare topic never trips it.
+  _CK(){return 'poems?|poetry|sonnets?|haikus?|limericks?|ballads?|odes?|verses?|villanelles?|couplets?|elegy|elegies|epigrams?|hymns?|psalms?|songs?|lyrics?|jingles?|raps?|stories|story|tales?|fables?|fairy[\\s-]?tales?|myths?|legends?|anecdotes?|jokes?|riddles?|dialogues?|monologues?|screenplays?|scripts?|plays?|skits?|rhymes?';}
+  _CV(){return 'write|compose|draft|create|pen|author|generate|make(?:\\s+me|\\s+up)?|come\\s+up\\s+with|give\\s+me|tell\\s+me';}
+  _composeIntent(q){
+    const s=String(q||'');
+    return new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s)&&new RegExp('\\b(?:'+this._CK()+')\\b','i').test(s);
+  }
+  // The KIND phrase, with any style modifier kept ("emily dickinson poem", "haiku"), length/quantity
+  // words peeled. Used for the walk's seed and the writer's instruction.
+  _composeKind(q){
+    const m=String(q||'').match(new RegExp('\\b(?:'+this._CV()+')\\s+(?:me\\s+|us\\s+)?(?:an?|another|one|some|the)?\\s*([^.?!,;]*?\\b(?:'+this._CK()+'))\\b','i'));
+    let k=m?m[1].trim():'';
+    k=k.replace(/^\s*(?:(?:\d+|one|two|three|four|five|several|a\s+few)[-\s]?(?:word|line|stanza|verse)s?\s+)+/i,'').trim();
+    k=k.replace(/^\s*(?:short|long|longer|brief|quick|little|simple|original|creative|nice|good|beautiful|funny|sad|happy|silly)\s+/i,'').trim();
+    return k||'poem';
+  }
+  // The SUBJECT the artifact is about — the "about/on X" clause, when there is one. Compose requests
+  // often have none ("write an emily dickinson poem"); then the kind carries the whole intent.
+  _composeSubject(q){
+    const m=String(q||'').match(/\b(?:about|on|regarding|concerning|describing|depicting|of|for|to do with|that\s+(?:is\s+about|describes|explores))\s+(.+)$/i);
+    return m?this.norm(m[1]).replace(/[?.!]+$/,'').trim():'';
+  }
+  // A compact, clean style sample from a read page — the example the writer studies. Page text
+  // carries chrome; take a dense middle slice and cap it so the small model's window isn't flooded.
+  _composeExcerpt(t){
+    let s=String(t||'').replace(/\r/g,'').replace(/[ \t]+/g,' ').replace(/\n{3,}/g,'\n\n').trim();
+    if(s.length<40)return '';
+    return s.slice(0,700).trim();
+  }
+  // The writer's prompt — a poet/storyteller, not a librarian. The examples anchor voice and form;
+  // the model writes an ORIGINAL piece and outputs only the piece (no preamble the chat would echo).
+  _composeMessages({kind,subject,examples}){
+    const a=/^[aeiou]/i.test(kind)?'an':'a';
+    const sys='You are a gifted writer. Compose '+a+' '+kind+'. Study any examples for voice, form, and rhythm, '
+      +'but write something ORIGINAL — never copy their lines. Output ONLY the '+kind+' itself: no title unless the '
+      +'form needs one, no preamble, no commentary before or after.';
+    const parts=[];
+    if(examples&&examples.length){
+      parts.push('Examples of the form, to learn its voice and shape (do not reuse their lines):\n\n'
+        +examples.map((e,i)=>'['+(i+1)+']\n'+e).join('\n\n———\n\n'));
+    }
+    parts.push('Now write '+a+' original '+kind+(subject?(' about '+subject):'')+'. Output only the '+kind+'.');
+    return [{role:'system',content:sys},{role:'user',content:parts.join('\n\n')}];
+  }
+  // Strip the small model's stray scaffolding — a "Here is a poem:" preamble, surrounding code
+  // fences or quotes — so the bubble shows the artifact clean.
+  _composeClean(t){
+    let s=String(t||'').trim();
+    s=s.replace(/^```[a-z]*\s*/i,'').replace(/\s*```$/,'').trim();
+    s=s.replace(/^(?:sure[,!.]?\s+|certainly[,!.]?\s+|of course[,!.]?\s+|here(?:'s| is| you go|’s)\b[^\n:]*:?\s*)/i,'').trim();
+    return s;
+  }
+  // The compose loop: STEP 1 read examples of the form (the curiosity walk, when the web is on),
+  // STEP 2 write an original one with the model, streamed into the bubble. Mirrors chatResearch's
+  // trail/bubble plumbing, but the synthesis is a make, not an answer-about.
+  async composeArtifact(q){
+    if(this._busy)return;
+    const kind=this._composeKind(q);
+    const subject=this._composeSubject(q);
+    const a=/^[aeiou]/i.test(kind)?'an':'a';
+    // Append the user turn + a pending assistant bubble carrying a live trail (like research).
+    let id=this.state.activeChat;
+    const webOn=this.state.webBrain!==false;
+    const startText='Composing '+a+' '+kind+(subject?(' about '+subject):'')+'. '
+      +(webOn?'First reading examples of the form to learn how it looks, then writing an original one.':'Writing an original one from the form.');
+    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      const research={steps:[{kind:'start',text:startText}],done:false,mode:'research',t0:Date.now()};
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,research}]};
+      return {chats,activeChat:id,chatInput:''};});
+    this._scrollChat();this._thinkClock();
+    const pushStep=(k,text)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst'&&m[li].research){const r=m[li].research;m[li]={...m[li],research:{...r,steps:[...r.steps,{kind:k,text}]}};}
+      return {...c,messages:m};})}),()=>this._scrollChat());
+    // STEP 1 — learn the form by reading examples (the same walk that already gathered Dickinson).
+    let walk={readUrls:[],hops:[]};
+    if(webOn){
+      this._busy=true;this.setState({busy:true});
+      try{walk=await this._curiosityWalk(kind,kind,pushStep,{lookup:false});}
+      catch(e){pushStep('warn','Couldn’t gather examples — '+((e&&e.message)||e)+'. Writing from the form itself.');}
+      this._busy=false;this.setState({busy:false});
+    }
+    for(const u of new Set(walk.readUrls))this.addChatSource(u);
+    const examples=[];
+    for(const u of [...new Set(walk.readUrls)]){const ex=this._composeExcerpt(this._pageText(u));if(ex)examples.push(ex);if(examples.length>=3)break;}
+    pushStep('done',(examples.length?('Read '+examples.length+' example'+(examples.length!==1?'s':'')+' of the form. '):'')+'Writing the '+kind+'…');
+    this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].research)m[li]={...m[li],research:{...m[li].research,done:true,readCount:examples.length,hops:walk.hops.length},think:'Writing the '+kind+'…'};
+      return {...c,messages:m};})}));
+    // STEP 2 — compose with the model, streamed into the bubble.
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    const guard=this._stallGuard();
+    let model=null;
+    try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
+    if(!model){guard.clear();finish({text:'I couldn’t load a model to write the '+kind+'.'});return;}
+    const messages=this._composeMessages({kind,subject,examples});
+    let acc='',raf=0;
+    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+    const onToken=(piece)=>{const sx=String(piece||'');if(!sx)return;guard.feed();acc+=sx;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+    let raw='';
+    try{raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:600,temperature:0.85,onToken,signal:guard.signal}),guard.race]);}
+    catch(e){raw=acc;}
+    guard.clear();
+    const text=this._composeClean(this.normMd(raw)||acc)||'(the model returned nothing to write)';
+    finish({text,sources:[...new Set(walk.readUrls)]});
+  }
   async _answerInto(id,q,gathered,opts){
     // OPT-IN LONGFORM (the arc, in the reader's own primitives): SEG the gathered evidence into one
     // section per source (a fold), CON each grounded ONLY in that source's spans (re-prompt per

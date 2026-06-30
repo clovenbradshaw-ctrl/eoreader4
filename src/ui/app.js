@@ -15,6 +15,7 @@ import { runTurn, runWebFollowup, formulateSearchQuery, searchAnnouncement, load
          runCuriousResearch, researchAnnouncement,
          runDeepResearch, modelPlanner, deepResearchAnnouncement } from '../turn/index.js';
 import { createWebClient, searchAndAdmit, createRawStore } from '../ingest/index.js';
+import { runArtifact, createSpecLibrary, artifactKindOf, assembleOutput, progressOf } from '../tasks/index.js';
 import { createSpeculativeWeb } from './prefetch.js';
 import { createAuditLog }   from '../audit/index.js';
 import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
@@ -536,10 +537,180 @@ const runSvg = async (rawQuestion, arg) => {
   }
 };
 
+// The compose verbs that open a GENERATIVE request — "write …", "compose …", "draft a …".
+// The gate, paired with `artifactKindOf` naming a real kind, that distinguishes "write an
+// emily dickinson poem" (a make-this) from "summarize this" or a bare question (a read-this).
+// Deliberately a lead-anchored verb set: a question never opens with one, so the grounded
+// answer path (runTurn) is untouched — only an explicit make-this crosses into the writer.
+const COMPOSE_VERB = /^\s*(?:please\s+)?(?:can you\s+|could you\s+|i'?d like you to\s+|i want you to\s+)?(?:write|compose|draft|create|generate|produce|pen|author|make)\b/i;
+
+// THE WRITER PATH (docs/task-creator.md, docs/spec-enacted-writer.md). A generative request
+// is not a question to answer — it is an artifact to MAKE. The reading pipeline (runTurn)
+// researches the topic and answers about it; that is why "write an emily dickinson poem" came
+// back as a memory of Dickinson rather than a poem. This path runs the three steps the request
+// actually asks for, all already built in the tasks holon but never wired to the chat surface:
+//   1. UNDERSTAND it is a make-this — routed here by the compose verb + a named artifact kind.
+//   2. LEARN what the form looks like — `acquireSpec` searches the web for EXAMPLES of the kind
+//      and the core engine learns the form off them (learnStructureFromExamples: stanzas, the
+//      meter, the dash). Proposer-only — the engine never touches the network; the search is
+//      injected, exactly as the runner never imports a model.
+//   3. WRITE it — `runArtifact` decomposes the learned shape into leaf-sized sections and the
+//      model renders each one, the substrate having fixed the structure.
+const runWrite = async (rawQuestion, kindHint = null) => {
+  if (!rawQuestion) return;
+  const ctl = new AbortController();
+  STATE.inflight = ctl;
+  setComposerBusy(true);
+  renderUserMessage(els.messages, rawQuestion);
+  if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('chat');
+
+  const kind = kindHint || artifactKindOf(rawQuestion);
+  const label = kind && kind !== 'answer' ? kind : 'piece';
+  const thinking = createThinkingMessage(els.messages, `composing ${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label}…`);
+
+  try {
+    await ensureModel();
+  } catch (err) {
+    finalizeThinking(thinking, `Model failed to load: ${err?.message || err}`, [], {
+      route: 'error', mode: STATE.grounding, onRetry: () => runWrite(rawQuestion, kindHint),
+    });
+    STATE.inflight = null;
+    setComposerBusy(false);
+    return;
+  }
+  if (ctl.signal.aborted) {
+    finalizeThinking(thinking, '⏹ Stopped.', [], { route: 'chat', mode: STATE.grounding });
+    STATE.inflight = null;
+    setComposerBusy(false);
+    return;
+  }
+
+  // The library is the machine's memory of what it has learned: a kind learned this session
+  // is reused with no second search (acquireSpec short-circuits on `library.learned(kind)`).
+  STATE.specLibrary ||= createSpecLibrary();
+
+  // Step 2 — "go learn what the form looks like." `acquireSpec` hands this query the examples
+  // it then learns the form from; we also stash a couple of short excerpts to anchor the
+  // renderer's voice (the learned `form` carries the meter/dash; the excerpts carry the music).
+  let styleExamples = [];
+  const exampleSearch = async (query) => {
+    setThinkingNote(thinking, `🔎 reading examples — “${query}”…`);
+    let results = [];
+    try {
+      results = await searchAndAdmit(query, {
+        client: webClientOf(), rawStore: rawStoreOf(), kind: 'auto', fetchPages: true, k: 6,
+      });
+    } catch { results = []; }
+    try {
+      styleExamples = results
+        .map((r) => String(r?.doc?.text || r?.record?.excerpt || '').trim())
+        .filter(Boolean).slice(0, 2).map((t) => t.slice(0, 400));
+    } catch { /* excerpts are advisory */ }
+    return results;
+  };
+
+  // Step 3 — the renderer: ONE model call per leaf. The substrate has already fixed the
+  // structure, the budget, and the form; the model only collapses one beat (a stanza, a
+  // paragraph) into fluent surface. The running draft rides in so each beat follows on.
+  let draftSoFar = '';
+  const generate = async (view) => {
+    if (ctl.signal.aborted) { const e = new Error('aborted'); e.name = 'AbortError'; throw e; }
+    const messages = writeMessages({ view, kind: label, draftSoFar, examples: styleExamples });
+    const out = await STATE.model.phrase(messages, { maxTokens: view.maxTokens, signal: ctl.signal });
+    return { output: String(out || '').trim(), sources: [] };
+  };
+
+  let res = null;
+  try {
+    setThinkingNote(thinking, `✍️ composing the ${label}…`);
+    res = await runArtifact({
+      request: rawQuestion,
+      library: STATE.specLibrary,
+      exampleSearch,
+      generate,
+      signal: ctl.signal,
+      // The live tree: as each section completes, fold the assembled draft so the next
+      // beat opens with a real transition, and let the bubble show the work landing.
+      onUpdate: (graph) => {
+        try {
+          draftSoFar = String(assembleOutput(graph.root) || '').trim();
+          const p = progressOf(graph.root);
+          if (p && p.total > 1) setThinkingNote(thinking, `✍️ composing the ${label} — ${p.done}/${p.total} parts…`);
+        } catch { /* projection is advisory */ }
+      },
+    });
+  } catch (err) {
+    if (ctl.signal.aborted || err?.name === 'AbortError') {
+      finalizeThinking(thinking, draftSoFar || '⏹ Stopped.', [], { route: 'chat', mode: STATE.grounding });
+      thinking.classList.add('stopped');
+    } else {
+      finalizeThinking(thinking, `Couldn't compose that: ${err?.message || err}`, [], {
+        route: 'error', mode: STATE.grounding, onRetry: () => runWrite(rawQuestion, kindHint),
+      });
+    }
+    STATE.inflight = null;
+    setComposerBusy(false);
+    return;
+  }
+
+  const artifact = String(res?.output || draftSoFar || '').trim();
+  finalizeThinking(thinking, artifact || `I couldn't compose that ${label}.`, [], {
+    route: 'chat', mode: STATE.grounding,
+    onRetry: () => runWrite(rawQuestion, kindHint),
+  });
+
+  // Commit the exchange so a follow-up ("make it longer", "now one about the sea") reads it
+  // back — the same session fold the grounded turns feed.
+  if (artifact) {
+    STATE.history.push({ role: 'user', content: rawQuestion });
+    STATE.history.push({ role: 'assistant', content: artifact });
+  }
+
+  STATE.inflight = null;
+  setComposerBusy(false);
+};
+
+// The renderer's prompt for one section. The substrate's directive is already lowered into
+// `view.goal` (the act + the learned form detail — "Open the stanza 1: 4 lines, about 8-6-8-6
+// syllables, ending lines with —"); the model is asked to render exactly that, in the kind's
+// voice, following on from the draft so far. Style excerpts anchor the voice without being
+// copied. Output only the artifact — no title, no commentary (the chatbot wrapper that made
+// the old answers read as essays-about rather than the thing itself).
+const writeMessages = ({ view, kind, draftSoFar = '', examples = [] }) => {
+  const a = /^[aeiou]/i.test(kind) ? 'an' : 'a';
+  const verse = view?.format === 'verse';
+  const system = `You are a skilled writer composing ${a} ${kind}. Write ONLY the requested part`
+    + ` — no title, no preamble, no commentary, no surrounding quotation marks. Match the form you are`
+    + ` given exactly, and write in the voice the examples show.`;
+  const parts = [];
+  if (examples.length) {
+    parts.push(`The style to match (for voice and form only — do not copy these lines):\n\n${examples.join('\n\n---\n\n')}`);
+  }
+  if (draftSoFar) parts.push(`The ${kind} so far:\n\n${draftSoFar}`);
+  parts.push(view?.goal || `Write ${a} ${kind}.`);
+  if (view?.role) parts.push(`(This is the ${view.role}.)`);
+  parts.push(`Write it now — output only the ${verse ? 'lines themselves' : 'text itself'}.`);
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: parts.join('\n\n') },
+  ];
+};
+
 // Run one query through the pipeline and render it. Factored out of the composer so
 // an errored turn can offer a one-click retry (re-runs the very same question).
 const runQuery = async (rawQuestion) => {
   if (!rawQuestion) return;
+  // THE WRITER PATH (docs/task-creator.md): a generative request is a make-this, not a question.
+  // "/write <request>" (or /compose, /draft) forces it; otherwise a request that opens with a
+  // compose verb and names an artifact kind is auto-detected. It composes the artifact
+  // (runArtifact) instead of researching the topic and answering about it (runTurn) — the gap
+  // that turned "write an emily dickinson poem" into a memory of Dickinson instead of a poem.
+  const writeCmd = /^\/(?:write|compose|draft|create)\b[\s:]*/i.exec(rawQuestion);
+  if (writeCmd) { await runWrite(rawQuestion.slice(writeCmd[0].length).trim()); return; }
+  if (COMPOSE_VERB.test(rawQuestion) && artifactKindOf(rawQuestion) !== 'answer') {
+    await runWrite(rawQuestion);
+    return;
+  }
   // LIMNER SVG MODE (docs/limner.md): "/svg [kind] [focus]" renders the active
   // document's EO state as deterministic SVG — graph (default), timeline,
   // void_map, or path — optionally centred on a figure named by the focus text.
