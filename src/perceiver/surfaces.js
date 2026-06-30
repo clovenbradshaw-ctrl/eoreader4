@@ -189,8 +189,8 @@ export const consciousness = (doc, spans, cursor = null, focus = []) => {
 // edge-grounding veto checks the talker's sentences against — one object, two
 // directions.
 // The notes are EOT now (docs/eot-surface-syntax.md), not flat arrows: a relation is a
-// LINK (A -> B : rel), a property an IS-A (A : value). `A --rel--> B` was retired here
-// because a model reads the arrow as a CAUSAL claim even when the edge is mere adjacency
+// LINK (A -> B : rel), a property an IS-A (A : value). The flat-arrow notation was retired
+// here because a model reads such an arrow as a CAUSAL claim even when the edge is mere adjacency
 // (the post-hoc fallacy, docs/subjective-frame.md §2); the EOT triple carries the same
 // relation without that pull. Polarity stays a CONSCIENCE token — a negated bond reaches
 // even a tiny talker as `not-rel`, never the bare positive. Delegates to serializeEOT so

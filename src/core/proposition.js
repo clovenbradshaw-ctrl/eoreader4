@@ -25,7 +25,7 @@
 export const PROPOSITION_SLOTS = Object.freeze(['substrate', 'relation', 'differentia']);
 
 // Construct a proposition (the emergent currency). Polarity defaults positive ·
-// realis; a carved absence (`A --rel--> [void]`) is the negative pole, content
+// realis; a carved absence (`A -> [void] : rel`) is the negative pole, content
 // in its own right. The result is frozen — once emerged, a proposition is a fact
 // about what the core found, not a mutable buffer.
 export const makeProposition = ({ substrate, relation, differentia, polarity = '+' }) =>

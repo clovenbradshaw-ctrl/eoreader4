@@ -82,7 +82,7 @@ test('a boundary REC is in the append-only log, replayable like the rest', () =>
 // ── The heading boundary (#0 segmentation) ───────────────────────────────────
 // A heading/label on its own line has no terminal punctuation; the single-newline
 // collapse used to weld it onto the sentence beneath, which is what minted the phantom
-// "Ryan Coogler --reboot--> Chris Carter" relation behind the wrong "Carter" answer.
+// "Ryan Coogler -> Chris Carter : reboot" relation behind the wrong "Carter" answer.
 
 test('a heading line welded to the next sentence is split at the line break', () => {
   const ss = segmentSentences(

@@ -8,7 +8,7 @@ import { answerRelation, answerWho } from '../src/answer/mechanical.js';
 import { editWithin, fuzzyMatches, fuzzCeiling } from '../src/perceiver/parse/fuzzy.js';
 
 // A relational "who" is a one-hop graph surf, not a definition lookup. The document
-// logs the kinship as a typed CON edge (Gregor --sister--> Grete); the answer is the
+// logs the kinship as a typed CON edge (Gregor -> Grete : sister); the answer is the
 // node on the other end. These pin the surf — and that it never mis-binds the phrase
 // to the bare name inside it, the confidently-wrong path the old `answerWho` took.
 
@@ -67,7 +67,7 @@ test('answerRelation honours the gender split — a sister query never returns a
 
 test('answerRelation reads a SYMMETRIC primitive in reverse for a genderless query', () => {
   const doc = parseText(STORY, { docId: 'rel' });
-  // The edge is logged Gregor --sister--> Grete; sibling is symmetric, so Grete's
+  // The edge is logged Gregor -> Grete : sister; sibling is symmetric, so Grete's
   // sibling is recoverable from the reverse, but only genderless (the noun on the
   // edge describes the owner, not the answer).
   const a = answerRelation(doc, `who is grete${apos}s sibling`);
@@ -127,14 +127,14 @@ test('fuzzyMatches rescues an out-of-vocabulary term onto its near neighbour', (
 
 // Passive voice → typed active edge (the meaning-graph richness for real prose). A copular
 // "<patient> was/is [being] <participle> by <AGENT>" used to flatten into a DEF that buried the
-// agent; now it emits AGENT --participle--> patient when the agent is an admitted named entity.
+// agent; now it emits AGENT -> patient : participle when the agent is an admitted named entity.
 test('passive with a named agent becomes a typed edge (created/written/produced by)', () => {
   const doc = parseText('The Metamorphosis was written by Kafka. Gregor was created by Kafka.', { docId: 'pv' });
   const rels = [];
   for (const sent of (doc.sentences || doc.units)) rels.push(...parseRelations(sent, doc.admission, {}, { referents: true }));
-  const edges = rels.filter(r => r.op === 'CON').map(r => `${r.src} --${r.via}--> ${r.tgt}`);
-  assert.ok(edges.includes('kafka --written--> metamorphosis'), `expected the written-by edge, got ${JSON.stringify(edges)}`);
-  assert.ok(edges.includes('kafka --created--> gregor'), `expected the created-by edge, got ${JSON.stringify(edges)}`);
+  const edges = rels.filter(r => r.op === 'CON').map(r => `${r.src} -> ${r.tgt} : ${r.via}`);
+  assert.ok(edges.includes('kafka -> metamorphosis : written'), `expected the written-by edge, got ${JSON.stringify(edges)}`);
+  assert.ok(edges.includes('kafka -> gregor : created'), `expected the created-by edge, got ${JSON.stringify(edges)}`);
   // It is a CON relation, not a flat "X: was written by …" DEF.
   assert.ok(!rels.some(r => r.op === 'DEF' && /written by/i.test(r.value || '')), 'no flat copular DEF for the passive');
 });

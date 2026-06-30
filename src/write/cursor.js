@@ -58,10 +58,12 @@ export const buildCursor = (cell, fold, spans = [], opts = {}) => {
   // hold the connection open, never overclaim.
   const band = bandOf(opts.resolution ?? cell.res);
 
-  // The typed edge in SURFACE (subject --edge--> object), never a hash (contract.mjs).
+  // The typed edge in SURFACE EOT (docs/eot-surface-syntax.md §5.3: a LINK is
+  // `SUBJECT -> OBJECT : relation`), never a hash (contract.mjs) and never the retired
+  // flat-arrow notation. A single named Site keeps the object slot open.
   const edge = cell.edge && integrals.length >= 2
-    ? `${integrals[0].name} --${cell.edge}--> ${integrals[integrals.length - 1].name}`
-    : (cell.edge && integrals.length === 1 ? `${integrals[0].name} --${cell.edge}-->` : '');
+    ? `${integrals[0].name} -> ${integrals[integrals.length - 1].name} : ${cell.edge}`
+    : (cell.edge && integrals.length === 1 ? `${integrals[0].name} -> : ${cell.edge}` : '');
 
   // "Established so far" — the fold in surface terms (heads only), never hashes.
   const established = fold.appeared()

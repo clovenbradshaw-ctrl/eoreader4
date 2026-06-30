@@ -32,7 +32,7 @@ raw text ──[sentence cut]──▶ sentence (sentIdx)
                                   │     object  "Mara Voss"      [26,35) → mara-voss
                                   │
                                   └──────────────────────▶ CON inspector-reed
-                                        { …, argspan: <seg.seq> }   --questioned--> mara-voss
+                                        { …, argspan: <seg.seq> }   -> mara-voss : questioned
 ```
 
 Each event references the one below it, so a **CON edge walks back** through the

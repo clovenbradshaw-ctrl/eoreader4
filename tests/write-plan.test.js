@@ -68,7 +68,7 @@ test('the resolver feeds a clean cursor — surface edge, no hashId leak (§2, t
   const cursor = buildCursor({ ...woke, target: 'one sentence' }, fold, woke.spans, { resolution: woke.res });
   const serial = cursor.input.map(m => m.content).join('\n');
   assert.equal(HASHID_RE.test(serial), false, 'no hashId reaches the model');
-  assert.match(serial, /Gregor Samsa --woke--> vermin/, 'the typed edge is handed in surface, labels not ids');
+  assert.match(serial, /Gregor Samsa -> vermin : woke/, 'the typed edge is handed in EOT surface, labels not ids');
 });
 
 test('a hedged (irrealis) edge resolves to a VOID band — the beat hedges before it is written (§3b)', () => {

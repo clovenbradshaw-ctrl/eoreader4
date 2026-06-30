@@ -51,7 +51,7 @@ test('A — a genuinely NOMINAL demonym still admits (the guard is surgical)', (
 
 test('B — existential "there is X" emits no relation on "there"', () => {
   const doc = parseText('There is an unspeaking jazz player in the room.', { docId: 'd' });
-  assert.ok(!edges(doc).some(e => e.via === 'there'), 'no --there--> edge from an existential');
+  assert.ok(!edges(doc).some(e => e.via === 'there'), 'no edge via "there" from an existential');
 });
 
 test('C — a relative clause is not pinned on the running sentence subject', () => {

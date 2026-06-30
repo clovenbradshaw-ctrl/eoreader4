@@ -11,7 +11,7 @@
 Take one line from the flat notes:
 
 ```
-Gregor --woke-as--> vermin
+Gregor -> vermin : woke-as
 ```
 
 A string verb wedged between two strings: the verb has no type, the endpoints no

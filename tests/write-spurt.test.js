@@ -71,6 +71,6 @@ test('the write loop folds the spine: schedule → cursor → spurt → witness 
 
 test('writeLoop requires a fold; the stub never leaks a hashId', async () => {
   await assert.rejects(() => writeLoop([], {}), /a fold .* is required/);
-  const text = await stubModel().phrase([{ role: 'user', content: 'Subject: Grete\nObject: Gregor Samsa\n  Grete --tends--> Gregor Samsa' }]);
+  const text = await stubModel().phrase([{ role: 'user', content: 'Subject: Grete\nObject: Gregor Samsa\n  Grete -> Gregor Samsa : tends' }]);
   assert.equal(HASHID_RE.test(text), false);
 });

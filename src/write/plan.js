@@ -12,7 +12,7 @@
 // `stopToCell` is the inverse of the reader's clause→event typing: take a stop and
 // SELECT the graph edge to realise —
 //   • the stop's focus figure              → the cell's SUBJECT (its integral name);
-//   • the strongest edge leaving it within  → the cell's EDGE (A --tends--> B), its
+//   • the strongest edge leaving it within  → the cell's EDGE (A -> B : tends), its
 //     the reach                               endpoints the Subject/Object slots;
 //   • the edge's Resolution band            → the cell's BAND, so a void stop HEDGES
 //                                             before it is written, never after (§3b);

@@ -105,7 +105,7 @@ const looksRelational = (sentence) => {
 // unbound. Recover the edge HERE, on the TALKER-claim side only — the document parse is untouched
 // (its naming path already logs these kinship edges). When one side names an admitted referent
 // and the other is "OWNER's REL" / "the REL of OWNER" with OWNER admitted and REL a relation the
-// algebra types, emit OWNER --REL--> NAME: the same owner→named, via=relnoun shape the page logs,
+// algebra types, emit OWNER -> NAME : REL: the same owner→named, via=relnoun shape the page logs,
 // so checkRelationAgree matches it against the document edge. Conservative by construction — both
 // endpoints must resolve to admitted ids and the relation must type, so it never manufactures an
 // edge from prose the document does not ground.

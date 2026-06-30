@@ -56,7 +56,7 @@ const abbreviates = (buf, isAbbreviation) => {
 // space, so such a line WELDS onto the sentence beneath it — "Ryan Coogler reboot" + "In
 // March 2023, …Chris Carter" became one sentence, and the relation reader, finding two
 // admitted names with the heading word "reboot" between them, minted the phantom edge
-// "Ryan Coogler --reboot--> Chris Carter" that produced the wrong "Carter" answer. The
+// "Ryan Coogler -> Chris Carter : reboot" that produced the wrong "Carter" answer. The
 // heading is its own unit; the `\n` after it is a boundary.
 //
 // The discriminator from a hard-wrapped PROSE line (Project Gutenberg wraps mid-sentence

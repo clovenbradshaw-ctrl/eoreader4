@@ -110,16 +110,16 @@ const propIdOf = (edge) =>
     : `prop:${edge.src}~${slugProp(edge.via)}~${edge.tgt}`;
 
 // Words that are not verbs: if the head slot lands on one of these, there is no
-// relation here — better silence than "Grete who Just" or "Gregor --between-->
-// spoke". Prepositions, indefinite pronouns, and bare cardinals are added because
+// relation here — better silence than "Grete who Just" or "Gregor -> spoke :
+// between". Prepositions, indefinite pronouns, and bare cardinals are added because
 // they were the surface words the flat extractor mistook for predicates
-// ("Gregor --something--> awful", "Gregor --two--> whole") — exactly the junk the
+// ("Gregor -> awful : something", "Gregor -> whole : two") — exactly the junk the
 // note format forbids in the relation slot.
 const NOT_HEAD = new Set([
   'who', 'whom', 'whose', 'which', 'that', 'what', 'where', 'when', 'why', 'how',
   // Expletive / deictic adverbs: "there is an unspeaking jazz player", "here stands a
   // man" front a clause but are no predicate. Without them the head-verb walk took the
-  // existential "there" as the relation ("X --there--> player"), inventing a bond out of
+  // existential "there" as the relation ("X -> player : there"), inventing a bond out of
   // a presentational clause. Same closed-class footing as the wh-adverbs above.
   'there', 'here',
   'by', 'of', 'in', 'on', 'at', 'to', 'from', 'with', 'for', 'as', 'than', 'about',
@@ -137,7 +137,7 @@ const NOT_HEAD = new Set([
   // clause has no admitted subject and falls to the inherited/last-INS fill, its head
   // walk would otherwise take the leading quantifier as the verb — "All these families
   // belong to Odontoceti" bonding an unrelated running figure via "all", a quarter of
-  // a real run's triples (the audit's "X --All--> Y", "--Several-->", "--Some-->" junk).
+  // a real run's triples (the audit's "X -> Y : All", "X -> Y : Several", "X -> Y : Some" junk).
   // A determiner-headed clause is a noun phrase the name-only reader cannot subject, so
   // it fails toward silence here rather than minting a bond on a non-verb. (more/most/
   // less/much/such/so are already modifiers — stepped over to the real verb, not here.)
@@ -152,7 +152,7 @@ const NOT_HEAD = new Set([
 // STEPPED OVER so the real verb is still reached — "couldn't understand" → the verb
 // `understand`, polarity −, modality epistemic — where the old walk either swallowed
 // the negation as a modifier (dropping it) or mistook the contraction for the verb
-// ("--couldn't--> understand"). Small closed sets; a later pass can move them to the
+// ("-> understand : couldn't"). Small closed sets; a later pass can move them to the
 // conventions ledger, the home for language-specific lists.
 const NEGATION        = new Set(['not', 'never', 'cannot']);
 const MODAL_EPISTEMIC = new Set(['could', 'would', 'might', 'may']);
@@ -363,7 +363,7 @@ export const headVerb = (text, { isCopula = defIsCopula, isModifier = defIsModif
 };
 
 // PASSIVE VOICE → the typed active edge. "<patient> is/was [being|been] <participle> by <agent>"
-// becomes AGENT --participle--> PATIENT, so "developed/produced/created/directed/founded by X"
+// becomes AGENT -> PATIENT : participle, so "developed/produced/created/directed/founded by X"
 // reaches the graph as a relation instead of a flat copular DEF that buries the agent — the
 // difference between a rich graph and a list of "X: is being developed by …" on real web prose.
 // Conservative by construction: the participle is -ed or a known irregular, there must be a
@@ -822,7 +822,7 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
 
     if (head.copular) {
       // PASSIVE → typed active edge: "<patient> is/was [being] <participle> by <AGENT>" becomes
-      // AGENT --participle--> patient, when the agent is an admitted named entity. Otherwise the
+      // AGENT -> patient : participle, when the agent is an admitted named entity. Otherwise the
       // copular predicate flattens to a DEF as before.
       const pv = passiveParticiple(head.rest);
       if (pv) {

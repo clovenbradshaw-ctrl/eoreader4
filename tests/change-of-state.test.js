@@ -10,8 +10,8 @@ import { ingestText } from '../src/organs/in/text.js';
 
 // §4 (docs/subjective-frame.md) — the parse-layer / algebra unlock the §5 veto depends on,
 // behind the RULES_REV flag with golden parity. The bug the audit found: the reading held
-// no `Gregor --transformed-into--> insect`, so the talker's `father --transformed-into-->
-// insect` corresponded to nothing and drew contradicted:0. These tests pin the unlock: the
+// no `Gregor -> insect : transformed-into`, so the talker's `father -> insect :
+// transformed-into` corresponded to nothing and drew contradicted:0. These tests pin the unlock: the
 // change-of-state algebra marks a different-undergoer claim CONTRADICTED, the coordinated-
 // subject reading reaches the convergence the single scan drops, and the basis carries
 // kinship/role edges as first-class elements. All flag-driven by an EXPLICIT argument, so
@@ -45,7 +45,7 @@ test('checkObjectFunctionalConflict: a different undergoer reaching the same res
 });
 
 // ── end to end through factCheck: the audit's missing number ─────────────────
-test('the §5 veto marks `father --transformed-into--> insect` CONTRADICTED (flag on); INDETERMINATE (flag off — golden parity)', async () => {
+test('the §5 veto marks `father -> insect : transformed-into` CONTRADICTED (flag on); INDETERMINATE (flag off — golden parity)', async () => {
   // A controlled reading: Gregor undergoes the transformation; Hermann is a distinct figure.
   // (Active voice, so the parser extracts the edge — Kafka's resultative "found himself
   // transformed" is the harder extraction the flag is benchmarked on before shipping.)

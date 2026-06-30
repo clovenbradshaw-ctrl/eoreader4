@@ -80,7 +80,7 @@ test('a lowercase clause-head pronoun resolves — Move 1\'s two halves, wired',
 // ---------------------------------------------------------------------------
 // Move 2 — the NP referent object slot.
 
-test('the spot-check: "Gregor crawled over the wall" → gregor --motion(crawled)--> wall(np)', () => {
+test('the spot-check: "Gregor crawled over the wall" → gregor -> wall(np) : motion(crawled)', () => {
   const doc = parseText(
     'Gregor Samsa crawled over the wall. Gregor Samsa crawled over the wall.',
     { docId: 'spot' });
@@ -190,7 +190,7 @@ test('an NP bond in a non-initial clause still walks back to the verbatim text (
 
 test('the arrows stay plain language — an NP referent reads as its lemma, no codes', () => {
   // The read layer renders an NP endpoint by its lemma (label || id), so the notes
-  // contract (A --rel--> B, no operator codes, no [sN]) holds with referents present.
+  // contract (A -> B : rel, no operator codes, no [sN]) holds with referents present.
   const doc = parseText(
     'Gregor Samsa crawled over the wall. Gregor Samsa crawled over the wall.',
     { docId: 'arrow' });

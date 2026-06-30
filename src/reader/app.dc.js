@@ -2472,7 +2472,7 @@ class Component extends DCLogic {
   // reads as one label, with the spec's `not-` carrying negation. Mirrors perceiver/surfaces.plainRel.
   eotRel(verb,neg){const v=String(verb||'').trim().replace(/[.!?]+$/,'').replace(/\s+/g,'-')||'linked-to';return (neg?'not-':'')+v;}
   // A proposition in EOT surface (docs/eot-surface-syntax.md): a relation is a LINK
-  // `SUBJECT -> OBJECT : relation`, never the retired flat `subject --relation--> object` arrow.
+  // `SUBJECT -> OBJECT : relation`, never the retired flat-arrow notation.
   eotSurface(t){return `${t.s} -> ${t.o} : ${t.rel!=null?t.rel:this.eotRel(t.v,t.neg)}`;}
   entityTriples(id){
     const subj=[],obj=[],seen=new Set();

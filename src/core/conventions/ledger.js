@@ -63,7 +63,7 @@ export const SEED_COPULA = Object.freeze([
 // verb. ReVerb's relation-phrase constraint, by hand — step over these to find the
 // real predicate, and if what remains is a copula or not verb-headed, emit no edge.
 // Includes the intensifiers eoreader4 was missing (much, more, rather, quite, …)
-// that let "Much --more--> Caroline" through.
+// that let "Much -> Caroline : more" through.
 export const SEED_MODIFIER = Object.freeze([
   // adverbs of time/manner/degree
   'then', 'now', 'also', 'just', 'once', 'soon', 'suddenly', 'slowly', 'quietly',

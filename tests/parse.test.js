@@ -12,8 +12,8 @@ import { projectGraph } from '../src/core/project.js';
 test('a determiner/quantifier at the clause head is never read as the verb — fail to silence', () => {
   // The dolphin-audit junk: a clause with no admitted subject ("All these families
   // belong to Odontoceti", "Several species…") fell to the inherited-subject fill and
-  // its head walk took the leading quantifier as the relation, minting "X --All--> Y",
-  // "--Several-->", "--Some-->", "--including-->" bonds on an unrelated running figure.
+  // its head walk took the leading quantifier as the relation, minting "X -> Y : All",
+  // "X -> Y : Several", "X -> Y : Some", "X -> Y : including" bonds on an unrelated running figure.
   // A determiner heads a NOUN PHRASE, never a predicate, so headVerb must return null
   // (no bond) rather than name the quantifier the verb.
   for (const w of ['All these families belong to Odontoceti', 'Some species use tools',
@@ -201,7 +201,7 @@ test('kinship apposition resolves a pronoun owner through the field ("His sister
 });
 
 test('relation elements carry polarity and modality — negation and hedge are not dropped', () => {
-  // "couldn't understand" used to log as --couldn't--> understand, dropping the
+  // "couldn't understand" used to log as `-> understand : couldn't`, dropping the
   // negation. Now the real verb is recovered and the sign and mood ride the element.
   const doc = parseText(
     'Gregor Samsa could not understand the words. Gregor told Grete. Gregor Samsa did not open the door.',
@@ -219,7 +219,7 @@ test('relation elements carry polarity and modality — negation and hedge are n
 });
 
 test('a preposition or indefinite pronoun in the head slot yields no relation (no surface-word junk)', () => {
-  // "Gregor --something--> awful" / "Gregor --between--> spoke" — the flat extractor's
+  // "Gregor -> awful : something" / "Gregor -> spoke : between" — the flat extractor's
   // junk. The head slot landing on a non-verb now produces silence, not a bond.
   const doc = parseText('Gregor Samsa something awful happened. Gregor Samsa between two rooms.', { docId: 'j' });
   const vias = doc.log.snapshot().filter(e => e.op === 'CON').map(e => e.via);

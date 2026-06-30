@@ -68,7 +68,7 @@ total: 34 — all same_as? (identity); 0 carved
 ```
 
 **The only voids this corpus carves are identity voids** — the open `same_as?`
-candidates the asterisk holds. There are no explicit `A --rel--> [void]` absences in the
+candidates the asterisk holds. There are no explicit `A -> [void] : rel` absences in the
 text. So the Void surface and Paradigm (the "void shape across the corpus") render, on
 this corpus, the asterisk's held identities and nothing else.
 

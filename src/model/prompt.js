@@ -11,7 +11,7 @@
 //
 // What this REVERSES from the earlier (prompt-assembly.md) contract, per the
 // June 20 correction and docs/subjective-frame.md:
-//   §2 — the fold's ARROWS leave the prompt. A model reads `A --rel--> B` as a
+//   §2 — the fold's ARROWS leave the prompt. A model reads a flat relational arrow as a
 //        causal claim even when the edge encodes only adjacency (the post-hoc
 //        fallacy); the arrows shipping today are degraded verb-fragments, noise
 //        not spine. Relational structure now rides in span SELECTION and ORDER
@@ -259,7 +259,7 @@ export const orderSpansForFrame = (spans = [], { max = 8 } = {}) => {
 // verbatim lines, the only thing the reader read — framed as a reading, with the
 // question and the absence clause LAST where a small model attends hardest. No arrows
 // (§2): relational structure rode into span selection and order upstream, never as
-// `A --rel--> B` in the talker's input. No recognition (§3): orientation is
+// `A -> B : rel` in the talker's input. No recognition (§3): orientation is
 // filename · type · length, never a title or author. The conversation rides in the same
 // reader's register (this reading so far), the USER's thread only — the talker's prior
 // answers stay withheld (the poisoning channel), and an unbound one never folds in (§7).
@@ -430,7 +430,7 @@ export const buildCursorMessages = ({
   established = '',
   integrals = [],          // [{ name }] — the full integral per argument Site (surface)
   open = [],               // [string]  — void attributes, held open
-  edge = '',               // the typed relation in surface: A --tends--> B
+  edge = '',               // the typed relation in EOT surface: A -> B : tends
   beat = '',               // OR a beat instruction (free prose target)
   spans = [],              // grounded substance for this beat (exafference)
   target = '',             // the shape instruction ("one plain past-tense sentence…")

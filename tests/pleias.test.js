@@ -24,7 +24,7 @@ test('extractGroundedInput recovers the question and the verbatim sources', () =
   const messages = buildGroundedMessages({
     question: 'Where did the fire start?',
     spans: [{ text: 'The fire started in the kitchen.' }, { text: 'It spread to the hall.' }],
-    notes: 'fire --started-in--> kitchen',
+    notes: 'fire -> kitchen : started-in',
     orientation: 'pg5200.txt · text · 12 sentences',
   });
   const { query, sources } = extractGroundedInput(messages);

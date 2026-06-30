@@ -186,7 +186,7 @@ export const createParser = ({
     // this sentence* and the strongest candidate's weight becomes the bond's
     // coupling. Nothing is committed — the weight carries the uncertainty.
     const corefField = createCorefField({ ...corefOpts, ...(rolesConflict ? { rolesConflict } : {}) });
-    // Derived descriptor edges (owner --role--> bearer) accumulate here and are
+    // Derived descriptor edges (owner -> bearer : role) accumulate here and are
     // logged after the candidate relations — they are the trigger's output, marked
     // `derived` so the graph and the edge-grounding veto read them as defeasible.
     const derivedEdges = [];
@@ -398,7 +398,7 @@ export const createParser = ({
       // The unify trigger (phase b): once this sentence's admissions and
       // descriptors are folded in, bind any role whose bearer is now uniquely
       // determined by elimination. Each binding becomes a derived owner→bearer
-      // edge (e.g. Gregor --sister--> Grete), typed downstream as the sibling
+      // edge (e.g. Gregor -> Grete : sister), typed downstream as the sibling
       // primitive — the apposition-free hop the channel exists to recover.
       for (const b of corefField.bindDescriptorsByElimination([...admission.admitted.values()], sentIdx))
         derivedEdges.push({ op: 'CON', src: b.owner, tgt: b.id, via: b.role, sentIdx, w: b.w, derived: true });

@@ -164,7 +164,7 @@ export const feedHolons = (structure) => {
   };
 
   for (const r of relations) {
-    // SIG is speech (⟨says⟩), CON is a plain bond (--with-->). The verb on the
+    // SIG is speech (⟨says⟩), CON is a plain bond (LINK `-> X : with`). The verb on the
     // edge is the relation; the operator only picks the bracket it reads in.
     ensure(r.src).bonds.push({ op: r.op, via: r.via || (r.op === 'SIG' ? 'says' : 'with'), to: r.tgt, idx: r.idx,
       polarity: r.polarity || '+', modality: r.modality || 'realis' });
