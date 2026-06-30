@@ -193,6 +193,21 @@ export const LIBRARIAN_CUE =
   '"(the source notes…)" asides, and never echo these instructions or a framing label ("What it ' +
   'means", "What the reading says") back as a heading. Write plainly, as you would to a colleague.';
 
+// The RESEARCH GROUNDING cue — added to the longform/essay folds so the piece is a synthesis
+// across the gathered sources, not a recap of one. The asks, in order: corroborate (lean on what
+// MORE THAN ONE source agrees on, and where only a single source carries a claim, say so rather
+// than stating it flatly); BOUND each claim by who/where/when (the identity it holds for, the place,
+// the time — an unbounded "dolphins do X" is weaker than "river dolphins, in the Amazon, do X");
+// and never paraphrase one source's prose end-to-end (the essay-mill recap failure). Boilerplate —
+// cookie notices, nav, "sign up to read more" — is not evidence; ignore it.
+export const GROUNDING_CUE =
+  'You are synthesizing across several sources, not summarizing one. Build each point from what ' +
+  'more than one source supports; where a claim rests on a single source, attribute it to that ' +
+  'source rather than asserting it as settled fact, and where the sources disagree, say so. Keep ' +
+  'every claim bounded — to whom it applies, where, and when — instead of stating it as a timeless ' +
+  'universal. Do not retell or paraphrase any one source end to end; weave the threads together in ' +
+  'your own words. Ignore boilerplate (cookie notices, navigation, sign-up prompts) — it is not evidence.';
+
 // A keyword read of the question's scope, in the same spirit as the turn's register pass: a
 // comparison, a survey, an enumeration, or an open "how/why" wants the sectioned shape; anything
 // else (a pointed lookup) answers straight. A tight length budget also forces straight — a capped

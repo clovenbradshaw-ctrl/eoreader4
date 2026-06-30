@@ -2056,8 +2056,12 @@ class Component extends DCLogic {
     let wiki=[];
     try{wiki=await this._searchWiki(query,Math.min(3,n||3));}catch(e){wiki=[];}
     if(wiki.length)return wiki;
-    try{return await this.searchLinks(query,n);}catch(e){return [];}
+    // Open-web fallback (off-encyclopedia topics): drop essay mills here too, so a subject Wikipedia
+    // has no article for still doesn't fall back to gradesfixer / bartleby to recap.
+    try{const open=await this.searchLinks(query,(n||4)+3);return this._dropMills(open).slice(0,n||4);}catch(e){return [];}
   }
+  // Strip essay-mill / study-help hosts from a list of URLs (the walk reads sources, not homework).
+  _dropMills(urls){return (urls||[]).filter(u=>{let h='';try{h=new URL(/^https?:/i.test(u)?u:'https://'+u).hostname;}catch(e){return true;}return !this._lowQualitySource(h);});}
   // The CITED external sources of a read Wikipedia article — the references that ground it, which
   // the walk follows to build a multi-source graph ("go find primary sources"). Pulled from the
   // article's reference list via the parse API (externallinks), filtered to readable publications
@@ -2086,8 +2090,31 @@ class Component extends DCLogic {
       'jstor.org','proquest.com','semanticscholar.org','researchgate.net','ssrn.com','academia.edu',
       'youtube.com','youtu.be','twitter.com','x.com','facebook.com','instagram.com','t.co','reddit.com'];
     if(noise.includes(host))return true;
+    if(this._lowQualitySource(host))return true;   // essay mills are noise too, never a cited source
     return /(?:^|\.)(?:wikipedia\.org|wikimedia\.org|wikidata\.org|wiktionary\.org|wikisource\.org|wikivoyage\.org|wikibooks\.org|mediawiki\.org|wmflabs\.org|toolforge\.org)$/.test(host)
       || /(?:^|\.)google\.[a-z.]+$/.test(host) || /(?:^|\.)bing\.com$/.test(host) || /(?:^|\.)amazon\.[a-z.]+$/.test(host);
+  }
+  // ESSAY MILLS & STUDY-HELP FARMS — the pages the open-web search handed back for "write me an
+  // essay about dolphins" (gradesfixer / bartleby / classace), plus the rest of that genre. Their
+  // text is other people's essays and homework, not sources: grounding an answer in them recaps —
+  // plagiarizes — those essays, and their pages are mostly cookie banners and "sign up to read more"
+  // boilerplate. Barred from the research walk AND down-weighted out of the grounding pool, so the
+  // answer stands on Wikipedia and real publications instead. Matched on the registrable host so
+  // "www." and regional variants are covered.
+  _lowQualitySource(host){
+    host=String(host||'').replace(/^www\./,'').toLowerCase();
+    if(!host)return false;
+    const mills=new Set(['gradesfixer.com','bartleby.com','classace.io','studymoose.com','ipl.org',
+      '123helpme.com','studocu.com','coursehero.com','cram.com','ukessays.com','studydriver.com',
+      'paperap.com','gradesaver.com','phdessay.com','customwritings.com','essaypro.com','edubirdie.com',
+      'studycorgi.com','studyhippo.com','studentshare.org','writework.com','megaessays.com','antiessays.com',
+      'chegg.com','quizlet.com','scribd.com','brainly.com','brainly.in','slideshare.net','academic.tips',
+      'eduzaurus.com','samploon.com','myperfectwords.com','nerdyseal.com','supersummary.com','litcharts.com',
+      'shmoop.com','cliffsnotes.com','sparknotes.com','enotes.com','bookrags.com','gradebuddy.com',
+      'essay.org','essays.io','speedypaper.com','grademiners.com','essayshark.com','homeworkmarket.com']);
+    if(mills.has(host))return true;
+    // …and the long tail by URL shape — any host whose name is built from these essay-mill tokens.
+    return /(?:^|[.-])(?:essay|essays|paper|papers|homework|coursework|termpaper|studynotes|study-?notes)(?:[.-]|$)/.test(host);
   }
   _rankCitedSources(links){
     const out=[],hosts=new Set();
@@ -3013,7 +3040,13 @@ class Component extends DCLogic {
     const cur=this.state.chats.find(c=>c.id===id);
     const had=this.chatSourcesOf(cur);
     const scope=had.length?[...new Set([...had,...(gathered||[])])]:[];
-    const urls=scope.length?scope:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
+    const allUrls=scope.length?scope:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
+    // QUALITY GATE on the grounding pool: an essay grounded in essay-mill pages recaps those essays
+    // (the plagiarism failure). Ground only in real sources when any are in scope; fall back to the
+    // full set just in case the whole scope is mills (then it's an honest recap, not a silent one).
+    const hostOf=u=>{try{return new URL(/^https?:/i.test(u)?u:'https://'+u).hostname;}catch(e){return '';}};
+    const good=allUrls.filter(u=>!this._lowQualitySource(hostOf(u)));
+    const urls=good.length?good:allUrls;
     // The named-subject gate: don't build a multi-section essay about a subject the in-scope
     // reading never names (the Grok case) — answer honestly instead of confabulating sections.
     if(!this._subjectsKnown(q,urls)){finish(this._noSubjectPatch(q,scope));return;}
@@ -3038,14 +3071,46 @@ class Component extends DCLogic {
     let model=null;try{model=await this.ensureChatModel();}catch(e){model=null;}
     const NOVELTY=0.2;
     const covered=new Set(),parts=[],usedHead=new Set(),allEnts=new Set(poolEnts),allSrcs=new Set(),allPass=[];
+    // CITATION REGISTRY for the inline superscripts — one footnote number per distinct source, in
+    // first-appearance order. _md renders a ⟦cSLOT⟧ sentinel as a superscript glyph showing `n`;
+    // the registry rides on the pending message (attached in paint) so the numbers form WHILE the
+    // essay streams, and the references list below points at the same numbers. (slot = array index
+    // the sentinel carries; n = the displayed footnote number.)
+    const cites={},slotOf=new Map();
+    const citeFor=(u,sample)=>{if(!u)return -1;if(!slotOf.has(u)){const slot=slotOf.size;
+      cites[slot]={u,n:slot+1,text:sample||'',label:this.truncLabel((((this.pageOf(u)||{}).title)||(/^text:/i.test(u)?'text':this.short(u))),40)};
+      slotOf.set(u,slot);}return slotOf.get(u);};
+    // Bind each SENTENCE of a finished section to the best-matching span it leans on, appending that
+    // span's source as an inline superscript (the receipt the reader wanted — every claim shows where
+    // it's grounded). Lexical overlap, the same match _citeAnnotate uses, but numbered off the shared
+    // registry so a source keeps one number across the whole essay. Headings never get a footnote.
+    const SENT=/(?<=[.!?])\s+/;
+    const citeBody=(body,spans)=>{
+      const ptok=(spans||[]).filter(s=>s&&s.text&&s.u).map(s=>({s,set:new Set(this._researchTerms(s.text))})).filter(p=>p.set.size);
+      if(!ptok.length)return body;
+      return String(body||'').split('\n').map(line=>{
+        if(!line.trim()||/^\s*#{1,6}\s/.test(line))return line;
+        return line.split(SENT).map(sent=>{
+          const toks=this._researchTerms(sent);if(toks.length<3)return sent;
+          const tset=new Set(toks);let best=null,bestScore=0;
+          for(const {s,set} of ptok){let hit=0;for(const t of tset)if(set.has(t))hit++;const score=hit/tset.size;if(hit>=2&&score>bestScore){bestScore=score;best=s;}}
+          if(best&&bestScore>=0.25){const slot=citeFor(best.u,best.text);if(slot>=0)return sent+'⟦c'+slot+'⟧';}
+          return sent;
+        }).join(' ');
+      }).join('\n');
+    };
     let acc='',raf=0;
-    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
-    // A grounded fold: stream `spans` into the running essay under an optional `header`, then
-    // append the result to `parts`. Shared by the LEAD (no header) and each CON theme section.
-    // ACCUMULATE the streamed tokens (`streamed`), don't REPLACE — each onToken piece is one
-    // token, so `acc=base+streamed` grows the live view left-to-right (the shape _answerSingle
-    // uses with `acc+=s`). Kept outside the try so a late hiccup (streamPhrase returns empty or
-    // throws AFTER streaming real prose) keeps what was written instead of dropping to a fragment.
+    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,cites};return {...c,messages:m};})}),()=>this._scrollChat());};
+    // The grounding guidance carried into every fold — synthesize across sources, bound claims by
+    // identity/space/time, never recap one source end to end (GROUNDING_CUE), in the librarian register.
+    const groundShape=[this._ME.LIBRARIAN_CUE,this._ME.GROUNDING_CUE].filter(Boolean).join('\n\n');
+    // A grounded fold: stream `spans` into the running essay under an optional `header`, then append
+    // the result to `parts`. Shared by the LEAD (no header) and each CON theme section. ACCUMULATE the
+    // streamed tokens (`streamed`), don't REPLACE — each onToken piece is one token, so `acc=base+
+    // streamed` grows the live view left-to-right. Returns true if it wrote a section, false if the
+    // model gave nothing — a barren fold is SKIPPED (no header, no raw-source paste), which is the fix
+    // for the essay "crapping out" into a pasted source line (the bled "…| Bartleby" title): a failed
+    // section now drops cleanly instead of dumping verbatim source text as prose.
     const fold=async(spans,header)=>{
       const head=header?('## '+header+'\n\n'):'';
       acc=(parts.join('\n\n')+(parts.length?'\n\n':'')+head);paint();
@@ -3054,17 +3119,18 @@ class Component extends DCLogic {
         try{
           const srcs=[...new Set(spans.map(s=>s.u).filter(Boolean))];const gscope=srcs.length?srcs:urls;
           const msgs=this._ME.buildGroundedMessages({question:q,spans,graph:this.meaningGraph(gscope),
-            orientation:this.chatOrientation(gscope),task:'answer',conversation:{pastTurns:[]},now:new Date()});
+            orientation:this.chatOrientation(gscope),task:'answer',conversation:{pastTurns:[]},now:new Date(),shape:groundShape});
           const base=acc;
           const onToken=(piece)=>{const t=String(piece||'');if(!t)return;streamed+=t;acc=base+streamed;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
           body=this.normMd(await this._ME.streamPhrase(model,msgs,{maxTokens:384,temperature:0.4,onToken}))||this.normMd(streamed);
         }catch(e){body=this.normMd(streamed);}
       }
-      if(!body)body=spans.slice(0,3).map(s=>this._clipPassage(s.text)).join(' ');   // structural fallback, bounded
-      parts.push(head+body);
+      if(!body){acc=parts.join('\n\n');paint();return false;}   // barren fold — skip it, don't paste raw source
+      parts.push(head+citeBody(body,spans));
       for(const s of spans.slice(0,2))allPass.push({text:s.text,u:s.u,i:s.i});
       for(const s of spans)if(s.u)allSrcs.add(s.u);
       acc=parts.join('\n\n');paint();
+      return true;
     };
     // LEAD — open on the strongest spans across the whole pool (a frame, not a theme section).
     await fold([...pool].sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,5),null);
@@ -3081,7 +3147,7 @@ class Component extends DCLogic {
     }
     if(parts.length<2)return this._answerSingle(id,q,gathered);
     finish({text:parts.join('\n\n'),entities:[...allEnts].slice(0,8),sources:[...allSrcs],
-      passages:allPass.slice(0,12),groundKind:'matched',related:this.relatedDocs(q,scope)});
+      passages:allPass.slice(0,12),cites:Object.keys(cites).length?cites:null,groundKind:'matched',related:this.relatedDocs(q,scope)});
   }
   // SEG for the arc: group pooled spans into THEMES, one section each. A theme IS a salient
   // content word — the spans that share it are its section, and that word (Title-Cased) is its
@@ -3196,7 +3262,7 @@ class Component extends DCLogic {
         // try the next one (`patience` dry threads in a row ends it).
         try{links=await this._wikiFirstLinks(node.query,6);}catch(e){step('warn','Search unavailable on that thread — '+((e&&e.message)||e));hops.push({query:node.query,term:node.term,got:0,next:null,error:String((e&&e.message)||e)});if(++stray>=cfg.patience)break;continue;}
       }
-      links=(links||[]).filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u));
+      links=this._dropMills((links||[]).filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u)));
       if(!links.length){if(!isUrl)step('warn','No fresh sources on that thread.');hops.push({query:node.query||node.url,term:node.term,got:0,next:null,empty:true});if(++stray>=cfg.patience)break;continue;}
       const want=isUrl?1:(node.term?cfg.want:cfg.wantSeed);let got=0,attempts=0;const keptText=[];
       for(let i=0;i<links.length&&got<want&&attempts<5;i++){
@@ -3464,10 +3530,14 @@ class Component extends DCLogic {
       // Render the model's markdown LIVE — even while the bubble is still pending — so lists, bold
       // and line breaks form as the answer streams in, not only once it finishes. User turns stay plain.
       const isMd=!isUser&&!!m.text;
-      // Bind each proposition to the passage it leans on → inline ¶ pills in the answer body.
-      // Only once the answer is settled (passages are attached on finish), so streaming stays cheap.
-      const ann=(isMd&&!m.pending&&(m.passages||[]).length)?this._citeAnnotate(m.text,m.passages):null;
-      const bodyHtml=isMd?this._md(ann?ann.text:m.text,ann&&ann.reg):'';
+      // Inline footnotes. The longform arc bakes ⟦cN⟧ sentinels into the text AS IT STREAMS and
+      // rides its own registry on `m.cites`, so the superscripts grow with the essay — use it
+      // directly (pending and settled). Any other answer gets the post-hoc binder once it settles
+      // (matched lexically against its passages), so streaming stays cheap. `m.text` already carries
+      // sentinels in the longform case, so it's passed straight through.
+      const liveReg=(isMd&&m.cites&&Object.keys(m.cites).length)?m.cites:null;
+      const ann=(!liveReg&&isMd&&!m.pending&&(m.passages||[]).length)?this._citeAnnotate(m.text,m.passages):null;
+      const bodyHtml=isMd?this._md((ann?ann.text:m.text),liveReg||(ann&&ann.reg)):'';
       // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
       // line (the librarian apparatus, shown by default). When the binder found no inline match we
       // still list the passages the answer drew on, so the source text is always in view.
@@ -3477,7 +3547,9 @@ class Component extends DCLogic {
       const refOf=(u,n,text)=>({n,label:titleForUrl(u),domain:this.short(u)||titleForUrl(u),
         preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.goWeb(u)});
       let refs=[];
-      if(ann&&ann.reg){
+      if(liveReg){
+        refs=Object.keys(liveReg).map(i=>liveReg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
+      }else if(ann&&ann.reg){
         refs=Object.keys(ann.reg).map(i=>ann.reg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
       }else if(!isUser&&!m.pending&&(m.passages||[]).length){
         refs=(m.passages||[]).slice(0,6).map((p,k)=>refOf(p.u,k+1,p.text));
