@@ -13,6 +13,15 @@ const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 // leaf budgeted above it is a Pattern goal the decomposer splits, the same role
 // LEAF_MAX_TOKENS played when it was a global. `contextOf` is the advisory retrieval
 // width per leaf, in this organ's context unit (spans).
+// The neutral arc verb each act lowers to in PROSE. A directive names a move (open /
+// develop / close / …) on a role; the organ supplies the language. So the same neutral
+// directive that music renders as a phrase, text renders as a sentence.
+const TEXT_VERB = Object.freeze({
+  open: 'Open', develop: 'Develop', close: 'Close',
+  state: 'State', vary: 'Vary', resolve: 'Resolve',
+  enumerate: 'List', summarize: 'Summarize',
+});
+
 export const textOrgan = Object.freeze({
   id: 'text',
   unit: 'tokens',
@@ -20,6 +29,14 @@ export const textOrgan = Object.freeze({
   minBudget: 64,
   contextUnit: 'spans',
   contextOf: (budget) => clamp(Math.round(budget / 40), 3, 10),
+  // lower(directive) → an English instruction. The TEXT lowering of a modality-neutral
+  // directive { act, role, subject, detail }; pure, plan-time (no model).
+  lower: ({ act, role, subject, detail } = {}) => {
+    const verb = TEXT_VERB[act] || 'Write';
+    const about = subject ? ` about ${subject}` : '';
+    const tail = detail ? `: ${detail}` : '';
+    return `${verb} the ${role || 'part'}${about}${tail}.`;
+  },
 });
 
 // renderText(generate) → render(view). The run-time half: adapt the modality-neutral

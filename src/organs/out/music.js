@@ -17,6 +17,15 @@ const clamp = (x, lo, hi) => (x < lo ? lo : x > hi ? hi : x);
 // The plan-time descriptor. `unit` is beats; `ceiling` is one phrase (~a bar or two)
 // — the most one small-model reach should compose before the goal is too big and the
 // decomposer must split it. `contextOf` is the advisory width in motifs.
+// The same neutral arc verbs, lowered to MELODIC moves. open → state the motif,
+// develop → vary and extend it, close → resolve to a cadence. This is what makes the
+// directive modality-neutral: the IR names the move, the organ names the music.
+const MUSIC_VERB = Object.freeze({
+  open: 'State the opening motif of', develop: 'Develop and vary the motif of', close: 'Resolve to a cadence',
+  state: 'State', vary: 'Vary the motif of', resolve: 'Resolve to a cadence',
+  enumerate: 'Sequence the figures of', summarize: 'Restate the motif of',
+});
+
 export const musicOrgan = Object.freeze({
   id: 'music',
   unit: 'beats',
@@ -24,6 +33,14 @@ export const musicOrgan = Object.freeze({
   minBudget: 4,
   contextUnit: 'motifs',
   contextOf: (budget) => clamp(Math.round(budget / 4), 1, 6),
+  // lower(directive) → a music instruction. The MUSIC lowering of the SAME neutral
+  // directive { act, role, subject, detail } the text organ renders as a sentence.
+  lower: ({ act, subject, detail } = {}) => {
+    const verb = MUSIC_VERB[act] || 'Play';
+    const evoking = subject ? ` evoking ${subject}` : '';
+    const tail = detail ? `, ${detail}` : '';
+    return `${verb} a phrase${evoking}${tail}.`;
+  },
 });
 
 // renderMusic(generate) → render(view). Adapt the neutral view to a music generator's

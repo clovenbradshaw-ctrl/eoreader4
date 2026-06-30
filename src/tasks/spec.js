@@ -179,10 +179,14 @@ export const ARTIFACT_TEMPLATES = Object.freeze({
   // A NON-TEXT artifact, planned by the same machinery — its leaves render through the
   // music output organ (native unit: BEATS, not tokens). Proof that the task language is
   // not text-shaped: same createTaskSpec, same runTaskGraph, a different output organ.
+  // NOTE: pure NEUTRAL directives — no English. Each section names a move (open /
+  // develop / close) and a role; the music organ lowers it to a phrase instruction, and
+  // the SAME directive handed to the text organ would lower to a sentence. This is the
+  // proof that the task IR is not text-shaped (docs/omnimodal-task-language.md).
   melody: T('melody', 'notes', 32, 'a short melodic arc — opening motif, development, cadence', [
-    { role: 'opening motif', share: 1.0, goal: (s) => `State the opening motif of a melody evoking ${s}.` },
-    { role: 'development', share: 1.6, goal: (s) => `Develop the motif of the melody evoking ${s}: vary and extend it.` },
-    { role: 'cadence', share: 1.0, goal: (s) => `Close the melody evoking ${s}: resolve to a cadence.` },
+    { role: 'opening motif', share: 1.0, dir: { act: 'open' } },
+    { role: 'development', share: 1.6, dir: { act: 'develop', detail: 'extend and reshape the motif' } },
+    { role: 'cadence', share: 1.0, dir: { act: 'close', detail: 'land on a stable tone' } },
   ], 'music'),
   // The default: no artifact named, so no shape to impose — a single goal, one leaf,
   // byte-identical to one small-model call (the runner's degenerate graph).
@@ -195,15 +199,25 @@ export const ARTIFACT_TEMPLATES = Object.freeze({
 // `repeat` body paragraphs become separate sections (body 1, body 2, body 3); the
 // goal builder is handed the index so each reads distinctly. The result is a flat,
 // ordered, inspectable section list — the structure, before budgets are assigned.
+// A section declares its instruction one of two ways: a NEUTRAL `dir` (an act + optional
+// detail, which the output organ lowers to language — the modality-neutral path), or a
+// legacy `goal` builder (a hand-written instruction, which IS the text organ's lowering —
+// kept for the English-rich text templates). `repeat` bodies become separate sections,
+// the builder handed the index so each reads distinctly.
 const expandSections = (template, subject) => {
   const out = [];
   for (const s of template.sections) {
     const n = s.repeat && s.repeat > 1 ? s.repeat : 1;
     for (let i = 1; i <= n; i++) {
-      const goal = typeof s.goal === 'function'
-        ? (n > 1 ? s.goal(subject, i, n) : s.goal(subject))
-        : String(s.goal);
-      out.push({ role: n > 1 ? `${s.role} ${i}` : s.role, share: Number(s.share) > 0 ? Number(s.share) : 1, goal });
+      const role = n > 1 ? `${s.role} ${i}` : s.role;
+      const share = Number(s.share) > 0 ? Number(s.share) : 1;
+      if (s.dir) {
+        const d = typeof s.dir === 'function' ? (n > 1 ? s.dir(subject, i, n) : s.dir(subject)) : s.dir;
+        out.push({ role, share, directive: { act: d.act, role, subject, detail: d.detail || null } });
+      } else {
+        const goal = typeof s.goal === 'function' ? (n > 1 ? s.goal(subject, i, n) : s.goal(subject)) : String(s.goal);
+        out.push({ role, share, goal });
+      }
     }
   }
   return out;
@@ -255,10 +269,14 @@ export const createTaskSpec = ({ request = '', library = null, length = null } =
 
   const sections = expanded.map((x, i) => {
     const extent = clamp(Math.round((total * x.share) / shareSum), organ.minBudget, total);
+    // The instruction handed to the model is the ORGAN'S LOWERING of the neutral
+    // directive; a legacy `goal` is itself the text lowering, kept as-is.
+    const goal = x.directive ? organ.lower(x.directive) : x.goal;
     return Object.freeze({
       id: `${i}`,
       role: x.role,
-      goal: x.goal,
+      goal,
+      directive: x.directive || null,   // the modality-neutral move, null for legacy goals
       organ: organ.id,
       extent,            // the leaf's budget in the organ's native unit
       unit: organ.unit,
@@ -394,6 +412,7 @@ export const withOrgans = (plan, registry) => (view) => {
     ...view,
     spec: plan.spec,
     role: sec ? sec.role : null,
+    directive: sec ? sec.directive : null,   // the modality-neutral move (null for legacy goals)
     organ: organId,
     format: plan.spec.format,
     extent: sec ? sec.extent : organ.minBudget,

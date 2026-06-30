@@ -209,17 +209,31 @@ The first slice is the seam, proven by a non-text artifact:
   exactly as a long essay paragraph splits — `incoherent: []` confirms it split rather
   than jammed.
 
-Deferred (the open questions below, unchanged): the `directive` is still carried as a
-text instruction even on a music leaf; per-organ SYN composition (`assembleOutput`
-still string-joins); and cross-modal bundles. The seam is crossed; these refine what
-travels across it.
+- **The directive is now modality-neutral.** A section declares a move
+  (`{ act: 'open' | 'develop' | 'close' | … }`), not English; each organ's
+  `lower(directive)` renders it — text to a sentence, music to a phrase. The melody
+  template carries *no English at all*; the same directive handed to the text organ
+  lowers to a sentence, which is the proof that the IR is not text-shaped. (The
+  English-rich text templates keep their hand-tuned `goal` builders, which simply *are*
+  the text organ's lowering — back-compat, `directive: null`.)
+- **End-to-end harness** (`scripts/task-creator-e2e.mjs`, `npm run task-creator`): an
+  essay rendered through the *real* model interface (the echo backend, grounded on
+  per-leaf spans, cited) and a melody composed from neutral directives — both through
+  the same `runArtifact`/`runTaskGraph`.
+
+Deferred (the open questions below): per-organ SYN composition (`assembleOutput` still
+string-joins — music should concatenate phrases, image should layer regions); and
+cross-modal bundles. The seam is crossed and the directive is neutral; these refine how
+leaves COMPOSE back, not how they are made.
 
 ## Open questions for the build
 
-- **Directive shape.** Minimum is `{ proposition, role }`. Does a generative
-  directive need more than a read proposition carries (e.g. an INS *target* the
-  ground does not yet contain)? The enactor's efference (`src/enactor/efference.js`)
-  is the likely home for "intend to make X."
+- **Directive shape.** *(first form landed: `{ act, role, subject, detail }`, lowered
+  per organ.)* The remaining question is depth — does a generative directive need more
+  than the move + role it carries now (e.g. an INS *target* proposition the ground does
+  not yet contain)? The enactor's efference (`src/enactor/efference.js`) is the likely
+  home for "intend to make X," and `act` is the natural slot to carry the cube move it
+  names.
 - **Composition (SYN @ Pattern).** `assembleOutput` joins leaf text with `\n\n`.
   Per-organ composition (concatenate notes into a phrase, layer regions into a
   frame) is the symmetric follow-up once `render` exists.

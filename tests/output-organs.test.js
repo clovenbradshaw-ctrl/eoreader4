@@ -5,7 +5,7 @@ import {
   runTaskGraph, FIGURE, PATTERN,
   createTaskSpec, planArtifact, withOrgans, runArtifact,
   OUTPUT_ORGANS, organFor, createOutputRegistry,
-  classifyArtifact,
+  textOrgan, musicOrgan, classifyArtifact,
 } from '../src/tasks/index.js';
 
 // ── the output membrane: descriptors are the mirror of organs/in ──────────────
@@ -38,6 +38,42 @@ test('a long melody overflows the MUSIC ceiling (16 beats), not the text one', (
   assert.equal(dev.grain, PATTERN, 'so it is a Pattern goal the decomposer must split');
   // crucially it overflowed at 16 beats, nowhere near the 256-token text ceiling
   assert.ok(dev.extent < 64, 'still tiny in absolute terms — beats, not tokens');
+});
+
+// ── the directive is modality-neutral — one move, lowered two ways ────────────
+test('a melody section carries a neutral directive, not baked English', () => {
+  const spec = createTaskSpec({ request: 'write a melody about spring' });
+  const motif = spec.sections.find((s) => s.role === 'opening motif');
+  assert.equal(motif.directive.act, 'open', 'the neutral move is carried');
+  assert.equal(motif.directive.subject, 'spring');
+  // the goal string is the MUSIC lowering of that directive
+  assert.match(motif.goal, /motif/i);
+  assert.match(motif.goal, /spring/);
+});
+
+test('the SAME directive lowers to a sentence (text) or a phrase (music)', () => {
+  const directive = { act: 'open', role: 'opening motif', subject: 'the sea', detail: null };
+  const asText = textOrgan.lower(directive);
+  const asMusic = musicOrgan.lower(directive);
+  assert.notEqual(asText, asMusic, 'two modalities, two renderings of one move');
+  assert.match(asText, /^Open the opening motif about the sea/);
+  assert.match(asMusic, /motif/i);
+  assert.match(asMusic, /phrase/i);
+});
+
+test('an essay keeps its hand-written (legacy) instructions, directive null', () => {
+  const spec = createTaskSpec({ request: 'write an essay about owls' });
+  assert.ok(spec.sections.every((s) => s.directive === null), 'legacy goals carry no directive');
+  assert.match(spec.sections[0].goal, /thesis/i, 'the tuned English survives');
+});
+
+test('withOrgans hands the renderer the neutral directive', async () => {
+  const seen = [];
+  const registry = createOutputRegistry({ music: (view) => { seen.push(view); return '♪'; } });
+  const plan = planArtifact({ request: 'write a melody about spring' });
+  const subs = plan.decompose({ goal: plan.goal, depth: 0 });
+  await withOrgans(plan, registry)({ goal: subs[0].goal, depth: 1 });
+  assert.equal(seen[0].directive.act, 'open', 'the renderer can read the move, not just the lowered text');
 });
 
 // ── withOrgans dispatches each leaf to its organ's renderer ───────────────────
