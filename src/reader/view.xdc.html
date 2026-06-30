@@ -260,7 +260,7 @@
                 <div style="{{ m.rowStyle }}">
                   <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.researchStyle }}">
-                      <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
+                      <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span style="{{ m.traceSpinStyle }}"></span><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
                       <sc-if value="{{ m.researchLiveOn }}" hint-placeholder-val="{{ true }}">
                         <div style="{{ m.researchLiveBox }}">
                           <sc-for list="{{ m.researchLive }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
@@ -811,7 +811,7 @@
               <div style="{{ m.rowStyle }}">
                 <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.researchStyle }}">
-                    <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
+                    <button onclick="{{ m.onToggleResearch }}" style="{{ m.researchHeadStyle }}"><span style="{{ m.traceSpinStyle }}"></span><span>{{ m.researchTitle }}</span><span style="font-size:9px;">{{ m.researchCaret }}</span></button>
                     <sc-if value="{{ m.researchLiveOn }}" hint-placeholder-val="{{ true }}">
                       <div style="{{ m.researchLiveBox }}">
                         <sc-for list="{{ m.researchLive }}" as="rs" hint-placeholder-count="1"><div style="{{ rs.rowStyle }}"><span style="{{ rs.iconStyle }}">{{ rs.icon }}</span><span style="{{ rs.textStyle }}">{{ rs.text }}</span></div></sc-for>
