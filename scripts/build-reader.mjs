@@ -15,6 +15,7 @@ const read = (p) => readFileSync(join(root, p), 'utf8');
 const view  = read('src/reader/view.xdc.html');           // <x-dc>…</x-dc> template
 const appJs = read('src/reader/app.dc.js');               // class Component extends DCLogic
 const props = read('src/reader/app.props.txt').trim();    // data-props (HTML-escaped)
+const phCss = read('vendor/phosphor/phosphor.css');       // @font-face for the Phosphor icon font
 
 // Inlining the logic into a <script> would end early on any literal </script>.
 const safeJs = appJs.replace(/<\/script/gi, '<\\/script');
@@ -48,6 +49,7 @@ const html = `<!doctype html>
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>${phCss}</style>
 <script src="vendor/react.production.min.js"></script>
 <script src="vendor/react-dom.production.min.js"></script>
 <script>(function(){var R=${JSON.stringify(resources)},b=document.baseURI,o={};for(var k in R)o[k]=new URL(R[k],b).href;window.__resources=o;})();</script>

@@ -1021,6 +1021,18 @@ class Component extends DCLogic {
       if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
     }
     return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
+  // CREATIVE GENERATION over a topic — "write an emily dickinson poem about iced coffee",
+  // "compose an essay on dolphins", "draft a haiku about the sea". The frame (write/compose/draft
+  // + poem/essay/song/…) names a FORM, and the real topic rides in the "about/on X" tail. Taken at
+  // face value the frame VERB "write" overlaps a corpus about a "writer" (Gervase of Chichester is
+  // literally a "writer" with a "Writings" section) and marks the turn grounded — so a Dickinson-
+  // poem-about-iced-coffee request composes from a Gervase article instead of going to read about
+  // iced coffee. Return the bare topic so routing can ground on THAT, not the frame verb, and send
+  // the turn to the web when the topic is something the reading never covered.
+  _genTopic(q){
+    const m=String(q||'').match(/\b(?:write|compose|draft|create|generate|produce|pen|craft)\b[^.?!]*?\b(?:poem|haiku|sonnet|limerick|verse|essay|story|song|lyrics?|rap|ballad|ode|tale|piece|article|blog\s*post|screenplay|script)\b\s+(?:about|on|regarding|concerning|describing|inspired\s+by|in\s+the\s+style\s+of)\s+(.+)$/i);
+    if(m&&m[1]){const t=this.norm(m[1]).replace(/[?.!]+$/,'').trim();if(t.length>1)return t;}
+    return null;}
   // ── The named-subject gate (the "essay about Grok" failure), the reader's copy ──
   // The same hole the answerabilityGate closes in the turn pipeline (src/longgen/answerable.js,
   // wired into src/turn/stages.js), brought to the path this UI actually runs: the Reader
@@ -1342,6 +1354,11 @@ class Component extends DCLogic {
     // A bare pleasantry / acknowledgement names no subject — don't go research "thanks".
     if(/^(?:thanks?|thank you|thx|ty|ok|okay|k|cool|nice|great|awesome|got it|sounds good|sure|yep|yes|no|yeah|nope|lol|haha|hi|hey|hello|yo|sup|np|no problem|cheers|bye|goodbye|good (?:morning|night))[\s.!?]*$/i.test(q))return false;
     if(!this._researchTerms(q).length)return false;         // nothing contentful to chase
+    // A CREATIVE-GENERATION request grounds on its TOPIC ("about iced coffee"), not its frame verb
+    // ("write"), which would otherwise overlap a "writer" corpus and wrongly keep the turn offline.
+    // Topic the reading doesn't actually cover → go read it before composing.
+    const topic=this._genTopic(q);
+    if(topic)return !this.groundNotes(topic,sources).relevant;
     // A CORRECTION / CONTRADICTION ("he is no longer a council member", "actually she's CEO now")
     // disputes the in-scope reading itself — so even when that reading "covers" the topic, don't
     // re-assert it offline; go to the web to settle the CURRENT fact (research-accuracy fix).
@@ -1399,13 +1416,13 @@ class Component extends DCLogic {
   // ticks a live word count — content motion, not just a clock. Honest signal only: it reflects the
   // real basis and the real words drawn, never invented stages.
   _composeOpen(grounded,ground){const n=(ground&&ground.spans&&ground.spans.length)||0;
-    if(n)return '✍️ Composing from '+n+' passage'+(n!==1?'s':'')+'…';
-    if(grounded)return '✍️ Composing from memory…';
-    return '✍️ Composing the answer…';}
+    if(n)return 'Composing from '+n+' passage'+(n!==1?'s':'')+'…';
+    if(grounded)return 'Composing from memory…';
+    return 'Composing the answer…';}
   // The live header during the decode: the word count drawn so far. Before the first word lands (the
   // prefill gap) it keeps the bare label, so the status line never reads empty.
   _composeTick(acc){const w=(String(acc||'').match(/\S+/g)||[]).length;
-    return w?('✍️ Writing the answer… · '+w+' word'+(w!==1?'s':'')):'✍️ Composing the answer…';}
+    return w?('Writing the answer… · '+w+' word'+(w!==1?'s':'')):'Composing the answer…';}
   // STALL GUARD — the chat model loads on first use and decodes on the CPU, and EITHER step can
   // hang outright: a weights download that stops mid-stream, or a decode that never emits a first
   // token. Both leave a promise that neither resolves nor rejects, so `await ensureChatModel()` /
@@ -2335,7 +2352,9 @@ class Component extends DCLogic {
       // walk runs it stays open and grows; once done it collapses to a one-line summary the user
       // can re-open. Makes "it actually went and researched" legible, the way a research-mode
       // chat shows its work.
-      const RICON={start:'✦',search:'⌕',read:'▤',graph:'＋',lead:'↳',warn:'⚠',done:'✓',think:'◌'};
+      // Phosphor icon glyphs (placed by codepoint; the iconStyle below carries font-family:Phosphor):
+      // sparkle · magnifying-glass · book-open · plus-circle · arrow-bend-down-right · warning · check · circle-dashed.
+      const RICON={start:'\ue6a2',search:'\ue30c',read:'\ue0e6',graph:'\ue3d6',lead:'\ue01a',warn:'\ue4e0',done:'\ue182',think:'\ue602'};
       const RCOL ={start:'var(--acc)',search:'#2563eb',read:'#b45309',graph:'#15803d',lead:'var(--acc)',warn:'#dc2626',done:'#15803d',think:'#7c8088'};
       const r=m.research;
       const pendingTurn=!!m.pending;
@@ -2358,7 +2377,7 @@ class Component extends DCLogic {
       const resKey=cur.id+':'+mi+':res', resOn=hasResearch&&(pendingTurn||!!gOpen[resKey]);
       const researchSteps=hasResearch?r.steps.map(s=>({icon:RICON[s.kind]||'·',text:s.text,
         rowStyle:'display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.45;color:var(--ink2);',
-        iconStyle:'flex:0 0 auto;width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:700;color:'+(RCOL[s.kind]||'#9aa1ab')+';background:'+(RCOL[s.kind]||'#9aa1ab')+'1c;margin-top:1px;',
+        iconStyle:'flex:0 0 auto;width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-family:\'Phosphor\';font-size:12.5px;color:'+(RCOL[s.kind]||'#9aa1ab')+';background:'+(RCOL[s.kind]||'#9aa1ab')+'1c;margin-top:1px;',
         textStyle:'flex:1;min-width:0;'})):[];
       const rc=(r&&r.readCount)||0,hp=(r&&r.hops)||0;
       // The header reads as a LIVE status while working — the current beat plus a ticking clock — then
@@ -3945,8 +3964,8 @@ class Component extends DCLogic {
   goToHist(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hpos=i;this._applyLoc(this._hist[i]);}
   closeTab(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hist.splice(i,1);if(this._hpos>=i&&this._hpos>0)this._hpos--;if(this._hpos>=this._hist.length)this._hpos=this._hist.length-1;if(this._hpos>=0)this._applyLoc(this._hist[this._hpos]);else this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
   newTab(){this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
-  tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?('🔎 '+this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
-  buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';return {label:lab,i,active,isWeb,dotStyle:'width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';',onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};});return all.slice(-6);}
+  tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?(this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
+  buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';const isSearch=isWeb&&/^search:/i.test(loc.url);return {label:lab,i,active,isWeb,dotGlyph:isSearch?'\ue30c':'',dotStyle:isSearch?('font-family:\'Phosphor\';font-size:13px;line-height:1;color:#9aa1ab;flex:0 0 auto;'):('width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';'),onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};});return all.slice(-6);}
   // ---- live embed of the page shown in the CENTER viewport ----
   // A readable "book" rendering of an imported text source. The author's own
   // paragraphs (blank-line separated) are kept; if the text has no such structure
@@ -4642,8 +4661,8 @@ class Component extends DCLogic {
     const dot=busy
       ?'width:12px;height:12px;border-radius:50%;border:2px solid '+color+';border-top-color:transparent;animation:eospin .8s linear infinite;display:inline-block;flex:0 0 auto;box-sizing:border-box;'
       :'width:8px;height:8px;border-radius:50%;background:'+color+';display:inline-block;flex:0 0 auto;'+((ready&&!n)?'animation:eopulse 2s infinite;':'');
-    const FEED={search:{i:'⌕',c:'#2563eb'},found:{i:'≣',c:'#2563eb'},read:{i:'▤',c:'#b45309'},graph:{i:'＋',c:'#15803d'},done:{i:'✓',c:'#15803d'},warn:{i:'!',c:'#dc2626'}};
-    const trail=lines.slice(-6).map(l=>{const f=FEED[l.k]||{i:'·',c:'#9aa1ab'};return {icon:f.i,full:l.t,style:'width:19px;height:19px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:'+f.c+';background:'+f.c+'18;flex:0 0 auto;'};});
+    const FEED={search:{i:'',c:'#2563eb'},found:{i:'',c:'#2563eb'},read:{i:'',c:'#b45309'},graph:{i:'',c:'#15803d'},done:{i:'',c:'#15803d'},warn:{i:'',c:'#dc2626'}};
+    const trail=lines.slice(-6).map(l=>{const f=FEED[l.k]||{i:'·',c:'#9aa1ab'};return {icon:f.i,full:l.t,style:'width:19px;height:19px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-family:\'Phosphor\';font-size:12px;color:'+f.c+';background:'+f.c+'18;flex:0 0 auto;'};});
     return {busy,label,labelColor:color,text,dotStyle:dot,barBg:busy?'#fdfaf3':'var(--card)',trail,hasTrail:trail.length>0,textStyle:''};
   }
 
@@ -4696,7 +4715,7 @@ class Component extends DCLogic {
       // HOW MUCH research — cycles shallow → deep → obsessive (the arc's coverage policy). Disabled
       // visually when the web is off (there's nothing to scale). Only meaningful while web is on.
       onCycleDepth:()=>this.cycleResearchDepth(),
-      depthBtnLabel:'🔬 '+(this.state.researchDepth||'deep'),
+      depthBtnIcon:'\ue79e',depthBtnLabel:(this.state.researchDepth||'deep'),
       depthTitle:'How much research per question: shallow (the strongest answer) · deep (several angles) · obsessive (exhaust the threads). Click to cycle.',
       depthStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
       backend:this.state.backend||'webllm',
@@ -4876,7 +4895,7 @@ class Component extends DCLogic {
       if(!vu&&!base.chatOn&&!base.gutenOn){
         base.showPrompt=true;
         base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Search the web — or read a URL':'Loading the reading engine…');
-        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type anything to search the web, paste a page URL to open it here, or use 📄 to import your own text. Pages render as HTML; open a result and every entity is read into the graph on the right — then ask about it in a chat.';
+        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type anything to search the web, paste a page URL to open it here, or use the import button to import your own text. Pages render as HTML; open a result and every entity is read into the graph on the right — then ask about it in a chat.';
         base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
         base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
       }
@@ -5175,8 +5194,8 @@ class Component extends DCLogic {
     base.modeHint=(busy?'Working…':'Research — searches and reads more sources.')+(this.state.direction.trim()&&!busy?'  ·  aimed at “'+this.state.direction.trim()+'”':'');
     base.onResearch=()=>this.research();base.researchLabel=busy?'Researching…':'Research';base.researchGlyph=busy?'◐':'✦';base.researchIcon='display:inline-block;margin-right:7px;'+(busy?'animation:eospin .9s linear infinite;':'');
     base.researchStyle='display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:#fff;background:'+(busy?'#7ea3e8':'var(--acc)')+';border:none;border-radius:9px;padding:9px 16px;box-shadow:0 1px 2px rgba(37,99,235,.3);'+(busy?'cursor:default;':'');
-    const FEED={search:{i:'⌕',c:'#2563eb'},found:{i:'≣',c:'#2563eb'},read:{i:'▤',c:'#b45309'},graph:{i:'＋',c:'#15803d'},done:{i:'✓',c:'#1b1f24'},warn:{i:'!',c:'#dc2626'}};
-    base.feed=this.state.feed.filter(l=>l.ent==null||l.ent===sel).map(l=>l.sep?{isSep:true,isLine:false,text:l.sep}:{isLine:true,isSep:false,icon:(FEED[l.k]||{i:'·'}).i,icStyle:'flex:0 0 auto;width:15px;text-align:center;color:'+((FEED[l.k]||{c:'#9aa1ab'}).c)+';font-weight:700;',text:l.t,rowStyle:l.k==='done'?'font-weight:500;':''});
+    const FEED={search:{i:'',c:'#2563eb'},found:{i:'',c:'#2563eb'},read:{i:'',c:'#b45309'},graph:{i:'',c:'#15803d'},done:{i:'',c:'#1b1f24'},warn:{i:'',c:'#dc2626'}};
+    base.feed=this.state.feed.filter(l=>l.ent==null||l.ent===sel).map(l=>l.sep?{isSep:true,isLine:false,text:l.sep}:{isLine:true,isSep:false,icon:(FEED[l.k]||{i:'\u00b7'}).i,icStyle:'flex:0 0 auto;width:15px;text-align:center;font-family:\'Phosphor\';font-size:12px;color:'+((FEED[l.k]||{c:'#9aa1ab'}).c)+';',text:l.t,rowStyle:l.k==='done'?'font-weight:500;':''});
     base.hasFeed=base.feed.length>0;
 
     // hovercard
