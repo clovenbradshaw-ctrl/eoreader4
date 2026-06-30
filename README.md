@@ -158,6 +158,21 @@ random code matches the real code's 8/16 functional boxes 0 times in 5000 — th
 emergent grouping is real reading order, and the real code is non-randomly organised
 so the redundancy the reader finds is functional.
 
+And one modality the other way — **source code** (`src/organs/in/code.js`). The code
+adapter reads a file of code and emits **EOT** (the Existential-Operator-Triple
+surface, `docs/eot-surface-syntax.md`), then lowers that surface through the same
+ingester a model's notes go through. The program's structure becomes the reading:
+each module, function, class and method is an entity, and `imports` / `definedIn` /
+`memberOf` / `extends` / `calls` are typed relations. Because it speaks the surface
+the engine already reads, a program drops straight into the spine — the call graph is
+CON edges, "who calls this / what does it call" is a graph traversal, and the whole
+fold, cursor and projection work on code exactly as on prose. The reading takes the
+**perceiver door**: code parsed from a file is real data (the world), not the model's
+conjecture. This is also where the **local coding models** (`src/model/coders.js`) earn
+their place — the Qwen2.5-Coder family registered as browser-runnable backends, an
+opt-in pick for chatting *about* code, beside the catalog of the heavier
+workstation-class coders that only a native runtime can hold.
+
 ## Three levels of reading — three kinds of math
 
 Reading happens at three levels, the three domains of the EO cube read top to

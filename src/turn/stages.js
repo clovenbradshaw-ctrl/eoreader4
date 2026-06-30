@@ -9,7 +9,7 @@
 // The user sees what the model actually said, with a flag pinned to it.
 
 import { answerVoid, answerMathAsync } from '../answer/index.js';
-import { retrieveHybrid, reserveBySource, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
+import { retrieveHybrid, reserveBySource, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, retrieveNetwork, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
 import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
@@ -201,16 +201,20 @@ export const stages = {
     //   path still holds the SUBJECT (the fold's cast); this is the complementary NOMINATION
     //   channel that finds the EVIDENCE spans the stall points at.
     const query = resolveQuery(ctx.question, ctx.history);
-    // A whole-document task (summary / list / explain) whose question makes no lexical
-    // contact with the page is a META-query — "summarize", "what is this about" — and
-    // retrieving on it fuzzy-matches the meta-word onto arbitrary fragments (the audit's
-    // t1 confabulated summary). Read the document's STRUCTURE instead: its opening,
-    // headings, and an even spread (retrieve/structural.js). A targeted whole-doc
-    // question naming a term the document uses stays on the lexical path (queryTouchesDoc
-    // is true), so the strong t6 ("what are the 9 operators?") is untouched.
-    if (ctx.task && ctx.task !== 'answer' && !queryTouchesDoc(ctx.doc, query)) {
-      const structural = retrieveStructural(ctx.doc, 12);
-      if (structural.length) return { ...ctx, spans: structural, retrievalQuery: query, retrieval: 'structural' };
+    // A PATTERN-GRAIN task (summary / list — the whole read as one frame, the network of
+    // members; turn/intent.js) reads the document's own STRUCTURE, not a point. The grain is
+    // the principled gate: a Figure-grain task (a pointed `answer`, or an `explain` of one
+    // thing) retrieves AT a location; a Pattern task reads ACROSS the whole. This replaces the
+    // old `task !== 'answer'` proxy — explain is task≠answer but Figure-grain, so it now stays
+    // pointed, which is what "why did X" wants. The two Pattern TERRAINS read differently:
+    //   · Paradigm (summary) → the structural skeleton: opening, headings, spread, turning points.
+    //   · Network  (list)    → the figure-bearing units: the members of the entity graph.
+    // A query that NAMES a term the document spells stays lexical (queryTouchesDoc is true), so a
+    // targeted whole-doc question — t6 "what are the 9 operators?" — finds the operators, untouched.
+    if (ctx.grain === 'Pattern' && !queryTouchesDoc(ctx.doc, query)) {
+      const network = ctx.terrain === 'Network';
+      const whole = network ? retrieveNetwork(ctx.doc, 12) : retrieveStructural(ctx.doc, 12);
+      if (whole.length) return { ...ctx, spans: whole, retrievalQuery: query, retrieval: network ? 'network' : 'structural' };
     }
     // Source activation (docs/source-activation.md): retrieve a wider pool, then — when the
     // scope is a composite that holds a freshly-fetched WEB source beside the loaded document —

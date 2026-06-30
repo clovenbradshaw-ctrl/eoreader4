@@ -12,6 +12,7 @@ export { buildGroundedMessages, buildChatMessages, SYSTEM_GROUND, SYSTEM_CHAT,
          orientationLine, metadataBlock, orderSpansForFrame,
          shapeForScope, STRUCTURE_CUE,
          EXCERPTS_HEADER, DEFAULT_BUDGET, SUMMARY_GUARD } from './prompt.js';
+export { CODER_MODELS, browserCoders } from './coders.js';
 
 import './echo.js';
 import './structure.js';
@@ -19,3 +20,4 @@ import './wllama.js';
 import './pleias.js';
 import './onnx.js';
 import './webllm.js';
+import './coders.js';
