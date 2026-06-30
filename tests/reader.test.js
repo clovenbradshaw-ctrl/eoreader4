@@ -78,6 +78,17 @@ test('the surf follows what it is curious about — it covers distinct casts bef
   assert.equal(new Set(firstFigures).size, 3, 'curiosity covers all three distinct casts, never doubling up');
 });
 
+test('reading improves prediction — prediction error on the read register falls as ρ accumulates', () => {
+  // The curiosity→prediction loop: ρ is a predictive model, surprise is prediction error. Reading
+  // a register lowers the error of predicting more of it — the self learns to predict by reading.
+  const r = createReader();
+  const register = 'Pierre met Andrew. Pierre trusted Andrew. Natasha loved Pierre. Pierre helped Andrew.';
+  const before = r.expect(register).predictionError;
+  for (let i = 0; i < 4; i++) r.feel(register, { accumulate: true });   // read it — the model learns
+  const after = r.expect(register).predictionError;
+  assert.ok(after <= before, `prediction error falls with reading (${before} → ${after})`);
+});
+
 test('curiousSurf takes a cue — the bias guides the start, competency still leads (omnimodal hook)', () => {
   const doc = parseText(
     'CHAPTER I\nAlice met Bob. Alice trusted Bob.\nCHAPTER II\nCarl chased Dave. Carl caught Dave.\n' +

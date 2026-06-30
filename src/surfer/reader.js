@@ -85,7 +85,15 @@ export const createReader = ({ gamma = 0.8 } = {}) => {
     return { curious, verdict, latest: round(latest), floor: Number.isFinite(floor) ? round(floor) : null, coherent };
   };
 
-  return Object.freeze({ feel, curiosity, horizon, reading: () => horizon.reading() });
+  // expect — PREDICTION. The accumulated ρ IS a predictive model; the surprise of content against
+  // it IS the prediction error (how poorly ρ predicted this). A pure read (never accumulates), so it
+  // measures the model as it stands. This closes the curiosity→prediction loop: competency-seeking
+  // fills ρ with MEANINGFUL, diverse content (never noise), so it is the exploration policy that
+  // lowers future prediction error fastest — the surf reading what it is curious about is the same
+  // act as the model learning to predict better. predictionError falls as the self reads its register.
+  const expect = (content) => ({ predictionError: round(horizon.surpriseOf(activationsOf(content))), reserve: horizon.reading().reserve });
+
+  return Object.freeze({ feel, expect, curiosity, horizon, reading: () => horizon.reading() });
 };
 
 // The CAST basis — per-unit activation over the document's figures (the INS referents any
