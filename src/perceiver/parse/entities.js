@@ -27,7 +27,16 @@ const TITLE = String.raw`(?:Mr|Mrs|Ms|Dr|Miss|Mister|Sir|Madam|Madame|Lady|Lord|
 // A lowercase connector (von, of, the) only counts when it sits *between* two
 // capitalised words — never trailing, so "Grete the news" is just "Grete".
 const CONN  = String.raw`de|von|van|der|del|di|du|la|le|of|the`;
-const NAME  = String.raw`[A-Z][a-zA-Z]+(?:\s+(?:${CONN}\s+)?[A-Z][a-zA-Z]+)*`;
+// Letters a name is built from. The ASCII class `[A-Z][a-zA-Z]` truncated every name at its
+// first accent — the Maude/Garnett transliteration of War and Peace stresses with acute marks
+// (Natásha, Kutúzov, Denísov, Pávlovna), so the scanner read "Nat", "Kut", "Den", "P", inventing
+// 136 truncated figures and 130 "Anna --p--> …" patronymic-split junk edges. Widen the class to
+// the Latin-1 letter block (À-Ö, Ø-ö, ø-ÿ — excludes × ÷), which carries the acute/grave/diaeresis
+// forms a European-name transliteration uses. These are single UTF-16 code units, so the existing
+// `\b`-anchored, un-`u`-flagged regexes keep working unchanged; only the reach of a name widens.
+const U = String.raw`A-ZÀ-ÖØ-Þ`;            // a capital name-initial, incl. accented (Á É Í Ó Ú …)
+const L = String.raw`A-Za-zÀ-ÖØ-öø-ÿ`;      // a name-internal letter, either case, incl. accented
+const NAME  = String.raw`[${U}][${L}]+(?:\s+(?:${CONN}\s+)?[${U}][${L}]+)*`;
 const CAP_RE = new RegExp(String.raw`\b(?:${TITLE}\s+)?${NAME}\b`, 'g');
 
 // ── Initialism (acronym ↔ expansion) — a learned, defeasible org alias ───────

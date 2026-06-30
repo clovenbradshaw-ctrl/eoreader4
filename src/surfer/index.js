@@ -86,3 +86,39 @@ export { reanalyze, applyReanalysis } from './reanalyze.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';
+// The accumulation layer — fold the sentence-grain total read into adaptive coarse units
+// (chapters/books or windows), each a reading of its own (figures, graded backbone,
+// inter-proposition links, and the cube's cast/meaning domain split), and surf that coarse
+// spine routed by the question's domain. This is what lets a whole-book question reach the
+// regions it lives in without surfing every sentence at full resolution.
+export { encodeLevels, detectGrain, coarseSurf, routeDomain, CAST_OPS, MEANING_OPS } from './levels.js';
+// The MODELER (faculty #2): read the narrator's evaluative OPERATION into the theory-of-mind
+// graph — owner-attributed (narrator, or ambiguous under free-indirect discourse), σ-side,
+// divergence-preserving. NOT the machine's endorsement (faculty #3, the read-time evaluator,
+// the veto guard's sibling on the rhetoric axis), which stays out of the graph as a node.
+export { attributedEvaluation, NARRATOR } from './evaluation.js';
+// Autopoietic holons by the Born rule — the grain DETECTED from the reading's own cast-closure
+// (ρ over the cast, its eigenlenses the self-coupled communities) rather than imposed by chapter
+// markers. The lens-switch boundaries are the cast-turnover surprise, so this is also the
+// multi-grain surprise encoding. `holarchy` nests coarse arcs into their scenes.
+export { detectHolons, holarchy } from './holons.js';
+// Assemble the surf's reading of a question into a structured, saveable result — the regions it
+// reaches, the cast, the cited bonds, the argument structure, and the narrator's owner-attributed
+// evaluative stance. σ-side evidence for a reader/talker to judge; the verdict is not encoded.
+export { surfToAnswer } from './answer.js';
+// The spiral (REC): interpretation at level n becomes Existence at level n+1 — the three-fold
+// closes on itself and climbs. `promote` re-stamps a verdict as the next level's source (owner=
+// self), append-only; `spiralStep` re-reads it with a query-blind cut. The firewall is FRACTAL —
+// query-blindness and the provenance stamp hold self-similarly at every storey, or the spiral
+// degrades to a hall of mirrors (dreaming gone wrong / opinion laundered into fact).
+export { promote, spiralStep, cutIsQueryBlind, provenanceIntact, SELF } from './spiral.js';
+// Metacognition: the Born rule testing whether any content COHERES into a reading (meaningfulness
+// = the spectrum concentrating above the noise floor) vs. a diffuse smear — the measurable gate
+// the spiral consults before promoting a verdict (provenance retained). And traceReading makes the
+// reading VISIBLE in EOT as it happens, so a chat shows what it parses through, not a spinner.
+export { meaningfulness, metacognize, traceReading } from './metacognition.js';
+// The reader — the ρ-side self that FEELS surprise (the interpretation level's live number, the
+// me-ness against the accumulated Horizon ρ). `interpret` fills interpretation.surprise on a σ-side
+// surf result at read-time (firewall held); `curiosity` is meta-surprise; `curiousSurf` lets the
+// surf follow what it is curious about — the surprise gradient through the material, not keywords.
+export { createReader, interpret, curiousSurf } from './reader.js';

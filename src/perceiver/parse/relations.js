@@ -40,9 +40,74 @@ const SUBJECT_PRONOUN = new Set(['He', 'She', 'They', 'We', 'It', 'I', 'You']);
 // Relative pronouns that open a clause whose subject is the ANTECEDENT, not the
 // running sentence subject ("…an unspeaking jazz player who refuses to speak" — the
 // one refusing is the player, not the narrator). The clause splitter consumes the
-// pronoun, so the relative clause arrives subjectless; we do not resolve antecedents
-// here, so rather than inherit the WRONG subject we let it fail toward silence.
+// pronoun, so the relative clause arrives subjectless. Without the total read we do
+// not resolve antecedents and let it fail toward silence; under the total read the
+// antecedent is the running figure, and the embedded clause is read as a full
+// proposition with that antecedent as subject (§2 — closing the "arrives subjectless"
+// gap), graded by the `relative` prior so the harder read carries its own number.
 const RELATIVE_OPENER = new Set(['who', 'whom', 'whose', 'which', 'that']);
+
+// §3 — inter-proposition links. A subordinator that opens a clause is not noise to be
+// dropped; it is a TYPED relation between the proposition it introduces and the matrix
+// proposition it hangs off. The clause splitter (clauses.js) only cuts on a
+// high-precision subset of connectives, so the openers reaching us are exactly these;
+// each maps to the closed link-type vocab the synthesis closes a holon over. The
+// literal connective rides beside the type as `connective`, the way the raw verb rides
+// beside `relType` on an ordinary bond.
+const SUBORDINATOR_TYPE = Object.freeze({
+  because: 'cause', since: 'cause', so: 'cause', therefore: 'cause', as: 'cause',
+  although: 'contrast', though: 'contrast', whereas: 'contrast', despite: 'contrast',
+  unless: 'condition', if: 'condition', provided: 'condition',
+  when: 'sequence', while: 'sequence', after: 'sequence', before: 'sequence',
+});
+
+// §4 — Confidence is carried, never dropped. The per-construction PRIOR: how surely a
+// reader apprehends a proposition pulled from THIS kind of site (not "how true is it";
+// "how surely did I read it"). A clean SVO main clause reads near-1; a relation buried
+// in a noun phrase never does (§9). The table is the reader's, held in one place,
+// inspectable and learnable — not magic numbers scattered through the scan. Total
+// capture means the low number RIDES the edge; it is never a reason to drop it (§1).
+export const CONFIDENCE = Object.freeze({
+  main:           0.95,   // subject–verb–object, the clause's head proposition
+  copula:         0.90,   // a copular DEF / predicative
+  passive:        0.85,   // a passive recovered to its active edge
+  coordSubject:   0.85,   // a coordinated-subject convergence ("Delgado and Reyes listed…")
+  np:             0.80,   // an SVO whose object is an NP-head referent, not a named figure
+  kinship:        0.80,   // a kinship apposition ("his sister Grete")
+  apposition:     0.70,   // a renaming noun phrase → is-a ("Samsa, a travelling salesman")
+  attribution:    0.70,   // a reported source ("per series creator Chris Carter")
+  coordPredicate: 0.70,   // a non-first conjunct of a coordinated predicate
+  subordinate:    0.65,   // a proposition read inside a subordinate clause
+  relative:       0.60,   // a proposition recovered from a relative clause
+  interProp:      0.55,   // an inter-proposition (subordinator) link
+  nominalized:    0.45,   // a relation buried in a noun phrase ("captivity of animals")
+});
+
+// The endpoint-resolution adjustment (§4: "adjusted by how cleanly the endpoints
+// resolved"). A name resolves cleanly (×1); a pronoun or an inherited (open-activation)
+// subject is a guess the reader is less sure it read right; an NP-head object is a
+// referent, not an admitted figure. The factors are GENTLE — the magnitude of the
+// resolution uncertainty already rides the coupling channel (`w`); confidence is the
+// orthogonal "did I read this construction right" channel, so a clean main clause with
+// a pronoun subject still reads high, never near nothing.
+const SUBJ_CONF_FACTOR = { name: 1, pronoun: 0.9, inherited: 0.85, relative: 0.85, prop: 1 };
+const gradeConfidence = (site, subjKind = 'name', objKind = null) => {
+  const base = CONFIDENCE[site] ?? 0.5;
+  const sf = SUBJ_CONF_FACTOR[subjKind] ?? 1;
+  const of = objKind === 'np' ? 0.9 : 1;
+  return Math.round(base * sf * of * 1000) / 1000;
+};
+
+// The reified id of a proposition (§3) — a CON/SIG bond or a copular DEF read as a node
+// so an inter-proposition link can take it as an endpoint. Built from the edge's own
+// figures, so two readings of the same proposition reify to the SAME id (idempotent,
+// §7), and it traces to the spans the bond already carries (§6 — never an invented
+// node, an apprehended one). Tagged `prop` downstream so the figure set never absorbs it.
+const slugProp = (v) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const propIdOf = (edge) =>
+  edge.op === 'DEF'
+    ? `prop:${edge.id}~is~${slugProp(edge.value).slice(0, 24)}`
+    : `prop:${edge.src}~${slugProp(edge.via)}~${edge.tgt}`;
 
 // Words that are not verbs: if the head slot lands on one of these, there is no
 // relation here — better silence than "Grete who Just" or "Gregor --between-->
@@ -536,6 +601,49 @@ export const scanVocatives = (sentence) => {
   return out;
 };
 
+// §2 — General apposition. A noun phrase that RENAMES a referent ("Samsa, a travelling
+// salesman") is Samsa→is-a→salesman, a DEF, exactly as the kinship-apposition path
+// already reads "his sister Grete". The construction is a NAME followed by a comma and a
+// determiner-led common-noun phrase; the figure path owns the leading name, so this never
+// invents a node — it only reads the predicate the comma apposes onto an admitted figure.
+// Bounded at the next clause punctuation so a comma-spliced continuation cannot bleed in.
+const APPOSITION_RE = /\b([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)*)\s*,\s+(an?|the)\s+([a-z][a-zA-Z]+(?:[\s-][a-z][a-zA-Z]+){0,3})/g;
+const appositionEdges = (sentence, admission) => {
+  const out = [];
+  const re = new RegExp(APPOSITION_RE.source, APPOSITION_RE.flags);
+  let m;
+  while ((m = re.exec(sentence)) !== null) {
+    const name = m[1];
+    if (!admission.isAdmitted(name)) continue;
+    const value = `${m[2]} ${m[3]}`.trim();
+    if (!value) continue;
+    out.push({ op: 'DEF', id: admission.idOf(name), key: 'predicate', value, apposition: true });
+  }
+  return out;
+};
+
+// §2 — Nominalized / prepositional relations. A relation can sit buried in a noun phrase:
+// "the captivity of intelligent animals" carries captivity→of→animals. Read conservatively
+// (§6 — apprehend, do not infer): the "of" genitive only, both heads ordinary common-noun
+// referents (never a name — the figure path owns those, and "the death of Caesar" is a
+// figure relation the SVO scan would mishandle), light/bleached heads screened by the same
+// NP stoplist. Graded by the `nominalized` prior — the lowest in the table, because it is
+// the hardest read. Endpoints are np-tagged lemmas; the never-invent rule holds.
+const NOMINALIZED_RE = /\bthe\s+([a-z][a-zA-Z]+)\s+of\s+(?:(?:the|a|an|its|his|her|their|some|all|these|those|each|every|[a-z]+ly|[a-z]+ent|[a-z]+ed|[a-z]+ing)\s+)*([a-z][a-zA-Z]+)\b/gi;
+const nominalizedEdges = (sentence) => {
+  const out = [];
+  const re = new RegExp(NOMINALIZED_RE.source, NOMINALIZED_RE.flags);
+  let m;
+  while ((m = re.exec(sentence)) !== null) {
+    const head = m[1].toLowerCase(), obj = m[2].toLowerCase();
+    if (NP_NON_HEAD.has(head) || NP_NON_HEAD.has(obj)) continue;
+    if (head.length < 3 || obj.length < 3) continue;
+    if (head === obj) continue;
+    out.push({ op: 'CON', src: head, tgt: obj, via: 'of', srcKind: 'np', tgtKind: 'np', nominalized: true });
+  }
+  return out;
+};
+
 export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // Speech / copula / modifier classification comes from the conventions ledger
   // when one is supplied (its seed ∪ Pass-0 learned), falling back to the seeds.
@@ -548,6 +656,15 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // common noun is an UNRESOLVED endpoint there, not a node — the veto grounds only
   // against document figures. So an undefined opt keeps the old name-only behaviour.
   const wantReferents = !!opts.referents;
+  // §1/§4 — the total read. OFF (the default, the talker-claim veto, every golden) the
+  // scan is byte-identical: one edge per clause head, no confidence field, relative
+  // clauses fail to silence, subordinators are dropped. ON, the reader withholds nothing
+  // it apprehends: every clause and sub-clause is a proposition site (§2), each edge
+  // carries a confidence (§4), the relative clause binds its antecedent (§2), and the
+  // subordinators become inter-proposition links (§3). Total over the phenomenon, never
+  // over the noumenon — the widening is over the syntactic forms read, never the
+  // semantic liberty taken (§6).
+  const totalRead = !!opts.totalRead;
   const out = [];
   const s = sentence.trim();
 
@@ -559,8 +676,26 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
   // to. A genealogy's "And he begat… and begat… and begat…" is exactly this — one
   // patriarch, held active, gathering sons across subjectless clauses.
   let running = null;
-  for (const clause of segmentClauses(s, opts.coordSubjects ? { boundaries: COORD_CLAUSE_BOUNDARY } : undefined)) {
+  // §3 — the matrix proposition a subordinate clause hangs off: the head proposition of
+  // the clause read just before this one, reified (propIdOf). Carried across clauses so a
+  // subordinator opener links THIS clause's proposition back to it.
+  let prevProp = null;
+  // The per-clause body is a closure so its early exits stay `return`s while the loop
+  // still runs the inter-proposition bookkeeping (§3) and the confidence stamp (§4) after
+  // each clause. `running` and `out` are the outer bindings it folds into.
+  const emitClause = (clause) => {
     const base = clause.offset;                       // clause-relative offset → `s`
+    // §2/§4 — which proposition SITE this clause is, fixing the confidence prior and
+    // (for §3) whether it links back to the matrix. A relative opener (who/which) reads
+    // its body as the antecedent's proposition; a subordinator opener (because/when/…)
+    // reads a full proposition that also links. Null → an ordinary main/continuation clause.
+    const relativeAntecedent = totalRead && RELATIVE_OPENER.has(clause.opener);
+    const clauseSite = RELATIVE_OPENER.has(clause.opener) ? 'relative'
+                     : (SUBORDINATOR_TYPE[clause.opener] ? 'subordinate' : null);
+    // Stamp a graded confidence onto an edge when the total read is on; a no-op otherwise,
+    // so the default edge shape is byte-identical (§9 golden parity).
+    const graded = (edge, site, subjKind, objKind) =>
+      totalRead ? { ...edge, confidence: gradeConfidence(site, subjKind, objKind) } : edge;
 
     // Coordinated subjects: read every conjunct, seek the verb after the WHOLE
     // coordination, and bond each conjunct to the shared object — two subjects on one
@@ -591,12 +726,13 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
             const verb   = { text: head.verb, start: base + coord.end + head.at, end: restBase };
             for (const su of coord.subjects) {
               const subject = { text: su.text, start: base + su.start, end: base + su.end, id: su.id };
-              out.push({ op, src: su.id, tgt: t.id, via: head.verb,
+              out.push(graded({ op, src: su.id, tgt: t.id, via: head.verb,
                          ...(t.kind ? { tgtKind: t.kind } : {}), ...polmod(head),
-                         coord: true, args: { subject, verb, object, op } });
+                         coord: true, args: { subject, verb, object, op } },
+                       clauseSite || 'coordSubject', 'name', t.kind));
             }
           }
-          if (targets.length) { running = { id: coord.subjects[coord.subjects.length - 1].id, w: 1 }; continue; }
+          if (targets.length) { running = { id: coord.subjects[coord.subjects.length - 1].id, w: 1 }; return; }
         }
       }
     }
@@ -611,16 +747,23 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
       // biggest well. Its weight rides as coupling: a witnessed deposit, not a
       // certain claim.
       const lead = (clause.text.match(LEAD_COORD) || [''])[0].length;
-      // A relative clause ("…player WHO refuses…") inherits NOTHING: its subject is
-      // the antecedent the splitter dropped, never the running subject. Attributing it
-      // to the running subject is exactly how "refuses to speak" was pinned on the
-      // narrator. No antecedent resolver here → fail toward silence, lose the edge.
-      if (!RELATIVE_OPENER.has(clause.opener) && headVerb(clause.text.slice(lead), verbOpts)) {
+      // A relative clause ("…player WHO refuses…") binds its subject to the ANTECEDENT,
+      // the head noun the splitter dropped, never an arbitrary running subject. Without
+      // the total read there is no antecedent resolver, so it fails toward silence (the
+      // wrong-subject read — "refuses to speak" pinned on the narrator — is worse than a
+      // missed edge). Under the total read the antecedent IS the running figure (the head
+      // the relative clause modifies, established by the clause just before it), so the
+      // embedded clause is read as a full proposition with that figure as subject (§2),
+      // graded by the `relative` prior — present and low, never dropped (§1).
+      if (relativeAntecedent) {
+        if (running && running.id && headVerb(clause.text.slice(lead), verbOpts))
+          subj = { id: running.id, start: lead, end: lead, text: '', kind: 'relative', w: running.w ?? 1 };
+      } else if (!RELATIVE_OPENER.has(clause.opener) && headVerb(clause.text.slice(lead), verbOpts)) {
         const inh = running || (coref.lastIns ? coref.lastIns() : null);
         if (inh && inh.id) subj = { id: inh.id, start: lead, end: lead, text: '', kind: 'inherited', w: inh.w ?? 0 };
       }
     }
-    if (!subj || !subj.id) continue;
+    if (!subj || !subj.id) return;
 
     // Compound subjects — "A and B [and C …] verb …" — collect co-subjects by
     // scanning for "and|or [AdmittedName]" immediately after the leading subject
@@ -655,7 +798,7 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
 
     const after = clause.text.slice(afterStart);
     const head  = headVerb(after, verbOpts);
-    if (!head) continue;
+    if (!head) return;
 
     // Argument spans — offsets back into `s` (which equals doc.sentences[sentIdx] —
     // segmentSentences trims), each carrying its verbatim text so the walk is
@@ -683,21 +826,33 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
           for (const ag of objectEntities(agentText, admission, csub.id)) {
             const aStart = agentBase + ag.start, aEnd = agentBase + ag.end;
             const agent = { text: s.slice(aStart, aEnd), start: aStart, end: aEnd, id: ag.id };
-            out.push({ op: 'CON', src: ag.id, tgt: csub.id, via: pv.verb, ...cw, ...polmod(head),
-                       args: { subject: agent, verb: verbSpan, object: patient, op: 'CON' } });
+            out.push(graded({ op: 'CON', src: ag.id, tgt: csub.id, via: pv.verb, ...cw, ...polmod(head),
+                       args: { subject: agent, verb: verbSpan, object: patient, op: 'CON' } },
+                     clauseSite || 'passive', 'name'));
             emitted = true;
           }
         }
-        if (emitted) continue;   // the typed edge stands in for the flat copular DEF
+        if (emitted) return;   // the typed edge stands in for the flat copular DEF
       }
       const pred = head.rest.replace(/^[\s,]+/, '').replace(/[.!?]+\s*$/, '').trim();
       if (pred) {
+        // §2 — Coordinated predicates. "Dolphins are intelligent, social, and emotional" is
+        // THREE propositions, one DEF per conjunct from the shared subject, not one DEF over
+        // the whole tail. Off the total read the predicate stays whole (byte-identical); on,
+        // it splits on the coordination, the first conjunct graded `copula`, the rest the
+        // weaker `coordPredicate`. A single-conjunct predicate ("a violinist") splits to one.
+        const parts = totalRead
+          ? pred.split(/\s*,\s*(?:and\s+|or\s+)?|\s+and\s+|\s+or\s+/i).map(p => p.trim()).filter(Boolean)
+          : [pred];
         for (const csub of subjects) {
           const cw = coupling(csub);
-          out.push({ op: 'DEF', id: csub.id, key: 'predicate', value: pred, ...cw, ...polmod(head) });
+          parts.forEach((value, pi) => {
+            out.push(graded({ op: 'DEF', id: csub.id, key: 'predicate', value, ...cw, ...polmod(head) },
+                     clauseSite || (pi === 0 ? 'copula' : 'coordPredicate'), csub.kind));
+          });
         }
       }
-      continue;
+      return;
     }
     const op = isSpeech(head.verb) ? 'SIG' : 'CON';
 
@@ -708,7 +863,8 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
       for (const obj of objectEntities(head.rest, admission, csub.id)) {
         const oStart = restBase + obj.start, oEnd = restBase + obj.end;
         const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: obj.id };
-        out.push({ op, src: csub.id, tgt: obj.id, via: head.verb, ...cw, ...polmod(head), args: { subject, verb, object, op } });
+        out.push(graded({ op, src: csub.id, tgt: obj.id, via: head.verb, ...cw, ...polmod(head), args: { subject, verb, object, op } },
+                 clauseSite || 'main', csub.kind));
         bonded = true;
       }
       // The NP referent object — only when the page asks for referents, and only when
@@ -720,19 +876,76 @@ export const parseRelations = (sentence, admission, coref = {}, opts = {}) => {
         if (np) {
           const oStart = restBase + np.start, oEnd = restBase + np.end;
           const object = { text: s.slice(oStart, oEnd), start: oStart, end: oEnd, id: np.lemma };
-          out.push({ op, src: csub.id, tgt: np.lemma, via: head.verb, tgtKind: 'np', ...cw, ...polmod(head),
-                     args: { subject, verb, object, op } });
+          out.push(graded({ op, src: csub.id, tgt: np.lemma, via: head.verb, tgtKind: 'np', ...cw, ...polmod(head),
+                     args: { subject, verb, object, op } }, clauseSite || 'main', csub.kind, 'np'));
         }
       }
+    }
+  };  // end emitClause
+
+  // The clause driver. Each clause folds its propositions into `out`; then (§3) a
+  // subordinator opener links this clause's head proposition back to the matrix one,
+  // and the head proposition becomes the matrix for the next clause. The link itself is
+  // a CON between two REIFIED proposition nodes (srcKind/tgtKind 'prop'), typed by the
+  // subordinator — the object-to-object bond the graph is starved of without it (§3).
+  for (const clause of segmentClauses(s, opts.coordSubjects ? { boundaries: COORD_CLAUSE_BOUNDARY } : undefined)) {
+    const clauseStart = out.length;
+    emitClause(clause);
+    if (!totalRead) continue;
+    // The clause's OWN head proposition — the first bond/define it emitted, never an
+    // inter-proposition link folded in by an earlier clause.
+    const primary = out.slice(clauseStart).find(e => (e.op === 'CON' || e.op === 'SIG' || e.op === 'DEF') && !e.linkKind);
+    if (!primary) {
+      // §2 — the coordinated-predicate tail. "Dolphins are intelligent, social, and
+      // emotional" is three predicates, but the clause splitter shears the last conjunct
+      // onto its own clause at the ', and ' boundary, where it has no verb and emits
+      // nothing. Recover it as another DEF on the matrix subject — gated to a COPULAR
+      // matrix (prevProp.def), so a verb continuation ("…, and slept") is never misread
+      // as a predicate, and to a single bare content word that is not itself a modifier.
+      const tail = (/^(and|or|nor)$/.test(clause.opener || '') && prevProp && prevProp.def)
+        ? clause.text.replace(/^[\s,]+/, '').replace(/[.!?,;:]+\s*$/, '').trim() : '';
+      if (tail && /^[a-z][a-z-]*$/i.test(tail) && !verbOpts.isModifier(tail.toLowerCase()) && !verbOpts.isCopula(tail.toLowerCase())) {
+        out.push({ op: 'DEF', id: prevProp.subjId, key: 'predicate', value: tail,
+                   confidence: gradeConfidence('coordPredicate') });
+      }
+      continue;   // prevProp unchanged: the copular matrix still owns the next tail
+    }
+    const curId = propIdOf(primary);
+    const linkType = SUBORDINATOR_TYPE[clause.opener];
+    if (linkType && prevProp && prevProp.id !== curId) {
+      out.push({ op: 'CON', src: curId, tgt: prevProp.id, via: linkType,
+                 srcKind: 'prop', tgtKind: 'prop', linkKind: 'inter-proposition',
+                 connective: clause.opener, confidence: gradeConfidence('interProp') });
+    }
+    // The matrix the next subordinate/coordinated clause hangs off. A copular DEF carries
+    // its subject so a sheared predicate tail can rejoin it.
+    prevProp = primary.op === 'DEF' ? { id: curId, def: true, subjId: primary.id } : { id: curId };
+  }
+
+  // §2 — General apposition and nominalized relations, read across the whole sentence
+  // (they are not clause-local). Apposition needs admission (a renamed figure); the
+  // nominalized "of" genitive is an NP-to-NP referent bond, so it rides with the page's
+  // referent reading. Both are total-read only and deduped against what the SVO scan
+  // already emitted, so nothing is double-counted.
+  if (totalRead) {
+    for (const a of appositionEdges(s, admission)) {
+      if (!out.some(o => o.op === 'DEF' && o.id === a.id && o.value === a.value))
+        out.push({ ...a, confidence: gradeConfidence('apposition') });
+    }
+    if (wantReferents) for (const n of nominalizedEdges(s)) {
+      if (!out.some(o => o.op === 'CON' && o.src === n.src && o.tgt === n.tgt && o.via === n.via))
+        out.push({ ...n, confidence: gradeConfidence('nominalized', 'np', 'np') });
     }
   }
 
   for (const k of kinshipEdges(s, admission, coref)) {
-    if (!out.some(o => o.op === k.op && o.src === k.src && o.tgt === k.tgt)) out.push(k);
+    if (!out.some(o => o.op === k.op && o.src === k.src && o.tgt === k.tgt))
+      out.push(totalRead ? { ...k, confidence: gradeConfidence('kinship') } : k);
   }
 
   for (const a of attributionEdges(s, admission)) {
-    if (!out.some(o => o.op === a.op && o.src === a.src && o.tgt === a.tgt)) out.push(a);
+    if (!out.some(o => o.op === a.op && o.src === a.src && o.tgt === a.tgt))
+      out.push(totalRead ? { ...a, confidence: gradeConfidence('attribution') } : a);
   }
 
   return out;

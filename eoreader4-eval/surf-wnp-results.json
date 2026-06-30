@@ -1,0 +1,1776 @@
+{
+  "meta": {
+    "doc": "War and Peace (Maude trans., Gutenberg 2600)",
+    "sentences": 30544,
+    "coarseUnits": 386,
+    "grain": "structural",
+    "readMs": 73845
+  },
+  "results": [
+    {
+      "question": "Do Tolstoy's essayistic digressions enrich the novel or form a separate treatise grafted onto it?",
+      "domain": "meaning",
+      "keys": [
+        "tolstoy",
+        "essayistic",
+        "digressions",
+        "enrich",
+        "novel",
+        "form",
+        "separate",
+        "treatise",
+        "grafted",
+        "onto"
+      ],
+      "verbatim": {
+        "level": "existence",
+        "basis": "the source, word for word",
+        "quotes": [
+          {
+            "sentIdx": 14881,
+            "text": "“Mais charmante!” said he, evidently referring to Natásha, who did not exactly hear his words but understood them from the movement of his lips."
+          },
+          {
+            "sentIdx": 14889,
+            "text": "Borís came to the Rostóvs’ box, received their congratulations very simply, and raising his eyebrows with an absent-minded smile conveyed to Natásha and Sónya his fiancée’s invitation to her wedding, and went away."
+          },
+          {
+            "sentIdx": 14892,
+            "text": "The scantily clad Hélène smiled at everyone in the same way, and Natásha gave Borís a similar smile."
+          },
+          {
+            "sentIdx": 26367,
+            "text": "Les gros bataillons ont toujours raison."
+          },
+          {
+            "sentIdx": 30042,
+            "text": "What force moves the nations?"
+          },
+          {
+            "sentIdx": 30043,
+            "text": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes and rulers."
+          },
+          {
+            "sentIdx": 30066,
+            "text": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that these events were produced by the will of Alexander."
+          }
+        ]
+      },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
+      "structure": {
+        "level": "structure",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 12.12,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Specialist -> Bourbons : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Specialist -> Alexander : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Biographical -> historians : historians",
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IX",
+            "lo": 14856,
+            "hi": 14948,
+            "sentences": 92,
+            "cast": [
+              "Natásha",
+              "Hélène",
+              "Rostóvs",
+              "Duport",
+              "Kurágin",
+              "Countess Bezúkhova"
+            ],
+            "meaningDensity": 0.066,
+            "narratorOperation": {
+              "carrier": "defamiliarization",
+              "score": 5.69,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Mais -> Natásha : charmante",
+                "src": "Mais",
+                "via": "charmante",
+                "tgt": "Natásha",
+                "confidence": 0.95,
+                "sentIdx": 14881
+              },
+              {
+                "eot": "Borís -> Rostóvs : came",
+                "src": "Borís",
+                "via": "came",
+                "tgt": "Rostóvs",
+                "confidence": 0.95,
+                "sentIdx": 14889
+              },
+              {
+                "eot": "Natásha -> Borís : gave",
+                "src": "Natásha",
+                "via": "gave",
+                "tgt": "Borís",
+                "confidence": 0.95,
+                "sentIdx": 14892
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER II",
+            "lo": 26356,
+            "hi": 26392,
+            "sentences": 36,
+            "cast": [
+              "Russians",
+              "Military Governor",
+              "French",
+              "Spain",
+              "People",
+              "Guerrilla"
+            ],
+            "meaningDensity": 0.063,
+            "narratorOperation": {
+              "carrier": "defamiliarization",
+              "score": 5.53,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Les Chevaliers -> raison : gros",
+                "src": "Les Chevaliers",
+                "via": "gros",
+                "tgt": "raison",
+                "confidence": 0.855,
+                "sentIdx": 26367
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30042,
+          "score": 12.12
+        }
+      },
+      "interpretation": {
+        "level": "interpretation",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
+        "surprise": null,
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure"
+      }
+    },
+    {
+      "question": "How does the novel dramatize the attack on the great-man theory, and is Kutuzov an alternative model of leadership?",
+      "domain": "meaning",
+      "keys": [
+        "novel",
+        "dramatize",
+        "attack",
+        "great",
+        "theory",
+        "kutuzov",
+        "alternative",
+        "model",
+        "leadership"
+      ],
+      "verbatim": {
+        "level": "existence",
+        "basis": "the source, word for word",
+        "quotes": [
+          {
+            "sentIdx": 27359,
+            "text": "Napoléon le Grand!” Du sublime au ridicule il n’y a qu’un pas."
+          },
+          {
+            "sentIdx": 27658,
+            "text": "For Russian historians, strange and terrible to say, Napoleon—that most insignificant tool of history who never anywhere, even in exile, showed human dignity—Napoleon is the object of adulation and enthusiasm; he is gran"
+          },
+          {
+            "sentIdx": 27662,
+            "text": "Kutúzov never talked of “forty centuries looking down from the Pyramids,” of the sacrifices he offered for the fatherland, or of what he intended to accomplish or had accomplished; in general he said nothing about himsel"
+          },
+          {
+            "sentIdx": 27663,
+            "text": "He wrote letters to his daughters and to Madame de Staël, read novels, liked the society of pretty women, jested with generals, officers, and soldiers, and never contradicted those who tried to prove anything to him."
+          },
+          {
+            "sentIdx": 30042,
+            "text": "What force moves the nations?"
+          },
+          {
+            "sentIdx": 30043,
+            "text": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes and rulers."
+          },
+          {
+            "sentIdx": 30066,
+            "text": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that these events were produced by the will of Alexander."
+          }
+        ]
+      },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
+      "structure": {
+        "level": "structure",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 12.12,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Specialist -> Bourbons : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Specialist -> Alexander : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Biographical -> historians : historians",
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER XVIII",
+            "lo": 27336,
+            "hi": 27364,
+            "sentences": 28,
+            "cast": [
+              "Grand Cross",
+              "Napoleon",
+              "Orsh",
+              "Emperor Alexander",
+              "Du",
+              "French"
+            ],
+            "meaningDensity": 0.221,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 6,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Napoléon -> Grand Cross : le",
+                "src": "Napoléon",
+                "via": "le",
+                "tgt": "Grand Cross",
+                "confidence": 0.95,
+                "sentIdx": 27359
+              },
+              {
+                "eot": "Napoléon -> Du : le",
+                "src": "Napoléon",
+                "via": "le",
+                "tgt": "Du",
+                "confidence": 0.95,
+                "sentIdx": 27359
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER V",
+            "lo": 27649,
+            "hi": 27688,
+            "sentences": 39,
+            "cast": [
+              "Kutúzov",
+              "Russian",
+              "Borodin",
+              "Emperor Alexander",
+              "Krásnoe",
+              "French"
+            ],
+            "meaningDensity": 0.073,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 2.82,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Russian -> Napoleon : historians",
+                "src": "Russian",
+                "via": "historians",
+                "tgt": "Napoleon",
+                "confidence": 0.95,
+                "sentIdx": 27658
+              },
+              {
+                "eot": "Kutúzov -> centuries : not-talked",
+                "src": "Kutúzov",
+                "via": "talked",
+                "tgt": "centuries",
+                "polarity": "−",
+                "confidence": 0.855,
+                "sentIdx": 27662
+              },
+              {
+                "eot": "Kutúzov -> Staël : wrote",
+                "src": "Kutúzov",
+                "via": "wrote",
+                "tgt": "Staël",
+                "confidence": 0.855,
+                "sentIdx": 27663
+              }
+            ],
+            "argumentLinks": {
+              "contrast": 1
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30042,
+          "score": 12.12
+        }
+      },
+      "interpretation": {
+        "level": "interpretation",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
+        "surprise": null,
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure"
+      }
+    },
+    {
+      "question": "Trace Pierre's spiritual development — genuine progress toward truth or a series of illusions?",
+      "domain": "meaning",
+      "keys": [
+        "trace",
+        "pierre",
+        "spiritual",
+        "development",
+        "genuine",
+        "progress",
+        "toward",
+        "truth",
+        "series",
+        "illusions"
+      ],
+      "verbatim": {
+        "level": "existence",
+        "basis": "the source, word for word",
+        "quotes": [
+          {
+            "sentIdx": 11604,
+            "text": "Napoleon himself had noticed her in the theater and said of her: “C’est un superbe animal.” * Her success as a beautiful and elegant woman did not surprise Pierre, for she had become even handsomer than before."
+          },
+          {
+            "sentIdx": 11606,
+            "text": "Bilíbin saved up his epigrams to produce them in Countess Bezúkhova’s presence."
+          },
+          {
+            "sentIdx": 11608,
+            "text": "Young men read books before attending Hélène’s evenings, to have something to say in her salon, and secretaries of the embassy, and even ambassadors, confided diplomatic secrets to her, so that in a way Hélène was a powe"
+          },
+          {
+            "sentIdx": 23413,
+            "text": "When the French officer went into the room with Pierre the latter again thought it his duty to assure him that he was not French and wished to go away, but the officer would not hear of it."
+          },
+          {
+            "sentIdx": 23485,
+            "text": "“Ha, ha, ha!” The Frenchman emitted a merry, sanguine chuckle, patting Pierre on the shoulder."
+          },
+          {
+            "sentIdx": 23590,
+            "text": "Ramballe emptied his too, again pressed Pierre’s hand, and leaned his elbows on the table in a pensive attitude."
+          },
+          {
+            "sentIdx": 30042,
+            "text": "What force moves the nations?"
+          },
+          {
+            "sentIdx": 30043,
+            "text": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes and rulers."
+          },
+          {
+            "sentIdx": 30066,
+            "text": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that these events were produced by the will of Alexander."
+          }
+        ]
+      },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
+      "structure": {
+        "level": "structure",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 12.12,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Specialist -> Bourbons : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Specialist -> Alexander : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Biographical -> historians : historians",
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IX",
+            "lo": 11597,
+            "hi": 11632,
+            "sentences": 35,
+            "cast": [
+              "Pierre",
+              "Hélène",
+              "Erfurt",
+              "Borís",
+              "French",
+              "Napoleonic"
+            ],
+            "meaningDensity": 0.18,
+            "narratorOperation": {
+              "carrier": "defamiliarization",
+              "score": 1.99,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Napoleon -> Pierre : himself",
+                "src": "Napoleon",
+                "via": "himself",
+                "tgt": "Pierre",
+                "confidence": 0.95,
+                "sentIdx": 11604
+              },
+              {
+                "eot": "Bilíbin -> Countess Bezúkhova : saved",
+                "src": "Bilíbin",
+                "via": "saved",
+                "tgt": "Countess Bezúkhova",
+                "confidence": 0.95,
+                "sentIdx": 11606
+              },
+              {
+                "eot": "Young -> Hélène : men",
+                "src": "Young",
+                "via": "men",
+                "tgt": "Hélène",
+                "confidence": 0.95,
+                "sentIdx": 11608
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER XXIX",
+            "lo": 23412,
+            "hi": 23644,
+            "sentences": 232,
+            "cast": [
+              "Pierre",
+              "Frenchman",
+              "French",
+              "Moscow",
+              "Captain Ramballe",
+              "Paris"
+            ],
+            "meaningDensity": 0.115,
+            "narratorOperation": null,
+            "bonds": [
+              {
+                "eot": "French -> Pierre : officer",
+                "src": "French",
+                "via": "officer",
+                "tgt": "Pierre",
+                "confidence": 0.95,
+                "sentIdx": 23413
+              },
+              {
+                "eot": "Ha -> Frenchman : ha",
+                "src": "Ha",
+                "via": "ha",
+                "tgt": "Frenchman",
+                "confidence": 0.95,
+                "sentIdx": 23485
+              },
+              {
+                "eot": "Captain Ramballe -> Pierre : emptied",
+                "src": "Captain Ramballe",
+                "via": "emptied",
+                "tgt": "Pierre",
+                "confidence": 0.95,
+                "sentIdx": 23590
+              }
+            ],
+            "argumentLinks": {
+              "contrast": 2,
+              "sequence": 1,
+              "cause": 1
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30042,
+          "score": 12.12
+        }
+      },
+      "interpretation": {
+        "level": "interpretation",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
+        "surprise": null,
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure"
+      }
+    },
+    {
+      "question": "Is the First Epilogue's domestic Natasha a betrayal of her vibrancy or a fulfillment of it?",
+      "domain": "meaning",
+      "keys": [
+        "first",
+        "epilogue",
+        "domestic",
+        "natasha",
+        "betrayal",
+        "vibrancy",
+        "fulfillment"
+      ],
+      "verbatim": {
+        "level": "existence",
+        "basis": "the source, word for word",
+        "quotes": [
+          {
+            "sentIdx": 14881,
+            "text": "“Mais charmante!” said he, evidently referring to Natásha, who did not exactly hear his words but understood them from the movement of his lips."
+          },
+          {
+            "sentIdx": 14889,
+            "text": "Borís came to the Rostóvs’ box, received their congratulations very simply, and raising his eyebrows with an absent-minded smile conveyed to Natásha and Sónya his fiancée’s invitation to her wedding, and went away."
+          },
+          {
+            "sentIdx": 14892,
+            "text": "The scantily clad Hélène smiled at everyone in the same way, and Natásha gave Borís a similar smile."
+          },
+          {
+            "sentIdx": 30042,
+            "text": "What force moves the nations?"
+          },
+          {
+            "sentIdx": 30043,
+            "text": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes and rulers."
+          },
+          {
+            "sentIdx": 30066,
+            "text": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that these events were produced by the will of Alexander."
+          },
+          {
+            "sentIdx": 30118,
+            "text": "Napoleon ordered an army to be raised and go to war."
+          },
+          {
+            "sentIdx": 30154,
+            "text": "Equally little does this view explain why for several centuries the collective will is not withdrawn from certain rulers and their heirs, and then suddenly during a period of fifty years is transferred to the Convention,"
+          },
+          {
+            "sentIdx": 30167,
+            "text": "Postulating some generalization as the goal of the movement of humanity, the historians study the men of whom the greatest number of monuments have remained: kings, ministers, generals, authors, reformers, popes, and jou"
+          }
+        ]
+      },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
+      "structure": {
+        "level": "structure",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 12.12,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Specialist -> Bourbons : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Specialist -> Alexander : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Biographical -> historians : historians",
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IX",
+            "lo": 14856,
+            "hi": 14948,
+            "sentences": 92,
+            "cast": [
+              "Natásha",
+              "Hélène",
+              "Rostóvs",
+              "Duport",
+              "Kurágin",
+              "Countess Bezúkhova"
+            ],
+            "meaningDensity": 0.066,
+            "narratorOperation": {
+              "carrier": "defamiliarization",
+              "score": 5.69,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Mais -> Natásha : charmante",
+                "src": "Mais",
+                "via": "charmante",
+                "tgt": "Natásha",
+                "confidence": 0.95,
+                "sentIdx": 14881
+              },
+              {
+                "eot": "Borís -> Rostóvs : came",
+                "src": "Borís",
+                "via": "came",
+                "tgt": "Rostóvs",
+                "confidence": 0.95,
+                "sentIdx": 14889
+              },
+              {
+                "eot": "Natásha -> Borís : gave",
+                "src": "Natásha",
+                "via": "gave",
+                "tgt": "Borís",
+                "confidence": 0.95,
+                "sentIdx": 14892
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER IV",
+            "lo": 30115,
+            "hi": 30182,
+            "sentences": 67,
+            "cast": [
+              "Napoleon",
+              "Louis XIV",
+              "Louis XVI",
+              "Russian",
+              "Terrible",
+              "Rousseau"
+            ],
+            "meaningDensity": 0.124,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 6.86,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Napoleon -> army : ordered",
+                "src": "Napoleon",
+                "via": "ordered",
+                "tgt": "army",
+                "confidence": 0.855,
+                "sentIdx": 30118
+              },
+              {
+                "eot": "Equally -> explain : little",
+                "src": "Equally",
+                "via": "little",
+                "tgt": "explain",
+                "confidence": 0.855,
+                "sentIdx": 30154
+              },
+              {
+                "eot": "Postulating -> generalization : some",
+                "src": "Postulating",
+                "via": "some",
+                "tgt": "generalization",
+                "confidence": 0.855,
+                "sentIdx": 30167
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30042,
+          "score": 12.12
+        }
+      },
+      "interpretation": {
+        "level": "interpretation",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
+        "surprise": null,
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure"
+      }
+    },
+    {
+      "question": "Analyze Tolstoy's defamiliarization — the opera scene — and its moral project.",
+      "domain": "meaning",
+      "keys": [
+        "analyze",
+        "tolstoy",
+        "defamiliarization",
+        "opera",
+        "scene",
+        "moral",
+        "project"
+      ],
+      "verbatim": {
+        "level": "existence",
+        "basis": "the source, word for word",
+        "quotes": [
+          {
+            "sentIdx": 11133,
+            "text": "In 1809 the intimacy between “the world’s two arbiters,” as Napoleon and Alexander were called, was such that when Napoleon declared war on Austria a Russian corps crossed the frontier to co-operate with our old enemy Bo"
+          },
+          {
+            "sentIdx": 14881,
+            "text": "“Mais charmante!” said he, evidently referring to Natásha, who did not exactly hear his words but understood them from the movement of his lips."
+          },
+          {
+            "sentIdx": 14889,
+            "text": "Borís came to the Rostóvs’ box, received their congratulations very simply, and raising his eyebrows with an absent-minded smile conveyed to Natásha and Sónya his fiancée’s invitation to her wedding, and went away."
+          },
+          {
+            "sentIdx": 14892,
+            "text": "The scantily clad Hélène smiled at everyone in the same way, and Natásha gave Borís a similar smile."
+          },
+          {
+            "sentIdx": 30118,
+            "text": "Napoleon ordered an army to be raised and go to war."
+          },
+          {
+            "sentIdx": 30154,
+            "text": "Equally little does this view explain why for several centuries the collective will is not withdrawn from certain rulers and their heirs, and then suddenly during a period of fifty years is transferred to the Convention,"
+          },
+          {
+            "sentIdx": 30167,
+            "text": "Postulating some generalization as the goal of the movement of humanity, the historians study the men of whom the greatest number of monuments have remained: kings, ministers, generals, authors, reformers, popes, and jou"
+          }
+        ]
+      },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
+      "structure": {
+        "level": "structure",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER XXII",
+            "lo": 11132,
+            "hi": 11136,
+            "sentences": 4,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Austria",
+              "Bonaparte",
+              "Emperor Alexander",
+              "Life Guards"
+            ],
+            "meaningDensity": 0.074,
+            "narratorOperation": {
+              "carrier": "defamiliarization",
+              "score": 13.88,
+              "owner": "mind:narrator"
+            },
+            "bonds": [],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IX",
+            "lo": 14856,
+            "hi": 14948,
+            "sentences": 92,
+            "cast": [
+              "Natásha",
+              "Hélène",
+              "Rostóvs",
+              "Duport",
+              "Kurágin",
+              "Countess Bezúkhova"
+            ],
+            "meaningDensity": 0.066,
+            "narratorOperation": {
+              "carrier": "defamiliarization",
+              "score": 5.69,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Mais -> Natásha : charmante",
+                "src": "Mais",
+                "via": "charmante",
+                "tgt": "Natásha",
+                "confidence": 0.95,
+                "sentIdx": 14881
+              },
+              {
+                "eot": "Borís -> Rostóvs : came",
+                "src": "Borís",
+                "via": "came",
+                "tgt": "Rostóvs",
+                "confidence": 0.95,
+                "sentIdx": 14889
+              },
+              {
+                "eot": "Natásha -> Borís : gave",
+                "src": "Natásha",
+                "via": "gave",
+                "tgt": "Borís",
+                "confidence": 0.95,
+                "sentIdx": 14892
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER IV",
+            "lo": 30115,
+            "hi": 30182,
+            "sentences": 67,
+            "cast": [
+              "Napoleon",
+              "Louis XIV",
+              "Louis XVI",
+              "Russian",
+              "Terrible",
+              "Rousseau"
+            ],
+            "meaningDensity": 0.124,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 6.86,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Napoleon -> army : ordered",
+                "src": "Napoleon",
+                "via": "ordered",
+                "tgt": "army",
+                "confidence": 0.855,
+                "sentIdx": 30118
+              },
+              {
+                "eot": "Equally -> explain : little",
+                "src": "Equally",
+                "via": "little",
+                "tgt": "explain",
+                "confidence": 0.855,
+                "sentIdx": 30154
+              },
+              {
+                "eot": "Postulating -> generalization : some",
+                "src": "Postulating",
+                "via": "some",
+                "tgt": "generalization",
+                "confidence": 0.855,
+                "sentIdx": 30167
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "defamiliarization",
+          "owner": "mind:narrator",
+          "sentIdx": 11133,
+          "score": 13.88
+        }
+      },
+      "interpretation": {
+        "level": "interpretation",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
+        "surprise": null,
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure"
+      }
+    },
+    {
+      "question": "Is Platon Karataev endorsed as wisdom or a romanticization of the peasantry?",
+      "domain": "meaning",
+      "keys": [
+        "platon",
+        "karataev",
+        "endorsed",
+        "wisdom",
+        "romanticization",
+        "peasantry"
+      ],
+      "verbatim": {
+        "level": "existence",
+        "basis": "the source, word for word",
+        "quotes": [
+          {
+            "sentIdx": 25047,
+            "text": "When Pierre remembered them afterwards they all seemed misty figures to him except Platón Karatáev, who always remained in his mind a most vivid and precious memory and the personification of everything Russian, kindly, "
+          },
+          {
+            "sentIdx": 25048,
+            "text": "When Pierre saw his neighbor next morning at dawn the first impression of him, as of something round, was fully confirmed: Platón’s whole figure—in a French overcoat girdled with a cord, a soldier’s cap, and bast shoes—w"
+          },
+          {
+            "sentIdx": 25867,
+            "text": "While Pierre was repeating what he had been told about the army leaving Moscow, a thin, sallow, tattered French soldier came up to the door of the shed."
+          },
+          {
+            "sentIdx": 25889,
+            "text": "Pierre saw that Platón did not want to understand what the Frenchman was saying, and he looked on without interfering."
+          },
+          {
+            "sentIdx": 27129,
+            "text": "Occasionally he glanced at the familiar crowd around him and then again at his feet."
+          },
+          {
+            "sentIdx": 27137,
+            "text": "Mentally addressing the rain, he repeated: “Now then, now then, go on!"
+          },
+          {
+            "sentIdx": 27144,
+            "text": "When Pierre reached the fire and heard Platón’s voice enfeebled by illness, and saw his pathetic face brightly lit up by the blaze, he felt a painful prick at his heart."
+          },
+          {
+            "sentIdx": 27337,
+            "text": "This campaign consisted in a flight of the French during which they did all they could to destroy themselves."
+          }
+        ]
+      },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
+      "structure": {
+        "level": "structure",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER XIII",
+            "lo": 25045,
+            "hi": 25086,
+            "sentences": 41,
+            "cast": [
+              "Pierre",
+              "Platón Karatáev",
+              "Karatáev",
+              "French",
+              "Russian",
+              "Christian"
+            ],
+            "meaningDensity": 0.107,
+            "narratorOperation": null,
+            "bonds": [
+              {
+                "eot": "Pierre -> Platón Karatáev : remembered",
+                "src": "Pierre",
+                "via": "remembered",
+                "tgt": "Platón Karatáev",
+                "confidence": 0.95,
+                "sentIdx": 25047
+              },
+              {
+                "eot": "Pierre -> Platón Karatáev : saw",
+                "src": "Pierre",
+                "via": "saw",
+                "tgt": "Platón Karatáev",
+                "confidence": 0.95,
+                "sentIdx": 25048
+              },
+              {
+                "eot": "Pierre -> French : saw",
+                "src": "Pierre",
+                "via": "saw",
+                "tgt": "French",
+                "confidence": 0.95,
+                "sentIdx": 25048
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER XI",
+            "lo": 25820,
+            "hi": 25906,
+            "sentences": 86,
+            "cast": [
+              "Pierre",
+              "Karatáev",
+              "Frenchman",
+              "French",
+              "Monsieur Pierre",
+              "Platón Karatáev"
+            ],
+            "meaningDensity": 0.068,
+            "narratorOperation": null,
+            "bonds": [
+              {
+                "eot": "Pierre -> Moscow : repeating",
+                "src": "Pierre",
+                "via": "repeating",
+                "tgt": "Moscow",
+                "confidence": 0.95,
+                "sentIdx": 25867
+              },
+              {
+                "eot": "Pierre -> French : repeating",
+                "src": "Pierre",
+                "via": "repeating",
+                "tgt": "French",
+                "confidence": 0.95,
+                "sentIdx": 25867
+              },
+              {
+                "eot": "Pierre -> Platón Karatáev : saw",
+                "src": "Pierre",
+                "via": "saw",
+                "tgt": "Platón Karatáev",
+                "confidence": 0.95,
+                "sentIdx": 25889
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER XIII",
+            "lo": 27127,
+            "hi": 27192,
+            "sentences": 65,
+            "cast": [
+              "Karatáev",
+              "Pierre",
+              "God",
+              "Platón Karatáev",
+              "Tsar",
+              "October Pierre"
+            ],
+            "meaningDensity": 0.073,
+            "narratorOperation": null,
+            "bonds": [
+              {
+                "eot": "Pierre -> Platón Karatáev : reached",
+                "src": "Pierre",
+                "via": "reached",
+                "tgt": "Platón Karatáev",
+                "confidence": 0.95,
+                "sentIdx": 27144
+              },
+              {
+                "eot": "Occasionally -> glanced : he",
+                "src": "Occasionally",
+                "via": "he",
+                "tgt": "glanced",
+                "confidence": 0.855,
+                "sentIdx": 27129
+              },
+              {
+                "eot": "Mentally -> rain : addressing",
+                "src": "Mentally",
+                "via": "addressing",
+                "tgt": "rain",
+                "confidence": 0.855,
+                "sentIdx": 27137
+              }
+            ],
+            "argumentLinks": {
+              "contrast": 1,
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 27337,
+          "score": 6
+        }
+      },
+      "interpretation": {
+        "level": "interpretation",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
+        "surprise": null,
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure"
+      }
+    },
+    {
+      "question": "How stable is the opposition between artificial Petersburg society and authentic Moscow?",
+      "domain": "both",
+      "keys": [
+        "stable",
+        "opposition",
+        "artificial",
+        "petersburg",
+        "society",
+        "authentic",
+        "moscow"
+      ],
+      "verbatim": {
+        "level": "existence",
+        "basis": "the source, word for word",
+        "quotes": [
+          {
+            "sentIdx": 11749,
+            "text": "The Rostóvs lived in the same hospitable way in Petersburg as in Moscow, and the most diverse people met at their suppers."
+          },
+          {
+            "sentIdx": 11750,
+            "text": "Country neighbors from Otrádnoe, impoverished old squires and their daughters, Perónskaya a maid of honor, Pierre Bezúkhov, and the son of their district postmaster who had obtained a post in Petersburg."
+          },
+          {
+            "sentIdx": 14222,
+            "text": "He ceased keeping a diary, avoided the company of the Brothers, began going to the club again, drank a great deal, and came once more in touch with the bachelor sets, leading such a life that the Countess Hélène thought "
+          },
+          {
+            "sentIdx": 14226,
+            "text": "Moscow society, from the old women down to the children, received Pierre like a long-expected guest whose place was always ready awaiting him."
+          },
+          {
+            "sentIdx": 14229,
+            "text": "Benefit performances, poor pictures, statues, benevolent societies, gypsy choirs, schools, subscription dinners, sprees, Freemasons, churches, and books—no one and nothing met with a refusal from him, and had it not been"
+          },
+          {
+            "sentIdx": 14525,
+            "text": "Borís had not succeeded in making a wealthy match in Petersburg, so with the same object in view he came to Moscow."
+          },
+          {
+            "sentIdx": 14545,
+            "text": "Borís sketched two trees in the album and wrote: “Rustic trees, your dark branches shed gloom and melancholy upon me.”"
+          },
+          {
+            "sentIdx": 14558,
+            "text": "Aliment de poison d’une âme trop sensible, Toi, sans qui le bonheur me serait impossible, Tendre mélancholie, ah, viens me consoler, Viens calmer les tourments de ma sombre retraite, Et mêle une douceur secrète A ces ple"
+          },
+          {
+            "sentIdx": 14857,
+            "text": "The floor of the stage consisted of smooth boards, at the sides was some painted cardboard representing trees, and at the back was a cloth stretched over boards."
+          }
+        ]
+      },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
+      "structure": {
+        "level": "structure",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER I",
+            "lo": 14217,
+            "hi": 14285,
+            "sentences": 68,
+            "cast": [
+              "Pierre",
+              "Moscow",
+              "Natásha",
+              "Prince Andrew",
+              "Andrew",
+              "Joseph Alexéevich"
+            ],
+            "meaningDensity": 0.061,
+            "narratorOperation": {
+              "carrier": "defamiliarization",
+              "score": 0.25,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Moscow -> Pierre : society",
+                "src": "Moscow",
+                "via": "society",
+                "tgt": "Pierre",
+                "confidence": 0.95,
+                "sentIdx": 14226
+              },
+              {
+                "eot": "Benefit -> Freemasons : performances",
+                "src": "Benefit",
+                "via": "performances",
+                "tgt": "Freemasons",
+                "confidence": 0.95,
+                "sentIdx": 14229
+              },
+              {
+                "eot": "Pierre -> Brothers : ceased",
+                "src": "Pierre",
+                "via": "ceased",
+                "tgt": "Brothers",
+                "confidence": 0.855,
+                "sentIdx": 14222
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 3
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER V",
+            "lo": 14524,
+            "hi": 14603,
+            "sentences": 79,
+            "cast": [
+              "Julie Karágina",
+              "Borís",
+              "Pénza",
+              "Moscow",
+              "Nizhegórod",
+              "Anna Mikháylovna"
+            ],
+            "meaningDensity": 0.056,
+            "narratorOperation": null,
+            "bonds": [
+              {
+                "eot": "Borís -> St Petersburg : not-succeeded",
+                "src": "Borís",
+                "via": "succeeded",
+                "tgt": "St Petersburg",
+                "polarity": "−",
+                "confidence": 0.95,
+                "sentIdx": 14525
+              },
+              {
+                "eot": "Borís -> Rustic : sketched",
+                "src": "Borís",
+                "via": "sketched",
+                "tgt": "Rustic",
+                "confidence": 0.95,
+                "sentIdx": 14545
+              },
+              {
+                "eot": "Aliment -> Viens : de",
+                "src": "Aliment",
+                "via": "de",
+                "tgt": "Viens",
+                "confidence": 0.95,
+                "sentIdx": 14558
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER XI",
+            "lo": 11742,
+            "hi": 11804,
+            "sentences": 62,
+            "cast": [
+              "Berg",
+              "St Petersburg",
+              "Countess Véra",
+              "Rostóvs",
+              "Moscow",
+              "Austerlitz"
+            ],
+            "meaningDensity": 0.103,
+            "narratorOperation": null,
+            "bonds": [
+              {
+                "eot": "Rostóvs -> St Petersburg : lived",
+                "src": "Rostóvs",
+                "via": "lived",
+                "tgt": "St Petersburg",
+                "confidence": 0.95,
+                "sentIdx": 11749
+              },
+              {
+                "eot": "Rostóvs -> Moscow : lived",
+                "src": "Rostóvs",
+                "via": "lived",
+                "tgt": "Moscow",
+                "confidence": 0.95,
+                "sentIdx": 11749
+              },
+              {
+                "eot": "Country -> Otrádnoe : neighbors",
+                "src": "Country",
+                "via": "neighbors",
+                "tgt": "Otrádnoe",
+                "confidence": 0.95,
+                "sentIdx": 11750
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "defamiliarization",
+          "owner": "mind:narrator",
+          "sentIdx": 14857,
+          "score": 5.69
+        }
+      },
+      "interpretation": {
+        "level": "interpretation",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
+        "surprise": null,
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure"
+      }
+    },
+    {
+      "question": "How does contingency and chance square with the deterministic claims about historical inevitability?",
+      "domain": "meaning",
+      "keys": [
+        "contingency",
+        "chance",
+        "square",
+        "deterministic",
+        "claims",
+        "historical",
+        "inevitability"
+      ],
+      "verbatim": {
+        "level": "existence",
+        "basis": "the source, word for word",
+        "quotes": [
+          {
+            "sentIdx": 27359,
+            "text": "Napoléon le Grand!” Du sublime au ridicule il n’y a qu’un pas."
+          },
+          {
+            "sentIdx": 30042,
+            "text": "What force moves the nations?"
+          },
+          {
+            "sentIdx": 30043,
+            "text": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes and rulers."
+          },
+          {
+            "sentIdx": 30066,
+            "text": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that these events were produced by the will of Alexander."
+          },
+          {
+            "sentIdx": 30118,
+            "text": "Napoleon ordered an army to be raised and go to war."
+          },
+          {
+            "sentIdx": 30154,
+            "text": "Equally little does this view explain why for several centuries the collective will is not withdrawn from certain rulers and their heirs, and then suddenly during a period of fifty years is transferred to the Convention,"
+          },
+          {
+            "sentIdx": 30167,
+            "text": "Postulating some generalization as the goal of the movement of humanity, the historians study the men of whom the greatest number of monuments have remained: kings, ministers, generals, authors, reformers, popes, and jou"
+          }
+        ]
+      },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
+      "structure": {
+        "level": "structure",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 12.12,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Specialist -> Bourbons : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Specialist -> Alexander : historians",
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066
+              },
+              {
+                "eot": "Biographical -> historians : historians",
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IV",
+            "lo": 30115,
+            "hi": 30182,
+            "sentences": 67,
+            "cast": [
+              "Napoleon",
+              "Louis XIV",
+              "Louis XVI",
+              "Russian",
+              "Terrible",
+              "Rousseau"
+            ],
+            "meaningDensity": 0.124,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 6.86,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Napoleon -> army : ordered",
+                "src": "Napoleon",
+                "via": "ordered",
+                "tgt": "army",
+                "confidence": 0.855,
+                "sentIdx": 30118
+              },
+              {
+                "eot": "Equally -> explain : little",
+                "src": "Equally",
+                "via": "little",
+                "tgt": "explain",
+                "confidence": 0.855,
+                "sentIdx": 30154
+              },
+              {
+                "eot": "Postulating -> generalization : some",
+                "src": "Postulating",
+                "via": "some",
+                "tgt": "generalization",
+                "confidence": 0.855,
+                "sentIdx": 30167
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER XVIII",
+            "lo": 27336,
+            "hi": 27364,
+            "sentences": 28,
+            "cast": [
+              "Grand Cross",
+              "Napoleon",
+              "Orsh",
+              "Emperor Alexander",
+              "Du",
+              "French"
+            ],
+            "meaningDensity": 0.221,
+            "narratorOperation": {
+              "carrier": "framing",
+              "score": 6,
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "eot": "Napoléon -> Grand Cross : le",
+                "src": "Napoléon",
+                "via": "le",
+                "tgt": "Grand Cross",
+                "confidence": 0.95,
+                "sentIdx": 27359
+              },
+              {
+                "eot": "Napoléon -> Du : le",
+                "src": "Napoléon",
+                "via": "le",
+                "tgt": "Du",
+                "confidence": 0.95,
+                "sentIdx": 27359
+              }
+            ],
+            "argumentLinks": {}
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30042,
+          "score": 12.12
+        }
+      },
+      "interpretation": {
+        "level": "interpretation",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
+        "surprise": null,
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure"
+      }
+    }
+  ]
+}
