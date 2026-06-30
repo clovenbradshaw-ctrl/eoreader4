@@ -2773,6 +2773,19 @@ class Component extends DCLogic {
     if(!this._subjectsKnown(q,sources))return true;
     return !this.groundNotes(q,sources).relevant;           // not covered by matched reading → go read
   }
+  // THINKING, made legible. Between "researched" and the first streamed token the answer model
+  // is busy — pulling passages, loading, prefilling, drafting — but the bubble showed only a bare
+  // "…". Narrate that gap instead: set a short status on the still-pending, still-empty assistant
+  // bubble so the reader sees WHAT it's doing, not an opaque ellipsis. Cleared for free the moment
+  // a real token streams in (the bubble then carries m.text, never the think line).
+  _setThink(id,text){this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;
+    const m=c.messages.slice(),li=m.length-1;
+    if(li>=0&&m[li].role==='asst'&&m[li].pending&&!m[li].text)m[li]={...m[li],think:String(text||'')};
+    return {...c,messages:m};})}));}
+  // The first beat of thinking, phrased from the matched supply: how much grounded reading the
+  // answer has to work from. No matches → it's reasoning from the meaning graph / its own read.
+  _thinkGround(ground){const n=(ground&&ground.spans&&ground.spans.length)||0;
+    return n?('Re-reading '+n+' matching passage'+(n!==1?'s':'')+'…'):'Working out the answer…';}
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
@@ -2807,6 +2820,7 @@ class Component extends DCLogic {
     const ground=this.groundNotes(q,sources);
     // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
     //    graph, so it speaks from the document instead of as a blank-slate assistant.
+    this._setThink(id,this._thinkGround(ground));
     try{
       const model=await this.ensureChatModel();
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
@@ -2833,6 +2847,7 @@ class Component extends DCLogic {
       // streamPhrase drives the backend's onToken when it can decode incrementally
       // (webllm, echo), and falls back to draw-then-emit otherwise — either way it
       // returns the full reply, which `finish` then re-renders as bound markdown.
+      this._setThink(id,'Composing the answer…');
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
@@ -2963,6 +2978,7 @@ class Component extends DCLogic {
     // the model confabulate it from whatever was gathered.
     if(!this._subjectsKnown(q,sources.length?sources:[...new Set([...(gathered||[])])])){finish(this._noSubjectPatch(q,sources));return;}
     const ground=this.groundNotes(q,sources);
+    this._setThink(id,this._thinkGround(ground));
     try{
       const model=await this.ensureChatModel();
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
@@ -2973,6 +2989,7 @@ class Component extends DCLogic {
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
+      this._setThink(id,'Composing the answer…');
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
@@ -3017,6 +3034,7 @@ class Component extends DCLogic {
     // The named-subject gate: don't build a multi-section essay about a subject the in-scope
     // reading never names (the Grok case) — answer honestly instead of confabulating sections.
     if(!this._subjectsKnown(q,urls)){finish(this._noSubjectPatch(q,scope));return;}
+    this._setThink(id,'Gathering the relevant passages across '+urls.length+' source'+(urls.length!==1?'s':'')+'…');
     // POOL — every relevant span across the in-scope sources, near-duplicates removed so two
     // sources phrasing the same fact don't seed two sections.
     const pool=[],seenKey=new Set(),poolEnts=new Set();
@@ -3032,6 +3050,7 @@ class Component extends DCLogic {
       }
     }
     if(pool.length<4)return this._answerSingle(id,q,gathered);   // thin supply — a flat answer reads better
+    this._setThink(id,'Found '+pool.length+' passages — mapping out the sections…');
     // SEG — cluster the pool into themes; each becomes one section. <2 themes → single answer.
     const plan=this._clusterSpans(pool,q).slice(0,6);
     if(plan.length<2)return this._answerSingle(id,q,gathered);
@@ -3047,6 +3066,7 @@ class Component extends DCLogic {
     // uses with `acc+=s`). Kept outside the try so a late hiccup (streamPhrase returns empty or
     // throws AFTER streaming real prose) keeps what was written instead of dropping to a fragment.
     const fold=async(spans,header)=>{
+      this._setThink(id,header?('Writing on: '+header+'…'):'Drafting the opening…');
       const head=header?('## '+header+'\n\n'):'';
       acc=(parts.join('\n\n')+(parts.length?'\n\n':'')+head);paint();
       let body='',streamed='';
@@ -3536,8 +3556,11 @@ class Component extends DCLogic {
       // While researching with no answer yet, the trail IS the message — suppress the empty
       // pulsing bubble. Once the answer streams in (or for a normal turn) the bubble shows.
       const showBubble=!(researchRunning&&!m.text);
-      // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
-      return {isUser,pending:!!m.pending,showBubble,text:m.pending?(m.text||'…'):m.text,isMd,plain:!isMd,html:bodyHtml,onCite:(e)=>this._onCite(e),
+      // main's streaming fills m.text on a still-pending bubble; show it as it arrives. Until the
+      // first token, show the live "thinking" line (what the model is doing right now) instead of
+      // a bare ellipsis — only falling back to "…" before any status has been set.
+      const thinking=!!m.pending&&!m.text&&!!m.think;
+      return {isUser,pending:!!m.pending,thinking,showBubble,text:m.pending?(m.text||m.think||'…'):m.text,isMd,plain:!isMd,html:bodyHtml,onCite:(e)=>this._onCite(e),
         hasResearch,researchRunning,researchSteps,researchOpen:resOn,researchTitle,
         researchLiveOn,researchFullOn,researchLive,researchHasEarlier,researchEarlierLabel,
         researchLiveBox:'margin-top:7px;display:flex;flex-direction:column;gap:5px;',
@@ -3570,7 +3593,7 @@ class Component extends DCLogic {
         relatedMoreStyle:'font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
         hasNote:!!m.modelNote,note:m.modelNote||'',
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
-        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
+        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(thinking?'font-style:italic;':'')+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
         noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
