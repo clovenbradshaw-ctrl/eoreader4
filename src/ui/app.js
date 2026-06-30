@@ -32,6 +32,7 @@ import { renderGraph } from './graph-view.js';
 import { renderLog } from './log-view.js';
 import { mountFeed } from './feed-view.js';
 import { mountPredict } from './predict-view.js';
+import { mountReplay } from './replay-view.js';
 import { mountIdle } from './idle-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 import { exportChat } from './chat-export.js';
@@ -113,6 +114,7 @@ const els = {
   graphView: document.getElementById('graph-view'),
   logView:   document.getElementById('log-view'),
   feedView:  document.getElementById('feed-view'),
+  replayView: document.getElementById('replay-view'),
   predictView: document.getElementById('predict-view'),
   idleView:  document.getElementById('idle-view'),
   docTabs:   document.getElementById('doc-tabs'),
@@ -234,6 +236,7 @@ const renderViewedDoc = (doc) => {
   renderLog(doc, els.logView, { onSelectSentence: selectSentence });
   if (STATE.activeTab === 'predict') STATE.predict?.refresh();
   if (STATE.activeTab === 'idle')    STATE.idle?.refresh();
+  if (STATE.activeTab === 'replay')  STATE.replay?.refresh();
 };
 
 // Show the empty placeholders (no document loaded).
@@ -243,6 +246,7 @@ const clearDocPane = () => {
   STATE.graph?.destroy?.();
   STATE.graph = renderGraph(null, els.graphView, { onSelectSentence: selectSentence });
   renderLog(null, els.logView, { onSelectSentence: selectSentence });
+  STATE.replay?.refresh();   // back to the empty placeholder (clears any running timer)
 };
 
 // View a loaded document by id (clicking its chip).
@@ -474,15 +478,20 @@ const setTab = (name) => {
   els.docView.hidden   = name !== 'text';
   els.graphView.hidden = name !== 'graph';
   els.logView.hidden   = name !== 'log';
+  els.replayView.hidden = name !== 'replay';
   els.feedView.hidden  = name !== 'feed';
   els.predictView.hidden = name !== 'predict';
   els.idleView.hidden  = name !== 'idle';
   els.dropzone.style.display = name === 'text' ? '' : 'none';
   if (name === 'graph') STATE.graph?.reheat?.();
-  // The move-log / open-set are rebuilt only when the document changed (refresh is
-  // a no-op otherwise), so opening the tab is cheap after the first build.
+  // The move-log / open-set / beat list are rebuilt only when the document changed
+  // (refresh is a no-op otherwise), so opening the tab is cheap after the first build.
   if (name === 'predict') STATE.predict?.refresh();
   if (name === 'idle')    STATE.idle?.refresh();
+  // The replay plays on a timer; refresh when shown, pause when hidden so it never
+  // ticks against an unseen surface.
+  if (name === 'replay') STATE.replay?.refresh();
+  else STATE.replay?.pause?.();
 };
 
 // Run one query through the pipeline and render it. Factored out of the composer so
@@ -1200,6 +1209,15 @@ mountFeed(els.feedView, {
 // operator, not the word) from the move-log — no model called. Reads the live
 // document through the getter; rebuilds the move-log only when the doc changes.
 STATE.predict = mountPredict(els.predictView, {
+  getDoc: () => STATE.doc,
+  onSelectSentence: selectSentence,
+});
+
+// The replay view: press play and watch the reading happen, slowly, one proposition
+// at a time — each line arriving under the expectation it carried in, its propositions
+// revealing one by one, the reading lingering where belief moves. No model called; the
+// beats are read off readingAt(doc, cursor), rebuilt only when the doc changes.
+STATE.replay = mountReplay(els.replayView, {
   getDoc: () => STATE.doc,
   onSelectSentence: selectSentence,
 });

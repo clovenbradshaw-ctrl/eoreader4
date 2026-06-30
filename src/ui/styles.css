@@ -980,6 +980,76 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 .pv-ctl-v { color: #e4e4e7; font-family: ui-monospace, monospace; min-width: 3rem; text-align: right; }
 .pv-ctl-n { color: #6ee7b7; font-size: .68rem; min-width: 9rem; }
 
+/* Replay view — watch the reading happen, slowly, one proposition at a time */
+.rp-wrap { display: flex; flex-direction: column; gap: .6rem; height: 100%; }
+.rp-intro { font-size: .76rem; color: #a1a1aa; line-height: 1.5; }
+.rp-intro b { color: #e4e4e7; }
+.rp-dim { color: #52525b; font-family: ui-monospace, monospace; font-size: .7rem; }
+
+.rp-transport { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.rp-play {
+  width: 2rem; height: 2rem; flex: 0 0 auto; border-radius: 999px;
+  border: 1px solid #2c4a7a; background: #11203a; color: #93c5fd;
+  font-size: .8rem; line-height: 1; cursor: pointer; display: inline-flex;
+  align-items: center; justify-content: center;
+}
+.rp-play:hover { background: #16284a; }
+.rp-play.on { color: #a7f3d0; border-color: #065f46; background: #06231b; }
+.rp-speeds { display: inline-flex; gap: .2rem; margin-left: .2rem; }
+.rp-speed {
+  font-family: ui-monospace, monospace; font-size: .68rem; color: #71717a;
+  background: #18181b; border: 1px solid #27272a; border-radius: 5px;
+  padding: .12rem .35rem; cursor: pointer;
+}
+.rp-speed:hover { color: #d4d4d8; }
+.rp-speed.on { color: #c4b5fd; border-color: #4c1d95; background: #1e1633; }
+.rp-readout {
+  margin-left: auto; font-family: ui-monospace, monospace; font-size: .7rem;
+  color: #93c5fd; text-align: right;
+}
+
+.rp-rail { height: .3rem; background: #18181b; border-radius: 999px; overflow: hidden; }
+.rp-rail-fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg,#3f6ad8,#c4b5fd,#fca5a5); transition: width .25s ease; }
+
+.rp-stage { display: flex; flex-direction: column; gap: .5rem; }
+.rp-trail { display: flex; flex-direction: column; gap: .15rem; opacity: .55; }
+.rp-trail-line { display: flex; gap: .45rem; align-items: baseline; font-size: .72rem; cursor: pointer; }
+.rp-trail-line:hover { opacity: 1; }
+.rp-trail-text { color: #71717a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.rp-now {
+  display: flex; flex-direction: column; gap: .45rem;
+  background: #131316; border: 1px solid #27272a; border-radius: 8px; padding: .7rem .8rem;
+}
+.rp-now-head { display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }
+.rp-pred { font-size: .7rem; color: #6ee7b7; font-style: italic; }
+.rp-line { font-size: .9rem; color: #f4f4f5; line-height: 1.5; }
+
+.rp-props { display: flex; flex-direction: column; gap: .25rem; }
+.rp-prop { display: flex; align-items: baseline; gap: .5rem; font-size: .8rem; }
+.rp-prop .op { margin: 0; flex: 0 0 auto; }
+.rp-prop-text { color: #d4d4d8; line-height: 1.4; }
+.rp-held .rp-prop-text { color: #71717a; font-style: italic; }
+.rp-quiet { color: #52525b; font-style: italic; font-size: .76rem; }
+@keyframes rp-fresh-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+.rp-fresh { animation: rp-fresh-in .22s ease; }
+
+.rp-meters { display: flex; gap: 1rem; flex-wrap: wrap; }
+.rp-meter { display: flex; align-items: center; gap: .4rem; font-size: .68rem; }
+.rp-meter-l { color: #71717a; text-transform: uppercase; letter-spacing: .04em; min-width: 5rem; }
+.rp-meter-bar { width: 5rem; height: .4rem; background: #18181b; border-radius: 999px; overflow: hidden; }
+.rp-meter-bar i { display: block; height: 100%; }
+.rp-meter-v { font-family: ui-monospace, monospace; color: #a1a1aa; min-width: 2.2rem; text-align: right; }
+.rp-meter-low .rp-meter-bar i { background: #3f6ad8; }
+.rp-meter-medium .rp-meter-bar i { background: #fbbf24; }
+.rp-meter-high .rp-meter-bar i { background: #fca5a5; }
+.rp-meter-high .rp-meter-v { color: #fca5a5; }
+
+.rp-summary { font-size: .78rem; color: #a1a1aa; font-style: italic; line-height: 1.5; }
+.rp-cite { color: #60a5fa; font-family: ui-monospace, monospace; font-size: .68rem; cursor: pointer; }
+.rp-cite:hover { text-decoration: underline; }
+.rp-cite-now { color: #93c5fd; }
+
 /* The Rest view — the instrument still reading after the first pass (§15/§16). */
 .iv-wrap { display: flex; flex-direction: column; gap: .6rem; }
 .iv-field { background: #131316; border: 1px solid #27272a; border-radius: 6px; padding: .6rem .7rem; }
