@@ -604,7 +604,26 @@ const runWrite = async (rawQuestion, kindHint = null) => {
     raw = acc;
   }
 
-  const artifact = String(raw || acc || '').trim();
+  // THE FIRST GO, THEN EVALUATE. "Let me take a first go, and then I'll update if I need to." The
+  // draft above is the first go; the writer now reads it back against the request and only rewrites
+  // if it falls short — the lag posture / self-fold weld, write→evaluate→(maybe)revise, not plan
+  // it all up front. Any trouble, an empty verdict, or an OK keeps the first go untouched.
+  let artifact = String(raw || acc || '').trim();
+  if (artifact && !ctl.signal.aborted) {
+    try {
+      const review = [
+        { role: 'system', content: 'You are the writer, reviewing your own draft. Read it against the request — the form it should take, the voice, and exactly what was asked. If the draft already meets the request well, reply with only the word OK. If it falls short, reply with an improved, complete version of the piece and nothing else — no commentary, no preamble.' },
+        { role: 'user', content: `Request: ${rawQuestion}\n\nDraft:\n${artifact}` },
+      ];
+      setThinkingNote(thinking, '🔁 reading it back…');
+      const verdict = String(await streamPhrase(STATE.model, review, { maxTokens: 700, temperature: 0.7, signal: ctl.signal }) || '').trim();
+      if (verdict && !/^ok\b/i.test(verdict)) {
+        const revised = verdict.replace(/^(?:sure[,!.]?\s+|certainly[,!.]?\s+|here(?:'s| is| you go|’s)\b[^\n:]*:?\s*)/i, '').trim();
+        if (revised.replace(/[^a-z]/gi, '').length >= 20) artifact = revised;
+      }
+    } catch { /* keep the first go */ }
+  }
+
   finalizeThinking(thinking, artifact || `I couldn't write that ${label}.`, [], {
     route: 'chat', mode: STATE.grounding,
     onRetry: () => runWrite(rawQuestion, kindHint),

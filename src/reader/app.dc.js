@@ -1688,8 +1688,37 @@ class Component extends DCLogic {
     let raw='';
     try{raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:700,temperature:0.85,onToken,signal:guard.signal}),guard.race]);}
     catch(e){raw=acc;}
+    // THE FIRST GO, THEN EVALUATE. "Let me take a first go, and then I'll update if I need to." The
+    // draft above is the first go; now the writer reads it back against the request and only rewrites
+    // if it falls short. This is the lag posture (spec-enacted-writer §6) and the self-fold weld: read
+    // your own output, judge it, re-enter — write→evaluate→(maybe)revise, not plan-it-all-up-front.
+    let out=this.normMd(raw)||acc;
+    if(out&&out.trim()&&!guard.signal.aborted){
+      out=await this._reviseIfNeeded(model,q,out,guard,(t)=>{
+        // surface the second look in the bubble's status (the first go stays visible underneath)
+        this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+          if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],think:t};return {...c,messages:m};})}));
+      });
+    }
     guard.clear();
-    finish({text:this.normMd(raw)||acc||'(the model returned nothing to write)'});
+    finish({text:out||'(the model returned nothing to write)'});
+  }
+  // Read the first go back and update only if it falls short. One extra pass: the writer judges its
+  // own draft against the request — replies OK when it already lands, or a better full version when it
+  // doesn't. Conservative: any failure, an empty verdict, or an OK keeps the first go untouched.
+  async _reviseIfNeeded(model,q,draft,guard,onStatus){
+    try{
+      if(typeof onStatus==='function')onStatus('Reading it back…');
+      const msgs=[
+        {role:'system',content:'You are the writer, reviewing your own draft. Read it against the request — the form it should take, the voice, and exactly what was asked. If the draft already meets the request well, reply with only the word OK. If it falls short, reply with an improved, complete version of the piece and nothing else — no commentary, no preamble.'},
+        {role:'user',content:'Request: '+q+'\n\nDraft:\n'+draft},
+      ];
+      const verdict=await Promise.race([this._ME.streamPhrase(model,msgs,{maxTokens:700,temperature:0.7,onToken:()=>guard.feed(),signal:guard.signal}),guard.race]);
+      let v=(this.normMd(verdict)||'').trim();
+      if(!v||/^ok\b/i.test(v))return draft;                 // it judged the first go good enough
+      v=v.replace(/^(?:sure[,!.]?\s+|certainly[,!.]?\s+|here(?:'s| is| you go|’s)\b[^\n:]*:?\s*)/i,'').trim();
+      return v.replace(/[^a-z]/gi,'').length>=20?v:draft;   // a real rewrite, not a stray token
+    }catch(e){return draft;}                                 // any trouble → keep the first go
   }
   async _answerInto(id,q,gathered,opts){
     // OPT-IN LONGFORM (the arc, in the reader's own primitives): SEG the gathered evidence into one
