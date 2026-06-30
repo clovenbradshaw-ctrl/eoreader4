@@ -1308,16 +1308,17 @@
             </sc-for>
           </sc-if>
           <sc-if value="{{ memTabLog }}" hint-placeholder-val="{{ false }}">
-            <div style="font-size:10.5px;color:var(--ink3);margin-bottom:9px;line-height:1.45;">{{ memNote.shown }} of {{ memNote.count }} propositions in memory · subject <span style="font-style:italic;color:var(--acc);">relation</span> → object · click to open the source line.</div>
+            <div style="font-size:10.5px;color:var(--ink3);margin-bottom:9px;line-height:1.45;">{{ memNote.shown }} of {{ memNote.count }} propositions in memory · subject -&gt; object : <span style="font-style:italic;color:var(--acc);">relation</span> · click to open the source line.</div>
             <sc-for list="{{ memNote.rows }}" as="r" hint-placeholder-count="5">
               <div style="border-bottom:1px solid var(--line);">
                 <div onclick="{{ r.onToggle }}" title="Show the raw logged JSON" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:7px 8px;cursor:pointer;" style-hover="background:#f7f8fa">
                   <span style="font-size:9px;color:var(--ink3);flex:0 0 auto;">{{ r.caret }}</span>
                   <span style="{{ r.srcStyle }}">{{ r.src }}</span>
                   <span style="font-size:12px;font-weight:600;color:var(--ink);">{{ r.s }}</span>
-                  <span style="font-size:11.5px;font-style:italic;color:var(--acc);">{{ r.v }}</span>
-                  <span style="font-size:12px;color:var(--ink3);flex:0 0 auto;">{{ r.arrow }}</span>
+                  <span style="font-size:12px;color:var(--ink3);flex:0 0 auto;">-&gt;</span>
                   <span style="font-size:12px;font-weight:600;color:var(--ink);">{{ r.o }}</span>
+                  <span style="font-size:12px;color:var(--ink3);flex:0 0 auto;">:</span>
+                  <span style="font-size:11.5px;font-style:italic;color:var(--acc);">{{ r.rel }}</span>
                   <span style="{{ r.grainStyle }}">{{ r.grain }}</span>
                 </div>
                 <sc-if value="{{ r.expanded }}" hint-placeholder-val="{{ false }}">

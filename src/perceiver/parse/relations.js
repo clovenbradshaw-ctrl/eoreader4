@@ -133,6 +133,17 @@ const NOT_HEAD = new Set([
   'something', 'nothing', 'anything', 'everything', 'someone', 'anyone', 'everyone',
   'somebody', 'anybody', 'everybody', 'nobody', 'none', 'one',
   'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  // Determiners and quantifiers that open a NOUN PHRASE, never a predicate. When a
+  // clause has no admitted subject and falls to the inherited/last-INS fill, its head
+  // walk would otherwise take the leading quantifier as the verb — "All these families
+  // belong to Odontoceti" bonding an unrelated running figure via "all", a quarter of
+  // a real run's triples (the audit's "X --All--> Y", "--Several-->", "--Some-->" junk).
+  // A determiner-headed clause is a noun phrase the name-only reader cannot subject, so
+  // it fails toward silence here rather than minting a bond on a non-verb. (more/most/
+  // less/much/such/so are already modifiers — stepped over to the real verb, not here.)
+  'all', 'some', 'any', 'each', 'every', 'both', 'either', 'neither', 'several',
+  'many', 'few', 'fewer', 'other', 'another', 'various', 'numerous', 'multiple',
+  'enough', 'certain', 'including',
 ]);
 
 // The polarity / modality channel the flat predicate dropped. A negation ("not",
