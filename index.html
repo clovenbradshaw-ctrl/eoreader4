@@ -2873,8 +2873,44 @@ class Component extends DCLogic {
     arm();
     return {signal:ctrl.signal,feed:arm,clear,tripped:()=>tripped,race};
   }
+  // LIMNER (docs/limner.md): "/svg [kind] [focus]" draws the reading's EO graph as
+  // deterministic SVG, inline in the chat. Headless — no model and no log mutation:
+  // it projects this.graph (already a fold of the event log) and the layout engine
+  // computes geometry. Self-contained, so it dynamic-imports the organ on first use.
+  async _limnChat(raw){
+    const q=this.norm(raw);
+    const arg=q.replace(/^\/svg\b[\s:]*/i,'').trim();
+    let id=this.state.activeChat;
+    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Drawing…'}]};
+      return {chats,activeChat:id,chatInput:''};});
+    this._scrollChat();
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    const g=this.graph;
+    if(!g||!g.entities||!g.entities.size){finish({text:'No graph yet — read a URL or import a book first, then try /svg.'});return;}
+    try{
+      const L=this._LIMN||(this._LIMN=await import(new URL('src/organs/out/limner/index.js',document.baseURI).href));
+      // Split a leading view kind off the argument; the remainder centres the view.
+      const toks=arg?arg.split(/\s+/):[];let kind='graph';
+      if(toks.length&&L.VIEW_KINDS.includes(toks[0].toLowerCase()))kind=toks.shift().toLowerCase();
+      const focus=toks.join(' ').trim();
+      // Enrich entity labels via labelOf so nodes read as names, not bare hashIds.
+      const entities=new Map();
+      for(const [eid,e] of g.entities){let lab;try{lab=this.labelOf(eid);}catch(_){}
+        entities.set(eid,{...e,label:lab||e.label||eid});}
+      const {svg,spec}=await L.limn({graph:{...g,entities},kind,scope:focus?{focus}:{}});
+      if(!spec.nodes.length){finish({text:focus?('Nothing to draw around “'+focus+'” yet — no matching figure in the graph.'):'No figures admitted yet — read more, then try /svg.'});return;}
+      const cap=(kind+(focus?(' · '+focus):'')+' — '+spec.nodes.length+' nodes, '+spec.edges.length+' edges').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+      const responsive=svg.replace('<svg ','<svg style="width:100%;height:auto;max-width:100%;display:block" ');
+      finish({svg:'<div class="limner-cap" style="font-size:12px;color:var(--ink3,#888);margin:0 0 4px">'+cap+'</div><div class="limner-figure">'+responsive+'</div>'});
+    }catch(e){finish({text:'Couldn’t draw that: '+(e&&e.message||e)});}
+  }
+
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
+    if(/^\/svg\b/i.test(q))return this._limnChat(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
     // a question it can't ground in what's been read+folded sends the engine to the web first — it
@@ -3635,7 +3671,11 @@ class Component extends DCLogic {
       // sentinels in the longform case, so it's passed straight through.
       const liveReg=(isMd&&m.cites&&Object.keys(m.cites).length)?m.cites:null;
       const ann=(!liveReg&&isMd&&!m.pending&&(m.passages||[]).length)?this._citeAnnotate(m.text,m.passages):null;
-      const bodyHtml=isMd?this._md((ann?ann.text:m.text),liveReg||(ann&&ann.reg)):'';
+      // A LIMNER /svg render (docs/limner.md): the message carries finished SVG
+      // markup on `m.svg`; show it as the bubble body verbatim (our own template's
+      // output, every text node escaped at the source — render.js).
+      const hasSvg=!isUser&&!!m.svg;
+      const bodyHtml=hasSvg?m.svg:(isMd?this._md((ann?ann.text:m.text),liveReg||(ann&&ann.reg)):'');
       // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
       // line (the librarian apparatus, shown by default). When the binder found no inline match we
       // still list the passages the answer drew on, so the source text is always in view.
@@ -3743,7 +3783,7 @@ class Component extends DCLogic {
       // suppress the empty pulsing bubble. Once a token streams in (or the turn settles) it shows.
       const showBubble=!thinking&&!(pendingTurn&&!m.text);
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
-      return {isUser,pending:!!m.pending,thinking,think:m.think||'',showBubble,text:m.pending?(m.text||m.think||'…'):m.text,isMd,plain:!isMd,html:bodyHtml,onCite:(e)=>this._onCite(e),
+      return {isUser,pending:!!m.pending,thinking,think:m.think||'',showBubble,text:m.pending?(m.text||m.think||'…'):m.text,isMd:isMd||hasSvg,plain:!(isMd||hasSvg),html:bodyHtml,onCite:(e)=>this._onCite(e),
         thinkRowStyle:'max-width:80%;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;color:var(--ink2);',
         thinkSpinnerStyle:'flex:0 0 auto;width:14px;height:14px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;',
         hasResearch,researchRunning,researchSteps,researchOpen:resOn,researchTitle,
