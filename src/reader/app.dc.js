@@ -2989,7 +2989,10 @@ class Component extends DCLogic {
   _locEq(a,b){return a&&b&&a.t===b.t&&(a.t==='web'?a.url===b.url:a.id===b.id);}
   _pushLoc(loc){let h=(this._hist||[]);let p=(this._hpos==null?-1:this._hpos);if(this._locEq(h[p],loc))return;h=h.slice(0,p+1);h.push(loc);this._hist=h;this._hpos=h.length-1;}
   _applyLoc(loc){if(!loc)return;if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}else{this.setState(s=>({selId:loc.id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));}}
-  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
+  // Opening an entity full takes over the centre column, so it closes any active chat the
+  // same way navigating to a page does (see goWeb / doReadUrl). Otherwise the chat would keep
+  // filling <main> and the centre-fill guard in the view-model would suppress the explorer.
+  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
   _scrollPanelTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-panel-scroll');if(a)a.scrollTop=0;});}
   clickEntity(id){if(this._gzMoved)return;const cur=this.state.panelSel;if(cur&&cur!==id)this._panelStack.push(cur);
     const patch={panelSel:id,rightOpen:true,panelLens:null,gz:{k:1,x:0,y:0}};
@@ -4267,6 +4270,17 @@ class Component extends DCLogic {
       if(this.state.panelSel&&g.entities.has(this.state.panelSel)){base.panelProfileOn=true;base.panelListOn=false;base.panelProfile=this.panelProfile(this.state.panelSel,vu);}
       else if(this.state.previewWiki){base.previewOn=true;base.panelListOn=false;base.preview=this.previewVals();}
       else if(this.state.panelMode!=='entities'){const ov=this.pageOverview(vu);if(ov){base.panelPageOn=true;base.panelListOn=false;base.pageOverview=ov;}}
+      return base;
+    }
+    // When an active chat fills the centre column (no page open, desktop/mid — not phone),
+    // the chat owns <main>. Don't also build the centre entity explorer: `sel` falls back to
+    // topEntity() even with nothing explicitly selected, so without this guard the explorer
+    // renders stacked *below* the chat composer. Mirrors how gutenOn / showPrompt already
+    // yield to the chat. The right-hand entity panel is independent of the centre, so keep it
+    // working (clickEntity → panelProfile) before returning.
+    if(base.chatOn && base.chatOverlayOn){
+      if(this.state.panelSel&&g.entities.has(this.state.panelSel)){base.panelProfileOn=true;base.panelListOn=false;base.panelProfile=this.panelProfile(this.state.panelSel,null);}
+      else if(this.state.previewWiki){base.previewOn=true;base.panelListOn=false;base.preview=this.previewVals();}
       return base;
     }
     if(!sel){base.showPrompt=true;base.promptTitle='Select an entity';base.promptBody='Pick one from the list, or read another URL.';base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};return base;}
