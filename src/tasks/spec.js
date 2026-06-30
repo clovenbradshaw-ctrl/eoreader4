@@ -48,6 +48,7 @@ import { PATTERN, FIGURE } from './grain.js';
 import { MAX_FANOUT } from './constants.js';
 import { runTaskGraph } from './runner.js';
 import { organFor, createOutputRegistry } from '../organs/out/index.js';
+import { learnStructureFromExamples, exampleQuery } from './learn.js';
 
 // ── The small-model budgets ──────────────────────────────────────────────────
 // LEAF_MAX_TOKENS — the most one small-model reach should emit (a paragraph). A
@@ -126,15 +127,19 @@ export const artifactKindOf = (request = '') => {
   s = s.replace(LEAD_VERB, '').trim().replace(ARTICLE, '').trim();
   let prev = null;
   while (s && s !== prev) { prev = s; s = s.replace(LENGTH_WORD, '').trim(); }
-  const m = s.match(/^([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)\b/);
-  if (!m) return 'answer';
-  const words = m[1].trim().split(/\s+/);
-  // keep the head noun; include a second word only when it is part of the NOUN ("cover
-  // letter"), not a determiner or the "about/on" pivot ("list the", "report on").
-  let kind = words[0];
-  if (words[1] && !DROP_SECOND.has(words[1]) && !PIVOT.test(words[1])) kind += ` ${words[1]}`;
-  if (!kind || NON_KIND.has(kind) || NON_KIND.has(words[0])) return 'answer';
-  return kind;
+  // Take the noun PHRASE — up to three words ("emily dickinson poem", "cover letter") —
+  // stopping at the first determiner, the "about/on" pivot, or a non-word. A style
+  // modifier and the artifact noun travel together as the kind, so the learned shape is
+  // as specific as the request ("emily dickinson poem" learns a Dickinson shape, not a
+  // generic poem one).
+  const words = s.split(/\s+/);
+  const kw = [];
+  for (const w of words.slice(0, 3)) {
+    if (!/^[a-z][a-z-]*$/.test(w) || PIVOT.test(w) || DROP_SECOND.has(w) || NON_KIND.has(w)) break;
+    kw.push(w);
+  }
+  if (!kw.length || NON_KIND.has(kw[0])) return 'answer';
+  return kw.join(' ');
 };
 
 // Back-compat alias — the classifier is now open-vocabulary.
@@ -163,8 +168,17 @@ export const subjectOf = (request = '') => {
   while (s && s !== prev) { prev = s; s = s.replace(LENGTH_WORD, '').trim(); }   // "long detailed"
   const kind = artifactKindOf(request);
   if (kind !== 'answer') s = s.replace(new RegExp(`^${escapeRe(kind)}s?\\b`, 'i'), '').trim();
+  const hadPivot = PIVOT.test(s);
   s = s.replace(PIVOT, '').trim();
-  return s || String(request || '').trim();
+  // After stripping the kind: what remains is the subject ("…about the sea" → "the sea").
+  // If the whole request WAS the artifact noun ("write an emily dickinson poem"), nothing
+  // remains and there is no subject — let createTaskSpec supply its default. Only a bare
+  // topic with no recognised kind (a single word that became the kind) keeps the original.
+  if (s) return s;
+  if (kind === 'answer' || (!hadPivot && kind === String(request || '').trim().toLowerCase())) {
+    return String(request || '').trim();
+  }
+  return '';
 };
 
 // ── The only stored shape: the UNIVERSAL ARC ──────────────────────────────────
@@ -440,11 +454,15 @@ export const withOrgans = (plan, registry) => (view) => {
 // machine's memory (createSpecLibrary); a transient one is made if none is passed, but a
 // caller that wants the learning to persist passes its own (wired to the folder).
 export const runArtifact = async ({
-  request = '', generate, organs = null, library = null, webSearch = null, length = null,
+  request = '', generate, organs = null, library = null,
+  exampleSearch = null, webSearch = null, length = null,
   onUpdate = null, signal = null, runner = runTaskGraph,
 } = {}) => {
   const lib = library || createSpecLibrary();
-  if (webSearch) { try { await acquireSpec({ request, library: lib, webSearch }); } catch { /* fall back to the arc */ } }
+  if (exampleSearch || webSearch) {
+    try { await acquireSpec({ request, library: lib, exampleSearch, webSearch }); }
+    catch { /* fall back to the arc */ }
+  }
 
   const plan = planArtifact({ request, library: lib, length });
   // `organs` chooses the omnimodal dispatch; a bare `generate` is the text shorthand.
@@ -508,11 +526,23 @@ export const deriveSpecFromDefinition = (kind, text, base = genericArc(organForK
     if (r && !seen.has(r) && plausibleRole(r)) { seen.add(r); found.push(r); }
   };
 
-  for (const line of t.split(/\n+/)) {
-    let m = line.match(/^\s*(?:\d+[.)]|[-*•])\s*([A-Za-z][A-Za-z \-]{2,40})/);  // "1. Introduction", "- Body"
-    if (m) add(m[1]);
-    m = line.match(/^\s*([A-Z][A-Za-z \-]{2,30}):/);                            // "Introduction:"
-    if (m) add(m[1]);
+  // Markdown-aware: real web definitions arrive as "1. **Lyric Form** - …", "## Common
+  // Meter", "- Body:". Strip the list/heading/emphasis markers, then take the HEADING —
+  // a bold span, or the text before a dash/colon separator — never the description after.
+  for (const raw of t.split(/\n+/)) {
+    let line = raw.trim();
+    if (!line) continue;
+    const listed = /^(?:\d+[.)]|[-*•])\s+/.test(line);              // had a list marker
+    line = line
+      .replace(/^#{1,6}\s+/, '')                  // "## Heading"
+      .replace(/^(?:\d+[.)]|[-*•])\s+/, '')       // "1. " or "- " list marker
+      .trim();
+    const bold = line.match(/^\*{1,2}([^*]{2,48})\*{1,2}/);          // "**Lyric Form** - …"
+    if (bold) { add(bold[1]); continue; }
+    const sep = line.match(/^([A-Za-z][A-Za-z '\-]{1,38}?)\s*[–—:]\s+\S/); // "Heading: desc" / "Heading — desc"
+    if (sep) { add(sep[1]); continue; }
+    if (listed) { add(line.replace(/[.:,;]+$/, '')); continue; }     // a bullet/number item IS the role
+    if (/^[A-Z][A-Za-z'\-]+(?:\s+[A-Za-z'\-]+){0,2}$/.test(line)) add(line);  // a bare short Title-case heading
   }
 
   if (found.length < 2) {
@@ -594,18 +624,39 @@ export const researchQuery = (kind) =>
 // arc). The engine never touches the network — `webSearch` is injected, the web.js
 // discipline. `extractText` turns a search result into the text deriveSpecFromDefinition
 // reads (defaults to common shapes: a string, {text}, {doc.text}, {snippet}).
-const defaultExtract = (results) => (Array.isArray(results) ? results : [results])
-  .map((r) => (typeof r === 'string' ? r : (r?.text || r?.doc?.text || r?.snippet || r?.content || '')))
-  .filter(Boolean).join('\n');
+const oneText = (r) => (typeof r === 'string' ? r : (r?.text || r?.doc?.text || r?.snippet || r?.content || ''));
+const defaultExtract = (results) => (Array.isArray(results) ? results : [results]).map(oneText).filter(Boolean).join('\n');
+// examples stay an ARRAY — one element per example work, so the engine reads each whole.
+const extractExamples = (results) => (Array.isArray(results) ? results : [results]).map(oneText).filter(Boolean);
 
-export const acquireSpec = async ({ request = '', kind = null, library, webSearch, extractText = defaultExtract } = {}) => {
+// acquireSpec — "go learn how to make it well, on its own." Preference order:
+//   1. EXAMPLES (the preferred path): an injected `exampleSearch` finds good examples of
+//      the kind, and the core engine LEARNS the form from them (learnStructureFromExamples).
+//   2. a DEFINITION: an injected `webSearch` fetches a how-to, parsed structurally.
+//   3. nothing → the arc floor.
+// Both fetchers are injected (proposer-only, the web.js discipline) — the engine never
+// touches the network. The learned shape is cached (and persisted to templates/).
+export const acquireSpec = async ({
+  request = '', kind = null, library, exampleSearch = null, webSearch = null,
+  extractText = defaultExtract, extractExamplesFrom = extractExamples,
+} = {}) => {
   const k = kind || artifactKindOf(request);
   if (k === 'answer' || !library) return library ? library.learned(k) : null;
   const already = library.learned(k);
   if (already) return already;                         // already built it itself
-  if (typeof webSearch !== 'function') return null;    // no brain to consult → arc floor
-  let text = '';
-  try { text = extractText(await webSearch(researchQuery(k))); } catch { text = ''; }
-  if (!text.trim()) return null;
-  return library.defineFromDefinition(k, text);        // derive + cache + persist
+
+  // 1) learn from examples
+  if (typeof exampleSearch === 'function') {
+    let examples = [];
+    try { examples = extractExamplesFrom(await exampleSearch(exampleQuery(k))); } catch { examples = []; }
+    const tmpl = learnStructureFromExamples(k, examples, { organ: organForKind(k) });
+    if (tmpl) return library.define(k, tmpl);
+  }
+  // 2) fall back to a definition
+  if (typeof webSearch === 'function') {
+    let text = '';
+    try { text = extractText(await webSearch(researchQuery(k))); } catch { text = ''; }
+    if (text.trim()) return library.defineFromDefinition(k, text);
+  }
+  return null;                                          // 3) → arc floor
 };

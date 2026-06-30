@@ -159,7 +159,7 @@ test('acquireSpec researches an unknown kind, derives a shape, and caches it', a
 });
 
 test('runArtifact researches on demand when handed a webSearch', async () => {
-  const webSearch = async () => [{ text: 'Structure:\n- Greeting\n- Body\n- Sign-off' }];
+  const webSearch = async () => [{ text: '1. Greeting\n2. Body\n3. Sign-off' }];
   const res = await runArtifact({
     request: 'write a cover letter for a job',
     webSearch,
@@ -168,6 +168,29 @@ test('runArtifact researches on demand when handed a webSearch', async () => {
   assert.equal(res.spec.source, 'learned', 'the kind was learned before planning');
   assert.deepEqual(res.spec.sections.map((s) => s.role), ['greeting', 'body', 'sign-off']);
   assert.ok(res.library.learned('cover letter'), 'and cached for next time');
+});
+
+test('deriveSpecFromDefinition parses real web markdown (bold, numbered, ## headings)', () => {
+  // the shape the live Emily Dickinson research actually returned
+  const text = `Major Characteristics
+
+1. **Lyric Form** - Short poems with a single speaker.
+2. **Common Meter** - Alternating lines of eight and six syllables.
+3. **Slant Rhyme** - Uses approximate rhyme.
+## Dashes
+Her signature dashes function as breath marks.`;
+  const tmpl = deriveSpecFromDefinition('emily dickinson poem', text);
+  assert.ok(tmpl, 'a shape was derived from real markdown');
+  const roles = tmpl.sections.map((s) => s.role);
+  assert.ok(roles.includes('lyric form'), 'bold heading parsed');
+  assert.ok(roles.includes('common meter') && roles.includes('slant rhyme'));
+  assert.equal(tmpl.sections[0].dir.act, 'open');
+});
+
+test('artifactKindOf keeps a style modifier with the artifact noun', () => {
+  assert.equal(artifactKindOf('write an emily dickinson poem'), 'emily dickinson poem');
+  assert.equal(artifactKindOf('write a poem'), 'poem');
+  assert.equal(artifactKindOf('compose a cover letter for a job'), 'cover letter');
 });
 
 test('offline (no webSearch) falls back to the arc, never invents a guide', async () => {

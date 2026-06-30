@@ -41,6 +41,7 @@ export const templateToJSON = (tmpl = {}) => {
     note: tmpl.note || '',
     source: tmpl.source || 'learned',
     ...(tmpl.provenance ? { provenance: tmpl.provenance } : {}),
+    ...(tmpl.form ? { form: tmpl.form } : {}),
     sections,
   };
 };
@@ -71,6 +72,7 @@ export const templateFromJSON = (json) => {
     note: j.note || '',
     source: j.source || 'installed',
     ...(j.provenance ? { provenance: j.provenance } : {}),
+    ...(j.form ? { form: j.form } : {}),
     sections,
   });
 };
