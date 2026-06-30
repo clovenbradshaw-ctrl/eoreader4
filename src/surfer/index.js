@@ -102,3 +102,7 @@ export { attributedEvaluation, NARRATOR } from './evaluation.js';
 // markers. The lens-switch boundaries are the cast-turnover surprise, so this is also the
 // multi-grain surprise encoding. `holarchy` nests coarse arcs into their scenes.
 export { detectHolons, holarchy } from './holons.js';
+// Assemble the surf's reading of a question into a structured, saveable result — the regions it
+// reaches, the cast, the cited bonds, the argument structure, and the narrator's owner-attributed
+// evaluative stance. σ-side evidence for a reader/talker to judge; the verdict is not encoded.
+export { surfToAnswer } from './answer.js';

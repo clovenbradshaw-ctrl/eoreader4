@@ -1,0 +1,1370 @@
+{
+  "meta": {
+    "doc": "War and Peace (Maude trans., Gutenberg 2600)",
+    "sentences": 30544,
+    "coarseUnits": 386,
+    "grain": "structural",
+    "readMs": 76561
+  },
+  "results": [
+    {
+      "question": "Do Tolstoy's essayistic digressions enrich the novel or form a separate treatise grafted onto it?",
+      "domain": "meaning",
+      "keys": [
+        "tolstoy",
+        "essayistic",
+        "digressions",
+        "enrich",
+        "novel",
+        "form",
+        "separate",
+        "treatise",
+        "grafted",
+        "onto"
+      ],
+      "source": {
+        "basis": "σ — cited document material and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "evaluation": {
+              "score": 12.12,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043,
+                "quote": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes"
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IX",
+            "lo": 14856,
+            "hi": 14948,
+            "sentences": 92,
+            "cast": [
+              "Natásha",
+              "Hélène",
+              "Rostóvs",
+              "Duport",
+              "Kurágin",
+              "Countess Bezúkhova"
+            ],
+            "meaningDensity": 0.066,
+            "evaluation": {
+              "score": 5.69,
+              "carrier": "defamiliarization",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Mais",
+                "via": "charmante",
+                "tgt": "Natásha",
+                "confidence": 0.95,
+                "sentIdx": 14881,
+                "quote": "“Mais charmante!” said he, evidently referring to Natásha, who did not exactly hear his words but understood t"
+              },
+              {
+                "src": "Borís",
+                "via": "came",
+                "tgt": "Rostóvs",
+                "confidence": 0.95,
+                "sentIdx": 14889,
+                "quote": "Borís came to the Rostóvs’ box, received their congratulations very simply, and raising his eyebrows with an a"
+              },
+              {
+                "src": "Natásha",
+                "via": "gave",
+                "tgt": "Borís",
+                "confidence": 0.95,
+                "sentIdx": 14892,
+                "quote": "The scantily clad Hélène smiled at everyone in the same way, and Natásha gave Borís a similar smile."
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER II",
+            "lo": 26356,
+            "hi": 26392,
+            "sentences": 36,
+            "cast": [
+              "Russians",
+              "Military Governor",
+              "French",
+              "Spain",
+              "People",
+              "Guerrilla"
+            ],
+            "meaningDensity": 0.063,
+            "evaluation": {
+              "score": 5.53,
+              "carrier": "defamiliarization",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Les Chevaliers",
+                "via": "gros",
+                "tgt": "raison",
+                "confidence": 0.855,
+                "sentIdx": 26367,
+                "quote": "Les gros bataillons ont toujours raison."
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30041,
+          "score": 12.12,
+          "quote": "What force moves the nations?"
+        }
+      },
+      "interpretation": {
+        "basis": "ρ — the reader's/talker's own verdict",
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with source"
+      }
+    },
+    {
+      "question": "How does the novel dramatize the attack on the great-man theory, and is Kutuzov an alternative model of leadership?",
+      "domain": "meaning",
+      "keys": [
+        "novel",
+        "dramatize",
+        "attack",
+        "great",
+        "theory",
+        "kutuzov",
+        "alternative",
+        "model",
+        "leadership"
+      ],
+      "source": {
+        "basis": "σ — cited document material and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "evaluation": {
+              "score": 12.12,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043,
+                "quote": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes"
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER XVIII",
+            "lo": 27336,
+            "hi": 27364,
+            "sentences": 28,
+            "cast": [
+              "Grand Cross",
+              "Napoleon",
+              "Orsh",
+              "Emperor Alexander",
+              "Du",
+              "French"
+            ],
+            "meaningDensity": 0.221,
+            "evaluation": {
+              "score": 6,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Napoléon",
+                "via": "le",
+                "tgt": "Grand Cross",
+                "confidence": 0.95,
+                "sentIdx": 27359,
+                "quote": "Napoléon le Grand!” Du sublime au ridicule il n’y a qu’un pas."
+              },
+              {
+                "src": "Napoléon",
+                "via": "le",
+                "tgt": "Du",
+                "confidence": 0.95,
+                "sentIdx": 27359,
+                "quote": "Napoléon le Grand!” Du sublime au ridicule il n’y a qu’un pas."
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER V",
+            "lo": 27649,
+            "hi": 27688,
+            "sentences": 39,
+            "cast": [
+              "Kutúzov",
+              "Russian",
+              "Borodin",
+              "Emperor Alexander",
+              "Krásnoe",
+              "French"
+            ],
+            "meaningDensity": 0.073,
+            "evaluation": {
+              "score": 2.82,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Russian",
+                "via": "historians",
+                "tgt": "Napoleon",
+                "confidence": 0.95,
+                "sentIdx": 27658,
+                "quote": "For Russian historians, strange and terrible to say, Napoleon—that most insignificant tool of history who neve"
+              },
+              {
+                "src": "Kutúzov",
+                "via": "talked",
+                "tgt": "centuries",
+                "confidence": 0.855,
+                "sentIdx": 27662,
+                "quote": "Kutúzov never talked of “forty centuries looking down from the Pyramids,” of the sacrifices he offered for the"
+              },
+              {
+                "src": "Kutúzov",
+                "via": "wrote",
+                "tgt": "Staël",
+                "confidence": 0.855,
+                "sentIdx": 27663,
+                "quote": "He wrote letters to his daughters and to Madame de Staël, read novels, liked the society of pretty women, jest"
+              }
+            ],
+            "argumentLinks": {
+              "contrast": 1
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30041,
+          "score": 12.12,
+          "quote": "What force moves the nations?"
+        }
+      },
+      "interpretation": {
+        "basis": "ρ — the reader's/talker's own verdict",
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with source"
+      }
+    },
+    {
+      "question": "Trace Pierre's spiritual development — genuine progress toward truth or a series of illusions?",
+      "domain": "meaning",
+      "keys": [
+        "trace",
+        "pierre",
+        "spiritual",
+        "development",
+        "genuine",
+        "progress",
+        "toward",
+        "truth",
+        "series",
+        "illusions"
+      ],
+      "source": {
+        "basis": "σ — cited document material and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "evaluation": {
+              "score": 12.12,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043,
+                "quote": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes"
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IX",
+            "lo": 11597,
+            "hi": 11632,
+            "sentences": 35,
+            "cast": [
+              "Pierre",
+              "Hélène",
+              "Erfurt",
+              "Borís",
+              "French",
+              "Napoleonic"
+            ],
+            "meaningDensity": 0.18,
+            "evaluation": {
+              "score": 1.99,
+              "carrier": "defamiliarization",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Napoleon",
+                "via": "himself",
+                "tgt": "Pierre",
+                "confidence": 0.95,
+                "sentIdx": 11604,
+                "quote": "Napoleon himself had noticed her in the theater and said of her: “C’est un superbe animal.” * Her success as a"
+              },
+              {
+                "src": "Bilíbin",
+                "via": "saved",
+                "tgt": "Countess Bezúkhova",
+                "confidence": 0.95,
+                "sentIdx": 11606,
+                "quote": "Bilíbin saved up his epigrams to produce them in Countess Bezúkhova’s presence."
+              },
+              {
+                "src": "Young",
+                "via": "men",
+                "tgt": "Hélène",
+                "confidence": 0.95,
+                "sentIdx": 11608,
+                "quote": "Young men read books before attending Hélène’s evenings, to have something to say in her salon, and secretarie"
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER XXIX",
+            "lo": 23412,
+            "hi": 23644,
+            "sentences": 232,
+            "cast": [
+              "Pierre",
+              "Frenchman",
+              "French",
+              "Moscow",
+              "Captain Ramballe",
+              "Paris"
+            ],
+            "meaningDensity": 0.115,
+            "evaluation": null,
+            "bonds": [
+              {
+                "src": "French",
+                "via": "officer",
+                "tgt": "Pierre",
+                "confidence": 0.95,
+                "sentIdx": 23413,
+                "quote": "When the French officer went into the room with Pierre the latter again thought it his duty to assure him that"
+              },
+              {
+                "src": "Ha",
+                "via": "ha",
+                "tgt": "Frenchman",
+                "confidence": 0.95,
+                "sentIdx": 23485,
+                "quote": "“Ha, ha, ha!” The Frenchman emitted a merry, sanguine chuckle, patting Pierre on the shoulder."
+              },
+              {
+                "src": "Captain Ramballe",
+                "via": "emptied",
+                "tgt": "Pierre",
+                "confidence": 0.95,
+                "sentIdx": 23590,
+                "quote": "Ramballe emptied his too, again pressed Pierre’s hand, and leaned his elbows on the table in a pensive attitud"
+              }
+            ],
+            "argumentLinks": {
+              "contrast": 2,
+              "sequence": 1,
+              "cause": 1
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30041,
+          "score": 12.12,
+          "quote": "What force moves the nations?"
+        }
+      },
+      "interpretation": {
+        "basis": "ρ — the reader's/talker's own verdict",
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with source"
+      }
+    },
+    {
+      "question": "Is the First Epilogue's domestic Natasha a betrayal of her vibrancy or a fulfillment of it?",
+      "domain": "meaning",
+      "keys": [
+        "first",
+        "epilogue",
+        "domestic",
+        "natasha",
+        "betrayal",
+        "vibrancy",
+        "fulfillment"
+      ],
+      "source": {
+        "basis": "σ — cited document material and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "evaluation": {
+              "score": 12.12,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043,
+                "quote": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes"
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IX",
+            "lo": 14856,
+            "hi": 14948,
+            "sentences": 92,
+            "cast": [
+              "Natásha",
+              "Hélène",
+              "Rostóvs",
+              "Duport",
+              "Kurágin",
+              "Countess Bezúkhova"
+            ],
+            "meaningDensity": 0.066,
+            "evaluation": {
+              "score": 5.69,
+              "carrier": "defamiliarization",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Mais",
+                "via": "charmante",
+                "tgt": "Natásha",
+                "confidence": 0.95,
+                "sentIdx": 14881,
+                "quote": "“Mais charmante!” said he, evidently referring to Natásha, who did not exactly hear his words but understood t"
+              },
+              {
+                "src": "Borís",
+                "via": "came",
+                "tgt": "Rostóvs",
+                "confidence": 0.95,
+                "sentIdx": 14889,
+                "quote": "Borís came to the Rostóvs’ box, received their congratulations very simply, and raising his eyebrows with an a"
+              },
+              {
+                "src": "Natásha",
+                "via": "gave",
+                "tgt": "Borís",
+                "confidence": 0.95,
+                "sentIdx": 14892,
+                "quote": "The scantily clad Hélène smiled at everyone in the same way, and Natásha gave Borís a similar smile."
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER IV",
+            "lo": 30115,
+            "hi": 30182,
+            "sentences": 67,
+            "cast": [
+              "Napoleon",
+              "Louis XIV",
+              "Louis XVI",
+              "Russian",
+              "Terrible",
+              "Rousseau"
+            ],
+            "meaningDensity": 0.124,
+            "evaluation": {
+              "score": 6.86,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Napoleon",
+                "via": "ordered",
+                "tgt": "army",
+                "confidence": 0.855,
+                "sentIdx": 30118,
+                "quote": "Napoleon ordered an army to be raised and go to war."
+              },
+              {
+                "src": "Equally",
+                "via": "little",
+                "tgt": "explain",
+                "confidence": 0.855,
+                "sentIdx": 30154,
+                "quote": "Equally little does this view explain why for several centuries the collective will is not withdrawn from cert"
+              },
+              {
+                "src": "Postulating",
+                "via": "some",
+                "tgt": "generalization",
+                "confidence": 0.855,
+                "sentIdx": 30167,
+                "quote": "Postulating some generalization as the goal of the movement of humanity, the historians study the men of whom "
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30041,
+          "score": 12.12,
+          "quote": "What force moves the nations?"
+        }
+      },
+      "interpretation": {
+        "basis": "ρ — the reader's/talker's own verdict",
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with source"
+      }
+    },
+    {
+      "question": "Analyze Tolstoy's defamiliarization — the opera scene — and its moral project.",
+      "domain": "meaning",
+      "keys": [
+        "analyze",
+        "tolstoy",
+        "defamiliarization",
+        "opera",
+        "scene",
+        "moral",
+        "project"
+      ],
+      "source": {
+        "basis": "σ — cited document material and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER XXII",
+            "lo": 11132,
+            "hi": 11136,
+            "sentences": 4,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Austria",
+              "Bonaparte",
+              "Emperor Alexander",
+              "Life Guards"
+            ],
+            "meaningDensity": 0.074,
+            "evaluation": {
+              "score": 13.88,
+              "carrier": "defamiliarization",
+              "owner": "mind:narrator"
+            },
+            "bonds": [],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IX",
+            "lo": 14856,
+            "hi": 14948,
+            "sentences": 92,
+            "cast": [
+              "Natásha",
+              "Hélène",
+              "Rostóvs",
+              "Duport",
+              "Kurágin",
+              "Countess Bezúkhova"
+            ],
+            "meaningDensity": 0.066,
+            "evaluation": {
+              "score": 5.69,
+              "carrier": "defamiliarization",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Mais",
+                "via": "charmante",
+                "tgt": "Natásha",
+                "confidence": 0.95,
+                "sentIdx": 14881,
+                "quote": "“Mais charmante!” said he, evidently referring to Natásha, who did not exactly hear his words but understood t"
+              },
+              {
+                "src": "Borís",
+                "via": "came",
+                "tgt": "Rostóvs",
+                "confidence": 0.95,
+                "sentIdx": 14889,
+                "quote": "Borís came to the Rostóvs’ box, received their congratulations very simply, and raising his eyebrows with an a"
+              },
+              {
+                "src": "Natásha",
+                "via": "gave",
+                "tgt": "Borís",
+                "confidence": 0.95,
+                "sentIdx": 14892,
+                "quote": "The scantily clad Hélène smiled at everyone in the same way, and Natásha gave Borís a similar smile."
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER IV",
+            "lo": 30115,
+            "hi": 30182,
+            "sentences": 67,
+            "cast": [
+              "Napoleon",
+              "Louis XIV",
+              "Louis XVI",
+              "Russian",
+              "Terrible",
+              "Rousseau"
+            ],
+            "meaningDensity": 0.124,
+            "evaluation": {
+              "score": 6.86,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Napoleon",
+                "via": "ordered",
+                "tgt": "army",
+                "confidence": 0.855,
+                "sentIdx": 30118,
+                "quote": "Napoleon ordered an army to be raised and go to war."
+              },
+              {
+                "src": "Equally",
+                "via": "little",
+                "tgt": "explain",
+                "confidence": 0.855,
+                "sentIdx": 30154,
+                "quote": "Equally little does this view explain why for several centuries the collective will is not withdrawn from cert"
+              },
+              {
+                "src": "Postulating",
+                "via": "some",
+                "tgt": "generalization",
+                "confidence": 0.855,
+                "sentIdx": 30167,
+                "quote": "Postulating some generalization as the goal of the movement of humanity, the historians study the men of whom "
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "defamiliarization",
+          "owner": "mind:narrator",
+          "sentIdx": 11132,
+          "score": 13.88,
+          "quote": "In 1809 the intimacy between “the world’s two arbiters,” as Napoleon and Alexander were called, was such that "
+        }
+      },
+      "interpretation": {
+        "basis": "ρ — the reader's/talker's own verdict",
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with source"
+      }
+    },
+    {
+      "question": "Is Platon Karataev endorsed as wisdom or a romanticization of the peasantry?",
+      "domain": "meaning",
+      "keys": [
+        "platon",
+        "karataev",
+        "endorsed",
+        "wisdom",
+        "romanticization",
+        "peasantry"
+      ],
+      "source": {
+        "basis": "σ — cited document material and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER XIII",
+            "lo": 25045,
+            "hi": 25086,
+            "sentences": 41,
+            "cast": [
+              "Pierre",
+              "Platón Karatáev",
+              "Karatáev",
+              "French",
+              "Russian",
+              "Christian"
+            ],
+            "meaningDensity": 0.107,
+            "evaluation": null,
+            "bonds": [
+              {
+                "src": "Pierre",
+                "via": "remembered",
+                "tgt": "Platón Karatáev",
+                "confidence": 0.95,
+                "sentIdx": 25047,
+                "quote": "When Pierre remembered them afterwards they all seemed misty figures to him except Platón Karatáev, who always"
+              },
+              {
+                "src": "Pierre",
+                "via": "saw",
+                "tgt": "Platón Karatáev",
+                "confidence": 0.95,
+                "sentIdx": 25048,
+                "quote": "When Pierre saw his neighbor next morning at dawn the first impression of him, as of something round, was full"
+              },
+              {
+                "src": "Pierre",
+                "via": "saw",
+                "tgt": "French",
+                "confidence": 0.95,
+                "sentIdx": 25048,
+                "quote": "When Pierre saw his neighbor next morning at dawn the first impression of him, as of something round, was full"
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER XI",
+            "lo": 25820,
+            "hi": 25906,
+            "sentences": 86,
+            "cast": [
+              "Pierre",
+              "Karatáev",
+              "Frenchman",
+              "French",
+              "Monsieur Pierre",
+              "Platón Karatáev"
+            ],
+            "meaningDensity": 0.068,
+            "evaluation": null,
+            "bonds": [
+              {
+                "src": "Pierre",
+                "via": "repeating",
+                "tgt": "Moscow",
+                "confidence": 0.95,
+                "sentIdx": 25867,
+                "quote": "While Pierre was repeating what he had been told about the army leaving Moscow, a thin, sallow, tattered Frenc"
+              },
+              {
+                "src": "Pierre",
+                "via": "repeating",
+                "tgt": "French",
+                "confidence": 0.95,
+                "sentIdx": 25867,
+                "quote": "While Pierre was repeating what he had been told about the army leaving Moscow, a thin, sallow, tattered Frenc"
+              },
+              {
+                "src": "Pierre",
+                "via": "saw",
+                "tgt": "Platón Karatáev",
+                "confidence": 0.95,
+                "sentIdx": 25889,
+                "quote": "Pierre saw that Platón did not want to understand what the Frenchman was saying, and he looked on without inte"
+              }
+            ],
+            "argumentLinks": {}
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER XIII",
+            "lo": 27127,
+            "hi": 27192,
+            "sentences": 65,
+            "cast": [
+              "Karatáev",
+              "Pierre",
+              "God",
+              "Platón Karatáev",
+              "Tsar",
+              "October Pierre"
+            ],
+            "meaningDensity": 0.073,
+            "evaluation": null,
+            "bonds": [
+              {
+                "src": "Pierre",
+                "via": "reached",
+                "tgt": "Platón Karatáev",
+                "confidence": 0.95,
+                "sentIdx": 27144,
+                "quote": "When Pierre reached the fire and heard Platón’s voice enfeebled by illness, and saw his pathetic face brightly"
+              },
+              {
+                "src": "Occasionally",
+                "via": "he",
+                "tgt": "glanced",
+                "confidence": 0.855,
+                "sentIdx": 27129,
+                "quote": "Occasionally he glanced at the familiar crowd around him and then again at his feet."
+              },
+              {
+                "src": "Mentally",
+                "via": "addressing",
+                "tgt": "rain",
+                "confidence": 0.855,
+                "sentIdx": 27137,
+                "quote": "Mentally addressing the rain, he repeated: “Now then, now then, go on!"
+              }
+            ],
+            "argumentLinks": {
+              "contrast": 1,
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 27336,
+          "score": 6,
+          "quote": "This campaign consisted in a flight of the French during which they did all they could to destroy themselves."
+        }
+      },
+      "interpretation": {
+        "basis": "ρ — the reader's/talker's own verdict",
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with source"
+      }
+    },
+    {
+      "question": "How stable is the opposition between artificial Petersburg society and authentic Moscow?",
+      "domain": "both",
+      "keys": [
+        "stable",
+        "opposition",
+        "artificial",
+        "petersburg",
+        "society",
+        "authentic",
+        "moscow"
+      ],
+      "source": {
+        "basis": "σ — cited document material and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER I",
+            "lo": 14217,
+            "hi": 14285,
+            "sentences": 68,
+            "cast": [
+              "Pierre",
+              "Moscow",
+              "Natásha",
+              "Prince Andrew",
+              "Andrew",
+              "Joseph Alexéevich"
+            ],
+            "meaningDensity": 0.061,
+            "evaluation": {
+              "score": 0.25,
+              "carrier": "defamiliarization",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Moscow",
+                "via": "society",
+                "tgt": "Pierre",
+                "confidence": 0.95,
+                "sentIdx": 14226,
+                "quote": "Moscow society, from the old women down to the children, received Pierre like a long-expected guest whose plac"
+              },
+              {
+                "src": "Benefit",
+                "via": "performances",
+                "tgt": "Freemasons",
+                "confidence": 0.95,
+                "sentIdx": 14229,
+                "quote": "Benefit performances, poor pictures, statues, benevolent societies, gypsy choirs, schools, subscription dinner"
+              },
+              {
+                "src": "Pierre",
+                "via": "ceased",
+                "tgt": "Brothers",
+                "confidence": 0.855,
+                "sentIdx": 14222,
+                "quote": "He ceased keeping a diary, avoided the company of the Brothers, began going to the club again, drank a great d"
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 3
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER V",
+            "lo": 14524,
+            "hi": 14603,
+            "sentences": 79,
+            "cast": [
+              "Julie Karágina",
+              "Borís",
+              "Pénza",
+              "Moscow",
+              "Nizhegórod",
+              "Anna Mikháylovna"
+            ],
+            "meaningDensity": 0.056,
+            "evaluation": null,
+            "bonds": [
+              {
+                "src": "Borís",
+                "via": "succeeded",
+                "tgt": "St Petersburg",
+                "confidence": 0.95,
+                "sentIdx": 14525,
+                "quote": "Borís had not succeeded in making a wealthy match in Petersburg, so with the same object in view he came to Mo"
+              },
+              {
+                "src": "Borís",
+                "via": "sketched",
+                "tgt": "Rustic",
+                "confidence": 0.95,
+                "sentIdx": 14545,
+                "quote": "Borís sketched two trees in the album and wrote: “Rustic trees, your dark branches shed gloom and melancholy u"
+              },
+              {
+                "src": "Aliment",
+                "via": "de",
+                "tgt": "Viens",
+                "confidence": 0.95,
+                "sentIdx": 14558,
+                "quote": "Aliment de poison d’une âme trop sensible, Toi, sans qui le bonheur me serait impossible, Tendre mélancholie, "
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER XI",
+            "lo": 11742,
+            "hi": 11804,
+            "sentences": 62,
+            "cast": [
+              "Berg",
+              "St Petersburg",
+              "Countess Véra",
+              "Rostóvs",
+              "Moscow",
+              "Austerlitz"
+            ],
+            "meaningDensity": 0.103,
+            "evaluation": null,
+            "bonds": [
+              {
+                "src": "Rostóvs",
+                "via": "lived",
+                "tgt": "St Petersburg",
+                "confidence": 0.95,
+                "sentIdx": 11749,
+                "quote": "The Rostóvs lived in the same hospitable way in Petersburg as in Moscow, and the most diverse people met at th"
+              },
+              {
+                "src": "Rostóvs",
+                "via": "lived",
+                "tgt": "Moscow",
+                "confidence": 0.95,
+                "sentIdx": 11749,
+                "quote": "The Rostóvs lived in the same hospitable way in Petersburg as in Moscow, and the most diverse people met at th"
+              },
+              {
+                "src": "Country",
+                "via": "neighbors",
+                "tgt": "Otrádnoe",
+                "confidence": 0.95,
+                "sentIdx": 11750,
+                "quote": "Country neighbors from Otrádnoe, impoverished old squires and their daughters, Perónskaya a maid of honor, Pie"
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          }
+        ],
+        "narratorStance": {
+          "carrier": "defamiliarization",
+          "owner": "mind:narrator",
+          "sentIdx": 14856,
+          "score": 5.69,
+          "quote": "The floor of the stage consisted of smooth boards, at the sides was some painted cardboard representing trees,"
+        }
+      },
+      "interpretation": {
+        "basis": "ρ — the reader's/talker's own verdict",
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with source"
+      }
+    },
+    {
+      "question": "How does contingency and chance square with the deterministic claims about historical inevitability?",
+      "domain": "meaning",
+      "keys": [
+        "contingency",
+        "chance",
+        "square",
+        "deterministic",
+        "claims",
+        "historical",
+        "inevitability"
+      ],
+      "source": {
+        "basis": "σ — cited document material and the narrator's attributed evaluative operation",
+        "regions": [
+          {
+            "rank": 1,
+            "title": "CHAPTER II",
+            "lo": 30041,
+            "hi": 30085,
+            "sentences": 44,
+            "cast": [
+              "Napoleon",
+              "Alexander",
+              "Revolution",
+              "Bourbons",
+              "Staël",
+              "Talleyrand"
+            ],
+            "meaningDensity": 0.089,
+            "evaluation": {
+              "score": 12.12,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Bourbons",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Specialist",
+                "via": "historians",
+                "tgt": "Alexander",
+                "confidence": 0.95,
+                "sentIdx": 30066,
+                "quote": "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that t"
+              },
+              {
+                "src": "Biographical",
+                "via": "historians",
+                "tgt": "historians",
+                "confidence": 0.855,
+                "sentIdx": 30043,
+                "quote": "Biographical historians and historians of separate nations understand this force as a power inherent in heroes"
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 1
+            }
+          },
+          {
+            "rank": 2,
+            "title": "CHAPTER IV",
+            "lo": 30115,
+            "hi": 30182,
+            "sentences": 67,
+            "cast": [
+              "Napoleon",
+              "Louis XIV",
+              "Louis XVI",
+              "Russian",
+              "Terrible",
+              "Rousseau"
+            ],
+            "meaningDensity": 0.124,
+            "evaluation": {
+              "score": 6.86,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Napoleon",
+                "via": "ordered",
+                "tgt": "army",
+                "confidence": 0.855,
+                "sentIdx": 30118,
+                "quote": "Napoleon ordered an army to be raised and go to war."
+              },
+              {
+                "src": "Equally",
+                "via": "little",
+                "tgt": "explain",
+                "confidence": 0.855,
+                "sentIdx": 30154,
+                "quote": "Equally little does this view explain why for several centuries the collective will is not withdrawn from cert"
+              },
+              {
+                "src": "Postulating",
+                "via": "some",
+                "tgt": "generalization",
+                "confidence": 0.855,
+                "sentIdx": 30167,
+                "quote": "Postulating some generalization as the goal of the movement of humanity, the historians study the men of whom "
+              }
+            ],
+            "argumentLinks": {
+              "sequence": 2
+            }
+          },
+          {
+            "rank": 3,
+            "title": "CHAPTER XVIII",
+            "lo": 27336,
+            "hi": 27364,
+            "sentences": 28,
+            "cast": [
+              "Grand Cross",
+              "Napoleon",
+              "Orsh",
+              "Emperor Alexander",
+              "Du",
+              "French"
+            ],
+            "meaningDensity": 0.221,
+            "evaluation": {
+              "score": 6,
+              "carrier": "framing",
+              "owner": "mind:narrator"
+            },
+            "bonds": [
+              {
+                "src": "Napoléon",
+                "via": "le",
+                "tgt": "Grand Cross",
+                "confidence": 0.95,
+                "sentIdx": 27359,
+                "quote": "Napoléon le Grand!” Du sublime au ridicule il n’y a qu’un pas."
+              },
+              {
+                "src": "Napoléon",
+                "via": "le",
+                "tgt": "Du",
+                "confidence": 0.95,
+                "sentIdx": 27359,
+                "quote": "Napoléon le Grand!” Du sublime au ridicule il n’y a qu’un pas."
+              }
+            ],
+            "argumentLinks": {}
+          }
+        ],
+        "narratorStance": {
+          "carrier": "framing",
+          "owner": "mind:narrator",
+          "sentIdx": 30041,
+          "score": 12.12,
+          "quote": "What force moves the nations?"
+        }
+      },
+      "interpretation": {
+        "basis": "ρ — the reader's/talker's own verdict",
+        "stance": null,
+        "generated": false,
+        "discipline": "render in a SEPARATE model call and a visibly distinct channel; never blended with source"
+      }
+    }
+  ]
+}

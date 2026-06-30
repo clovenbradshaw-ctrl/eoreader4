@@ -34,6 +34,22 @@ export const MEANING_OPS = Object.freeze(new Set(['DEF', 'EVA', 'REC']));
 // the tentative reads still exist on the sentence graph, they just don't define the unit.
 const BACKBONE_CONFIDENCE = 0.85;
 
+// Opener-weld filter (a presentation-layer skip for the upstream admission bug). The entity
+// scanner welds a capitalised clause-opener onto a following name ("Having Pierre", "Next
+// day", "Firmly", a heading "CHAPTER XIII"), admitting it as a pseudo-figure. Until that is
+// fixed in admission, the cast and the cited backbone skip any figure whose label LEADS with a
+// known opener or is an all-caps heading token — so the reading a question surfaces shows real
+// figures, not welds. Names that legitimately lead with one of these are vanishingly rare.
+const OPENER_WELD = new Set([
+  'having', 'seeing', 'next', 'toward', 'towards', 'without', 'firmly', 'though', 'although',
+  'evidently', 'similarly', 'whence', 'call', 'place', 'near', 'above', 'below', 'being',
+  'suddenly', 'meanwhile', 'soyez', 'chapter', 'book', 'epilogue', 'whose', 'while', 'when',
+]);
+const isWelded = (label) => {
+  const first = String(label || '').trim().split(/\s+/)[0] || '';
+  return OPENER_WELD.has(first.toLowerCase()) || /^[A-Z]{2,}$/.test(first);
+};
+
 // A structural heading — a short line that opens a division the author already cut
 // (CHAPTER / BOOK / PART / EPILOGUE / a bare roman or arabic numeral). The grain the
 // document hands us, read off its shape, not imposed. Kept high-precision (short line,
@@ -130,13 +146,15 @@ export const encodeLevels = (doc, opts = {}) => {
   const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const segments = segs.map((seg) => {
     const figures = [...seg.figureCount.entries()]
-      .sort((a, b) => b[1] - a[1]).slice(0, 8)
-      .map(([id, n]) => ({ id, label: labelOf(id), n }));
+      .map(([id, n]) => ({ id, label: labelOf(id), n }))
+      .filter((f) => !isWelded(f.label))                       // skip opener-weld pseudo-figures
+      .sort((a, b) => b.n - a.n).slice(0, 8);
     const bonds = [...seg.bonds.values()]
-      .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
       .map((e) => ({ src: rep(e.src), via: e.via, tgt: rep(e.tgt),
                      srcLabel: labelOf(rep(e.src)), tgtLabel: labelOf(rep(e.tgt)),
-                     confidence: e.confidence, idx: e.sentIdx }));
+                     confidence: e.confidence, idx: e.sentIdx }))
+      .filter((b) => !isWelded(b.srcLabel) && !isWelded(b.tgtLabel))   // cite real figures, not welds
+      .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
     const tot = seg.cast + seg.meaning;
     return Object.freeze({
       idx: seg.idx, lo: seg.lo, hi: seg.hi, title: seg.title,
@@ -196,11 +214,19 @@ export const routeDomain = (question) => {
 // and return the top regions with their readings — the material a synthesis folds. The
 // surf rides the coarse spine (a few hundred units), never the 30k sentences, so a
 // whole-book question reaches every region it lives in at a fraction of the cost.
-export const coarseSurf = (encoding, question, { top = 4, domain } = {}) => {
+//
+// `evaluation` (an attributedEvaluation result) wires the MODELER into region selection: for a
+// MEANING-routed question, a unit where the narrator's evaluative operation fires (the opera's
+// defamiliarization, the historians' framing) is boosted — but ONLY when the unit already has
+// keyword/figure relevance, so the globally-most-evaluative chapters are not dragged into every
+// meaning question. This is the fix for the Q5 miss: the opera is the #1 evaluative unit AND
+// carries the keyword "opera", so the boost lifts it to the top instead of leaving it unranked.
+export const coarseSurf = (encoding, question, { top = 4, domain, evaluation = null } = {}) => {
   const segs = encoding?.segments || [];
   const route = domain || routeDomain(question);
   const keys = keyTokens(question);
   const keySet = new Set(keys);
+  const evByIdx = new Map((evaluation?.segments || []).map((s) => [s.idx, s]));
 
   const scored = segs.map((seg) => {
     let kw = 0;
@@ -215,7 +241,12 @@ export const coarseSurf = (encoding, question, { top = 4, domain } = {}) => {
     // the figure-dense ones — small, so relevance still leads.
     const dom = route === 'meaning' ? seg.domain.meaningDensity
               : route === 'cast' ? (1 - seg.domain.meaningDensity) : 0;
-    const score = kw + fig + 1.5 * dom;
+    const relevance = kw + fig;
+    // the modeler boost — gated on relevance>0, so it re-ranks RELEVANT units toward the ones
+    // where the narrator is judging, never surfaces an evaluative-but-irrelevant chapter.
+    const evScore = evByIdx.get(seg.idx)?.score ?? 0;
+    const evalBoost = (route === 'meaning' && relevance > 0 && evScore > 0) ? 0.6 * evScore : 0;
+    const score = relevance + 1.5 * dom + evalBoost;
     return { seg, score, kw, fig };
   }).filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)
