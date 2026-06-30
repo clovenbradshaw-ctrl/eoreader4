@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   runTaskGraph, FIGURE, PATTERN,
-  createTaskSpec, planArtifact, withOrgans, runArtifact,
+  createTaskSpec, planArtifact, withOrgans, runArtifact, createSpecLibrary,
   OUTPUT_ORGANS, organFor, createOutputRegistry,
   textOrgan, musicOrgan, classifyArtifact,
 } from '../src/tasks/index.js';
@@ -61,10 +61,23 @@ test('the SAME directive lowers to a sentence (text) or a phrase (music)', () =>
   assert.match(asMusic, /phrase/i);
 });
 
-test('an essay keeps its hand-written (legacy) instructions, directive null', () => {
+test('the text arc carries neutral directives, lowered to sentences', () => {
   const spec = createTaskSpec({ request: 'write an essay about owls' });
-  assert.ok(spec.sections.every((s) => s.directive === null), 'legacy goals carry no directive');
-  assert.match(spec.sections[0].goal, /thesis/i, 'the tuned English survives');
+  assert.ok(spec.sections.every((s) => s.directive && s.directive.act), 'every section is a neutral move');
+  // the text organ lowered the open directive to an English sentence
+  assert.match(spec.sections[0].goal, /^Open the opening about owls/);
+});
+
+test('an INSTALLED template may use a literal goal string (legacy path), directive null', () => {
+  const lib = createSpecLibrary({
+    seed: { ['press release']: { organ: 'text', size: 400, sections: [
+      { role: 'headline', share: 0.5, goal: (s) => `Write a headline about ${s}.` },
+      { role: 'body', share: 1.5, goal: (s) => `Write the body about ${s}.` },
+    ] } },
+  });
+  const spec = createTaskSpec({ request: 'write a press release about a launch', library: lib });
+  assert.equal(spec.sections[0].directive, null, 'a literal goal carries no directive');
+  assert.match(spec.sections[0].goal, /headline about a launch/i);
 });
 
 test('withOrgans hands the renderer the neutral directive', async () => {
@@ -139,5 +152,5 @@ test('an essay still runs through runArtifact via the single-modality shorthand'
   assert.equal(res.spec.organ, 'text');
   assert.equal(res.spec.unit, 'tokens');
   assert.equal(res.spec.tokens, res.spec.extent, 'text keeps the back-compat tokens alias');
-  assert.equal(res.progress.total, 5);
+  assert.equal(res.progress.total, 3, 'the text arc: opening · development · close');
 });

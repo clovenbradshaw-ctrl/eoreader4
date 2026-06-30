@@ -82,28 +82,63 @@ export const readLength = (request = '') => {
 
 // ── Classifying the artifact kind ─────────────────────────────────────────────
 // The same cheap regex read as readTask/classifyWantedType, lifted to GENERATIVE
-// artifacts. Order matters: the more specific kinds are tried before the looser ones,
-// and `answer` is the default — a request that names no artifact decomposes to a
-// single leaf (the degenerate task graph the runner's doc promises ≡ one generation).
+// artifacts. We do NOT ship a guide for any specific kind — the system treats the
+// internet as its brain and LEARNS how to make a thing well the first time it is asked,
+// caching the shape (the library). So the kind is OPEN-VOCABULARY: whatever artifact
+// noun the request names — essay, sonnet, lab report, cover letter, sales deck — is the
+// kind, and the only stored shape is the universal arc (the offline floor). `answer` is
+// the default — a request that names no artifact decomposes to a single grounded leaf.
+
+// A few common kinds, for documentation only — NOT an authoritative list. Anything the
+// request names is a valid kind; these are just the ones you will see most.
 export const ARTIFACT_KINDS = Object.freeze([
   'essay', 'report', 'story', 'review', 'letter', 'list', 'summary', 'melody', 'answer',
 ]);
 
-export const classifyArtifact = (request = '') => {
-  const q = String(request || '').toLowerCase().trim();
-  if (!q) return 'answer';
-  if (/\bessay\b/.test(q)) return 'essay';
-  if (/\b(report|white\s?paper|brief(?:ing)?|memo)\b/.test(q)) return 'report';
-  if (/\b(short\s+story|story|tale|fable|narrative|fiction)\b/.test(q)) return 'story';
-  if (/\b(review|critique|appraisal|assessment)\b/.test(q)) return 'review';
-  if (/\b(letter|email|e-?mail|note\s+to|message\s+to)\b/.test(q)) return 'letter';
-  if (/\b(list|bullet(?:ed|s)?|enumerate|rundown)\b/.test(q)) return 'list';
-  if (/\b(summary|summari[sz]e|overview|recap|tl;?dr)\b/.test(q)) return 'summary';
-  // a non-text artifact, planned by the same machinery — its leaves render through the
-  // music output organ instead of text (docs/omnimodal-task-language.md).
-  if (/\b(melody|tune|jingle|riff|theme\s+music)\b/.test(q)) return 'melody';
-  return 'answer';
+// Question words / fillers that are not artifact nouns — a request that heads with one
+// is a question, not a make-this, so it falls to the degenerate `answer`.
+const NON_KIND = new Set([
+  'what', 'who', 'whom', 'whose', 'when', 'where', 'why', 'how', 'which',
+  'is', 'are', 'was', 'were', 'do', 'does', 'did', 'can', 'could', 'would', 'should',
+  'tell', 'explain', 'describe', 'answer', 'question', 'this', 'that', 'it', 'the', 'a', 'an',
+]);
+// Determiners/pronouns that may follow the head noun but are not part of it — so
+// "list the planets" is kind `list`, not `list the`. ("cover letter" keeps its second
+// word because `letter` is not here.)
+const DROP_SECOND = new Set([
+  'the', 'a', 'an', 'my', 'your', 'our', 'their', 'his', 'her', 'its',
+  'this', 'that', 'these', 'those', 'some', 'any', 'all', 'each', 'every',
+]);
+
+// Musical artifact nouns route to the MUSIC output organ; everything else renders as
+// text. This is a MODALITY router (which sense to render in), NOT a structural guide —
+// the structure of a melody is still learned, not shipped. New output organs add their
+// noun set here as they land (image: sketch/diagram; etc.).
+const MUSIC_KINDS = /\b(melody|melodies|tune|song|jingle|riff|theme|anthem|hymn|march|lullaby|ballad|motif)\b/i;
+export const organForKind = (kind = '') => (MUSIC_KINDS.test(String(kind)) ? 'music' : 'text');
+
+// artifactKindOf(request) → the artifact noun the request names, open-vocabulary. Peels
+// the imperative, article, and length words, then takes the head noun (one or two words)
+// up to the "about/on" pivot. A question or a bare topic → `answer`.
+export const artifactKindOf = (request = '') => {
+  let s = String(request || '').toLowerCase().trim().replace(/[?.!]+\s*$/, '');
+  if (!s) return 'answer';
+  s = s.replace(LEAD_VERB, '').trim().replace(ARTICLE, '').trim();
+  let prev = null;
+  while (s && s !== prev) { prev = s; s = s.replace(LENGTH_WORD, '').trim(); }
+  const m = s.match(/^([a-z][a-z-]*(?:\s+[a-z][a-z-]*)?)\b/);
+  if (!m) return 'answer';
+  const words = m[1].trim().split(/\s+/);
+  // keep the head noun; include a second word only when it is part of the NOUN ("cover
+  // letter"), not a determiner or the "about/on" pivot ("list the", "report on").
+  let kind = words[0];
+  if (words[1] && !DROP_SECOND.has(words[1]) && !PIVOT.test(words[1])) kind += ` ${words[1]}`;
+  if (!kind || NON_KIND.has(kind) || NON_KIND.has(words[0])) return 'answer';
+  return kind;
 };
+
+// Back-compat alias — the classifier is now open-vocabulary.
+export const classifyArtifact = artifactKindOf;
 
 // ── The subject the artifact is ABOUT ─────────────────────────────────────────
 // Strip the leading imperative and the artifact framing — "write a short essay about
@@ -112,88 +147,63 @@ export const classifyArtifact = (request = '') => {
 const LEAD_VERB = /^\s*(?:please\s+)?(?:can you\s+|could you\s+)?(?:write|compose|draft|create|generate|produce|give\s+me|make|prepare|put\s+together)\b/i;
 const ARTICLE = /^\s*(?:a|an|the|me|us)\b/i;
 const LENGTH_WORD = /^\s*(?:brief|short|quick|long|detailed|in[- ]depth|thorough|comprehensive|full)\b/i;
-const KIND_NOUN = new RegExp(`^\\s*(?:${ARTIFACT_KINDS.join('|')})s?\\b`, 'i');
 const PIVOT = /^\s*(?:about|on|regarding|concerning|covering|for|of|to)\b/i;
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // A single structured peel — leading verb, the OBJECT article (once), any length words,
-// the artifact noun, then the "about/on/to" pivot. The subject keeps its OWN article
-// ("the sea" stays "the sea"), so the article strip runs once at the front, never inside
-// the subject. When nothing clean remains, the request stands rather than vanishing.
+// the DETECTED artifact noun (open-vocabulary, whatever kind the request named), then the
+// "about/on/to" pivot. The subject keeps its OWN article ("the sea" stays "the sea"), so
+// the article strip runs once at the front, never inside the subject. When nothing clean
+// remains, the request stands rather than vanishing.
 export const subjectOf = (request = '') => {
   let s = String(request || '').trim().replace(/[?.!]+\s*$/, '');
   s = s.replace(LEAD_VERB, '').trim();
   s = s.replace(ARTICLE, '').trim();
   let prev = null;
   while (s && s !== prev) { prev = s; s = s.replace(LENGTH_WORD, '').trim(); }   // "long detailed"
-  s = s.replace(KIND_NOUN, '').trim();
+  const kind = artifactKindOf(request);
+  if (kind !== 'answer') s = s.replace(new RegExp(`^${escapeRe(kind)}s?\\b`, 'i'), '').trim();
   s = s.replace(PIVOT, '').trim();
   return s || String(request || '').trim();
 };
 
-// ── The built-in shapes (what's been "defined previously", shipped) ───────────
-// Each template is an ordered list of SECTIONS. A section has a `role` (its name in
-// the artifact), a `share` (its slice of the total budget, relative — normalised at
-// build), a `goal(subject[, i, n])` that becomes the small model's instruction, and
-// an optional `repeat` (the body of an essay is N paragraphs, one section each).
-// `size` is the kind's default total at length 1, in the OUTPUT ORGAN's native unit
-// (tokens for text, beats for music); `organ` names that output organ (default text);
-// `format` rides to each leaf as a within-organ styling hint (prose / markdown / bullets).
-const T = (kind, format, size, note, sections, organ = 'text') =>
-  Object.freeze({ kind, format, size, organ, note, sections, source: 'builtin' });
+// ── The only stored shape: the UNIVERSAL ARC ──────────────────────────────────
+// We ship NO guide for any specific artifact. A template is an ordered list of SECTIONS
+// — each a `role`, a `share` of the budget, and a NEUTRAL `dir` (an act the output organ
+// lowers to an instruction). The single shipped shape is the universal arc: open →
+// develop → close. That is not an artifact canon (an "essay guide" would be) — it is the
+// significance row's intrinsic order, the shape any making takes when it sets out,
+// develops, and lands (the same arc longgen/shape.js derives rather than imposes). It is
+// the OFFLINE FLOOR: used only when nothing has been learned and no research is available.
+// The SPECIFIC structure of an essay, a sonnet, a lab report is LEARNED (acquireSpec),
+// never stored here.
+const T = (kind, format, size, note, sections, organ = 'text', source = 'builtin') =>
+  Object.freeze({ kind, format, size, organ, note, sections, source });
 
-export const ARTIFACT_TEMPLATES = Object.freeze({
-  essay: T('essay', 'prose', 700, 'a thesis opened, defended in ordered paragraphs, and closed', [
-    { role: 'introduction', share: 1.0, goal: (s) => `Open the essay on ${s}: set the context in a sentence or two and state the thesis.` },
-    { role: 'body', share: 1.2, repeat: 3, goal: (s, i) => `Develop supporting point ${i} of the thesis on ${s}, in one focused paragraph.` },
-    { role: 'conclusion', share: 1.0, goal: (s) => `Close the essay on ${s}: draw the points together and restate the thesis; introduce no new claim.` },
-  ]),
-  report: T('report', 'markdown', 1100, 'an oriented document — summary, findings under headings, a recommendation', [
-    { role: 'summary', share: 1.0, goal: (s) => `Write the executive summary of a report on ${s}: the situation and the headline finding.` },
-    { role: 'background', share: 1.4, goal: (s) => `Write the background section on ${s}: what is known and why it matters.` },
-    { role: 'findings', share: 2.4, goal: (s) => `Write the findings section on ${s}: the substantive analysis, the evidence and what it shows.` },
-    { role: 'recommendation', share: 1.2, goal: (s) => `Write the recommendation section on ${s}: what should be done, grounded in the findings.` },
-  ]),
-  story: T('story', 'prose', 800, 'a narrative arc — setup, complication, climax, resolution', [
-    { role: 'setup', share: 1.0, goal: (s) => `Open a short story about ${s}: establish the scene and the character.` },
-    { role: 'rising action', share: 1.2, goal: (s) => `Continue the story about ${s}: introduce the complication and build tension.` },
-    { role: 'climax', share: 1.0, goal: (s) => `Write the climax of the story about ${s}: the turning point.` },
-    { role: 'resolution', share: 0.9, goal: (s) => `Close the story about ${s}: resolve the arc.` },
-  ]),
-  review: T('review', 'prose', 600, 'a judgment — overview, strengths, weaknesses, a verdict', [
-    { role: 'overview', share: 1.0, goal: (s) => `Open a review of ${s}: what it is and the overall impression.` },
-    { role: 'strengths', share: 1.0, goal: (s) => `Write the strengths of ${s}, with specifics.` },
-    { role: 'weaknesses', share: 1.0, goal: (s) => `Write the weaknesses of ${s}, with specifics.` },
-    { role: 'verdict', share: 0.8, goal: (s) => `Write the verdict on ${s}: weigh the two sides and land a recommendation.` },
-  ]),
-  letter: T('letter', 'prose', 350, 'a greeting, a body that states the purpose, a closing', [
-    { role: 'greeting', share: 0.4, goal: (s) => `Write the greeting of a letter about ${s}.` },
-    { role: 'body', share: 1.6, goal: (s) => `Write the body of the letter about ${s}: state the purpose and the substance.` },
-    { role: 'closing', share: 0.5, goal: (s) => `Write the closing of the letter about ${s}.` },
-  ]),
-  list: T('list', 'bullets', 400, 'an enumeration — one section, items as bullets', [
-    { role: 'list', share: 1.0, goal: (s) => `Write a list about ${s}: the items, each as one bullet.` },
-  ]),
-  summary: T('summary', 'prose', 320, 'one section — the whole drawn together briefly', [
-    { role: 'summary', share: 1.0, goal: (s) => `Write a brief summary of ${s}: the main points, drawn together.` },
-  ]),
-  // A NON-TEXT artifact, planned by the same machinery — its leaves render through the
-  // music output organ (native unit: BEATS, not tokens). Proof that the task language is
-  // not text-shaped: same createTaskSpec, same runTaskGraph, a different output organ.
-  // NOTE: pure NEUTRAL directives — no English. Each section names a move (open /
-  // develop / close) and a role; the music organ lowers it to a phrase instruction, and
-  // the SAME directive handed to the text organ would lower to a sentence. This is the
-  // proof that the task IR is not text-shaped (docs/omnimodal-task-language.md).
-  melody: T('melody', 'notes', 32, 'a short melodic arc — opening motif, development, cadence', [
-    { role: 'opening motif', share: 1.0, dir: { act: 'open' } },
-    { role: 'development', share: 1.6, dir: { act: 'develop', detail: 'extend and reshape the motif' } },
-    { role: 'cadence', share: 1.0, dir: { act: 'close', detail: 'land on a stable tone' } },
-  ], 'music'),
-  // The default: no artifact named, so no shape to impose — a single goal, one leaf,
-  // byte-identical to one small-model call (the runner's degenerate graph).
-  answer: T('answer', 'prose', 256, 'no artifact shape — a single grounded reach', [
-    { role: 'answer', share: 1.0, goal: (s) => s },
-  ]),
-});
+// genericArc(organ) → the universal arc, sized and named for the output organ. The
+// roles read naturally per modality (a melody opens with a motif and lands on a cadence),
+// but the SHAPE is the same three moves — this is a floor, not a guide.
+const genericArc = (organ = 'text') => {
+  const music = organ === 'music';
+  return T(
+    'generic', music ? 'notes' : 'prose', music ? 24 : 512,
+    'the universal arc — open, develop, close (the offline floor; specific shapes are learned)',
+    [
+      { role: music ? 'opening motif' : 'opening', share: 1.0, dir: { act: 'open' } },
+      { role: 'development', share: 1.6, dir: { act: 'develop', detail: 'extend and deepen' } },
+      { role: music ? 'cadence' : 'close', share: 1.0, dir: { act: 'close', detail: 'draw together; introduce nothing new' } },
+    ],
+    organ, 'fallback',
+  );
+};
+
+export const GENERIC_SHAPES = Object.freeze({ text: genericArc('text'), music: genericArc('music') });
+
+// The degenerate shape: no artifact named, a single grounded leaf — byte-identical to
+// one small-model call (the runner's degenerate graph).
+const ANSWER_SHAPE = T('answer', 'prose', 256, 'no artifact shape — a single grounded reach', [
+  { role: 'answer', share: 1.0, goal: (s) => s },
+], 'text', 'fallback');
 
 // ── Expanding a template into concrete sections ───────────────────────────────
 // `repeat` body paragraphs become separate sections (body 1, body 2, body 3); the
@@ -235,24 +245,21 @@ const artifactGoal = (kind, subject, lengthLabel) => {
 };
 
 // ── The creator: a request → a concrete spec ──────────────────────────────────
-// Reads the kind, the subject and the length off the request, picks the shape (learned
-// → built-in), and assigns every section an ABSOLUTE token budget from its share of the
-// length-scaled total. The budget fixes each section's grain (Figure leaf vs Pattern
-// goal) and its advisory context width, so the spec already encodes the small-model
-// limits the runner will honor. `library` is optional (createSpecLibrary); without it
-// the built-ins govern.
+// Reads the kind, the subject, and the length off the request, picks the shape, and
+// assigns every section a budget in the output organ's native unit. The shape is
+// resolved LEARNED → universal-arc floor: a kind whose specific structure the library
+// has learned (via acquireSpec, from the internet) uses that; otherwise the universal
+// arc is the floor. NO artifact-specific guide is shipped. A bare question (kind
+// `answer`) is the degenerate single leaf. Synchronous and pure — research happens in
+// `acquireSpec`/`runArtifact`, which populate the library BEFORE this runs.
 export const createTaskSpec = ({ request = '', library = null, length = null } = {}) => {
-  // The classifier knows the built-in kinds; a LEARNED kind (one the library defined,
-  // e.g. a fetched "haiku") is detected by name when the built-in read came back blank.
-  let kind = classifyArtifact(request);
-  if (library && kind === 'answer' && typeof library.kinds === 'function') {
-    const hit = library.kinds().find((k) => new RegExp(`\\b${k}\\b`, 'i').test(request));
-    if (hit) kind = hit;
-  }
+  const kind = artifactKindOf(request);
   const subjectRaw = subjectOf(request);
   const subject = subjectRaw && subjectRaw.toLowerCase() !== kind ? subjectRaw : 'the requested topic';
 
-  const template = (library && library.get(kind)) || ARTIFACT_TEMPLATES[kind] || ARTIFACT_TEMPLATES.answer;
+  const template =
+    kind === 'answer' ? ANSWER_SHAPE
+    : (library && library.learned(kind)) || genericArc(organForKind(kind));
 
   // The OUTPUT ORGAN governs the budget math: its native unit, its single-reach ceiling
   // (a paragraph for text, a phrase for music), its floor, and its context width. The
@@ -260,7 +267,7 @@ export const createTaskSpec = ({ request = '', library = null, length = null } =
   // so the same creator sizes a melody in beats and an essay in tokens
   // (docs/omnimodal-task-language.md).
   const organ = organFor(template.organ || 'text');
-  const baseSize = template.size ?? template.tokens ?? ARTIFACT_TEMPLATES.answer.size;
+  const baseSize = template.size ?? template.tokens ?? ANSWER_SHAPE.size;
   const len = length ? { label: length === 'normal' ? '' : length, scale: LENGTH_SCALE[length] ?? 1 } : readLength(request);
   const total = Math.max(organ.minBudget, Math.round(baseSize * len.scale));
 
@@ -422,17 +429,24 @@ export const withOrgans = (plan, registry) => (view) => {
 };
 
 // ── The convenience: create the task and run it ───────────────────────────────
-// A few lines, the way the runner's doc promises: build the spec, derive the faces,
-// wrap generation, run the graph. Pass `generate` for the single-modality (text)
-// shorthand, OR `organs` — a map of per-modality generators ({ text, music, … }) or a
-// bare text generator — to dispatch each leaf to its output organ. `library` lets a
-// learned shape win; `runner` is swappable for tests. Returns the runner's result with
-// the spec attached.
+// Build the spec, derive the faces, wrap generation, run the graph. Pass `generate` for
+// the single-modality (text) shorthand, OR `organs` — a map of per-modality generators
+// ({ text, music, … }) — to dispatch each leaf to its output organ.
+//
+// THE INTERNET IS THE BRAIN. If `webSearch` is supplied and the machine has not learned
+// this kind, it goes and learns how to make it well FIRST (acquireSpec → research →
+// derive → cache to the `templates/` store), then plans with the learned shape. Offline,
+// or when research yields nothing, it falls back to the universal arc. `library` is the
+// machine's memory (createSpecLibrary); a transient one is made if none is passed, but a
+// caller that wants the learning to persist passes its own (wired to the folder).
 export const runArtifact = async ({
-  request = '', generate, organs = null, library = null, length = null,
+  request = '', generate, organs = null, library = null, webSearch = null, length = null,
   onUpdate = null, signal = null, runner = runTaskGraph,
 } = {}) => {
-  const plan = planArtifact({ request, library, length });
+  const lib = library || createSpecLibrary();
+  if (webSearch) { try { await acquireSpec({ request, library: lib, webSearch }); } catch { /* fall back to the arc */ } }
+
+  const plan = planArtifact({ request, library: lib, length });
   // `organs` chooses the omnimodal dispatch; a bare `generate` is the text shorthand.
   const face = organs
     ? withOrgans(plan, createOutputRegistry(organs))
@@ -444,7 +458,7 @@ export const runArtifact = async ({
     onUpdate,
     signal,
   });
-  return { ...res, spec: plan.spec };
+  return { ...res, spec: plan.spec, library: lib };
 };
 
 // ── The learned / web definition path ─────────────────────────────────────────
@@ -475,13 +489,15 @@ const plausibleRole = (r) => {
   return words.length <= 3 && !STOP_ROLE.has(r);
 };
 
-// deriveSpecFromDefinition(kind, text, base?) → a template, or null when the text yields
-// nothing usable (the caller then keeps the built-in — behaviour only improves, never
-// regresses, the formulateSearchQuery discipline). It pulls section roles from the
-// definition: numbered/bulleted/colon-led headings first, then known element words by
-// order of appearance. Budgets and format are inherited from `base` (the built-in for
-// the kind) so a derived shape is sized like a shipped one.
-export const deriveSpecFromDefinition = (kind, text, base = ARTIFACT_TEMPLATES[kind]) => {
+// deriveSpecFromDefinition(kind, text, base?) → a learned template, or null when the
+// text yields nothing usable (the caller then keeps the universal-arc floor — behaviour
+// only improves, never regresses, the formulateSearchQuery discipline). It pulls section
+// roles from the fetched definition: numbered/bulleted/colon-led headings first, then
+// known element words by order of appearance. Each role is mapped to a NEUTRAL directive
+// act by its position in the arc (first → open, last → close, middle → develop), so a
+// learned shape is modality-neutral like the shipped arc. Size/organ inherit from `base`
+// (the arc floor for the kind's organ) so a derived shape is sized like the floor.
+export const deriveSpecFromDefinition = (kind, text, base = genericArc(organForKind(kind))) => {
   const t = String(text || '');
   if (!t.trim()) return null;
 
@@ -511,43 +527,85 @@ export const deriveSpecFromDefinition = (kind, text, base = ARTIFACT_TEMPLATES[k
   if (found.length < 2) return null;
 
   const roles = found.slice(0, MAX_FANOUT);
+  const actAt = (i) => (i === 0 ? 'open' : i === roles.length - 1 ? 'close' : 'develop');
   return Object.freeze({
     kind,
+    organ: base?.organ || 'text',
     format: base?.format || 'prose',
-    tokens: base?.tokens || 600,
-    note: `derived from a definition (${roles.length} elements)`,
+    size: base?.size || 600,
+    note: `learned from a definition (${roles.length} elements)`,
     source: 'learned',
-    sections: roles.map((role) => ({ role, share: 1, goal: (s) => `Write the ${role} of the ${kind} on ${s}.` })),
+    provenance: { via: 'research', at: null },   // stamped by the caller (research time)
+    sections: roles.map((role, i) => ({ role, share: 1, dir: { act: actAt(i), detail: role } })),
   });
 };
 
-// ── The library cache: a shape defined once is reused ─────────────────────────
-// In-memory, keyed by kind. `get` prefers a learned shape over the built-in; `learned`
-// returns only the learned one (null when none); `has` is true when ANY shape covers
-// the kind. `define`/`defineFromDefinition` write a learned shape, so a definition
-// fetched once ("defined previously") guides every later request without re-fetching.
-export const createSpecLibrary = (seed = {}) => {
+// ── The library: the machine's learned shapes, the `templates/` store in memory ──
+// Keyed by kind. `learned` returns a shape the machine has built or that was installed;
+// `get` falls back to the universal arc so an external caller always gets something
+// usable. `define`/`defineFromDefinition` write a learned shape AND fire `onLearn`, the
+// persistence hook a Node caller wires to write the template into the `templates/` folder
+// (see src/tasks/templates.js) — so a shape learned once is reused forever, and the same
+// JSON can be shared or installed. Seed it from disk (the installed/built templates) via
+// `createSpecLibrary({ seed })`.
+export const createSpecLibrary = ({ seed = {}, onLearn = null } = {}) => {
   const learned = new Map();
-  for (const [kind, tmpl] of Object.entries(seed)) learned.set(kind, Object.freeze({ ...tmpl, source: 'learned' }));
+  for (const [kind, tmpl] of Object.entries(seed)) learned.set(kind, Object.freeze({ ...tmpl, kind, source: tmpl.source || 'installed' }));
+  const pending = [];   // persistence promises, so a caller can `await library.flush()`
+  const write = (kind, tmpl) => {
+    const t = Object.freeze({ ...tmpl, kind });
+    learned.set(kind, t);
+    if (onLearn) {
+      try { const p = onLearn(kind, t); if (p && typeof p.then === 'function') pending.push(p); }
+      catch { /* persistence must never sink a run */ }
+    }
+    return t;
+  };
   return {
-    get: (kind) => learned.get(kind) || ARTIFACT_TEMPLATES[kind] || null,
+    get: (kind) => learned.get(kind) || genericArc(organForKind(kind)),
     learned: (kind) => learned.get(kind) || null,
-    has: (kind) => learned.has(kind) || !!ARTIFACT_TEMPLATES[kind],
-    kinds: () => [...learned.keys()],   // the LEARNED kinds, so the creator can detect them by name
-    define: (kind, tmpl) => { const t = Object.freeze({ ...tmpl, kind, source: 'learned' }); learned.set(kind, t); return t; },
+    has: (kind) => learned.has(kind),
+    kinds: () => [...learned.keys()],
+    define: (kind, tmpl) => write(kind, { ...tmpl, source: tmpl.source || 'learned' }),
     defineFromDefinition: (kind, text) => {
       const t = deriveSpecFromDefinition(kind, text);
-      if (t) learned.set(kind, t);
-      return t;
+      return t ? write(kind, t) : null;
     },
+    // Await every persistence write the library has kicked off — so a CLI/test can read
+    // the folder back deterministically. App callers can ignore it (writes are durable).
+    flush: () => Promise.allSettled(pending.splice(0)),
   };
 };
 
-// needsResearch — is there NO shape for this kind (neither learned nor shipped)? When
-// true the caller may propose a web search; proposer-only, like web.js — nothing is
-// fetched here. `researchQuery` is the query to hand a `webSearch`, whose result feeds
-// `defineFromDefinition`.
+// needsResearch — has the machine NOT learned this kind yet? When true, `acquireSpec`
+// goes and learns it (the internet is the brain). `answer` never needs research (it is
+// the degenerate single leaf). `researchQuery` is the query handed to a `webSearch`.
 export const needsResearch = (kind, library = null) =>
-  !(library ? library.has(kind) : !!ARTIFACT_TEMPLATES[kind]);
+  kind !== 'answer' && !(library && library.learned(kind));
 
-export const researchQuery = (kind) => `good elements and structure of a ${kind}: what sections it has`;
+export const researchQuery = (kind) =>
+  `how to write a good ${kind}: the standard structure and the sections it should have`;
+
+// ── acquireSpec — "go learn how to make it well" ──────────────────────────────
+// The internet-as-brain step. If the machine has not learned this kind, fetch a
+// definition with the injected `webSearch`, derive a shape, and cache it (which persists
+// it to the `templates/` folder when the library has a writer). Returns the learned
+// template, or null when nothing could be learned (the caller falls back to the universal
+// arc). The engine never touches the network — `webSearch` is injected, the web.js
+// discipline. `extractText` turns a search result into the text deriveSpecFromDefinition
+// reads (defaults to common shapes: a string, {text}, {doc.text}, {snippet}).
+const defaultExtract = (results) => (Array.isArray(results) ? results : [results])
+  .map((r) => (typeof r === 'string' ? r : (r?.text || r?.doc?.text || r?.snippet || r?.content || '')))
+  .filter(Boolean).join('\n');
+
+export const acquireSpec = async ({ request = '', kind = null, library, webSearch, extractText = defaultExtract } = {}) => {
+  const k = kind || artifactKindOf(request);
+  if (k === 'answer' || !library) return library ? library.learned(k) : null;
+  const already = library.learned(k);
+  if (already) return already;                         // already built it itself
+  if (typeof webSearch !== 'function') return null;    // no brain to consult → arc floor
+  let text = '';
+  try { text = extractText(await webSearch(researchQuery(k))); } catch { text = ''; }
+  if (!text.trim()) return null;
+  return library.defineFromDefinition(k, text);        // derive + cache + persist
+};

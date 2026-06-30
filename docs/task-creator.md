@@ -1,10 +1,12 @@
 # The task creator — "write an essay" becomes a shaped, budgeted plan
 
-> `src/tasks/spec.js` · `tests/task-creator.test.js`. The fixed-plan face of the
+> `src/tasks/spec.js` · `tests/task-creator.test.js`. The planning face of the
 > [tasks holon](nested-task-levels.md): a generative request is read for its
-> **kind**, **length**, and **subject**, matched to an artifact **shape**, and
-> handed to `runTaskGraph` as a decomposition whose every leaf is sized for a
-> small model.
+> **kind**, **length**, and **subject**, given an artifact **shape** — one the machine
+> has **learned** (and cached in [`templates/`](../templates/README.md)) or, for an
+> unknown kind, **researches from the internet on demand** — and handed to
+> `runTaskGraph` as a decomposition whose every leaf is sized for a small model. No
+> artifact-specific guide is shipped; only the universal arc, as an offline floor.
 
 ## The one fact
 
@@ -75,58 +77,86 @@ Each leaf is also handed its **context width** (`contextSpans`) — how wide the
 caller should retrieve for that one generation — so a leaf's *input* stays inside
 the model's window the same way its *output* stays inside the ceiling.
 
-## Three sources of a shape
+## The internet is the brain — we ship no artifact guide
 
-`createTaskSpec` resolves the shape in priority order:
+There is **no stored guide for any specific artifact**. The kind is
+**open-vocabulary** — `artifactKindOf` reads whatever noun the request names (essay,
+sonnet, lab report, cover letter, press release), not a fixed enum. The only shape
+shipped in code is the **universal arc** — open → develop → close — which is not an
+artifact canon but the significance row's intrinsic order (the same arc
+`longgen/shape.js` derives rather than imposes). It is an **offline floor**, identical
+for every kind until that kind is learned.
 
-1. **A learned definition** — one the caller defined previously (the library cache).
-2. **A built-in template** — the shapes shipped here: `essay`, `report`, `story`,
-   `review`, `letter`, `list`, `summary`, and the degenerate `answer`.
-3. **Nothing** — `needsResearch(kind)` is true. The caller may propose a web search
-   for the *"good elements of a `<kind>`"* (`researchQuery`), parse the result with
-   `deriveSpecFromDefinition`, and `define` it into the library so the next request
-   reuses it.
+> *"if something needs to be made, go learn how to make it well."*
 
-> *"you could have it do a websearch to determine what the good elements of an essay
-> are, or if that's been defined previously."*
+So `createTaskSpec` resolves a shape in just two tiers — **learned → arc floor** — and
+the learning is acquired on demand:
 
-The library is the **"defined previously"** half; `deriveSpecFromDefinition` plus a
-caller's web fetch is the **"websearch"** half. The fetch is the caller's
-(proposer-only, the [web-search](web-search.md) discipline) — this module **never
-touches the network**, exactly as the runner never imports a model. A definition
-parsed once is cached, so the cost is paid at most once per kind.
+1. **Learned / installed** — a shape the machine has built, or one a person dropped
+   into the `templates/` folder (the library; see below). Used whenever present.
+2. **The universal arc** — the floor, when the kind has not been learned and no
+   research is available.
 
-`deriveSpecFromDefinition` is guarded the way `formulateSearchQuery` is: a
-definition it cannot parse into at least two section roles returns `null`, and the
-built-in stands — behaviour only improves, never regresses.
+The acquisition is `acquireSpec` (folded into `runArtifact`): when handed a
+`webSearch` and asked for a kind it has not learned, it **researches how to make the
+thing well** (`researchQuery(kind)`), parses the result with
+`deriveSpecFromDefinition` — mapping each found section to a neutral directive act by
+its place in the arc — and caches it in the library, which persists it to
+`templates/`. The next request, this session or a future one, reads it back with no
+search. The engine never touches the network itself: `webSearch` is injected
+(proposer-only, the [web-search](web-search.md) discipline), exactly as the runner
+never imports a model. `deriveSpecFromDefinition` is guarded like
+`formulateSearchQuery` — a definition it cannot parse into at least two roles returns
+`null`, and the arc floor stands; behaviour only improves, never regresses.
+
+### `templates/` — the durable memory
+
+Learned and installed shapes live as small JSON files in the repo's
+[`templates/`](../templates/README.md) folder, keyed by kind. The machine **writes**
+what it learns there (`templatePersister` → `saveTemplate`); a person **installs** a
+shape by dropping a `<kind>.json` in; a session **loads** the folder as the library's
+seed (`loadTemplatesDir`). A template stores its sections as **neutral directives**, so
+an installed shape is modality-neutral and the output organ lowers it at run time. The
+knowledge is **data — learned or shared — never code**.
+
+```js
+const library = createSpecLibrary({
+  seed:    await loadTemplatesDir('templates'),   // installed + previously-learned
+  onLearn: templatePersister('templates'),        // persist whatever it learns next
+});
+await runArtifact({ request: 'write a sonnet about the sea', library, webSearch, generate });
+// "sonnet" unknown → researches it → writes templates/sonnet.json → builds with it.
+// next time: no search.
+```
 
 ## The API
 
 ```js
 import {
-  classifyArtifact, subjectOf, readLength,   // the three reads off the request
+  artifactKindOf, subjectOf, readLength,      // the three reads off the request
   createTaskSpec, planArtifact, withBudgets,  // request → spec → runTaskGraph faces
-  runArtifact,                                // the convenience: create + run
-  createSpecLibrary, deriveSpecFromDefinition, needsResearch, researchQuery,  // the learned/web path
+  runArtifact,                                // the convenience: create + run (researches on demand)
+  createSpecLibrary, acquireSpec, deriveSpecFromDefinition, needsResearch, researchQuery,  // internet-as-brain
+  loadTemplatesDir, templatePersister,        // the durable templates/ store
 } from '../tasks/index.js';
 ```
 
-Wiring a small model to it is a few lines — `generate` is the only injected face
-that touches a model:
+Wiring a small model to it is a few lines — `generate` is the only injected face that
+touches a model, `webSearch` the only one that touches the network. `runArtifact`
+researches an unknown kind itself before planning, so the caller just supplies the two
+injected faces (see `npm run task-creator` for the full end-to-end demo):
 
 ```js
-const lib = createSpecLibrary();
-
-// if the kind has no shape yet, fetch one and cache it (proposer-only):
-if (needsResearch(kind, lib)) {
-  const pages = await webSearch(researchQuery(kind));     // the caller's fetch
-  lib.defineFromDefinition(kind, pages.map(p => p.text).join('\n'));
-}
+const lib = createSpecLibrary({
+  seed:    await loadTemplatesDir('templates'),
+  onLearn: templatePersister('templates'),
+});
 
 const res = await runArtifact({
-  request: 'write a long essay about the sea',
+  request: 'write a sonnet about the sea',
   library: lib,
-  generate: async (view) => {                              // run ONCE PER LEAF
+  webSearch,                                                // injected: learns an unknown kind first
+  generate: async (view) => {                               // run ONCE PER LEAF
     const spans = retrieveFor(view.goal, { k: view.contextSpans });   // this leaf's evidence only
     const messages = buildGroundedMessages({ question: view.goal, spans, format: view.format });
     const output = await model.phrase(messages, { maxTokens: view.maxTokens });  // the leaf's ceiling

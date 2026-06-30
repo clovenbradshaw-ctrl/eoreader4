@@ -4,30 +4,29 @@ import assert from 'node:assert/strict';
 import {
   runTaskGraph, FIGURE, PATTERN,
   LEAF_MAX_TOKENS,
-  classifyArtifact, subjectOf, readLength,
+  artifactKindOf, classifyArtifact, subjectOf, readLength,
   createTaskSpec, planArtifact, withBudgets, runArtifact,
-  deriveSpecFromDefinition, createSpecLibrary, needsResearch, researchQuery,
-  ARTIFACT_TEMPLATES,
+  deriveSpecFromDefinition, createSpecLibrary, acquireSpec, needsResearch, researchQuery,
+  GENERIC_SHAPES,
 } from '../src/tasks/index.js';
 
-// ── classification — the kind read off the request, no model ──────────────────
-test('classifyArtifact reads the artifact kind, falling back to answer', () => {
-  assert.equal(classifyArtifact('write an essay about the moon'), 'essay');
-  assert.equal(classifyArtifact('draft a report on Q3 sales'), 'report');
-  assert.equal(classifyArtifact('write a short story about a fox'), 'story');
-  assert.equal(classifyArtifact('write a review of the new phone'), 'review');
-  assert.equal(classifyArtifact('compose a letter to the council'), 'letter');
-  assert.equal(classifyArtifact('list the planets'), 'list');
-  assert.equal(classifyArtifact('summarize the meeting'), 'summary');
-  assert.equal(classifyArtifact('what is the capital of France?'), 'answer');
-  assert.equal(classifyArtifact(''), 'answer');
+// ── classification is OPEN-VOCABULARY — the kind is whatever noun is named ─────
+test('artifactKindOf reads the artifact noun, open-vocabulary', () => {
+  assert.equal(artifactKindOf('write an essay about the moon'), 'essay');
+  assert.equal(artifactKindOf('draft a report on Q3 sales'), 'report');
+  assert.equal(artifactKindOf('write a short story about a fox'), 'story');
+  assert.equal(artifactKindOf('compose a cover letter for a job'), 'cover letter');  // two-word kind
+  assert.equal(artifactKindOf('write a sonnet about the sea'), 'sonnet');            // never shipped — still a kind
+  assert.equal(artifactKindOf('list the planets'), 'list');
+  assert.equal(artifactKindOf('what is the capital of France?'), 'answer');          // a question, not a make
+  assert.equal(artifactKindOf(''), 'answer');
+  assert.equal(classifyArtifact('write an essay'), 'essay', 'classifyArtifact is the alias');
 });
 
-test('subjectOf strips the imperative and the artifact framing', () => {
+test('subjectOf strips the imperative and the detected kind', () => {
   assert.equal(subjectOf('write a short essay about climate change'), 'climate change');
   assert.equal(subjectOf('please draft a detailed report on renewable energy'), 'renewable energy');
-  assert.equal(subjectOf('compose a letter to the mayor'), 'the mayor');
-  // nothing clean to strip → the request stands rather than vanishing
+  assert.equal(subjectOf('compose a sonnet about the sea'), 'the sea');
   assert.equal(subjectOf('photosynthesis'), 'photosynthesis');
 });
 
@@ -35,36 +34,37 @@ test('readLength scales the budget off the request size words', () => {
   assert.equal(readLength('write an essay').scale, 1);
   assert.equal(readLength('write a short essay').scale, 0.5);
   assert.ok(readLength('write a long essay').scale > 1);
-  assert.equal(readLength('write a long essay').label, 'long');
 });
 
-// ── the creator — a request becomes a concrete, budgeted, grained spec ────────
-test('createTaskSpec builds an essay shape with budgets that sum to the total', () => {
+// ── no shipped guide: an unlearned kind gets the UNIVERSAL ARC floor ──────────
+test('an unlearned essay falls back to the universal arc, not a stored essay guide', () => {
   const spec = createTaskSpec({ request: 'write an essay about the sea' });
   assert.equal(spec.kind, 'essay');
   assert.equal(spec.subject, 'the sea');
-  assert.equal(spec.format, 'prose');
-  // intro + 3 body + conclusion
-  assert.equal(spec.sections.length, 5);
-  assert.deepEqual(spec.sections.map((s) => s.role),
-    ['introduction', 'body 1', 'body 2', 'body 3', 'conclusion']);
-  // every normal-length essay section fits one reach → all Figure leaves
-  assert.ok(spec.sections.every((s) => s.grain === FIGURE));
-  // the budgets are within the total and floored, and roughly add up
+  assert.equal(spec.source, 'fallback', 'the arc is a floor, not learned/installed');
+  assert.deepEqual(spec.sections.map((s) => s.role), ['opening', 'development', 'close']);
+  // the arc sections carry NEUTRAL directives (no baked English)
+  assert.ok(spec.sections.every((s) => s.directive && s.directive.act));
   const sum = spec.sections.reduce((a, s) => a + s.tokens, 0);
-  assert.ok(Math.abs(sum - spec.tokens) <= spec.sections.length, 'section budgets ≈ total');
-  assert.ok(spec.sections.every((s) => s.tokens <= LEAF_MAX_TOKENS));
+  assert.ok(Math.abs(sum - spec.tokens) <= spec.sections.length, 'budgets ≈ total');
 });
 
-test('a long essay overflows the leaf ceiling, so body paragraphs become Pattern goals', () => {
+test('the arc floor is identical whatever the kind, until the kind is learned', () => {
+  const essay = createTaskSpec({ request: 'write an essay about owls' });
+  const memo = createTaskSpec({ request: 'write a memo about owls' });
+  assert.deepEqual(essay.sections.map((s) => s.role), memo.sections.map((s) => s.role),
+    'no per-kind structure is shipped — both get the arc');
+});
+
+test('a long request overflows the leaf ceiling and the development nests', () => {
   const spec = createTaskSpec({ request: 'write a long detailed essay about the sea' });
-  const body = spec.sections.find((s) => s.role === 'body 1');
-  assert.ok(spec.tokens > 700, 'length scaled the total up');
-  assert.equal(body.grain, PATTERN, 'a body paragraph now overflows one reach');
-  assert.ok(body.tokens > LEAF_MAX_TOKENS);
+  const dev = spec.sections.find((s) => s.role === 'development');
+  assert.ok(spec.tokens > 512, 'length scaled the total up');
+  assert.equal(dev.grain, PATTERN);
+  assert.ok(dev.tokens > LEAF_MAX_TOKENS);
 });
 
-test('an unrecognised artifact is the degenerate single-leaf plan', () => {
+test('a bare question is the degenerate single-leaf plan', () => {
   const spec = createTaskSpec({ request: 'what is the capital of France?' });
   assert.equal(spec.kind, 'answer');
   assert.equal(spec.sections.length, 1);
@@ -72,26 +72,24 @@ test('an unrecognised artifact is the degenerate single-leaf plan', () => {
 });
 
 // ── planArtifact — the decompose face the runner consumes ─────────────────────
-test('planArtifact.decompose unravels the root into the spec sections', () => {
+test('planArtifact.decompose unravels the root into the arc sections', () => {
   const plan = planArtifact({ request: 'write an essay about bees' });
   const subs = plan.decompose({ goal: plan.goal, depth: 0 });
-  assert.equal(subs.length, 5);
-  assert.ok(subs.every((s) => s.grain === FIGURE));
+  assert.equal(subs.length, 3);
   // a Figure section is a leaf (no further split)
-  assert.deepEqual(plan.decompose({ goal: subs[0].goal, depth: 1 }), []);
+  const opening = plan.spec.sections.find((s) => s.role === 'opening');
+  assert.deepEqual(plan.decompose({ goal: opening.goal, depth: 1 }), []);
 });
 
 test('planArtifact.decompose splits a Pattern section into leaf-sized parts', () => {
   const plan = planArtifact({ request: 'write a comprehensive essay about bees' });
-  plan.decompose({ goal: plan.goal, depth: 0 });            // register the sections
-  const body = plan.spec.sections.find((s) => s.role === 'body 1');
-  const parts = plan.decompose({ goal: body.goal, depth: 1 });  // goals are resolved strings
+  plan.decompose({ goal: plan.goal, depth: 0 });
+  const dev = plan.spec.sections.find((s) => s.role === 'development');
+  const parts = plan.decompose({ goal: dev.goal, depth: 1 });
   assert.ok(parts.length >= 2, 'an overflowing section splits');
-  // each part is registered and budgeted to fit one reach
   for (const p of parts) {
     const sec = plan.budgetFor(p.goal);
-    assert.ok(sec, 'the part is registered for budget lookup');
-    assert.ok(sec.tokens <= LEAF_MAX_TOKENS, 'each part fits a small-model reach');
+    assert.ok(sec && sec.tokens <= LEAF_MAX_TOKENS, 'each part fits a small-model reach');
     assert.equal(p.grain, FIGURE);
   }
 });
@@ -104,103 +102,113 @@ test('withBudgets hands each leaf its maxTokens, role and format', () => {
   const gen = withBudgets(plan, (view) => { captured.push(view); return view.goal; });
   gen({ goal: subs[1].goal, depth: 1 });
   const v = captured[0];
-  assert.equal(v.role, 'body 1');
+  assert.equal(v.role, 'development');
   assert.equal(v.format, 'prose');
   assert.ok(v.maxTokens > 0 && v.maxTokens <= LEAF_MAX_TOKENS);
-  assert.ok(v.contextSpans >= 3);
   assert.equal(v.spec.kind, 'essay');
 });
 
 // ── end-to-end through the real runner ────────────────────────────────────────
-test('runArtifact builds an essay graph and generates each section once, within budget', async () => {
+test('runArtifact builds a graph and generates each section once, within budget', async () => {
   const seen = [];
   const res = await runArtifact({
     request: 'write an essay about the sea',
-    // a stub small model: echo the role and assert it was handed a real budget
-    generate: (view) => {
-      seen.push({ role: view.role, maxTokens: view.maxTokens });
-      assert.ok(view.maxTokens > 0, 'each leaf carries an output ceiling');
-      return `[${view.role}]`;
-    },
+    generate: (view) => { seen.push(view.role); assert.ok(view.maxTokens > 0); return `[${view.role}]`; },
   });
-  assert.deepEqual(seen.map((s) => s.role),
-    ['introduction', 'body 1', 'body 2', 'body 3', 'conclusion'], 'depth-first section order');
+  assert.deepEqual(seen, ['opening', 'development', 'close'], 'depth-first section order');
   assert.equal(res.spec.kind, 'essay');
-  assert.equal(res.progress.total, 5);
-  assert.equal(res.progress.done, 5);
+  assert.equal(res.progress.total, 3);
+  assert.equal(res.progress.done, 3);
   assert.equal(res.incoherent.length, 0, 'budgets match grains → no confab flags');
-  assert.match(res.output, /\[introduction\][\s\S]*\[conclusion\]/);
 });
 
-test('a long-essay run nests a body paragraph and stays coherent', async () => {
+test('a long run nests a section and stays coherent', async () => {
   const res = await runArtifact({
     request: 'write a comprehensive essay about the sea',
     generate: (view) => `[${view.role}]`,
   });
-  // the deepest leaf sits below its overflowing parent (nesting really happened)
   const depths = [];
   const walk = (n) => { if (n.children?.length) n.children.forEach(walk); else depths.push(n.depth); };
   walk(res.graph.root);
   assert.ok(Math.max(...depths) >= 2, 'a Pattern section split one level deeper');
-  assert.equal(res.incoherent.length, 0, 'a section that overflowed was split, not jammed');
+  assert.equal(res.incoherent.length, 0);
 });
 
-// ── the learned / web definition path ─────────────────────────────────────────
-test('needsResearch is true only when no shape covers the kind', () => {
-  assert.equal(needsResearch('essay'), false, 'a built-in covers it');
-  assert.equal(needsResearch('haiku'), true, 'no built-in, no learned → propose research');
-  assert.match(researchQuery('haiku'), /haiku/);
+// ── the internet-as-brain path: learn the kind, then reuse it ─────────────────
+test('needsResearch is true for any unlearned kind (nothing is shipped)', () => {
+  const lib = createSpecLibrary();
+  assert.equal(needsResearch('essay', lib), true, 'no shipped essay guide');
+  assert.equal(needsResearch('sonnet', lib), true);
+  assert.equal(needsResearch('answer', lib), false, 'a bare answer needs no shape');
+  assert.match(researchQuery('sonnet'), /sonnet/);
 });
 
-test('deriveSpecFromDefinition parses section roles from a fetched definition', () => {
+test('acquireSpec researches an unknown kind, derives a shape, and caches it', async () => {
+  const lib = createSpecLibrary();
+  const webSearch = async (q) => {
+    assert.match(q, /sonnet/);
+    return [{ text: '1. First quatrain\n2. Second quatrain\n3. Third quatrain\n4. Final couplet' }];
+  };
+  const tmpl = await acquireSpec({ request: 'write a sonnet about the sea', library: lib, webSearch });
+  assert.ok(tmpl, 'a shape was learned');
+  assert.equal(needsResearch('sonnet', lib), false, 'now cached');
+  const spec = createTaskSpec({ request: 'write a sonnet about the sea', library: lib });
+  assert.equal(spec.source, 'learned');
+  assert.deepEqual(spec.sections.map((s) => s.role),
+    ['first quatrain', 'second quatrain', 'third quatrain', 'final couplet']);
+});
+
+test('runArtifact researches on demand when handed a webSearch', async () => {
+  const webSearch = async () => [{ text: 'Structure:\n- Greeting\n- Body\n- Sign-off' }];
+  const res = await runArtifact({
+    request: 'write a cover letter for a job',
+    webSearch,
+    generate: (view) => `[${view.role}]`,
+  });
+  assert.equal(res.spec.source, 'learned', 'the kind was learned before planning');
+  assert.deepEqual(res.spec.sections.map((s) => s.role), ['greeting', 'body', 'sign-off']);
+  assert.ok(res.library.learned('cover letter'), 'and cached for next time');
+});
+
+test('offline (no webSearch) falls back to the arc, never invents a guide', async () => {
+  const res = await runArtifact({
+    request: 'write a sonnet about the sea',
+    generate: (view) => `[${view.role}]`,
+  });
+  assert.equal(res.spec.source, 'fallback');
+  assert.deepEqual(res.spec.sections.map((s) => s.role), ['opening', 'development', 'close']);
+});
+
+// ── deriveSpecFromDefinition — the parse, with neutral directives ─────────────
+test('deriveSpecFromDefinition parses roles and maps them to arc directives', () => {
   const definition = `A good essay has these parts:
 1. Introduction — the hook and the thesis
 2. Body paragraphs — each develops one point with evidence
 3. Conclusion — restate the thesis and close`;
   const tmpl = deriveSpecFromDefinition('essay', definition);
-  assert.ok(tmpl, 'a usable shape was derived');
+  assert.ok(tmpl);
   const roles = tmpl.sections.map((s) => s.role);
-  assert.ok(roles.includes('introduction'));
-  assert.ok(roles.includes('conclusion'));
+  assert.ok(roles.includes('introduction') && roles.includes('conclusion'));
+  assert.equal(tmpl.sections[0].dir.act, 'open', 'first element → open');
+  assert.equal(tmpl.sections.at(-1).dir.act, 'close', 'last element → close');
   assert.equal(tmpl.source, 'learned');
 });
 
-test('deriveSpecFromDefinition returns null on unusable text (built-in stands)', () => {
+test('deriveSpecFromDefinition returns null on unusable text (arc floor stands)', () => {
   assert.equal(deriveSpecFromDefinition('essay', ''), null);
-  assert.equal(deriveSpecFromDefinition('essay', 'just some prose with no structure named at all here'), null);
+  assert.equal(deriveSpecFromDefinition('essay', 'just prose with no structure named at all'), null);
 });
 
-test('the library prefers a learned shape and guides the next request', () => {
+// ── the library ───────────────────────────────────────────────────────────────
+test('the library returns the arc floor until a kind is learned, then the learned shape', () => {
   const lib = createSpecLibrary();
-  assert.equal(lib.learned('essay'), null, 'nothing learned yet');
-  assert.ok(lib.get('essay'), 'falls back to the built-in');
+  assert.equal(lib.learned('report'), null, 'nothing learned yet');
+  assert.equal(lib.get('report').source, 'fallback', 'get falls back to the arc');
 
-  const definition = `Sections:\n- Background\n- Analysis\n- Recommendation`;
-  const learned = lib.defineFromDefinition('report', definition);
-  assert.ok(learned, 'derived and stored');
-
+  lib.defineFromDefinition('report', 'Sections:\n- Background\n- Analysis\n- Recommendation');
   const spec = createTaskSpec({ request: 'write a report on water use', library: lib });
-  assert.equal(spec.source, 'learned', 'the learned shape governs');
+  assert.equal(spec.source, 'learned');
   assert.deepEqual(spec.sections.map((s) => s.role), ['background', 'analysis', 'recommendation']);
-});
-
-test('a hand-defined shape runs through the graph end-to-end', async () => {
-  const lib = createSpecLibrary();
-  lib.define('haiku', {
-    format: 'prose', tokens: 120, note: 'three lines',
-    sections: [
-      { role: 'line 1', share: 1, goal: (s) => `Write the first line of a haiku about ${s}.` },
-      { role: 'line 2', share: 1, goal: (s) => `Write the second line of a haiku about ${s}.` },
-      { role: 'line 3', share: 1, goal: (s) => `Write the third line of a haiku about ${s}.` },
-    ],
-  });
-  assert.equal(needsResearch('haiku', lib), false, 'now covered');
-  const res = await runArtifact({
-    request: 'write a haiku about rain', library: lib,
-    generate: (view) => `[${view.role}]`,
-  });
-  assert.equal(res.progress.total, 3);
-  assert.equal(res.spec.kind, 'haiku');
 });
 
 // ── grounding the claim: the degenerate plan is one generation ────────────────
@@ -216,12 +224,11 @@ test('runArtifact on a bare answer is byte-identical to one generate call', asyn
   assert.equal(res.graph.root.children.length, 0, 'no nesting — the root is the leaf');
 });
 
-// a touch of sanity over the shipped templates
-test('every built-in template has ordered sections with positive shares', () => {
-  for (const [kind, t] of Object.entries(ARTIFACT_TEMPLATES)) {
-    assert.ok(t.sections.length >= 1, `${kind} has sections`);
-    assert.ok(t.sections.every((s) => (s.share ?? 1) > 0), `${kind} shares are positive`);
-    assert.ok(typeof t.size === 'number' && t.size > 0, `${kind} has a size total`);
-    assert.ok(typeof t.organ === 'string', `${kind} names an output organ`);
+// the only shipped shapes are the universal arc (a floor, not a guide)
+test('GENERIC_SHAPES holds only the universal arc, per organ', () => {
+  assert.deepEqual(Object.keys(GENERIC_SHAPES).sort(), ['music', 'text']);
+  for (const shape of Object.values(GENERIC_SHAPES)) {
+    assert.equal(shape.source, 'fallback');
+    assert.deepEqual(shape.sections.map((s) => s.dir.act), ['open', 'develop', 'close']);
   }
 });

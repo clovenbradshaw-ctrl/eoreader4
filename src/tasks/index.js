@@ -41,11 +41,18 @@ export { MAX_DEPTH, MAX_FANOUT, MAX_NODES } from './constants.js';
 // leaf-sized, budgeted generations.
 export {
   LEAF_MAX_TOKENS, LEAF_MIN_TOKENS, CONTEXT_SPANS,
-  ARTIFACT_KINDS, ARTIFACT_TEMPLATES,
-  classifyArtifact, subjectOf, readLength,
+  ARTIFACT_KINDS, GENERIC_SHAPES,
+  artifactKindOf, classifyArtifact, organForKind, subjectOf, readLength,
   createTaskSpec, planArtifact, withBudgets, withOrgans, runArtifact,
-  deriveSpecFromDefinition, createSpecLibrary, needsResearch, researchQuery,
+  deriveSpecFromDefinition, createSpecLibrary, acquireSpec, needsResearch, researchQuery,
 } from './spec.js';
+
+// The templates store (templates/): how a learned/installed shape becomes durable JSON.
+// Pure (de)serialization is browser-safe; the fs helpers lazy-import node:fs.
+export {
+  TEMPLATE_SCHEMA, templateToJSON, templateFromJSON,
+  loadTemplatesDir, saveTemplate, templatePersister,
+} from './templates.js';
 
 // The output membrane (organs/out): the renderers a task leaf dispatches to, the
 // mirror of organs/in. Re-exported here so a caller wiring runArtifact's `organs`

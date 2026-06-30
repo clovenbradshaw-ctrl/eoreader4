@@ -1,117 +1,93 @@
-// End-to-end exercise of the task creator + the omnimodal output organs.
-//
-// Drives the REAL pipeline: createTaskSpec → planArtifact → runTaskGraph → organs/out.
-// Text leaves render through the actual model interface (the echo backend, offline and
-// deterministic, grounded on per-leaf spans). Music leaves render through a small
-// directive-reading generator. Nothing here is stubbed at the task layer — this is the
-// same code path a real small model would run.
+// End-to-end exercise of the task creator: open-vocabulary kinds, the internet as the
+// brain (research → learn → persist to templates/), and the omnimodal output organs.
 //
 //   node scripts/task-creator-e2e.mjs
+//
+// Text leaves render through the real model interface (the echo backend, offline and
+// deterministic). The "web" is a canned function here — the engine never touches the
+// network itself; webSearch is injected (the repo's proposer-only discipline).
 
-import { runArtifact, createTaskSpec } from '../src/tasks/index.js';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { runArtifact, createTaskSpec, createSpecLibrary, loadTemplatesDir, templatePersister } from '../src/tasks/index.js';
 import { createModel, buildGroundedMessages } from '../src/model/index.js';
 
-const rule = (t) => console.log('\n' + '═'.repeat(72) + `\n${t}\n` + '═'.repeat(72));
+const rule = (t) => console.log('\n' + '═'.repeat(74) + `\n${t}\n` + '═'.repeat(74));
 
-// ── a tiny corpus to ground the essay on (stands in for retrieval) ────────────
 const CORPUS = [
   { idx: 0, text: 'The sea covers more than seventy percent of the planet’s surface.' },
   { idx: 1, text: 'Ocean currents redistribute heat and drive the world’s climate.' },
   { idx: 2, text: 'Tides rise and fall with the gravitational pull of the moon.' },
   { idx: 3, text: 'The deep sea remains the least explored region on Earth.' },
-  { idx: 4, text: 'Marine life ranges from microscopic plankton to the blue whale.' },
-  { idx: 5, text: 'Coastal communities have depended on the sea for trade and food for millennia.' },
 ];
-// crude per-leaf "retrieval": pick spans whose words overlap the leaf goal, else spread.
-const retrieveFor = (goal, k) => {
-  const words = new Set(String(goal).toLowerCase().match(/[a-z]{4,}/g) || []);
-  const scored = CORPUS.map((s) => ({ s, hits: (s.text.toLowerCase().match(/[a-z]{4,}/g) || []).filter((w) => words.has(w)).length }));
-  const ranked = scored.sort((a, b) => b.hits - a.hits).map((x) => x.s);
-  return ranked.slice(0, k);
+const retrieveFor = (goal, k) => CORPUS.slice(0, Math.max(2, k));
+
+// A canned "web" — stands in for a real search. Returns a definition of the asked kind.
+const FAKE_WEB = {
+  sonnet: '1. First quatrain — introduce the theme\n2. Second quatrain — develop it\n3. Third quatrain — turn or complication\n4. Final couplet — resolve',
+  'cover letter': 'Structure:\n- Greeting\n- Opening hook\n- Body: relevant experience\n- Closing call to action\n- Sign-off',
+};
+const makeWebSearch = (log) => async (query) => {
+  const kind = Object.keys(FAKE_WEB).find((k) => query.toLowerCase().includes(k));
+  log.push({ query, found: !!kind });
+  return kind ? [{ text: FAKE_WEB[kind] }] : [];
 };
 
-// ── 1) ESSAY — text organ, driven by the real echo backend ────────────────────
-const runEssay = async () => {
-  rule('1) "write an essay about the sea"  — text organ, real model interface (echo)');
-  const model = createModel('echo');
-  await model.load?.(() => {});
+const textModel = createModel('echo');
+const textGen = async (view) => {
+  const spans = retrieveFor(view.goal, view.contextSpans);
+  const messages = buildGroundedMessages({ question: view.goal, spans, task: 'answer' });
+  return { output: await textModel.phrase(messages, { maxTokens: view.maxTokens }), sources: spans.map((s) => s.idx) };
+};
+const showSections = (res) => res.graph.root.children.forEach((c) => console.log(`  ▸ ${c.goal}`));
 
-  const spec = createTaskSpec({ request: 'write an essay about the sea' });
-  console.log(`spec: ${spec.kind} · organ=${spec.organ} · ${spec.extent} ${spec.unit} · ${spec.sections.length} sections\n`);
+const main = async () => {
+  await textModel.load?.(() => {});
+  const dir = await mkdtemp(join(tmpdir(), 'eo-templates-'));
+  const webLog = [];
+  // the library IS the machine's memory: seeded from the folder, persisting what it learns
+  const library = createSpecLibrary({ seed: await loadTemplatesDir(dir), onLearn: templatePersister(dir) });
+  const webSearch = makeWebSearch(webLog);
 
-  const res = await runArtifact({
-    request: 'write an essay about the sea',
-    // the TEXT generator: a genuine grounded model call per leaf, honoring the leaf budget
-    generate: async (view) => {
-      const spans = retrieveFor(view.goal, view.contextSpans);
-      const messages = buildGroundedMessages({ question: view.goal, spans, task: 'answer' });
-      const output = await model.phrase(messages, { maxTokens: view.maxTokens });
-      return { output, sources: spans.map((s) => s.idx) };
-    },
-    onUpdate: (graph, ev) => { if (ev?.type === 'complete') process.stdout.write('● '); },
-  });
+  // 1) an UNLEARNED kind, OFFLINE → the universal arc floor (no stored essay guide)
+  rule('1) "write an essay about the sea"  — no webSearch → universal arc floor');
+  const off = createTaskSpec({ request: 'write an essay about the sea' });
+  console.log(`source=${off.source} · sections: ${off.sections.map((s) => s.role).join(' · ')}\n`);
+  const r1 = await runArtifact({ request: 'write an essay about the sea', generate: textGen });
+  showSections(r1);
 
-  console.log('\n\n--- assembled essay ---\n');
-  res.graph.root.children.forEach((sec) => {
-    console.log(`## ${sec.goal}\n${sec.output}\n`);
-  });
-  console.log(`progress: ${res.progress.done}/${res.progress.total} leaves · sources cited: [${res.sources.join(', ')}] · incoherent: ${res.incoherent.length}`);
+  // 2) a kind it has NEVER seen → go learn how to make it well, then build it
+  rule('2) "write a sonnet about the sea"  — unknown kind → research, learn, persist');
+  const r2 = await runArtifact({ request: 'write a sonnet about the sea', library, webSearch, generate: textGen });
+  console.log(`web queries: ${webLog.length} · learned source=${r2.spec.source}`);
+  console.log(`learned structure: ${r2.spec.sections.map((s) => s.role).join(' · ')}`);
+  await library.flush();
+  console.log(`\nwrote ${dir}/sonnet.json:`);
+  console.log(await readFile(join(dir, 'sonnet.json'), 'utf8'));
+
+  // 3) ask AGAIN — now it's in the folder, no second search
+  rule('3) "write a sonnet about spring"  — same kind → reused from templates/, no research');
+  const before = webLog.length;
+  const r3 = await runArtifact({ request: 'write a sonnet about spring', library, webSearch, generate: textGen });
+  console.log(`web queries this time: ${webLog.length - before} (0 = reused) · source=${r3.spec.source}`);
+  showSections(r3);
+
+  // 4) a fresh process: a new library seeded from the folder already knows the kind
+  rule('4) fresh library seeded from the folder — the learning survived');
+  const reseeded = createSpecLibrary({ seed: await loadTemplatesDir(dir) });
+  console.log(`installed kinds on disk: [${reseeded.kinds().join(', ')}]`);
+  const r4 = createTaskSpec({ request: 'write a sonnet about loss', library: reseeded });
+  console.log(`source=${r4.source} · sections: ${r4.sections.map((s) => s.role).join(' · ')}`);
+
+  // 5) a NON-TEXT kind → the same flow, music organ (beats), arc floor offline
+  rule('5) "write a melody about the sea"  — music organ, beats, arc floor');
+  const r5 = await runArtifact({ request: 'write a melody about the sea', organs: { music: (v) => `♪[${v.role}|${v.maxBeats}b]♪` } });
+  console.log(`organ=${r5.spec.organ} · unit=${r5.spec.unit}`);
+  r5.graph.root.children.forEach((c) => console.log(`  ▸ ${c.goal.padEnd(54)} ${c.output || '[branch]'}`));
+
+  console.log('\nthe internet is the brain: unknown kinds are learned once, written to templates/, and reused.\n');
 };
 
-// ── 2) MELODY — music organ, a directive-reading generator ────────────────────
-// A toy "composer": reads the NEUTRAL directive (open/develop/close) and the beat
-// budget, emits a note sequence. No model — the point is that the SAME runTaskGraph
-// runs it, sized in beats, with the directive (not English) driving the notes.
-const SCALE = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-const compose = (view) => {
-  const beats = view.maxBeats || 8;
-  const act = view.directive?.act || 'state';
-  const start = { open: 0, develop: 2, close: 4 }[act] ?? 0;
-  const dir = act === 'close' ? -1 : 1;                       // cadences fall, motifs rise
-  const notes = [];
-  for (let i = 0; i < beats; i++) notes.push(SCALE[((start + dir * i) % 7 + 7) % 7]);
-  const tail = act === 'close' ? ' |]' : '';                  // a cadence bar-line
-  return notes.join(' ') + tail;
-};
-
-const runMelody = async () => {
-  rule('2) "write a melody about the sea"  — music organ, directive-driven composer');
-  const spec = createTaskSpec({ request: 'write a melody about the sea' });
-  console.log(`spec: ${spec.kind} · organ=${spec.organ} · ${spec.extent} ${spec.unit} · ${spec.sections.length} sections`);
-  console.log('directives (neutral moves, no English in the template):');
-  spec.sections.forEach((s) => console.log(`  • ${s.role}: { act: "${s.directive.act}" }  →  lowered: "${s.goal}"`));
-  console.log();
-
-  const res = await runArtifact({
-    request: 'write a melody about the sea',
-    organs: { music: (view) => compose(view) },
-    onUpdate: (graph, ev) => { if (ev?.type === 'complete') process.stdout.write('♪ '); },
-  });
-
-  console.log('\n\n--- assembled melody (beats per phrase) ---\n');
-  res.graph.root.children.forEach((sec) => {
-    console.log(`${sec.goal.padEnd(48)}  ${sec.output}`);
-  });
-  console.log(`\nprogress: ${res.progress.done}/${res.progress.total} phrases · unit=${res.spec.unit} · incoherent: ${res.incoherent.length}`);
-};
-
-// ── 3) LONG MELODY — the budget-driven split, in beats ────────────────────────
-const runLongMelody = async () => {
-  rule('3) "write a long melody about the sea"  — a phrase overflows 16 beats → nests');
-  const res = await runArtifact({
-    request: 'write a long melody about the sea',
-    organs: { music: (view) => compose(view) },
-  });
-  const show = (n, d = 0) => {
-    const pad = '  '.repeat(d);
-    if (n.children?.length) { console.log(`${pad}${n.goal || 'ROOT'}  [${n.object}]`); n.children.forEach((c) => show(c, d + 1)); }
-    else console.log(`${pad}${n.goal}  →  ${n.output}`);
-  };
-  show(res.graph.root);
-  console.log(`\nleaves: ${res.progress.total} · incoherent: ${res.incoherent.length} (0 = every overflow split, not jammed)`);
-};
-
-await runEssay();
-await runMelody();
-await runLongMelody();
-console.log('\nend-to-end: text via the real model interface, music via the same runTaskGraph — one task language, two organs.\n');
+await main();
