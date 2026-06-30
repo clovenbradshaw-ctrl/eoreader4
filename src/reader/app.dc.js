@@ -912,6 +912,66 @@ class Component extends DCLogic {
       if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
     }
     return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
+  // ── The named-subject gate (the "essay about Grok" failure), the reader's copy ──
+  // The same hole the answerabilityGate closes in the turn pipeline (src/longgen/answerable.js,
+  // wired into src/turn/stages.js), brought to the path this UI actually runs: the Reader
+  // answers in its OWN sendChat / _longformArc, never through that pipeline, so the gate there
+  // never sees these turns. The failure: eight pages about Errol Musk, "write me a long essay
+  // about Grok", incidental word overlap ("long" inside "no longer") that marked the sources
+  // relevant and kept the turn offline, and a 3B model that then invented sections about a Grok
+  // it made up — even narrating its own void ("I don't have any information about Grok") and
+  // confabulating anyway. So: read the proper-noun SUBJECTS out of the question and require at
+  // least one to be known to the in-scope reading (its entity labels or read sentences). When
+  // none is, the request is about something never read — route it to the web (web on) or answer
+  // honestly that it isn't in the sources (web off), never walk the irrelevant spans. A turn
+  // that names no specific subject ("summarize this") names nothing to be absent and passes.
+  _namedSubjects(q){
+    if(!this._subjStop)this._subjStop=new Set(('write writes wrote writing written compose composed draft produce generate create created make made give given tell explain explaining describe summarize summarise discuss outline report overview account analyze analyse please what who whom when where why how which is are was were the a an this that about me my your long longer short brief detailed comprehensive thorough essay essays piece article guide on of for and or to in into with').split(/\s+/));
+    const out=new Set();
+    for(const m of String(q||'').match(/\b[A-Z][A-Za-z'’-]{2,}\b/g)||[]){
+      if(this._subjStop.has(m.toLowerCase()))continue;
+      out.add(m);
+    }
+    return [...out];
+  }
+  // Does the in-scope reading know one named subject? Case-insensitive contains both ways,
+  // so "Musk" matches the entity "Errol Musk" and vice versa.
+  _subjectKnown(subj,scopes){
+    const t=String(subj||'').toLowerCase();if(!t)return false;
+    if(this.graph)for(const e of this.graph.entities.values()){
+      if(!this.showable(e.id))continue;
+      const lab=this.labelOf(e.id).toLowerCase();
+      if(lab&&(lab.includes(t)||t.includes(lab)))return true;
+    }
+    if(this.master&&this.master.sentences){
+      const inScope=u=>!scopes.length||scopes.includes(u);
+      for(let i=0;i<this.master.sentences.length;i++){
+        if(!inScope(this.master.sentenceSource[i]))continue;
+        if(this.norm(this.master.sentences[i]).toLowerCase().includes(t))return true;
+      }
+    }
+    return false;
+  }
+  // Licensed unless EVERY named subject is absent from the reading. No named subject → licensed
+  // (nothing to be absent). At least one known → licensed (a "compare X and Grok" still walks X).
+  _subjectsKnown(q,sources){
+    const subs=this._namedSubjects(q);
+    if(!subs.length)return true;
+    const scopes=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    return subs.some(s=>this._subjectKnown(s,scopes));
+  }
+  // The honest answer when the subject isn't in the reading — names what WAS read and how to
+  // reach what wasn't, instead of inventing it. Used on every offline path that would otherwise
+  // hand the model irrelevant spans and a question about a subject it never read.
+  _noSubjectPatch(q,sources){
+    const subj=this._namedSubjects(q).slice(0,3).join(', ');
+    const what=this.chatOrientation(sources);
+    const tail=(this.state.webBrain===false)
+      ? 'Turn the web on (the ✦ toggle on the composer) and I’ll go read about it — or ask me about what’s here.'
+      : 'I couldn’t find it in the sources — ask me about what’s here, or I can look it up on the web.';
+    const text='I haven’t read anything about '+(subj?('“'+subj+'”'):'that')+'. What I have read is '+what+'. '+tail;
+    return {text,groundKind:'model',disclosure:'Not grounded in your reading — the sources don’t mention this.',related:this.relatedDocs(q,sources)};
+  }
   // Disclose WHERE an answer is grounded — honestly, so a summary never reads as fact
   // pulled from the page when it was really the model drawing the lines together. Maps a
   // groundNotes result (+ sendChat's `grounded` flag) onto the chip's three modes:
@@ -1174,6 +1234,10 @@ class Component extends DCLogic {
     // disputes the in-scope reading itself — so even when that reading "covers" the topic, don't
     // re-assert it offline; go to the web to settle the CURRENT fact (research-accuracy fix).
     if(this._isCorrection(q))return true;
+    // A request whose named subject the in-scope reading never mentions ("essay about Grok"
+    // over an Errol-Musk corpus) → go read it, rather than let incidental word overlap keep a
+    // confabulating answer offline. This is the named-subject gate, on the routing side.
+    if(!this._subjectsKnown(q,sources))return true;
     return !this.groundNotes(q,sources).relevant;           // not covered by matched reading → go read
   }
   async sendChat(){
@@ -1196,6 +1260,11 @@ class Component extends DCLogic {
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     // 1) clock questions — no model
     const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
+    // 1a) THE NAMED-SUBJECT GATE (offline). We are here only because the web didn't take this
+    // turn (web off, or it would have routed to research above). If the question names a subject
+    // the in-scope reading never mentions, do NOT hand the model irrelevant spans and a question
+    // about a subject it never read — that is the Grok confabulation. Answer honestly instead.
+    if(!this._subjectsKnown(q,sources)){finish(this._noSubjectPatch(q,sources));return;}
     // 1b) OPT-IN LONGFORM, offline too: an essay/report/"N words" ask over what's ALREADY been read
     // (web off, or the reading already covers it) becomes a multi-section grounded piece — the arc
     // over the in-scope sources — instead of one capped answer. Needs grounded supply; _longformArc
@@ -1352,6 +1421,10 @@ class Component extends DCLogic {
     // Empty `had` means the chat ranges over EVERYTHING read (which already includes the new
     // pages) — keep it empty. Otherwise widen the scope to include what we just gathered.
     const sources=had.length?[...new Set([...had,...(gathered||[])])]:[];
+    // The named-subject gate again, after the web walk: if the research turned up nothing that
+    // names the subject (the corpus still doesn't know it), answer honestly rather than letting
+    // the model confabulate it from whatever was gathered.
+    if(!this._subjectsKnown(q,sources.length?sources:[...new Set([...(gathered||[])])])){finish(this._noSubjectPatch(q,sources));return;}
     const ground=this.groundNotes(q,sources);
     try{
       const model=await this.ensureChatModel();
@@ -1397,6 +1470,9 @@ class Component extends DCLogic {
     const had=this.chatSourcesOf(cur);
     const scope=had.length?[...new Set([...had,...(gathered||[])])]:[];
     const urls=scope.length?scope:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
+    // The named-subject gate: don't build a multi-section essay about a subject the in-scope
+    // reading never names (the Grok case) — answer honestly instead of confabulating sections.
+    if(!this._subjectsKnown(q,urls)){finish(this._noSubjectPatch(q,scope));return;}
     // SEG — the section plan: each in-scope source that actually bears on the question, ranked.
     const plan=[];
     for(const u of urls){

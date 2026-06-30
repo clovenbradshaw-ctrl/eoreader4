@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { parseText } from '../src/perceiver/parse/pipeline.js';
 import { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from '../src/surfer/index.js';
 import { answerVoid } from '../src/answer/index.js';
+import { answerabilityGate } from '../src/longgen/answerable.js';
 
 // The answerability gate (docs/answerability.md): before the talker is warmed,
 // measure whether the field where the question landed holds any structure. When it
@@ -98,4 +99,37 @@ test('answerVoid · renders the typed absence in the mechanical-answer shape', (
 test('answerVoid · returns null when there is an answer to give', () => {
   const doc = docOf('Gregor Samsa is a travelling salesman. Gregor waited.');
   assert.equal(answerVoid(doc, 'who is gregor', []), null);
+});
+
+// ── The named-subject gate: the Grok regression ──────────────────────────────
+// A corpus about Errol Musk handed "write a long essay about Grok" must NOT walk:
+// the named subject is absent from the ground, so the lenient whole-document type
+// cannot license it. The observed failure invented a Robert E. Howard novel.
+test('answerabilityGate refuses an essay about a subject absent from the corpus', () => {
+  const ground = [
+    { idx: 0, score: 0.6, text: 'Errol Musk denied claims' },
+    { idx: 1, score: 0.6, text: 'Us Weekly reached Elon' },
+    { idx: 2, score: 0.5, text: 'While Errol claimed Tesla' },
+  ];
+  const graph = { relations: [{ subject: 'Errol Musk', object: 'claims' }, { subject: 'Elon', object: 'Tesla' }] };
+  const g = answerabilityGate({ question: 'write me a long essay about Grok', ground, graph });
+  assert.equal(g.licensed, false);
+  assert.equal(g.reason, 'no-subject');
+  assert.deepEqual(g.missing, ['Grok']);
+  assert.match(g.refusal.text, /do not contain anything about Grok/);
+  assert.ok(g.refusal.sources.length > 0, 'the refusal still cites what the corpus DOES hold');
+});
+
+test('answerabilityGate licenses an essay about a subject the corpus DOES name', () => {
+  const ground = [{ idx: 0, score: 0.6, text: 'Errol Musk denied claims' }];
+  const graph = { relations: [{ subject: 'Errol Musk', object: 'claims' }] };
+  const g = answerabilityGate({ question: 'write me a long essay about Errol Musk', ground, graph });
+  assert.equal(g.licensed, true);
+});
+
+test('answerabilityGate does not falsely refuse a bare whole-document request', () => {
+  const ground = [{ idx: 0, score: 0.6, text: 'Errol Musk denied claims' }];
+  const graph = { relations: [{ subject: 'Errol Musk', object: 'claims' }] };
+  const g = answerabilityGate({ question: 'summarize this', ground, graph });
+  assert.equal(g.licensed, true);
 });

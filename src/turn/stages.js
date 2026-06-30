@@ -25,6 +25,7 @@ import { bindCitations, renderBound } from '../ground/index.js';
 import { runVetoes, isUnbound, classifyProvenance } from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
 import { projectGraph, VERDICTS } from '../core/index.js';
+import { answerabilityGate } from '../longgen/answerable.js';
 import { factCheck, auditPropositions } from '../factcheck/index.js';
 import { streamAnswer }     from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
@@ -464,6 +465,50 @@ export const stages = {
   // a small model re-reading its own earlier (maybe wrong) reply and anchoring on it. The
   // talker's output is a weaker witness (converse/provenance.js); on this path it is not
   // carried at all. The document note (the fold's arrows) rides as before.
+  // THE ANSWERABILITY GATE (longgen/answerable.js, spec-planner.md §3), in FRONT of the
+  // talker. The void gate strips an invented NAME or NUMBER on the way back, but it cannot
+  // catch an invented SHAPE: a corpus about Errol Musk handed "write a long essay about
+  // Grok" produced two sections inventing a Robert E. Howard novel, every word grounded in
+  // nothing, the model even narrating its own void ("I don't have any information about
+  // Grok from the reading") before confabulating anyway. The lie is not at the token grain;
+  // it is the gap between what the question asked for and what the ground can give. So
+  // before any model call, type the question and test the ground against the type, and test
+  // that the corpus knows the subjects the question NAMES. When neither holds the walk does
+  // not run: the turn terminates with the refusal atom — the honest one-sentence answer,
+  // grounded on what the corpus DOES hold, short by construction.
+  //
+  // Runs after `fold` (ctx.spans and the graph are ready) and only on a GROUNDED route — a
+  // pure chat turn has no corpus to be unanswerable against. The lenient whole-document
+  // types (summary / list / explain) still pass groundSupplies; the named-subject test is
+  // what catches an essay about a figure the corpus never mentions.
+  async gate(ctx) {
+    if (ctx.route !== 'grounded' || ctx.meta) return ctx;
+    // Only gate a question that ENGAGES the corpus. A question that makes no lexical
+    // contact with the document ("What is 2 + 2?" with a doc loaded) is a chat question
+    // that happens to have a document open, not an unanswerable grounded request — it
+    // reaches the talker, where the void gate still holds it on the way back. The gate is
+    // for a question that points AT the corpus and asks for what the corpus does not hold
+    // (the Grok essay against an Errol Musk page), not for one that points away from it.
+    if (!queryTouchesDoc(ctx.doc, ctx.question)) return ctx;
+    const graph = ctx.doc?.log ? projectGraph(ctx.doc.log) : null;
+    const ground = (ctx.spans || []).map((s, i) => ({ idx: s.idx ?? i, text: s.text, score: s.score }));
+    const g = answerabilityGate({ question: ctx.question, ground, graph });
+    if (g.licensed) return ctx;
+    const r = g.refusal;
+    // The refusal atom IS the answer — typed decline, grounded on the held spans, never a
+    // model call. `gated:true` records that the floor substituted a decline; the walk's
+    // downstream stages are skipped via `terminate`.
+    return {
+      ...ctx,
+      terminate: true,
+      gated: true,
+      answer: r.text,
+      sources: [...(r.sources || [])].sort((a, b) => a - b),
+      vetoes: [Object.freeze({ id: 'unanswerable', refuses: true,
+        message: `The corpus does not hold ${g.reason === 'no-subject' && g.missing?.length ? g.missing.join(' or ') : 'what was asked'}; the walk was not run.` })],
+    };
+  },
+
   async prompt(ctx) {
     // The register is the route the grounding chip selected upstream — not just
     // "did we get spans". A strict-grounded turn with no spans still builds a
