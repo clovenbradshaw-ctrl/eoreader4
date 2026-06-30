@@ -86,22 +86,33 @@ honest. Slots with no content are simply omitted.
 ## The task register (`src/turn/intent.js`)
 
 The turn's **task** is read off the question mechanically — the same cheap regex
-pass as the smalltalk and math answerers, no model. It sets two things: the prompt
-register (does the summary degeneracy guard ride?) and the token ceiling — the
-real length bound.
+pass as the smalltalk and math answerers, no model. It sets three things: the prompt
+register (does the summary degeneracy guard ride?), the token ceiling — the real
+length bound — and the task's **cube placement**.
 
-| task | matched by | `max_tokens` |
-|---|---|---|
-| summary | summari{se,ze}, tl;dr, recap, gist, overview, and the whole-document identity question — "what is this about", "what is this document?", "what is this?" (but not a pointed "what is this WORD?") | 512 |
-| list | list, enumerate, "what are the…", "name every…" | 448 |
-| explain | explain, why, how, "walk me through", "in detail" | 448 |
-| answer (default) | everything else | 384 |
+| task | matched by | `max_tokens` | domain (level) | grain | terrain |
+|---|---|---|---|---|---|
+| summary | summari{se,ze}, tl;dr, recap, gist, overview, and the whole-document identity question — "what is this about", "what is this document?", "what is this?" (but not a pointed "what is this WORD?") | 512 | Interpretation (3) | Pattern | Paradigm |
+| list | list, enumerate, "what are the…", "name every…" | 448 | Structure (2) | Pattern | Network |
+| explain | explain, why, how, "walk me through", "in detail" | 448 | Interpretation (3) | Figure | Lens |
+| answer (default) | everything else | 384 | Existence (1) | Figure | Entity |
 
 The budget stays empty (no sentence line) for every task; it exists only so a
 caller can re-impose a hard cap deliberately. The summary task adds one line — the
 degeneracy guard ("say what the document is about in your own words, drawing the
 excerpts together — never reword a single excerpt as the whole answer") — which is
 faithfulness, not length.
+
+**The cube placement** names *where on the EO cube a task operates* — its
+**domain** (the order of question, i.e. the reading level, `docs/reading-levels.md`),
+its **grain** (the Object axis — Ground / Figure / Pattern, `docs/cube.md`), and the
+Site-face **terrain** the two land on (derived from `core/cube.js`, never hardcoded).
+This is grain-awareness applied to intent: a pointed lookup is a **Figure** question
+(a fact at one location) while "what is this document?" is a **Pattern** question (the
+whole read as one frame) — *different grains*, which is exactly why summary must not be
+answered as a lookup. Reading a task without its grain would be the error the cube
+forbids — a Figure fix on a Pattern problem. The placement is spread into the turn
+context (`turn/stages.js`), so the grain is available to every downstream stage.
 
 ## The surface discipline (§3) — the whole prompt, not half of it
 

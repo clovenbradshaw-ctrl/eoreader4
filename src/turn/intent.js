@@ -2,7 +2,7 @@
 // (docs/prompt-assembly.md, "The task register")
 //
 // The same cheap regex pass as the smalltalk and math answerers, no model. It sets
-// two things, and ONLY these two:
+// three things:
 //
 //   1. the prompt register — whether the summary degeneracy guard rides (summary
 //      task only); a faithfulness instruction, NOT a length instruction.
@@ -10,6 +10,14 @@
 //      carried "Reply in at most N sentences," which a small model read as the task
 //      ("summarize" came back as a literal three-sentence stub). There is no length
 //      prescription in the prompt now; the answer is as long as max_tokens allows.
+//   3. the CUBE PLACEMENT — where on the EO cube the task operates: its DOMAIN (the
+//      order of question / reading level — Existence / Structure / Interpretation),
+//      its GRAIN (the Object axis — Ground / Figure / Pattern, "at what grain"), and
+//      the SITE-FACE TERRAIN the two name ("where it lands"). A task is not
+//      grain-blind: reading one without its grain is exactly the error the cube
+//      forbids — a Figure fix applied to a Pattern problem (docs/cube.md). The
+//      placement rides into the turn context (turn/stages.js spreads the register),
+//      so every downstream stage knows the grain the question is asked at.
 //
 // Order matters: summary is read before list/explain because "what is this about"
 // must not be captured by explain's "how/why".
@@ -24,12 +32,52 @@
 // the excerpts. The doc-noun group lets "what is this DOCUMENT about" through — the plain
 // "this … about" branch missed it — without capturing pointed "what is this WORD?" lookups.
 
+import { terrainOf } from '../core/index.js';
+
 export const TASK_MAX_TOKENS = Object.freeze({
   summary: 512,
   list:    448,
   explain: 448,
   answer:  384,   // the default
 });
+
+// ── The cube register — where on the EO cube each task operates ──────────────────
+// Each task names the DOMAIN it reads in (the reading level, docs/reading-levels.md)
+// and the GRAIN it reads at (the Object axis, core/cube.js). The pair fixes the
+// Site-face TERRAIN — "where it lands" — derived from the cube authority below, never
+// hardcoded, so an entry can only name a real cell. The readings:
+//
+//   answer  · a fact at ONE location — a concrete individual you fetch.   Existence × Figure  → Entity
+//   summary · the WHOLE document read as one frame — not a fact to fetch. Interpretation × Pattern → Paradigm
+//   list    · the SET of members as one regularity — enumeration.         Structure × Pattern → Network
+//   explain · a thing read UNDER a frame — the how/why of one figure.     Interpretation × Figure → Lens
+//
+// summary and explain both live in Interpretation (level 3) but at different grains —
+// summary works the Pattern (the document-as-paradigm), explain works a Figure (one
+// thing, through a Lens). list is Structure (level 2): the network of parts. answer is
+// the Existence default (level 1): presence at a point. That a pointed lookup and a
+// "what is this document" question sit at DIFFERENT grains is the whole reason summary
+// must not be answered as a lookup — the cube names the difference the router enforces.
+const LEVEL = Object.freeze({ Existence: 1, Structure: 2, Interpretation: 3 });
+const TASK_CUBE = Object.freeze({
+  answer:  { domain: 'Existence',      grain: 'Figure'  },
+  summary: { domain: 'Interpretation', grain: 'Pattern' },
+  list:    { domain: 'Structure',      grain: 'Pattern' },
+  explain: { domain: 'Interpretation', grain: 'Figure'  },
+});
+
+// The full cube placement of a task: its domain, grain, the terrain the two name
+// (from the cube authority, core/cube.js), and the reading level. Defaults to the
+// `answer` cell for any unknown task, so the register is total.
+export const cubeOf = (task) => {
+  const c = TASK_CUBE[task] || TASK_CUBE.answer;
+  return Object.freeze({
+    domain:  c.domain,
+    grain:   c.grain,
+    terrain: terrainOf(c.domain, c.grain),   // Site face — where it lands
+    level:   LEVEL[c.domain],
+  });
+};
 
 // The nouns that name the document as a whole — "what is this DOCUMENT" is a summary,
 // "what is this WORD" is not. Kept narrow on purpose.
@@ -118,9 +166,20 @@ export const readTask = (question) => {
   return 'answer';
 };
 
-// The full register for a turn: the task name and its token ceiling. The budget
-// stays empty by default — no sentence line — so the only bound is max_tokens.
+// The full register for a turn: the task name, its token ceiling, and its cube
+// placement (domain / grain / terrain / level). The budget stays empty by default —
+// no sentence line — so the only bound is max_tokens. The cube fields ride into the
+// turn context (turn/stages.js), so the grain the question is asked at is available
+// to every downstream stage — retrieval shape, the prompt register, the veto grain.
 export const taskOf = (question) => {
   const task = readTask(question);
-  return { task, maxTokens: TASK_MAX_TOKENS[task] ?? TASK_MAX_TOKENS.answer };
+  const cube = cubeOf(task);
+  return {
+    task,
+    maxTokens: TASK_MAX_TOKENS[task] ?? TASK_MAX_TOKENS.answer,
+    domain:  cube.domain,
+    grain:   cube.grain,
+    terrain: cube.terrain,
+    level:   cube.level,
+  };
 };

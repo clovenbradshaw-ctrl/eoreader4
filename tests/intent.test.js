@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { readTask, taskOf, TASK_MAX_TOKENS } from '../src/turn/intent.js';
+import { readTask, taskOf, cubeOf, TASK_MAX_TOKENS } from '../src/turn/intent.js';
+import { terrainOf, GRAINS, DOMAINS } from '../src/core/index.js';
 
 // ---------------------------------------------------------------------------
 // The task register (docs/prompt-assembly.md, "The task register"). Read off the
@@ -60,7 +61,48 @@ test('list and explain route on their own cues, and default is answer', () => {
 });
 
 test('taskOf carries the per-task token ceiling — the real length bound', () => {
-  assert.deepEqual(taskOf('summarize this'), { task: 'summary', maxTokens: TASK_MAX_TOKENS.summary });
-  assert.deepEqual(taskOf('what is this document?'), { task: 'summary', maxTokens: TASK_MAX_TOKENS.summary });
-  assert.deepEqual(taskOf('who is Gregor'), { task: 'answer', maxTokens: TASK_MAX_TOKENS.answer });
+  assert.equal(taskOf('summarize this').task, 'summary');
+  assert.equal(taskOf('summarize this').maxTokens, TASK_MAX_TOKENS.summary);
+  assert.equal(taskOf('what is this document?').maxTokens, TASK_MAX_TOKENS.summary);
+  assert.equal(taskOf('who is Gregor').task, 'answer');
+  assert.equal(taskOf('who is Gregor').maxTokens, TASK_MAX_TOKENS.answer);
+});
+
+// ---------------------------------------------------------------------------
+// The cube register (docs/cube.md, docs/reading-levels.md): each task names the
+// DOMAIN (reading level) and GRAIN (Object axis) it operates at, and the Site-face
+// TERRAIN the two land on. The task understander is cube-aware and grain-aware.
+
+test('every task places on a real cube cell — domain, grain, and a derived terrain', () => {
+  for (const task of ['answer', 'summary', 'list', 'explain']) {
+    const c = cubeOf(task);
+    assert.ok(DOMAINS.includes(c.domain), `${task} domain on the cube`);
+    assert.ok(GRAINS.includes(c.grain), `${task} grain on the cube`);
+    // the terrain is the cube authority's Site-face cell for (domain, grain), not hardcoded
+    assert.equal(c.terrain, terrainOf(c.domain, c.grain), `${task} terrain is the real cell`);
+    assert.ok(c.terrain, `${task} lands on a named terrain`);
+  }
+});
+
+test('the grain distinguishes a pointed lookup from a whole-document question', () => {
+  // The whole reason summary must not be answered as a lookup: different grain.
+  assert.equal(cubeOf('answer').grain,  'Figure');   // a fact at one location
+  assert.equal(cubeOf('summary').grain, 'Pattern');  // the document as one frame
+  assert.notEqual(cubeOf('answer').grain, cubeOf('summary').grain);
+});
+
+test('the canonical task placements and reading levels', () => {
+  assert.deepEqual(cubeOf('answer'),  { domain: 'Existence',      grain: 'Figure',  terrain: 'Entity',   level: 1 });
+  assert.deepEqual(cubeOf('summary'), { domain: 'Interpretation', grain: 'Pattern', terrain: 'Paradigm', level: 3 });
+  assert.deepEqual(cubeOf('list'),    { domain: 'Structure',      grain: 'Pattern', terrain: 'Network',  level: 2 });
+  assert.deepEqual(cubeOf('explain'), { domain: 'Interpretation', grain: 'Figure',  terrain: 'Lens',     level: 3 });
+});
+
+test('taskOf rides the cube placement into the register, for the turn context', () => {
+  const reg = taskOf('what is this about');
+  assert.equal(reg.task, 'summary');
+  assert.equal(reg.grain, 'Pattern');
+  assert.equal(reg.domain, 'Interpretation');
+  assert.equal(reg.terrain, 'Paradigm');
+  assert.equal(reg.level, 3);
 });
