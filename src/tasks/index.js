@@ -34,3 +34,30 @@ export {
   objectGrainOf, holonGrainOf, cubeCellOf, actsOf, grainCoherence, annotateGrain,
 } from './grain.js';
 export { MAX_DEPTH, MAX_FANOUT, MAX_NODES } from './constants.js';
+
+// The task creator (spec.js): a generative request → an artifact spec → the two
+// runTaskGraph faces, sized for small models. Reads the kind/subject/length off the
+// request, picks a shape (learned → built-in → research), and decomposes it into
+// leaf-sized, budgeted generations.
+export {
+  LEAF_MAX_TOKENS, LEAF_MIN_TOKENS, CONTEXT_SPANS,
+  ARTIFACT_KINDS, GENERIC_SHAPES,
+  artifactKindOf, classifyArtifact, organForKind, subjectOf, readLength,
+  createTaskSpec, planArtifact, withBudgets, withOrgans, runArtifact,
+  deriveSpecFromDefinition, createSpecLibrary, acquireSpec, needsResearch, researchQuery,
+} from './spec.js';
+
+// The templates store (templates/): how a learned/installed shape becomes durable JSON.
+// Pure (de)serialization is browser-safe; the fs helpers lazy-import node:fs.
+export {
+  TEMPLATE_SCHEMA, templateToJSON, templateFromJSON,
+  loadTemplatesDir, saveTemplate, templatePersister,
+} from './templates.js';
+
+// The output membrane (organs/out): the renderers a task leaf dispatches to, the
+// mirror of organs/in. Re-exported here so a caller wiring runArtifact's `organs`
+// has the contract and the descriptors in one place.
+export {
+  OUTPUT_ORGANS, organFor, createOutputRegistry,
+  textOrgan, renderText, musicOrgan, renderMusic,
+} from '../organs/out/index.js';

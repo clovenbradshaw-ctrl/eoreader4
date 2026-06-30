@@ -26,6 +26,7 @@
     "structural-significance": "node scripts/structural-significance.mjs",
     "grained": "node scripts/predict-grained.mjs",
     "segment": "node scripts/predict-segment.mjs",
+    "task-creator": "node scripts/task-creator-e2e.mjs",
     "mechanics": "node eoreader4-eval/mechanics/run.mjs ABCD"
   },
   "engines": {
