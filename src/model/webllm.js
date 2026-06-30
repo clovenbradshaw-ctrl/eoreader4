@@ -12,8 +12,13 @@ const WEBLLM_URL = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2/+esm';
 // byte-identical to the engine's by construction — no reliance on undocumented internals.
 const WEB_TOKENIZERS_URL = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-tokenizers@0.1/+esm';
 
-registerBackend('webllm', (opts = {}) => {
-  const model = opts.model || 'Llama-3.2-3B-Instruct-q4f32_1-MLC';
+// The backend is a parameterised builder so a coding-model variant (model/coders.js)
+// can bind a different MLC artifact under its own id WITHOUT duplicating the engine,
+// tokenizer, and lens-port wiring below. `webllm` itself is just the builder with the
+// Llama-3.2-3B default; a coder passes { id, model } and reuses every line of this path.
+export const makeWebllmBackend = (defaults = {}) => (opts = {}) => {
+  const id    = defaults.id || 'webllm';
+  const model = opts.model || defaults.model || 'Llama-3.2-3B-Instruct-q4f32_1-MLC';
   let engine  = null;
   let loading = null;
   let tokenizer = null;     // the injected seam { encode, decode } | null when unavailable
@@ -36,7 +41,7 @@ registerBackend('webllm', (opts = {}) => {
   };
 
   return {
-    id: 'webllm',
+    id,
     kind: 'local',
     isLoaded: () => !!engine,
     // The optional bridge capability (parallels `propose`): the turn builds the concept→token
@@ -72,7 +77,7 @@ registerBackend('webllm', (opts = {}) => {
       return loading;
     },
     async phrase(messages, opts = {}) {
-      if (!engine) throw new Error('webllm: not loaded');
+      if (!engine) throw new Error(`${id}: not loaded`);
       // CANCELLATION (the Stop button): an optional AbortSignal lets the caller halt
       // generation. Already aborted before we start ⇒ draw nothing. Mid-stream we ask
       // the engine to interruptGenerate() and return whatever decoded so far, so the
@@ -117,4 +122,6 @@ registerBackend('webllm', (opts = {}) => {
       return out.choices?.[0]?.message?.content?.trim() || '';
     },
   };
-});
+};
+
+registerBackend('webllm', makeWebllmBackend());

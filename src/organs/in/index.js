@@ -8,6 +8,10 @@
 //   ingestFrequencies(spec)     raw tones → units = notes    (overtone token sets)
 //   ingestFrames(spec)          video     → units = frames   (motion tracks)
 //   ingestCodons(spec)          DNA/RNA   → units = codons   (prefix token sets)
+//   ingestCode(file)            source    → units = modules / functions / classes,
+//                                           related by imports / definedIn / calls / extends.
+//                                           Emits EOT and lowers it, so a program reads as a
+//                                           traversable EO graph (organs/in/code.js).
 //
 // New modalities (audio, tables, OCR) are new adapters emitting the same
 // operators onto the same log. The spine does not change.
@@ -33,6 +37,7 @@ export { ingestMusic }       from './music.js';
 export { ingestFrequencies } from './frequency.js';
 export { ingestFrames }      from './video.js';
 export { ingestCodons }      from './codon.js';
+export { ingestCode }        from './code.js';
 export {
   parseFasta, complement, reverseComplement, codonsOf, isStop,
   codonVector, vectorDim, codonReadings, frameReading, sixFrameReadings,

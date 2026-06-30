@@ -181,6 +181,8 @@ registerBackend('wllama', (opts = {}) => {
   };
 });
 
-const toPrompt = (messages) =>
+// ChatML assembly — the prompt format SmolLM2 and Qwen2.5(-Coder) both speak. Exported
+// so the GGUF coder backends (model/coders.js) reuse it rather than re-deriving it.
+export const toPrompt = (messages) =>
   messages.map(m => `<|im_start|>${m.role}\n${m.content}<|im_end|>`).join('\n') +
   '\n<|im_start|>assistant\n';

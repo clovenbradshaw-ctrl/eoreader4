@@ -8,6 +8,10 @@
 export { createModel } from '../model/interface.js';
 export { streamPhrase } from '../model/stream.js';
 export { buildChatMessages, buildGroundedMessages, shapeForScope, LIBRARIAN_CUE } from '../model/prompt.js';
+export { CODER_MODELS, browserCoders } from '../model/coders.js';
 import '../model/echo.js';
 import '../model/webllm.js';
 import '../model/pleias.js';
+// The local coding models (Qwen2.5-Coder family). Browser-runnable members register
+// here; each loads only when picked, like every other backend.
+import '../model/coders.js';
