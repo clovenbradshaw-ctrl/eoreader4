@@ -308,7 +308,7 @@
           </div>
           <div style="flex:0 0 auto;padding:13px 22px 17px;border-top:1px solid var(--line);background:var(--card);">
             <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
-              <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
+              <div style="{{ chat.statusStyle }}"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
             </sc-if>
             <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
               <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
@@ -317,7 +317,12 @@
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
               <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
-              <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+              <sc-if value="{{ chat.generating }}" hint-placeholder-val="{{ false }}">
+                <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
+              </sc-if>
+              <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
+                <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+              </sc-if>
             </div>
           </div>
         </div>
@@ -859,7 +864,7 @@
         </div>
         <div style="flex:0 0 auto;padding:13px 22px 17px;border-top:1px solid var(--line);background:var(--card);">
           <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
-            <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
+            <div style="{{ chat.statusStyle }}"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
           </sc-if>
           <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
             <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
@@ -868,7 +873,12 @@
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
             <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
-            <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+            <sc-if value="{{ chat.generating }}" hint-placeholder-val="{{ false }}">
+              <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
+            </sc-if>
+            <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
+              <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+            </sc-if>
           </div>
         </div>
       </div>

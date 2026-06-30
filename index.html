@@ -324,7 +324,7 @@
           </div>
           <div style="flex:0 0 auto;padding:13px 22px 17px;border-top:1px solid var(--line);background:var(--card);">
             <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
-              <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
+              <div style="{{ chat.statusStyle }}"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
             </sc-if>
             <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
               <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
@@ -333,7 +333,12 @@
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
               <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
-              <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+              <sc-if value="{{ chat.generating }}" hint-placeholder-val="{{ false }}">
+                <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
+              </sc-if>
+              <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
+                <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+              </sc-if>
             </div>
           </div>
         </div>
@@ -875,7 +880,7 @@
         </div>
         <div style="flex:0 0 auto;padding:13px 22px 17px;border-top:1px solid var(--line);background:var(--card);">
           <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
-            <div style="max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
+            <div style="{{ chat.statusStyle }}"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
           </sc-if>
           <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
             <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
@@ -884,7 +889,12 @@
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
             <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
-            <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+            <sc-if value="{{ chat.generating }}" hint-placeholder-val="{{ false }}">
+              <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
+            </sc-if>
+            <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
+              <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
+            </sc-if>
           </div>
         </div>
       </div>
@@ -1481,6 +1491,9 @@ class Component extends DCLogic {
     this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
     let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null,savedWebBrain=null,savedViewMode=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');savedWebBrain=localStorage.getItem('eo_webbrain');savedViewMode=localStorage.getItem('eo_viewmode');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
+    // Live model-generation tracking: every stall guard registers here so a single Stop can abort
+    // whatever's decoding; `_stopGen` latches a user stop until the next turn starts.
+    this._activeGuards=new Set(); this._stopGen=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
       // Entity panel width — persisted + clamped. Chat column width (chatW) likewise.
@@ -2876,17 +2889,59 @@ class Component extends DCLogic {
   // fallback they already carry instead of waiting on a model that will never answer.
   _stallGuard(ms=60000){
     const ctrl=(typeof AbortController!=='undefined')?new AbortController():{abort(){},signal:null};
-    let timer=null,tripped=false,trip=null;
-    const clear=()=>{if(timer){clearTimeout(timer);timer=null;}};
-    const arm=()=>{if(tripped)return;clear();timer=setTimeout(()=>{tripped=true;timer=null;
+    let timer=null,tripped=false,trip=null;const self=this;
+    // clear() also unregisters the guard from the live set so a finished/aborted attempt is no
+    // longer a stop target; arm() re-times WITHOUT unregistering (re-arming is liveness, not done).
+    const stopTimer=()=>{if(timer){clearTimeout(timer);timer=null;}};
+    const clear=()=>{stopTimer();if(self._activeGuards)self._activeGuards.delete(g);};
+    const arm=()=>{if(tripped)return;stopTimer();timer=setTimeout(()=>{tripped=true;timer=null;
       try{ctrl.abort();}catch(e){}if(trip)trip(Object.assign(new Error('the chat model stalled'),{stalled:true}));},ms);};
+    // abort() — the manual stop. Aborts the in-flight decode/download (the backends honour the
+    // signal) and trips the race with a {stopped:true} error so the answer paths can tell a USER
+    // stop from a stall and keep whatever streamed instead of swapping in the structural fallback.
+    const abort=()=>{if(tripped)return;tripped=true;stopTimer();if(self._activeGuards)self._activeGuards.delete(g);
+      try{ctrl.abort();}catch(e){}if(trip)trip(Object.assign(new Error('stopped'),{stopped:true}));};
     const race=new Promise((_,rej)=>{trip=rej;});
     // Swallow the rejection if nobody is racing it at trip time (e.g. after clear()), so a tripped
     // guard never surfaces as an unhandled rejection; the answer path's own race still sees it.
     race.catch(()=>{});
+    const g={signal:ctrl.signal,feed:arm,clear,tripped:()=>tripped,race,abort};
+    if(self._activeGuards)self._activeGuards.add(g);
     arm();
-    return {signal:ctrl.signal,feed:arm,clear,tripped:()=>tripped,race};
+    return g;
   }
+  // STOP — the user's pull-cord for any in-flight generation (the chat decode, a longform arc, or a
+  // research walk). Aborts every live stall guard (which cancels the backend decode and trips each
+  // answer path into its stopped branch), drops the research busy flag so the curiosity walk bails
+  // between hops, and finalizes any still-pending bubble in place — keeping whatever streamed so far
+  // rather than discarding it. `_stopGen` rides until the next turn starts, so the arc/walk loops and
+  // the answer-path catch blocks all see the stop and don't write past it.
+  stopGeneration(){
+    this._stopGen=true;
+    if(this._activeGuards)for(const g of [...this._activeGuards]){try{g.abort();}catch(e){}}
+    this._busy=false;
+    this.setState(s=>({busy:false,modelStatus:'',chats:(s.chats||[]).map(c=>{
+      const m=c.messages.slice();let touched=false;
+      for(let i=0;i<m.length;i++){
+        if(m[i].role==='asst'&&m[i].pending){
+          const had=String(m[i].text||'').trim();
+          m[i]={...m[i],pending:false,think:null,stopped:true,
+            text:had?m[i].text:'_Stopped._',
+            research:m[i].research?{...m[i].research,done:true}:m[i].research,
+            modelNote:had?'Stopped — partial answer kept.':undefined};
+          touched=true;
+        }
+      }
+      return touched?{...c,messages:m}:c;
+    })}));
+  }
+  // Is a turn live in the active chat? Drives the composer's Ask⇄Stop swap and the "model is working"
+  // banner — derived straight from the pending bubble so every path (chat / arc / research) lights it.
+  _genActive(cur){return !!(cur&&(cur.messages||[]).some(m=>m.role==='asst'&&m.pending));}
+  // A short, human name for the chat model in scope — for the live "X is working…" indicator.
+  _modelLabel(){const b=this.state.backend||'webllm';return ({
+    'webllm':'Llama-3.2-3B','qwen-coder-1.5b':'Qwen2.5-Coder 1.5B','qwen-coder-7b':'Qwen2.5-Coder 7B',
+    'qwen-coder-0.5b':'Qwen2.5-Coder 0.5B','echo':'Echo'})[b]||b;}
   // LIMNER (docs/limner.md): "/svg [kind] [focus]" draws the reading's EO graph as
   // deterministic SVG, inline in the chat. Headless — no model and no log mutation:
   // it projects this.graph (already a fold of the event log) and the layout engine
@@ -2924,6 +2979,7 @@ class Component extends DCLogic {
 
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
+    this._stopGen=false;   // a fresh turn clears any prior stop
     if(/^\/svg\b/i.test(q))return this._limnChat(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
@@ -3003,8 +3059,11 @@ class Component extends DCLogic {
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
       this._pivotChatPanel(q+' '+text);
     }catch(e){
-      // model unavailable OR stalled — answer structurally from what's read, or say so plainly
       guard.clear();
+      // User stop — stopGeneration already finalized the bubble with whatever streamed. Don't
+      // overwrite it with a structural fallback.
+      if((e&&e.stopped)||this._stopGen)return;
+      // model unavailable OR stalled — answer structurally from what's read, or say so plainly
       const fb=this.answerQuestion(q,sources);
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
       const relevant=!!(fb.refs&&fb.refs.length);
@@ -3039,6 +3098,7 @@ class Component extends DCLogic {
   cycleResearchDepth(){const order=['shallow','deep','obsessive'];this.setState(s=>{const i=order.indexOf(s.researchDepth||'deep');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_depth',next);}catch(e){}return {researchDepth:next};});}
   async chatResearch(q){
     if(this._busy)return;
+    this._stopGen=false;   // a fresh turn clears any prior stop
     // The SUBJECT to chase — named outright when the message carries its own topic, or DERIVED
     // from this chat when the message is a continuation ("do more research", "go deeper"). This is
     // the fix for "it researched the word research": a meta ask now deepens THIS conversation.
@@ -3074,6 +3134,9 @@ class Component extends DCLogic {
     try{walk=await this._curiosityWalk(topic,anchor,pushStep,{extraSeeds,lookup});}
     catch(e){pushStep('warn','Research stopped — '+((e&&e.message)||e));}
     this._busy=false;this.setState({busy:false});
+    // Stopped mid-walk — stopGeneration already finalized the bubble; don't push a "done" step or
+    // start writing the answer on top of it.
+    if(this._stopGen)return;
     const readCount=new Set(walk.readUrls).size,hops=walk.hops.length;
     const learned=Math.max(0,((this.graph&&this.graph.entities&&this.graph.entities.size)||0)-preEnts);
     pushStep('done',readCount?('Read '+readCount+' source'+(readCount!==1?'s':'')+' across '+hops+' hop'+(hops!==1?'s':'')+(learned?(' · learned '+learned+' new '+(learned===1?'entity':'entities')):'')+'. Writing it up…')
@@ -3149,6 +3212,8 @@ class Component extends DCLogic {
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
     }catch(e){
       guard.clear();
+      // User stop — keep the partial bubble stopGeneration already finalized.
+      if((e&&e.stopped)||this._stopGen)return;
       const fb=this.answerQuestion(q,sources);
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
@@ -3282,8 +3347,10 @@ class Component extends DCLogic {
     };
     // LEAD — open on the strongest spans across the whole pool (a frame, not a theme section).
     await fold([...pool].sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,5),null);
+    if(this._stopGen)return;   // user stop — stopGeneration kept the partial; don't write past it
     // CON — one grounded section per theme, headed by the theme, while it still adds coverage.
     for(const sec of plan){
+      if(this._stopGen)return;
       // EVA → NUL: a fold whose terms are already covered would only re-cite — skip it.
       const terms=new Set(sec.spans.flatMap(s=>this._researchTerms(s.text)));
       const fresh=[...terms].filter(t=>!covered.has(t));
@@ -3293,6 +3360,7 @@ class Component extends DCLogic {
       await fold(sec.spans,head);
       for(const t of terms)covered.add(t);
     }
+    if(this._stopGen)return;
     if(parts.length<2)return this._answerSingle(id,q,gathered);
     finish({text:parts.join('\n\n'),entities:[...allEnts].slice(0,8),sources:[...allSrcs],
       passages:allPass.slice(0,12),cites:Object.keys(cites).length?cites:null,groundKind:'matched',related:this.relatedDocs(q,scope)});
@@ -3397,6 +3465,7 @@ class Component extends DCLogic {
       for(let i=cited.length-1;i>=0;i--){if(citedTotal>=citedMax)break;frontier.unshift({url:cited[i],term:'source',via:'wiki-cite'});citedTotal++;}
     };
     while(hops.length<maxHops&&frontier.length){
+      if(this._stopGen)break;   // user stop — bail out of the walk between hops
       const node=frontier.shift();
       const isUrl=!!node.url;
       let links=[];
@@ -3849,12 +3918,28 @@ class Component extends DCLogic {
     const addable=pages.filter(p=>!ss.includes(p.url)).map(p=>({label:this.truncLabel(p.title||this.short(p.url),34),host:this.short(p.url),
       onAdd:()=>this.addChatSource(p.url),
       rowStyle:'display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 11px;border-radius:8px;cursor:pointer;'}));
+    // A turn is live in this chat (model decoding, an arc writing, or a research walk running) —
+    // the single signal that lights the "model is working" banner and swaps Ask → Stop.
+    const genActive=this._genActive(cur);
+    const ml=this._modelLabel();
+    // The status line text: the model name + what it's doing while a turn is live; the load progress
+    // otherwise (the model downloading before the first chat). One row serves both.
+    const statusText=genActive
+      ? (ml+(this.state.modelStatus?(' · '+this.state.modelStatus):' is working — generating your answer…'))
+      : (this.state.modelStatus||'');
     base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,docked,
       scopeLabel:ss.length?(ss.length===1?titleOf(ss[0]):(ss.length+' sources')):'everything you have read',
       about:aboutChips,hasAbout:aboutChips.length>0,aboutEmpty:aboutChips.length===0,
       addOpen:!!this.state.chatAddOpen,addable,hasAddable:addable.length>0,noAddable:addable.length===0,onToggleAdd:()=>this.toggleChatAdd(),
       addEmptyMsg:pages.length?'All your sources are already in this chat.':'Read a URL or import a book to add a source.',
-      messages:msgs,empty:msgs.length===0,modelStatus:this.state.modelStatus||'',hasStatus:!!this.state.modelStatus,
+      messages:msgs,empty:msgs.length===0,
+      generating:genActive,
+      modelStatus:statusText,hasStatus:genActive||!!this.state.modelStatus,
+      // The banner reads as a calm hint while loading, and a live accent pill while the model works —
+      // so it's unmistakable WHERE the app is busy with the model.
+      statusStyle:genActive
+        ? 'max-width:720px;margin:0 auto 8px;font-size:11.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:6px 11px;display:flex;align-items:center;gap:8px;'
+        : 'max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;',
       shellStyle:drawer
         ? 'position:absolute;top:0;right:0;bottom:0;width:min(440px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
         : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);'+(docked?'border-left:1px solid var(--line);':''),
@@ -6073,7 +6158,7 @@ class Component extends DCLogic {
       readBtnLabel:this.state.busy?'…':'Read',readBtnStyle:'font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:7px;padding:6px 13px;flex:0 0 auto;cursor:pointer;'+(this.state.busy?'opacity:.6;':''),
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
       chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
-      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
+      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onStopGen:()=>this.stopGeneration(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
       onToggleResearchMode:()=>this.toggleWebBrain(),researchModeOn:this.state.webBrain!==false,
       webBtnLabel:this.state.webBrain!==false?'✦ Web on':'✦ Web off',
       researchModeTitle:this.state.webBrain!==false?'Web is on — when your own reading doesn’t cover a question I go read the internet, fold it into memory, and answer grounded in what I found. Click to turn the web off.':'Web is off — answers come only from what you’ve read, nothing from the internet. Click to let me read the web when your reading doesn’t cover a question.',
