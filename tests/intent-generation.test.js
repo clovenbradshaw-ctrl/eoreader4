@@ -52,19 +52,31 @@ test('the cube placement rides into the generation context for every task', asyn
   }
 });
 
-// The grain is not inert on generation: a Pattern-grain task (the whole document as one
-// frame / the network of members) reads the structural skeleton — an even spread — while
-// a Figure-grain pointed lookup retrieves at a point. This split is exactly the grain.
-test('Pattern-grain tasks read the structural skeleton; a Figure lookup does not', async () => {
+// The grain is not inert on generation — it is LOAD-BEARING in retrieval. A Pattern-grain
+// task reads the whole document, not a point; a Figure-grain lookup retrieves at a point.
+// And the two Pattern TERRAINS read differently: a Paradigm (summary) takes the structural
+// skeleton — an even spread; a Network (list) takes the figure-bearing units — the members.
+test('the grain steers retrieval: Pattern reads the whole, Figure reads a point', async () => {
   const summary = await runFor('what is this about');
   const list    = await runFor('list the characters');
   const lookup  = await runFor('who is Gregor');
+  const why     = await runFor('why did the family want to be rid of him');
 
   assert.equal(summary.route.grain, 'Pattern');
   assert.equal(list.route.grain,    'Pattern');
   assert.equal(lookup.route.grain,  'Figure');
+  assert.equal(why.route.grain,     'Figure');
 
-  assert.equal(summary.retrieve.retrieval, 'structural', 'a Pattern summary spreads across the skeleton');
-  assert.equal(list.retrieve.retrieval,    'structural', 'a Pattern list spreads across the skeleton');
-  assert.notEqual(lookup.retrieve.retrieval, 'structural', 'a Figure lookup retrieves at a point, not the skeleton');
+  // Paradigm summary → the skeleton; Network list → the members; both are whole-document.
+  assert.equal(summary.retrieve.retrieval, 'structural', 'a Paradigm summary spreads across the skeleton');
+  assert.equal(list.retrieve.retrieval,    'network',    'a Network list reads the figure-bearing units');
+  // Figure-grain tasks retrieve at a point — neither the skeleton nor the member network.
+  assert.notEqual(lookup.retrieve.retrieval, 'structural', 'a Figure lookup retrieves at a point');
+  assert.notEqual(lookup.retrieve.retrieval, 'network',    'a Figure lookup is not a member read');
+  assert.ok(!why.retrieve.retrieval, 'a Figure explain stays on the default (pointed) path');
+
+  // The two Pattern reads are genuinely different evidence, not the same spread relabelled.
+  const summarySpans = (summary.retrieve.spans || []).map(s => s.idx).join(',');
+  const listSpans    = (list.retrieve.spans || []).map(s => s.idx).join(',');
+  assert.notEqual(summarySpans, listSpans, 'Paradigm and Network select different units');
 });

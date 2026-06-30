@@ -114,6 +114,17 @@ answered as a lookup. Reading a task without its grain would be the error the cu
 forbids — a Figure fix on a Pattern problem. The placement is spread into the turn
 context (`turn/stages.js`), so the grain is available to every downstream stage.
 
+The grain is **load-bearing in retrieval**, not just a label. The `retrieve` stage keys
+the whole-document read on `grain === 'Pattern'` (replacing the old `task !== 'answer'`
+proxy): a **Figure**-grain task (a pointed `answer`, or an `explain` of one thing)
+retrieves *at* a location; a **Pattern** task reads *across* the whole document. And the
+two Pattern terrains read differently — a **Paradigm** (`summary`) takes the structural
+skeleton (`retrieve/structural.js` — opening, headings, spread, turning points), while a
+**Network** (`list`) takes the figure-bearing units (`retrieveNetwork` — the members of
+the entity graph, most-sighted first). A question that *names* a term the document spells
+stays lexical either way (`queryTouchesDoc`), so a targeted "what are the 9 operators?"
+still finds the operators.
+
 ## The surface discipline (§3) — the whole prompt, not half of it
 
 The talker reads a serialized graph in plain language and speaks prose; the

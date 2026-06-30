@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { parseText } from '../src/perceiver/parse/pipeline.js';
 import { retrieveLexical } from '../src/retrieve/lexical.js';
 import { retrieveHybrid, fuseConcordance, pickRetrievalEmbedder, selectExcerpts } from '../src/retrieve/hybrid.js';
-import { retrieveStructural, queryTouchesDoc } from '../src/retrieve/structural.js';
+import { retrieveStructural, retrieveNetwork, queryTouchesDoc } from '../src/retrieve/structural.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import { ingestText } from '../src/organs/in/text.js';
 
@@ -251,4 +251,30 @@ test('retrieveStructural skips site/furniture units and blanks', () => {
   doc.log.append({ op: 'DEF', id: 'unit:1', key: 'role', value: 'site', sentIdx: 1 });
   const spans = retrieveStructural(doc, 8);
   assert.ok(!spans.some(s => s.idx === 1), 'a DEF-site unit is never offered as structural material');
+});
+
+// retrieveNetwork — the Network terrain (Structure × Pattern, a LIST task). Returns the
+// units that INTRODUCE the document's figures (the members of the entity graph), framed by
+// the opening — a different read from the structural skeleton's even spread.
+test('retrieveNetwork returns the figure-introducing units, the opening leading', () => {
+  const STORY = 'Gregor Samsa woke transformed into an insect. His sister Grete cared for him. ' +
+                'The morning was cold. The evening was quiet. The night was long. Carol arrived at last.';
+  const doc = parseText(STORY, { docId: 'story' });
+  const net = retrieveNetwork(doc, 12);
+  assert.ok(net.length > 0, 'a network read is never empty when the doc has figures');
+  assert.equal(net[0].idx, 0, 'the opening frames the list');
+  assert.ok(net.every(s => s.via === 'network'), 'tagged as a network read for the audit');
+  // The figure-bearing units (where Gregor/Grete/Carol enter) are selected; the figureless
+  // weather lines (cold/quiet/long morning–night) are not pulled in as members.
+  const idxs = new Set(net.map(s => s.idx));
+  assert.ok(idxs.has(0), 'the unit introducing Gregor is a member');
+  assert.ok(idxs.has(1), 'the unit introducing Grete is a member');
+});
+
+test('retrieveNetwork degrades to the structural skeleton when the doc has no figures', () => {
+  const doc = parseText('the morning was cold. the evening was quiet. the night was long.', { docId: 'd' });
+  const net = retrieveNetwork(doc, 6);
+  assert.ok(net.length > 0, 'never empty — falls back to the skeleton');
+  // with no figures, it is the structural read (tagged structural by the fallback)
+  assert.ok(net.every(s => s.via === 'structural'), 'a figureless doc falls back to the structural skeleton');
 });
