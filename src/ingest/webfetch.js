@@ -217,11 +217,20 @@ export const createWebClient = ({
 const nowIso = () => { try { return new Date().toISOString(); } catch { return null; } };
 
 // Persist the full fetched text as binary to the OPFS raw store (ingest/opfs-store.js), keyed by
-// the admitted record's content hash — "save it all". Best-effort and awaited only enough to keep
-// the cache warm; a store fault never blocks admission. No-op when no rawStore is threaded.
+// the admitted record's content hash — "save it all". Alongside the bytes, hand the store the
+// page's identity (url/title/fetched_at) so its pointer manifest can reference the page on the web
+// at export time without re-embedding the text. Best-effort and awaited only enough to keep the
+// cache warm; a store fault never blocks admission. No-op when no rawStore is threaded.
 const keepRaw = async (rawStore, admitted, text) => {
-  const hash = admitted?.record?.content_hash;
-  if (rawStore && hash) { try { await rawStore.put(hash, text); } catch { /* never block admission */ } }
+  const rec  = admitted?.record;
+  const hash = rec?.content_hash;
+  if (rawStore && hash) {
+    try {
+      await rawStore.put(hash, text, {
+        url: rec.url, final_url: rec.final_url, title: rec.title, fetched_at: rec.fetched_at,
+      });
+    } catch { /* never block admission */ }
+  }
   return admitted;
 };
 
