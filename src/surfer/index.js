@@ -106,3 +106,9 @@ export { detectHolons, holarchy } from './holons.js';
 // reaches, the cast, the cited bonds, the argument structure, and the narrator's owner-attributed
 // evaluative stance. σ-side evidence for a reader/talker to judge; the verdict is not encoded.
 export { surfToAnswer } from './answer.js';
+// The spiral (REC): interpretation at level n becomes Existence at level n+1 — the three-fold
+// closes on itself and climbs. `promote` re-stamps a verdict as the next level's source (owner=
+// self), append-only; `spiralStep` re-reads it with a query-blind cut. The firewall is FRACTAL —
+// query-blindness and the provenance stamp hold self-similarly at every storey, or the spiral
+// degrades to a hall of mirrors (dreaming gone wrong / opinion laundered into fact).
+export { promote, spiralStep, cutIsQueryBlind, provenanceIntact, SELF } from './spiral.js';
