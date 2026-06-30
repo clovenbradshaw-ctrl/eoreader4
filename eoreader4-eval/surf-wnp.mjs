@@ -66,18 +66,21 @@ for (let i = 0; i < results.length; i++) {
   L.push(`*domain → ${r.domain}*  ·  keys: ${r.keys.join(', ')}\n`);
   L.push(`### 🟩 VERBATIM — the source, word for word\n`);
   for (const q of r.verbatim.quotes) L.push(`- [s${q.sentIdx}] "${q.text}"`);
-  L.push(`\n### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim\n`);
+  L.push(`\n_↧ **${r.cut.operator}** (the cut, Existence→Structure): rule \`${r.cut.rule}\`, query-blind=${r.cut.queryBlind} — objective; any reader re-derives it._\n`);
+  L.push(`### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim · EOT triples\n`);
   for (const reg of r.structure.regions) {
     L.push(`\n**▸ ${reg.title || '(span)'}**  · s${reg.lo}–${reg.hi} (${reg.sentences}s) · cast: ${reg.cast.join(', ') || '—'}`);
     if (reg.narratorOperation) L.push(`  · narrator's evaluative operation (attributed, owner ${reg.narratorOperation.owner.replace('mind:', '')}): **${reg.narratorOperation.carrier || '—'}** (score ${reg.narratorOperation.score})`);
     const al = Object.entries(reg.argumentLinks);
     if (al.length) L.push(`  · argument links: ${al.map(([k, v]) => `${k}×${v}`).join(', ')}`);
-    for (const b of reg.bonds) L.push(`  - \`${b.src} --${b.via}--> ${b.tgt}\`  →[s${b.sentIdx}]`);
+    for (const b of reg.bonds) L.push(`  - \`${b.eot}\`  →[s${b.sentIdx}]`);
   }
   const ns = r.structure.narratorStance;
   if (ns) L.push(`\n> narrator's sharpest judgment near this material (attributed, owner **${ns.owner.replace('mind:', '')}**): _${ns.carrier}_ →[s${ns.sentIdx}]`);
   L.push(`\n### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)\n`);
-  L.push(`> _${r.interpretation.discipline}._ The surf renders no verdict; this is yours, or a talker's separate call.`);
+  L.push(`- _attention_ (pre-surprise me-ness): grain foregrounded \`${r.interpretation.attention.grainForegrounded}\`, selected ${r.interpretation.attention.selectedBy} — Ground stays σ.`);
+  L.push(`- _surprise_ (against the reader's ρ): ${r.interpretation.surprise ?? 'withheld'} · _verdict_: ${r.interpretation.stance ?? 'withheld'}.`);
+  L.push(`> _${r.interpretation.discipline}._`);
 }
 writeFileSync(join(HERE, 'surf-wnp-results.md'), L.join('\n') + '\n');
 process.stderr.write(`wrote surf-wnp-results.{json,md}\n`);

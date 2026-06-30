@@ -4,7 +4,7 @@
     "sentences": 30544,
     "coarseUnits": 386,
     "grain": "structural",
-    "readMs": 73597
+    "readMs": 73845
   },
   "results": [
     {
@@ -56,11 +56,15 @@
           }
         ]
       },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
       "structure": {
         "level": "structure",
-        "basis": "objective about the source (re-derivable), not verbatim — relations, cast, and the narrator's attributed evaluative operation",
-        "grain": "structural",
-        "grainNote": "the grain is the Ground (background condition); objective given the grain, but choosing the grain is the transcendental act, and the holarchy holds the other grains",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
         "regions": [
           {
             "rank": 1,
@@ -84,6 +88,7 @@
             },
             "bonds": [
               {
+                "eot": "Specialist -> Bourbons : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Bourbons",
@@ -91,6 +96,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Specialist -> Alexander : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Alexander",
@@ -98,6 +104,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Biographical -> historians : historians",
                 "src": "Biographical",
                 "via": "historians",
                 "tgt": "historians",
@@ -131,6 +138,7 @@
             },
             "bonds": [
               {
+                "eot": "Mais -> Natásha : charmante",
                 "src": "Mais",
                 "via": "charmante",
                 "tgt": "Natásha",
@@ -138,6 +146,7 @@
                 "sentIdx": 14881
               },
               {
+                "eot": "Borís -> Rostóvs : came",
                 "src": "Borís",
                 "via": "came",
                 "tgt": "Rostóvs",
@@ -145,6 +154,7 @@
                 "sentIdx": 14889
               },
               {
+                "eot": "Natásha -> Borís : gave",
                 "src": "Natásha",
                 "via": "gave",
                 "tgt": "Borís",
@@ -176,6 +186,7 @@
             },
             "bonds": [
               {
+                "eot": "Les Chevaliers -> raison : gros",
                 "src": "Les Chevaliers",
                 "via": "gros",
                 "tgt": "raison",
@@ -197,7 +208,12 @@
       },
       "interpretation": {
         "level": "interpretation",
-        "basis": "the reader's subjective response (ρ) — surprise against MY accumulated state, the me-ness; not re-derivable across readers",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
         "surprise": null,
         "stance": null,
         "generated": false,
@@ -252,11 +268,15 @@
           }
         ]
       },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
       "structure": {
         "level": "structure",
-        "basis": "objective about the source (re-derivable), not verbatim — relations, cast, and the narrator's attributed evaluative operation",
-        "grain": "structural",
-        "grainNote": "the grain is the Ground (background condition); objective given the grain, but choosing the grain is the transcendental act, and the holarchy holds the other grains",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
         "regions": [
           {
             "rank": 1,
@@ -280,6 +300,7 @@
             },
             "bonds": [
               {
+                "eot": "Specialist -> Bourbons : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Bourbons",
@@ -287,6 +308,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Specialist -> Alexander : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Alexander",
@@ -294,6 +316,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Biographical -> historians : historians",
                 "src": "Biographical",
                 "via": "historians",
                 "tgt": "historians",
@@ -327,6 +350,7 @@
             },
             "bonds": [
               {
+                "eot": "Napoléon -> Grand Cross : le",
                 "src": "Napoléon",
                 "via": "le",
                 "tgt": "Grand Cross",
@@ -334,6 +358,7 @@
                 "sentIdx": 27359
               },
               {
+                "eot": "Napoléon -> Du : le",
                 "src": "Napoléon",
                 "via": "le",
                 "tgt": "Du",
@@ -365,6 +390,7 @@
             },
             "bonds": [
               {
+                "eot": "Russian -> Napoleon : historians",
                 "src": "Russian",
                 "via": "historians",
                 "tgt": "Napoleon",
@@ -372,13 +398,16 @@
                 "sentIdx": 27658
               },
               {
+                "eot": "Kutúzov -> centuries : not-talked",
                 "src": "Kutúzov",
                 "via": "talked",
                 "tgt": "centuries",
+                "polarity": "−",
                 "confidence": 0.855,
                 "sentIdx": 27662
               },
               {
+                "eot": "Kutúzov -> Staël : wrote",
                 "src": "Kutúzov",
                 "via": "wrote",
                 "tgt": "Staël",
@@ -400,7 +429,12 @@
       },
       "interpretation": {
         "level": "interpretation",
-        "basis": "the reader's subjective response (ρ) — surprise against MY accumulated state, the me-ness; not re-derivable across readers",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
         "surprise": null,
         "stance": null,
         "generated": false,
@@ -464,11 +498,15 @@
           }
         ]
       },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
       "structure": {
         "level": "structure",
-        "basis": "objective about the source (re-derivable), not verbatim — relations, cast, and the narrator's attributed evaluative operation",
-        "grain": "structural",
-        "grainNote": "the grain is the Ground (background condition); objective given the grain, but choosing the grain is the transcendental act, and the holarchy holds the other grains",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
         "regions": [
           {
             "rank": 1,
@@ -492,6 +530,7 @@
             },
             "bonds": [
               {
+                "eot": "Specialist -> Bourbons : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Bourbons",
@@ -499,6 +538,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Specialist -> Alexander : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Alexander",
@@ -506,6 +546,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Biographical -> historians : historians",
                 "src": "Biographical",
                 "via": "historians",
                 "tgt": "historians",
@@ -539,6 +580,7 @@
             },
             "bonds": [
               {
+                "eot": "Napoleon -> Pierre : himself",
                 "src": "Napoleon",
                 "via": "himself",
                 "tgt": "Pierre",
@@ -546,6 +588,7 @@
                 "sentIdx": 11604
               },
               {
+                "eot": "Bilíbin -> Countess Bezúkhova : saved",
                 "src": "Bilíbin",
                 "via": "saved",
                 "tgt": "Countess Bezúkhova",
@@ -553,6 +596,7 @@
                 "sentIdx": 11606
               },
               {
+                "eot": "Young -> Hélène : men",
                 "src": "Young",
                 "via": "men",
                 "tgt": "Hélène",
@@ -580,6 +624,7 @@
             "narratorOperation": null,
             "bonds": [
               {
+                "eot": "French -> Pierre : officer",
                 "src": "French",
                 "via": "officer",
                 "tgt": "Pierre",
@@ -587,6 +632,7 @@
                 "sentIdx": 23413
               },
               {
+                "eot": "Ha -> Frenchman : ha",
                 "src": "Ha",
                 "via": "ha",
                 "tgt": "Frenchman",
@@ -594,6 +640,7 @@
                 "sentIdx": 23485
               },
               {
+                "eot": "Captain Ramballe -> Pierre : emptied",
                 "src": "Captain Ramballe",
                 "via": "emptied",
                 "tgt": "Pierre",
@@ -617,7 +664,12 @@
       },
       "interpretation": {
         "level": "interpretation",
-        "basis": "the reader's subjective response (ρ) — surprise against MY accumulated state, the me-ness; not re-derivable across readers",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
         "surprise": null,
         "stance": null,
         "generated": false,
@@ -678,11 +730,15 @@
           }
         ]
       },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
       "structure": {
         "level": "structure",
-        "basis": "objective about the source (re-derivable), not verbatim — relations, cast, and the narrator's attributed evaluative operation",
-        "grain": "structural",
-        "grainNote": "the grain is the Ground (background condition); objective given the grain, but choosing the grain is the transcendental act, and the holarchy holds the other grains",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
         "regions": [
           {
             "rank": 1,
@@ -706,6 +762,7 @@
             },
             "bonds": [
               {
+                "eot": "Specialist -> Bourbons : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Bourbons",
@@ -713,6 +770,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Specialist -> Alexander : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Alexander",
@@ -720,6 +778,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Biographical -> historians : historians",
                 "src": "Biographical",
                 "via": "historians",
                 "tgt": "historians",
@@ -753,6 +812,7 @@
             },
             "bonds": [
               {
+                "eot": "Mais -> Natásha : charmante",
                 "src": "Mais",
                 "via": "charmante",
                 "tgt": "Natásha",
@@ -760,6 +820,7 @@
                 "sentIdx": 14881
               },
               {
+                "eot": "Borís -> Rostóvs : came",
                 "src": "Borís",
                 "via": "came",
                 "tgt": "Rostóvs",
@@ -767,6 +828,7 @@
                 "sentIdx": 14889
               },
               {
+                "eot": "Natásha -> Borís : gave",
                 "src": "Natásha",
                 "via": "gave",
                 "tgt": "Borís",
@@ -798,6 +860,7 @@
             },
             "bonds": [
               {
+                "eot": "Napoleon -> army : ordered",
                 "src": "Napoleon",
                 "via": "ordered",
                 "tgt": "army",
@@ -805,6 +868,7 @@
                 "sentIdx": 30118
               },
               {
+                "eot": "Equally -> explain : little",
                 "src": "Equally",
                 "via": "little",
                 "tgt": "explain",
@@ -812,6 +876,7 @@
                 "sentIdx": 30154
               },
               {
+                "eot": "Postulating -> generalization : some",
                 "src": "Postulating",
                 "via": "some",
                 "tgt": "generalization",
@@ -833,7 +898,12 @@
       },
       "interpretation": {
         "level": "interpretation",
-        "basis": "the reader's subjective response (ρ) — surprise against MY accumulated state, the me-ness; not re-derivable across readers",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
         "surprise": null,
         "stance": null,
         "generated": false,
@@ -886,11 +956,15 @@
           }
         ]
       },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
       "structure": {
         "level": "structure",
-        "basis": "objective about the source (re-derivable), not verbatim — relations, cast, and the narrator's attributed evaluative operation",
-        "grain": "structural",
-        "grainNote": "the grain is the Ground (background condition); objective given the grain, but choosing the grain is the transcendental act, and the holarchy holds the other grains",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
         "regions": [
           {
             "rank": 1,
@@ -937,6 +1011,7 @@
             },
             "bonds": [
               {
+                "eot": "Mais -> Natásha : charmante",
                 "src": "Mais",
                 "via": "charmante",
                 "tgt": "Natásha",
@@ -944,6 +1019,7 @@
                 "sentIdx": 14881
               },
               {
+                "eot": "Borís -> Rostóvs : came",
                 "src": "Borís",
                 "via": "came",
                 "tgt": "Rostóvs",
@@ -951,6 +1027,7 @@
                 "sentIdx": 14889
               },
               {
+                "eot": "Natásha -> Borís : gave",
                 "src": "Natásha",
                 "via": "gave",
                 "tgt": "Borís",
@@ -982,6 +1059,7 @@
             },
             "bonds": [
               {
+                "eot": "Napoleon -> army : ordered",
                 "src": "Napoleon",
                 "via": "ordered",
                 "tgt": "army",
@@ -989,6 +1067,7 @@
                 "sentIdx": 30118
               },
               {
+                "eot": "Equally -> explain : little",
                 "src": "Equally",
                 "via": "little",
                 "tgt": "explain",
@@ -996,6 +1075,7 @@
                 "sentIdx": 30154
               },
               {
+                "eot": "Postulating -> generalization : some",
                 "src": "Postulating",
                 "via": "some",
                 "tgt": "generalization",
@@ -1017,7 +1097,12 @@
       },
       "interpretation": {
         "level": "interpretation",
-        "basis": "the reader's subjective response (ρ) — surprise against MY accumulated state, the me-ness; not re-derivable across readers",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
         "surprise": null,
         "stance": null,
         "generated": false,
@@ -1073,11 +1158,15 @@
           }
         ]
       },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
       "structure": {
         "level": "structure",
-        "basis": "objective about the source (re-derivable), not verbatim — relations, cast, and the narrator's attributed evaluative operation",
-        "grain": "structural",
-        "grainNote": "the grain is the Ground (background condition); objective given the grain, but choosing the grain is the transcendental act, and the holarchy holds the other grains",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
         "regions": [
           {
             "rank": 1,
@@ -1097,6 +1186,7 @@
             "narratorOperation": null,
             "bonds": [
               {
+                "eot": "Pierre -> Platón Karatáev : remembered",
                 "src": "Pierre",
                 "via": "remembered",
                 "tgt": "Platón Karatáev",
@@ -1104,6 +1194,7 @@
                 "sentIdx": 25047
               },
               {
+                "eot": "Pierre -> Platón Karatáev : saw",
                 "src": "Pierre",
                 "via": "saw",
                 "tgt": "Platón Karatáev",
@@ -1111,6 +1202,7 @@
                 "sentIdx": 25048
               },
               {
+                "eot": "Pierre -> French : saw",
                 "src": "Pierre",
                 "via": "saw",
                 "tgt": "French",
@@ -1138,6 +1230,7 @@
             "narratorOperation": null,
             "bonds": [
               {
+                "eot": "Pierre -> Moscow : repeating",
                 "src": "Pierre",
                 "via": "repeating",
                 "tgt": "Moscow",
@@ -1145,6 +1238,7 @@
                 "sentIdx": 25867
               },
               {
+                "eot": "Pierre -> French : repeating",
                 "src": "Pierre",
                 "via": "repeating",
                 "tgt": "French",
@@ -1152,6 +1246,7 @@
                 "sentIdx": 25867
               },
               {
+                "eot": "Pierre -> Platón Karatáev : saw",
                 "src": "Pierre",
                 "via": "saw",
                 "tgt": "Platón Karatáev",
@@ -1179,6 +1274,7 @@
             "narratorOperation": null,
             "bonds": [
               {
+                "eot": "Pierre -> Platón Karatáev : reached",
                 "src": "Pierre",
                 "via": "reached",
                 "tgt": "Platón Karatáev",
@@ -1186,6 +1282,7 @@
                 "sentIdx": 27144
               },
               {
+                "eot": "Occasionally -> glanced : he",
                 "src": "Occasionally",
                 "via": "he",
                 "tgt": "glanced",
@@ -1193,6 +1290,7 @@
                 "sentIdx": 27129
               },
               {
+                "eot": "Mentally -> rain : addressing",
                 "src": "Mentally",
                 "via": "addressing",
                 "tgt": "rain",
@@ -1215,7 +1313,12 @@
       },
       "interpretation": {
         "level": "interpretation",
-        "basis": "the reader's subjective response (ρ) — surprise against MY accumulated state, the me-ness; not re-derivable across readers",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
         "surprise": null,
         "stance": null,
         "generated": false,
@@ -1276,11 +1379,15 @@
           }
         ]
       },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
       "structure": {
         "level": "structure",
-        "basis": "objective about the source (re-derivable), not verbatim — relations, cast, and the narrator's attributed evaluative operation",
-        "grain": "structural",
-        "grainNote": "the grain is the Ground (background condition); objective given the grain, but choosing the grain is the transcendental act, and the holarchy holds the other grains",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
         "regions": [
           {
             "rank": 1,
@@ -1304,6 +1411,7 @@
             },
             "bonds": [
               {
+                "eot": "Moscow -> Pierre : society",
                 "src": "Moscow",
                 "via": "society",
                 "tgt": "Pierre",
@@ -1311,6 +1419,7 @@
                 "sentIdx": 14226
               },
               {
+                "eot": "Benefit -> Freemasons : performances",
                 "src": "Benefit",
                 "via": "performances",
                 "tgt": "Freemasons",
@@ -1318,6 +1427,7 @@
                 "sentIdx": 14229
               },
               {
+                "eot": "Pierre -> Brothers : ceased",
                 "src": "Pierre",
                 "via": "ceased",
                 "tgt": "Brothers",
@@ -1347,13 +1457,16 @@
             "narratorOperation": null,
             "bonds": [
               {
+                "eot": "Borís -> St Petersburg : not-succeeded",
                 "src": "Borís",
                 "via": "succeeded",
                 "tgt": "St Petersburg",
+                "polarity": "−",
                 "confidence": 0.95,
                 "sentIdx": 14525
               },
               {
+                "eot": "Borís -> Rustic : sketched",
                 "src": "Borís",
                 "via": "sketched",
                 "tgt": "Rustic",
@@ -1361,6 +1474,7 @@
                 "sentIdx": 14545
               },
               {
+                "eot": "Aliment -> Viens : de",
                 "src": "Aliment",
                 "via": "de",
                 "tgt": "Viens",
@@ -1390,6 +1504,7 @@
             "narratorOperation": null,
             "bonds": [
               {
+                "eot": "Rostóvs -> St Petersburg : lived",
                 "src": "Rostóvs",
                 "via": "lived",
                 "tgt": "St Petersburg",
@@ -1397,6 +1512,7 @@
                 "sentIdx": 11749
               },
               {
+                "eot": "Rostóvs -> Moscow : lived",
                 "src": "Rostóvs",
                 "via": "lived",
                 "tgt": "Moscow",
@@ -1404,6 +1520,7 @@
                 "sentIdx": 11749
               },
               {
+                "eot": "Country -> Otrádnoe : neighbors",
                 "src": "Country",
                 "via": "neighbors",
                 "tgt": "Otrádnoe",
@@ -1425,7 +1542,12 @@
       },
       "interpretation": {
         "level": "interpretation",
-        "basis": "the reader's subjective response (ρ) — surprise against MY accumulated state, the me-ness; not re-derivable across readers",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
         "surprise": null,
         "stance": null,
         "generated": false,
@@ -1478,11 +1600,15 @@
           }
         ]
       },
+      "cut": {
+        "operator": "SEG",
+        "rule": "structural",
+        "queryBlind": true,
+        "basis": "Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them"
+      },
       "structure": {
         "level": "structure",
-        "basis": "objective about the source (re-derivable), not verbatim — relations, cast, and the narrator's attributed evaluative operation",
-        "grain": "structural",
-        "grainNote": "the grain is the Ground (background condition); objective given the grain, but choosing the grain is the transcendental act, and the holarchy holds the other grains",
+        "basis": "objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator's attributed evaluative operation",
         "regions": [
           {
             "rank": 1,
@@ -1506,6 +1632,7 @@
             },
             "bonds": [
               {
+                "eot": "Specialist -> Bourbons : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Bourbons",
@@ -1513,6 +1640,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Specialist -> Alexander : historians",
                 "src": "Specialist",
                 "via": "historians",
                 "tgt": "Alexander",
@@ -1520,6 +1648,7 @@
                 "sentIdx": 30066
               },
               {
+                "eot": "Biographical -> historians : historians",
                 "src": "Biographical",
                 "via": "historians",
                 "tgt": "historians",
@@ -1553,6 +1682,7 @@
             },
             "bonds": [
               {
+                "eot": "Napoleon -> army : ordered",
                 "src": "Napoleon",
                 "via": "ordered",
                 "tgt": "army",
@@ -1560,6 +1690,7 @@
                 "sentIdx": 30118
               },
               {
+                "eot": "Equally -> explain : little",
                 "src": "Equally",
                 "via": "little",
                 "tgt": "explain",
@@ -1567,6 +1698,7 @@
                 "sentIdx": 30154
               },
               {
+                "eot": "Postulating -> generalization : some",
                 "src": "Postulating",
                 "via": "some",
                 "tgt": "generalization",
@@ -1600,6 +1732,7 @@
             },
             "bonds": [
               {
+                "eot": "Napoléon -> Grand Cross : le",
                 "src": "Napoléon",
                 "via": "le",
                 "tgt": "Grand Cross",
@@ -1607,6 +1740,7 @@
                 "sentIdx": 27359
               },
               {
+                "eot": "Napoléon -> Du : le",
                 "src": "Napoléon",
                 "via": "le",
                 "tgt": "Du",
@@ -1626,7 +1760,12 @@
       },
       "interpretation": {
         "level": "interpretation",
-        "basis": "the reader's subjective response (ρ) — surprise against MY accumulated state, the me-ness; not re-derivable across readers",
+        "basis": "the reader's subjective response (ρ) — the me-ness; not re-derivable across readers",
+        "attention": {
+          "grainForegrounded": "structural",
+          "selectedBy": "query-blind (document size)",
+          "note": "foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ"
+        },
         "surprise": null,
         "stance": null,
         "generated": false,

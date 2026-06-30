@@ -152,7 +152,7 @@ export const encodeLevels = (doc, opts = {}) => {
     const bonds = [...seg.bonds.values()]
       .map((e) => ({ src: rep(e.src), via: e.via, tgt: rep(e.tgt),
                      srcLabel: labelOf(rep(e.src)), tgtLabel: labelOf(rep(e.tgt)),
-                     confidence: e.confidence, idx: e.sentIdx }))
+                     confidence: e.confidence, polarity: e.polarity, idx: e.sentIdx }))
       .filter((b) => !isWelded(b.srcLabel) && !isWelded(b.tgtLabel))   // cite real figures, not welds
       .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
     const tot = seg.cast + seg.meaning;

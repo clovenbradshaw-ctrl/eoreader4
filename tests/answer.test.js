@@ -64,3 +64,31 @@ test('the modeler is wired into region selection — a meaning question surfaces
   const r = surfToAnswer('Analyze the defamiliarized opera scene.', c);
   assert.ok(r.structure.regions.some(reg => /CHAPTER II\b/.test(reg.title)), 'the opera region is surfaced');
 });
+
+test('structure relations render as EOT LINK triples (Subject -> Object : relation), not arrows', () => {
+  const c = ctx();
+  const r = surfToAnswer('who loaded the cannon?', c);
+  const bonds = r.structure.regions.flatMap((reg) => reg.bonds);
+  assert.ok(bonds.length > 0, 'there is a bond to render');
+  for (const b of bonds) {
+    assert.match(b.eot, /^.+ -> .+ : .+$/, `EOT shape: "${b.eot}"`);
+    assert.doesNotMatch(b.eot, /-->/, 'no ad-hoc arrows');
+  }
+});
+
+test('the cut is SEG and QUERY-BLIND — regions are selected from the pre-computed grain, never re-cut', () => {
+  // The firewall invariant: σ is reader-independent only if the grain is. Two different
+  // questions over the SAME encoding select different regions, but every region boundary must
+  // already exist in the query-blind cut — selection among grains, never shaping them.
+  const c = ctx();
+  const cutLos = new Set(c.encoding.segments.map((s) => s.lo));
+  const a = surfToAnswer('Analyze the defamiliarized opera scene.', c);
+  const b = surfToAnswer('who loaded the cannon and cleaned the barrel?', c);
+  assert.equal(a.cut.operator, 'SEG');
+  assert.equal(a.cut.queryBlind, true);
+  for (const r of [a, b])
+    for (const reg of r.structure.regions)
+      assert.ok(cutLos.has(reg.lo), `region s${reg.lo} is a pre-computed cut boundary, not re-cut for the query`);
+  // attention (the grain foregrounded) is the same for both — the Ground was not reshaped by the question.
+  assert.equal(a.interpretation.attention.grainForegrounded, b.interpretation.attention.grainForegrounded);
+});

@@ -22,32 +22,36 @@ Three levels, gated so they never blend (the cube's Site face at the output boun
 - [s30043] "Biographical historians and historians of separate nations understand this force as a power inherent in heroes and rulers."
 - [s30066] "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that these events were produced by the will of Alexander."
 
-### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim
+_↧ **SEG** (the cut, Existence→Structure): rule `structural`, query-blind=true — objective; any reader re-derives it._
+
+### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim · EOT triples
 
 
 **▸ CHAPTER II**  · s30041–30085 (44s) · cast: Napoleon, Alexander, Revolution, Bourbons, Staël, Talleyrand
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 12.12)
   · argument links: sequence×1
-  - `Specialist --historians--> Bourbons`  →[s30066]
-  - `Specialist --historians--> Alexander`  →[s30066]
-  - `Biographical --historians--> historians`  →[s30043]
+  - `Specialist -> Bourbons : historians`  →[s30066]
+  - `Specialist -> Alexander : historians`  →[s30066]
+  - `Biographical -> historians : historians`  →[s30043]
 
 **▸ CHAPTER IX**  · s14856–14948 (92s) · cast: Natásha, Hélène, Rostóvs, Duport, Kurágin, Countess Bezúkhova
   · narrator's evaluative operation (attributed, owner narrator): **defamiliarization** (score 5.69)
-  - `Mais --charmante--> Natásha`  →[s14881]
-  - `Borís --came--> Rostóvs`  →[s14889]
-  - `Natásha --gave--> Borís`  →[s14892]
+  - `Mais -> Natásha : charmante`  →[s14881]
+  - `Borís -> Rostóvs : came`  →[s14889]
+  - `Natásha -> Borís : gave`  →[s14892]
 
 **▸ CHAPTER II**  · s26356–26392 (36s) · cast: Russians, Military Governor, French, Spain, People, Guerrilla
   · narrator's evaluative operation (attributed, owner narrator): **defamiliarization** (score 5.53)
   · argument links: sequence×2
-  - `Les Chevaliers --gros--> raison`  →[s26367]
+  - `Les Chevaliers -> raison : gros`  →[s26367]
 
 > narrator's sharpest judgment near this material (attributed, owner **narrator**): _framing_ →[s30042]
 
 ### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)
 
-> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._ The surf renders no verdict; this is yours, or a talker's separate call.
+- _attention_ (pre-surprise me-ness): grain foregrounded `structural`, selected query-blind (document size) — Ground stays σ.
+- _surprise_ (against the reader's ρ): withheld · _verdict_: withheld.
+> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._
 
 ## Q2. How does the novel dramatize the attack on the great-man theory, and is Kutuzov an alternative model of leadership?
 
@@ -63,33 +67,37 @@ Three levels, gated so they never blend (the cube's Site face at the output boun
 - [s30043] "Biographical historians and historians of separate nations understand this force as a power inherent in heroes and rulers."
 - [s30066] "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that these events were produced by the will of Alexander."
 
-### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim
+_↧ **SEG** (the cut, Existence→Structure): rule `structural`, query-blind=true — objective; any reader re-derives it._
+
+### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim · EOT triples
 
 
 **▸ CHAPTER II**  · s30041–30085 (44s) · cast: Napoleon, Alexander, Revolution, Bourbons, Staël, Talleyrand
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 12.12)
   · argument links: sequence×1
-  - `Specialist --historians--> Bourbons`  →[s30066]
-  - `Specialist --historians--> Alexander`  →[s30066]
-  - `Biographical --historians--> historians`  →[s30043]
+  - `Specialist -> Bourbons : historians`  →[s30066]
+  - `Specialist -> Alexander : historians`  →[s30066]
+  - `Biographical -> historians : historians`  →[s30043]
 
 **▸ CHAPTER XVIII**  · s27336–27364 (28s) · cast: Grand Cross, Napoleon, Orsh, Emperor Alexander, Du, French
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 6)
-  - `Napoléon --le--> Grand Cross`  →[s27359]
-  - `Napoléon --le--> Du`  →[s27359]
+  - `Napoléon -> Grand Cross : le`  →[s27359]
+  - `Napoléon -> Du : le`  →[s27359]
 
 **▸ CHAPTER V**  · s27649–27688 (39s) · cast: Kutúzov, Russian, Borodin, Emperor Alexander, Krásnoe, French
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 2.82)
   · argument links: contrast×1
-  - `Russian --historians--> Napoleon`  →[s27658]
-  - `Kutúzov --talked--> centuries`  →[s27662]
-  - `Kutúzov --wrote--> Staël`  →[s27663]
+  - `Russian -> Napoleon : historians`  →[s27658]
+  - `Kutúzov -> centuries : not-talked`  →[s27662]
+  - `Kutúzov -> Staël : wrote`  →[s27663]
 
 > narrator's sharpest judgment near this material (attributed, owner **narrator**): _framing_ →[s30042]
 
 ### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)
 
-> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._ The surf renders no verdict; this is yours, or a talker's separate call.
+- _attention_ (pre-surprise me-ness): grain foregrounded `structural`, selected query-blind (document size) — Ground stays σ.
+- _surprise_ (against the reader's ρ): withheld · _verdict_: withheld.
+> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._
 
 ## Q3. Trace Pierre's spiritual development — genuine progress toward truth or a series of illusions?
 
@@ -107,33 +115,37 @@ Three levels, gated so they never blend (the cube's Site face at the output boun
 - [s30043] "Biographical historians and historians of separate nations understand this force as a power inherent in heroes and rulers."
 - [s30066] "Specialist historians describing the campaign of 1813 or the restoration of the Bourbons plainly assert that these events were produced by the will of Alexander."
 
-### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim
+_↧ **SEG** (the cut, Existence→Structure): rule `structural`, query-blind=true — objective; any reader re-derives it._
+
+### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim · EOT triples
 
 
 **▸ CHAPTER II**  · s30041–30085 (44s) · cast: Napoleon, Alexander, Revolution, Bourbons, Staël, Talleyrand
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 12.12)
   · argument links: sequence×1
-  - `Specialist --historians--> Bourbons`  →[s30066]
-  - `Specialist --historians--> Alexander`  →[s30066]
-  - `Biographical --historians--> historians`  →[s30043]
+  - `Specialist -> Bourbons : historians`  →[s30066]
+  - `Specialist -> Alexander : historians`  →[s30066]
+  - `Biographical -> historians : historians`  →[s30043]
 
 **▸ CHAPTER IX**  · s11597–11632 (35s) · cast: Pierre, Hélène, Erfurt, Borís, French, Napoleonic
   · narrator's evaluative operation (attributed, owner narrator): **defamiliarization** (score 1.99)
-  - `Napoleon --himself--> Pierre`  →[s11604]
-  - `Bilíbin --saved--> Countess Bezúkhova`  →[s11606]
-  - `Young --men--> Hélène`  →[s11608]
+  - `Napoleon -> Pierre : himself`  →[s11604]
+  - `Bilíbin -> Countess Bezúkhova : saved`  →[s11606]
+  - `Young -> Hélène : men`  →[s11608]
 
 **▸ CHAPTER XXIX**  · s23412–23644 (232s) · cast: Pierre, Frenchman, French, Moscow, Captain Ramballe, Paris
   · argument links: contrast×2, sequence×1, cause×1
-  - `French --officer--> Pierre`  →[s23413]
-  - `Ha --ha--> Frenchman`  →[s23485]
-  - `Captain Ramballe --emptied--> Pierre`  →[s23590]
+  - `French -> Pierre : officer`  →[s23413]
+  - `Ha -> Frenchman : ha`  →[s23485]
+  - `Captain Ramballe -> Pierre : emptied`  →[s23590]
 
 > narrator's sharpest judgment near this material (attributed, owner **narrator**): _framing_ →[s30042]
 
 ### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)
 
-> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._ The surf renders no verdict; this is yours, or a talker's separate call.
+- _attention_ (pre-surprise me-ness): grain foregrounded `structural`, selected query-blind (document size) — Ground stays σ.
+- _surprise_ (against the reader's ρ): withheld · _verdict_: withheld.
+> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._
 
 ## Q4. Is the First Epilogue's domestic Natasha a betrayal of her vibrancy or a fulfillment of it?
 
@@ -151,34 +163,38 @@ Three levels, gated so they never blend (the cube's Site face at the output boun
 - [s30154] "Equally little does this view explain why for several centuries the collective will is not withdrawn from certain rulers and their heirs, and then suddenly during a period of fifty years is transferred to the Convention,"
 - [s30167] "Postulating some generalization as the goal of the movement of humanity, the historians study the men of whom the greatest number of monuments have remained: kings, ministers, generals, authors, reformers, popes, and jou"
 
-### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim
+_↧ **SEG** (the cut, Existence→Structure): rule `structural`, query-blind=true — objective; any reader re-derives it._
+
+### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim · EOT triples
 
 
 **▸ CHAPTER II**  · s30041–30085 (44s) · cast: Napoleon, Alexander, Revolution, Bourbons, Staël, Talleyrand
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 12.12)
   · argument links: sequence×1
-  - `Specialist --historians--> Bourbons`  →[s30066]
-  - `Specialist --historians--> Alexander`  →[s30066]
-  - `Biographical --historians--> historians`  →[s30043]
+  - `Specialist -> Bourbons : historians`  →[s30066]
+  - `Specialist -> Alexander : historians`  →[s30066]
+  - `Biographical -> historians : historians`  →[s30043]
 
 **▸ CHAPTER IX**  · s14856–14948 (92s) · cast: Natásha, Hélène, Rostóvs, Duport, Kurágin, Countess Bezúkhova
   · narrator's evaluative operation (attributed, owner narrator): **defamiliarization** (score 5.69)
-  - `Mais --charmante--> Natásha`  →[s14881]
-  - `Borís --came--> Rostóvs`  →[s14889]
-  - `Natásha --gave--> Borís`  →[s14892]
+  - `Mais -> Natásha : charmante`  →[s14881]
+  - `Borís -> Rostóvs : came`  →[s14889]
+  - `Natásha -> Borís : gave`  →[s14892]
 
 **▸ CHAPTER IV**  · s30115–30182 (67s) · cast: Napoleon, Louis XIV, Louis XVI, Russian, Terrible, Rousseau
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 6.86)
   · argument links: sequence×2
-  - `Napoleon --ordered--> army`  →[s30118]
-  - `Equally --little--> explain`  →[s30154]
-  - `Postulating --some--> generalization`  →[s30167]
+  - `Napoleon -> army : ordered`  →[s30118]
+  - `Equally -> explain : little`  →[s30154]
+  - `Postulating -> generalization : some`  →[s30167]
 
 > narrator's sharpest judgment near this material (attributed, owner **narrator**): _framing_ →[s30042]
 
 ### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)
 
-> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._ The surf renders no verdict; this is yours, or a talker's separate call.
+- _attention_ (pre-surprise me-ness): grain foregrounded `structural`, selected query-blind (document size) — Ground stays σ.
+- _surprise_ (against the reader's ρ): withheld · _verdict_: withheld.
+> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._
 
 ## Q5. Analyze Tolstoy's defamiliarization — the opera scene — and its moral project.
 
@@ -194,7 +210,9 @@ Three levels, gated so they never blend (the cube's Site face at the output boun
 - [s30154] "Equally little does this view explain why for several centuries the collective will is not withdrawn from certain rulers and their heirs, and then suddenly during a period of fifty years is transferred to the Convention,"
 - [s30167] "Postulating some generalization as the goal of the movement of humanity, the historians study the men of whom the greatest number of monuments have remained: kings, ministers, generals, authors, reformers, popes, and jou"
 
-### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim
+_↧ **SEG** (the cut, Existence→Structure): rule `structural`, query-blind=true — objective; any reader re-derives it._
+
+### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim · EOT triples
 
 
 **▸ CHAPTER XXII**  · s11132–11136 (4s) · cast: Napoleon, Alexander, Austria, Bonaparte, Emperor Alexander, Life Guards
@@ -202,22 +220,24 @@ Three levels, gated so they never blend (the cube's Site face at the output boun
 
 **▸ CHAPTER IX**  · s14856–14948 (92s) · cast: Natásha, Hélène, Rostóvs, Duport, Kurágin, Countess Bezúkhova
   · narrator's evaluative operation (attributed, owner narrator): **defamiliarization** (score 5.69)
-  - `Mais --charmante--> Natásha`  →[s14881]
-  - `Borís --came--> Rostóvs`  →[s14889]
-  - `Natásha --gave--> Borís`  →[s14892]
+  - `Mais -> Natásha : charmante`  →[s14881]
+  - `Borís -> Rostóvs : came`  →[s14889]
+  - `Natásha -> Borís : gave`  →[s14892]
 
 **▸ CHAPTER IV**  · s30115–30182 (67s) · cast: Napoleon, Louis XIV, Louis XVI, Russian, Terrible, Rousseau
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 6.86)
   · argument links: sequence×2
-  - `Napoleon --ordered--> army`  →[s30118]
-  - `Equally --little--> explain`  →[s30154]
-  - `Postulating --some--> generalization`  →[s30167]
+  - `Napoleon -> army : ordered`  →[s30118]
+  - `Equally -> explain : little`  →[s30154]
+  - `Postulating -> generalization : some`  →[s30167]
 
 > narrator's sharpest judgment near this material (attributed, owner **narrator**): _defamiliarization_ →[s11133]
 
 ### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)
 
-> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._ The surf renders no verdict; this is yours, or a talker's separate call.
+- _attention_ (pre-surprise me-ness): grain foregrounded `structural`, selected query-blind (document size) — Ground stays σ.
+- _surprise_ (against the reader's ρ): withheld · _verdict_: withheld.
+> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._
 
 ## Q6. Is Platon Karataev endorsed as wisdom or a romanticization of the peasantry?
 
@@ -234,30 +254,34 @@ Three levels, gated so they never blend (the cube's Site face at the output boun
 - [s27144] "When Pierre reached the fire and heard Platón’s voice enfeebled by illness, and saw his pathetic face brightly lit up by the blaze, he felt a painful prick at his heart."
 - [s27337] "This campaign consisted in a flight of the French during which they did all they could to destroy themselves."
 
-### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim
+_↧ **SEG** (the cut, Existence→Structure): rule `structural`, query-blind=true — objective; any reader re-derives it._
+
+### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim · EOT triples
 
 
 **▸ CHAPTER XIII**  · s25045–25086 (41s) · cast: Pierre, Platón Karatáev, Karatáev, French, Russian, Christian
-  - `Pierre --remembered--> Platón Karatáev`  →[s25047]
-  - `Pierre --saw--> Platón Karatáev`  →[s25048]
-  - `Pierre --saw--> French`  →[s25048]
+  - `Pierre -> Platón Karatáev : remembered`  →[s25047]
+  - `Pierre -> Platón Karatáev : saw`  →[s25048]
+  - `Pierre -> French : saw`  →[s25048]
 
 **▸ CHAPTER XI**  · s25820–25906 (86s) · cast: Pierre, Karatáev, Frenchman, French, Monsieur Pierre, Platón Karatáev
-  - `Pierre --repeating--> Moscow`  →[s25867]
-  - `Pierre --repeating--> French`  →[s25867]
-  - `Pierre --saw--> Platón Karatáev`  →[s25889]
+  - `Pierre -> Moscow : repeating`  →[s25867]
+  - `Pierre -> French : repeating`  →[s25867]
+  - `Pierre -> Platón Karatáev : saw`  →[s25889]
 
 **▸ CHAPTER XIII**  · s27127–27192 (65s) · cast: Karatáev, Pierre, God, Platón Karatáev, Tsar, October Pierre
   · argument links: contrast×1, sequence×2
-  - `Pierre --reached--> Platón Karatáev`  →[s27144]
-  - `Occasionally --he--> glanced`  →[s27129]
-  - `Mentally --addressing--> rain`  →[s27137]
+  - `Pierre -> Platón Karatáev : reached`  →[s27144]
+  - `Occasionally -> glanced : he`  →[s27129]
+  - `Mentally -> rain : addressing`  →[s27137]
 
 > narrator's sharpest judgment near this material (attributed, owner **narrator**): _framing_ →[s27337]
 
 ### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)
 
-> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._ The surf renders no verdict; this is yours, or a talker's separate call.
+- _attention_ (pre-surprise me-ness): grain foregrounded `structural`, selected query-blind (document size) — Ground stays σ.
+- _surprise_ (against the reader's ρ): withheld · _verdict_: withheld.
+> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._
 
 ## Q7. How stable is the opposition between artificial Petersburg society and authentic Moscow?
 
@@ -275,33 +299,37 @@ Three levels, gated so they never blend (the cube's Site face at the output boun
 - [s14558] "Aliment de poison d’une âme trop sensible, Toi, sans qui le bonheur me serait impossible, Tendre mélancholie, ah, viens me consoler, Viens calmer les tourments de ma sombre retraite, Et mêle une douceur secrète A ces ple"
 - [s14857] "The floor of the stage consisted of smooth boards, at the sides was some painted cardboard representing trees, and at the back was a cloth stretched over boards."
 
-### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim
+_↧ **SEG** (the cut, Existence→Structure): rule `structural`, query-blind=true — objective; any reader re-derives it._
+
+### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim · EOT triples
 
 
 **▸ CHAPTER I**  · s14217–14285 (68s) · cast: Pierre, Moscow, Natásha, Prince Andrew, Andrew, Joseph Alexéevich
   · narrator's evaluative operation (attributed, owner narrator): **defamiliarization** (score 0.25)
   · argument links: sequence×3
-  - `Moscow --society--> Pierre`  →[s14226]
-  - `Benefit --performances--> Freemasons`  →[s14229]
-  - `Pierre --ceased--> Brothers`  →[s14222]
+  - `Moscow -> Pierre : society`  →[s14226]
+  - `Benefit -> Freemasons : performances`  →[s14229]
+  - `Pierre -> Brothers : ceased`  →[s14222]
 
 **▸ CHAPTER V**  · s14524–14603 (79s) · cast: Julie Karágina, Borís, Pénza, Moscow, Nizhegórod, Anna Mikháylovna
   · argument links: sequence×1
-  - `Borís --succeeded--> St Petersburg`  →[s14525]
-  - `Borís --sketched--> Rustic`  →[s14545]
-  - `Aliment --de--> Viens`  →[s14558]
+  - `Borís -> St Petersburg : not-succeeded`  →[s14525]
+  - `Borís -> Rustic : sketched`  →[s14545]
+  - `Aliment -> Viens : de`  →[s14558]
 
 **▸ CHAPTER XI**  · s11742–11804 (62s) · cast: Berg, St Petersburg, Countess Véra, Rostóvs, Moscow, Austerlitz
   · argument links: sequence×2
-  - `Rostóvs --lived--> St Petersburg`  →[s11749]
-  - `Rostóvs --lived--> Moscow`  →[s11749]
-  - `Country --neighbors--> Otrádnoe`  →[s11750]
+  - `Rostóvs -> St Petersburg : lived`  →[s11749]
+  - `Rostóvs -> Moscow : lived`  →[s11749]
+  - `Country -> Otrádnoe : neighbors`  →[s11750]
 
 > narrator's sharpest judgment near this material (attributed, owner **narrator**): _defamiliarization_ →[s14857]
 
 ### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)
 
-> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._ The surf renders no verdict; this is yours, or a talker's separate call.
+- _attention_ (pre-surprise me-ness): grain foregrounded `structural`, selected query-blind (document size) — Ground stays σ.
+- _surprise_ (against the reader's ρ): withheld · _verdict_: withheld.
+> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._
 
 ## Q8. How does contingency and chance square with the deterministic claims about historical inevitability?
 
@@ -317,30 +345,34 @@ Three levels, gated so they never blend (the cube's Site face at the output boun
 - [s30154] "Equally little does this view explain why for several centuries the collective will is not withdrawn from certain rulers and their heirs, and then suddenly during a period of fifty years is transferred to the Convention,"
 - [s30167] "Postulating some generalization as the goal of the movement of humanity, the historians study the men of whom the greatest number of monuments have remained: kings, ministers, generals, authors, reformers, popes, and jou"
 
-### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim
+_↧ **SEG** (the cut, Existence→Structure): rule `structural`, query-blind=true — objective; any reader re-derives it._
+
+### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim · EOT triples
 
 
 **▸ CHAPTER II**  · s30041–30085 (44s) · cast: Napoleon, Alexander, Revolution, Bourbons, Staël, Talleyrand
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 12.12)
   · argument links: sequence×1
-  - `Specialist --historians--> Bourbons`  →[s30066]
-  - `Specialist --historians--> Alexander`  →[s30066]
-  - `Biographical --historians--> historians`  →[s30043]
+  - `Specialist -> Bourbons : historians`  →[s30066]
+  - `Specialist -> Alexander : historians`  →[s30066]
+  - `Biographical -> historians : historians`  →[s30043]
 
 **▸ CHAPTER IV**  · s30115–30182 (67s) · cast: Napoleon, Louis XIV, Louis XVI, Russian, Terrible, Rousseau
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 6.86)
   · argument links: sequence×2
-  - `Napoleon --ordered--> army`  →[s30118]
-  - `Equally --little--> explain`  →[s30154]
-  - `Postulating --some--> generalization`  →[s30167]
+  - `Napoleon -> army : ordered`  →[s30118]
+  - `Equally -> explain : little`  →[s30154]
+  - `Postulating -> generalization : some`  →[s30167]
 
 **▸ CHAPTER XVIII**  · s27336–27364 (28s) · cast: Grand Cross, Napoleon, Orsh, Emperor Alexander, Du, French
   · narrator's evaluative operation (attributed, owner narrator): **framing** (score 6)
-  - `Napoléon --le--> Grand Cross`  →[s27359]
-  - `Napoléon --le--> Du`  →[s27359]
+  - `Napoléon -> Grand Cross : le`  →[s27359]
+  - `Napoléon -> Du : le`  →[s27359]
 
 > narrator's sharpest judgment near this material (attributed, owner **narrator**): _framing_ →[s30042]
 
 ### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)
 
-> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._ The surf renders no verdict; this is yours, or a talker's separate call.
+- _attention_ (pre-surprise me-ness): grain foregrounded `structural`, selected query-blind (document size) — Ground stays σ.
+- _surprise_ (against the reader's ρ): withheld · _verdict_: withheld.
+> _render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure._

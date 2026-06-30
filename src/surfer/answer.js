@@ -13,8 +13,14 @@
 // owner-attributed loci against a hand key.
 
 import { coarseSurf } from './levels.js';
+import { plainRel } from '../perceiver/surfaces.js';
 
 const clip = (t, n = 140) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, n);
+// A relation rendered in EOT surface syntax (docs/eot-surface-syntax.md): SUBJECT -> OBJECT :
+// relation, the negation riding as the spec's `not-` token. The same shape serializeEOT emits,
+// so structure reads as canonical EO LINK triples rather than ad-hoc arrows.
+const eotLink = (srcLabel, via, tgtLabel, polarity) =>
+  `${srcLabel} -> ${tgtLabel} : ${polarity === '−' ? 'not-' : ''}${plainRel(via)}`;
 
 export const surfToAnswer = (question, { doc, encoding, evaluation, top = 3 } = {}) => {
   const S = doc?.sentences || doc?.units || [];
@@ -36,7 +42,9 @@ export const surfToAnswer = (question, { doc, encoding, evaluation, top = 3 } = 
     // verbatim words live in the verbatim channel, looked up by that index. A relation is a
     // reading of the source, not the source.
     const bonds = (reg.bonds || []).slice(0, 3).map((b) => ({
-      src: b.srcLabel, via: b.via, tgt: b.tgtLabel, confidence: b.confidence, sentIdx: cite(b.idx),
+      eot: eotLink(b.srcLabel, b.via, b.tgtLabel, b.polarity),   // EOT LINK triple (canonical surface)
+      src: b.srcLabel, via: b.via, tgt: b.tgtLabel, polarity: b.polarity,
+      confidence: b.confidence, sentIdx: cite(b.idx),
     }));
     const argTypes = {};
     for (const l of links) if (l.sentIdx >= reg.lo && l.sentIdx < reg.hi) argTypes[l.via] = (argTypes[l.via] || 0) + 1;
@@ -73,27 +81,41 @@ export const surfToAnswer = (question, { doc, encoding, evaluation, top = 3 } = 
   return {
     question, domain: r.domain, keys: r.keys,
     verbatim: { level: 'existence', basis: 'the source, word for word', quotes },
+    // The GRAIN is not a level — it is SEG, the OPERATOR carrying Existence → Structure: the cut
+    // that takes the undifferentiated verbatim stream and produces the units structure describes
+    // and interpretation evaluates. It sits on the EDGE between levels one and two, not on a shelf
+    // beside them. The cut given the rule is objective (σ): detectGrain is deterministic, the
+    // boundaries re-derivable. The whole MULTI-GRAIN STACK (the holarchy) is objective Ground —
+    // every grain's cuts by the same rule, the entire lattice re-derivable; all of it σ. THE
+    // INVARIANT: σ is reader-independent only if the grain is. Grains are computed QUERY-BLIND
+    // (detectGrain adapts to document size, never to the question); a query may SELECT among
+    // pre-computed grains but must never SHAPE them. The instant grain-selection becomes
+    // query-sensitive, ρ reaches through the floor into the Ground and structure is contaminated
+    // from below — the firewall holes where it can't be seen. surfToAnswer only SELECTS (it never
+    // calls detectGrain), so the cut here stays query-blind.
+    cut: {
+      operator: 'SEG', rule: encoding?.mode || 'unknown', queryBlind: true,
+      basis: 'Existence→Structure: the verbatim stream segmented into units. Objective given the rule; the whole grain stack is objective Ground; queries select among grains, never shape them',
+    },
     structure: {
-      level: 'structure', basis: 'objective about the source (re-derivable), not verbatim — relations, cast, and the narrator\'s attributed evaluative operation',
-      // The GRAIN is the GROUND — the background condition for anything to stand out. The
-      // span-cut is objective GIVEN a grain (closure/the Born spectrum determines it,
-      // re-derivably), but the CHOICE of grain is prior to the figure/ground distinction itself:
-      // it sets what CAN become a figure or a surprise. Interpretation's surprise (the me-ness)
-      // stands out only against this Ground; change the grain and a different reading stands out.
-      // There are MULTIPLE grains (the holarchy — detectHolons/holarchy): a stack of Grounds, each
-      // making different figures salient. This result stands on one of them.
-      grain: encoding?.mode || 'unknown',
-      grainNote: 'the grain is the Ground (background condition); objective given the grain, but choosing the grain is the transcendental act, and the holarchy holds the other grains',
+      level: 'structure', basis: 'objective about the source (re-derivable), not verbatim — relations (EOT LINK triples), cast, and the narrator\'s attributed evaluative operation',
       regions, narratorStance,
     },
     interpretation: {
       level: 'interpretation',
-      // The subjective register — the ME-NESS. Its native quantity is SURPRISE measured against
-      // the READER's accumulated ρ (not the document's σ): what departed from MY priors, what I
-      // found salient. That is why it is not re-derivable across readers (structure is) — a thing
-      // is surprising only relative to a self, and the prior IS the self. Document-intrinsic
-      // surprise (cast turnover, holon boundaries) is the OTHER surprise and lives in structure.
-      basis: 'the reader\'s subjective response (ρ) — surprise against MY accumulated state, the me-ness; not re-derivable across readers',
+      // The subjective register — the ME-NESS — which the self enters TWICE, ordered:
+      //   attention — foregrounding a grain/Ground to read at. PRE-surprise: you choose where to
+      //     stand before anything can stand out. The most primordial subjective move, and it
+      //     leaves no relEntropy number because it is the precondition for there being one. Here
+      //     the grain was foregrounded QUERY-BLIND (by document size), so ρ has NOT entered the
+      //     Ground; a reader who re-foregrounds a different grain performs this act and owns it.
+      //   surprise  — figures standing out against the reader's accumulated ρ AT that grain. The
+      //     measurable trace of the self's prior. Reader-relative, not re-derivable; the OTHER
+      //     surprise (document-intrinsic cast turnover / holon boundaries) is σ and lives in
+      //     structure. Same operation; which prior — σ or ρ — decides the level.
+      basis: 'the reader\'s subjective response (ρ) — the me-ness; not re-derivable across readers',
+      attention: { grainForegrounded: encoding?.mode || 'unknown', selectedBy: 'query-blind (document size)',
+                   note: 'foregrounding a grain is attention, the pre-surprise me-ness; query-blind here, so the Ground stays σ' },
       surprise: null,                      // reader-relative surprise — filled only by a self with an accumulated ρ
       stance: null, generated: false,
       discipline: 'render in a SEPARATE model call and a visibly distinct channel; never blended with verbatim or structure',
