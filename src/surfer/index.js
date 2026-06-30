@@ -86,3 +86,9 @@ export { reanalyze, applyReanalysis } from './reanalyze.js';
 export { persistentFigures, coherentFigures, motionReading, detectMotion } from './motion.js';
 export { fieldVerdict, fieldIsVoid, ANSWERABLE_ALPHA } from './answerable.js';
 export * from './sequence.js';
+// The accumulation layer — fold the sentence-grain total read into adaptive coarse units
+// (chapters/books or windows), each a reading of its own (figures, graded backbone,
+// inter-proposition links, and the cube's cast/meaning domain split), and surf that coarse
+// spine routed by the question's domain. This is what lets a whole-book question reach the
+// regions it lives in without surfing every sentence at full resolution.
+export { encodeLevels, detectGrain, coarseSurf, routeDomain, CAST_OPS, MEANING_OPS } from './levels.js';
