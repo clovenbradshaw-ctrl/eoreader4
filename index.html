@@ -3789,7 +3789,7 @@ class Component extends DCLogic {
     const reader=(ev&&ev.reader)||(sp&&sp.reader)||'svo-regex';
     const grain=e.grain||(ev&&ev.grain)||this.edgeGrain(e)||'Figure';
     const conf=(ev&&ev.confidence!=null)?ev.confidence:(e.confidence!=null?e.confidence:0.6);
-    const neg=(((ev&&ev.polarity)||e.polarity)==='negative');
+    const neg=(p=>p==='−'||p==='-'||p==='negative')((ev&&ev.polarity)||e.polarity);
     const irr=(((ev&&ev.modality)||e.modality)==='irrealis');
     const speech=((ev&&ev.op==='SIG')||e.op==='SIG'||e.kind==='SIG');
     const u=e.sentIdx!=null?this.master.sentenceSource[e.sentIdx]:null;

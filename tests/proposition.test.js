@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   parseText, positionElements, argumentSpansHold, SVO_EXTRACTOR,
 } from '../src/perceiver/parse/index.js';
-import { projectGraph } from '../src/core/index.js';
+import { projectGraph, propositionOfEdge } from '../src/core/index.js';
 
 const argspans = (doc) => doc.log.filter(e => e.op === 'SEG' && e.kind === 'argspan');
 const cons     = (doc) => doc.log.filter(e => e.op === 'CON');
@@ -94,6 +94,20 @@ test('the argument-span SEG does not perturb the graph projection', () => {
   assert.equal(g.edges.length, 1, 'one bond, the SEG adds no edge');
   assert.ok(g.entities.has('grete-vale') && g.entities.has('gregor-pike'),
     'both endpoints survive — the SEG retracts nothing');
+});
+
+// Negation must survive the edge → proposition bridge under every sign the engine
+// carries it: the parser writes U+2212 '−' (relations.js), other paths write ASCII
+// '-' or the word 'negative'. Dropping any of them flips a negated claim positive —
+// "Google won't launch ChatGPT" read as "Google launch ChatGPT".
+test('propositionOfEdge normalizes every negative polarity sign to "-"', () => {
+  for (const sign of ['−', '-', 'negative']) {
+    const p = propositionOfEdge({ src: 'google', via: 'launch', tgt: 'chatgpt', polarity: sign });
+    assert.equal(p.polarity, '-', `polarity ${JSON.stringify(sign)} reads as negated`);
+  }
+  // Absent / affirmative stays positive — the realis default.
+  assert.equal(propositionOfEdge({ src: 'a', via: 'r', tgt: 'b' }).polarity, '+');
+  assert.equal(propositionOfEdge({ src: 'a', via: 'r', tgt: 'b', polarity: '+' }).polarity, '+');
 });
 
 // The headVerb offset extension stays backward-compatible for its other consumer.

@@ -48,5 +48,5 @@ export const propositionOfEdge = (e) =>
     substrate:   e.src ?? e.from,
     relation:    e.via ?? e.rel,
     differentia: e.tgt ?? e.to,
-    polarity:    e.polarity === 'negative' || e.polarity === '-' ? '-' : '+',
+    polarity:    e.polarity === 'negative' || e.polarity === '-' || e.polarity === '−' ? '-' : '+',
   });
