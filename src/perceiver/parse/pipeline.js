@@ -75,6 +75,12 @@ export const createParser = ({
   // takes content verbs reacts into an entity node, gated by an inhibitor against runaway.
   // Off by default → the capitalised reading is byte-identical.
   commonNouns        = false,
+  // The total read (relations.js, §1–§9): every clause and sub-clause is a proposition
+  // site, every edge carries a graded confidence, relative clauses bind their antecedent,
+  // and subordinators become inter-proposition links. OFF by default → the scan is
+  // byte-identical (the simple SVO path parses to the same edges, §9 golden parity); the
+  // total read only ever ADDS propositions, each graded by how surely it was apprehended.
+  totalRead          = false,
 } = {}) => {
   // State owned by this parser instance. Mutated by parse(); the mutation
   // is visible only inside the holon. Tests construct one parser per case.
@@ -368,7 +374,8 @@ export const createParser = ({
       };
       const relOpts = { isSpeech, isCopula: conventions.isCopula, isModifier: conventions.isModifier,
                         isConjunction: conventions.isConjunction,   // ledger coordinator predicate
-                        referents: true, coordSubjects };   // open the NP object slot (move 2); coord subjects (gated)
+                        referents: true, coordSubjects,   // open the NP object slot (move 2); coord subjects (gated)
+                        totalRead };   // §1–§9 the total read (gated; adds graded propositions)
       for (const rel of parseRelations(sent, admission, coref, relOpts)) candidates.push({ rel, sentIdx });
 
       // Standing descriptors — the third coref channel (extraction half). A role

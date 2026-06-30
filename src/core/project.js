@@ -157,6 +157,13 @@ const computeProjection = (log, frame) => {
           // kinship hop) is defeasible. The edge-grounding veto reads this flag —
           // a derived filler never satisfies the functional-axiom witness rule.
           derived: !!e.derived,
+          // §4 — how surely the reader apprehended this proposition from the text.
+          // Rides through verbatim when the total read graded it (absent otherwise),
+          // so the surfer, the synthesis, and the fact-check can weight by it.
+          ...(e.confidence != null ? { confidence: e.confidence } : {}),
+          // §3 — an inter-proposition link's reified-proposition endpoints, tagged so a
+          // downstream reader can tell a proposition-to-proposition bond from a figure one.
+          ...(e.linkKind ? { linkKind: e.linkKind } : {}),
         });
         break;
       case 'SYN':
