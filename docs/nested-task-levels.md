@@ -213,11 +213,40 @@ random signal gets no spurious lift (≤3%) and a periodic signal the note grain
 already reads is never harmed (composite = figure exactly) — both asserted in the
 tests.
 
-**Honest limits.** Boundary-note prediction stays weak (2/15 here): each phrase
-transition is still seen only a few times, so the transition model rarely commits.
-And segmentation (where the phrases are) is taken as input — auto-segmenting from
-surprise over-fired badly in testing (24 phrases for 8). The grain *composition*
-is the result; learned segmentation and warm transition models are the next work.
+### Learned segmentation — the SEG cut, derived
+
+Finding the phrases is the separate SEG problem. The boundaries above were given;
+`src/predict/segment.js` now learns them from the note grain's own surprise
+(`npm run segment`). A flat surprise threshold over-fired (46 cuts, F1 0.50 — a
+cold model is surprised everywhere). The fix mirrors the engine's
+`void-boundary`: the threshold is a **readout the signal computes from its own
+surprise background** (a high quantile, the only human number being `alpha`, the
+tolerated false-cut rate), and two signal-derived guards turn the plateau into
+cuts — a boundary must be a **local peak** in surprise, and a **minimum phrase
+length** keeps cuts from crowding.
+
+| segmenter | cuts | F1 vs 16 true |
+| --- | --- | --- |
+| naive flat threshold (0.7) | 46 | 0.50 |
+| **learned (signal-derived)** | **15** | **0.83** |
+
+End-to-end, with **no human boundaries**, the predictor learns its own cuts and
+still lifts over the flat baseline:
+
+| predictor | hit rate |
+| --- | --- |
+| flat n-gram order 1 | 25% |
+| flat n-gram order 2 | 37% |
+| grain-nested o1, hand boundaries | 43% (ceiling) |
+| **grain-nested o1, learned boundaries** | **33%** |
+
+**Honest limits.** Self-supervised, the predictor beats flat order-1 (+8 pts) but
+the segmentation error (F1 0.83, not 1.0) still costs the gap to the hand-fed
+ceiling — it does not yet beat flat order-2 without given boundaries. And
+boundary-note prediction stays weak (each phrase transition is seen only a few
+times, so the transition model rarely commits). The grain *composition* and a
+signal-derived SEG cut are the results here; a sharper cut (peak shape, not just
+height) and warm transition models are the next levers.
 
 ## The guards (runaway only)
 

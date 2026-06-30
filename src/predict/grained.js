@@ -36,6 +36,7 @@
 
 import { predictiveSequenceReading } from '../surfer/sequence.js';
 import { runTaskGraph, PATTERN } from '../tasks/index.js';
+import { learnBoundariesFromSurprise } from './segment.js';
 
 const round = (x) => Math.round(x * 1000) / 1000;
 
@@ -148,12 +149,16 @@ const makePatternMemory = ({ minOverlap, minPrefix }) => {
 // prediction, and compose: trust the Pattern grain when it is confident (inside a
 // matched template or a sharp transition), else fall back to Figure. The composite
 // hit is what the predictor would actually emit.
-export const predictGrained = (doc, { order = 2, boundaries = null, minOverlap = 0.6, minPrefix = 2, patternConf = 0.6, figConfFloor = 0.5 } = {}) => {
+export const predictGrained = (doc, { order = 2, boundaries = null, minOverlap = 0.6, minPrefix = 2, patternConf = 0.6, figConfFloor = 0.5, alpha = 0.4, minGap = 2 } = {}) => {
   const labels = doc.sequence.map((s) => s.pc);
   const figureSteps = predictiveSequenceReading(doc, { order });
   const figByAt = new Map(figureSteps.map((s) => [s.at, s]));
 
-  const starts = boundaries || surpriseBoundaries(figureSteps);
+  // Boundaries: taken as input when given, else LEARNED from the note grain's own
+  // surprise (segment.js) — the SEG cut derived, not hand-fed. The default path is
+  // now fully self-supervised: no human marks the phrases.
+  const starts = boundaries
+    || learnBoundariesFromSurprise(figureSteps.map((s) => ({ at: s.at, surprise: s.surprise })), { alpha, minGap });
   const startSet = new Set(starts);
   const { phrases } = splitPhrases(labels, starts);
 
