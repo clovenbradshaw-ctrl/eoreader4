@@ -17,7 +17,7 @@ import { createHashEmbedder } from '../src/model/embed-hash.js';
 // A document where Grete is established as Gregor's sister through kinship
 // apposition. Mirrors the parse-holon fixture: Grete is admitted (two bare
 // sightings) before "His sister Grete", and "His" resolves to the hotter
-// referent (Gregor) — so the page logs gregor-samsa --sister--> grete @s4.
+// referent (Gregor) — so the page logs gregor-samsa -> grete : sister @s4.
 const STORY =
   'Grete arrived. Grete waited. Gregor Samsa woke. Gregor stood. His sister Grete left. Klaus Berg arrived.';
 

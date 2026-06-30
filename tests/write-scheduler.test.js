@@ -53,7 +53,7 @@ test('the baseline (no gate) carries structural violations — the gate is doing
 });
 
 test('the arity gate is HARD and modality-blind: a CON needs its argument Sites in the frontier (§3a)', () => {
-  const cTends = cells.find(c => c.id === 'c_tends');           // grete --tends--> gregor
+  const cTends = cells.find(c => c.id === 'c_tends');           // grete -> gregor : tends
   assert.ok(!arityReady(cTends, new Set(['gregor'])),  'grete has not appeared → not schedulable');
   assert.ok(!arityReady(cTends, new Set(['grete'])),   'gregor has not appeared → not schedulable');
   assert.ok( arityReady(cTends, new Set(['grete', 'gregor'])), 'both slots filled → schedulable');

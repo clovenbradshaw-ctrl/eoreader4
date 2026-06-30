@@ -2,7 +2,7 @@
 
 > **PARTIALLY REVERSED by `subjective-frame.md` (June 20 correction).** Two changes
 > here did not survive contact with the metamorphosis battery: the arrows now LEAVE
-> the prompt (a model reads `A --rel--> B` as a causal claim even when it encodes
+> the prompt (a model reads a flat relational arrow as a causal claim even when it encodes
 > only adjacency), and the talker no longer reads its spans as "memory" — it reads
 > them as the one who just read them. `serializeNotes` stays alive for the grounder
 > and the veto; it no longer reaches the talker. The task register, the no-length
@@ -47,9 +47,9 @@ Notes about our conversation before this:
 Relevant parts of our past conversation:
 [the recent verbatim window, the activated past turns]
 Notes from the document:
-sister --tends--> Gregor
-Topps --slammed--> man
-fire --originated-in--> room4
+sister -> Gregor : tends
+Topps -> man : slammed
+fire -> room4 : originated-in
 Excerpts from the document:
 [the relevant retrieved spans, verbatim]
 ```

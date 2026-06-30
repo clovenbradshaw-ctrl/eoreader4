@@ -77,7 +77,7 @@ inverse of the reader's clause→event typing:
 
 - the stop's focus figure → the cell's **Subject** (its integral name from the fold);
 - the strongest **unspent** edge leaving that figure within the reach → the cell's
-  **edge** (`A --tends--> B`) — read off `figureSurface`, which already returns a
+  **edge** (`A -> B : tends`) — read off `figureSurface`, which already returns a
   referent's incident bonds coref-collapsed and weight-ranked in surface form;
 - the edge's Resolution band (void when a modality hedges it or a carved absence
   shadows the subject) → the cell's **band**, so a void stop **hedges before it is

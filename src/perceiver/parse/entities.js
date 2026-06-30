@@ -30,7 +30,7 @@ const CONN  = String.raw`de|von|van|der|del|di|du|la|le|of|the`;
 // Letters a name is built from. The ASCII class `[A-Z][a-zA-Z]` truncated every name at its
 // first accent — the Maude/Garnett transliteration of War and Peace stresses with acute marks
 // (Natásha, Kutúzov, Denísov, Pávlovna), so the scanner read "Nat", "Kut", "Den", "P", inventing
-// 136 truncated figures and 130 "Anna --p--> …" patronymic-split junk edges. Widen the class to
+// 136 truncated figures and 130 "Anna -> … : p" patronymic-split junk edges. Widen the class to
 // the Latin-1 letter block (À-Ö, Ø-ö, ø-ÿ — excludes × ÷), which carries the acute/grave/diaeresis
 // forms a European-name transliteration uses. These are single UTF-16 code units, so the existing
 // `\b`-anchored, un-`u`-flagged regexes keep working unchanged; only the reach of a name widens.

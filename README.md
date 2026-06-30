@@ -324,7 +324,7 @@ Those arrows are also what the talker is **handed**. The prompt feeds the fold �
 the document **notes** (plain-language arrows over the folded graph) *plus* the
 verbatim **excerpts** — never raw spans alone, the discard that let the model fill
 the gaps between sentences with invented tokens. The surface discipline runs the
-whole prompt: the notes are arrows in words (`sister --tends--> Gregor`), never
+whole prompt: the notes are relations in words (`sister -> Gregor : tends`), never
 operator codes, cell names, sentence indices, or citation tokens, and orientation
 is the *filename*, type, and length — never a title, author, or genre, because
 recognition replaces reading. The notes register feeds the prompt on the way out

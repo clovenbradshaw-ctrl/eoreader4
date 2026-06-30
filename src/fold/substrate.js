@@ -162,7 +162,7 @@ export const substrateToEOT = (substrate, { max = 8 } = {}) =>
   renderLines(substrate, { max, includeHeld: true });
 
 // renderLines — the shared EOT LINK / IS-A renderer (docs/eot-surface-syntax.md). A bond
-// is `A -> B : rel`, a value `A : value` — the flat `A --rel--> B` arrow was retired (a
+// is `A -> B : rel`, a value `A : value` — the flat-arrow notation was retired (a
 // model reads it as causal even on mere adjacency; §2). includeHeld=false drops the facts
 // a tension has claimed (the membrane's settled group); includeHeld=true keeps them (the
 // round-trip superset).

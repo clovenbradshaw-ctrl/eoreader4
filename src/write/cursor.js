@@ -60,7 +60,7 @@ export const buildCursor = (cell, fold, spans = [], opts = {}) => {
 
   // The typed edge in SURFACE EOT (docs/eot-surface-syntax.md §5.3: a LINK is
   // `SUBJECT -> OBJECT : relation`), never a hash (contract.mjs) and never the retired
-  // flat `subject --edge--> object` arrow. A single named Site keeps the object slot open.
+  // flat-arrow notation. A single named Site keeps the object slot open.
   const edge = cell.edge && integrals.length >= 2
     ? `${integrals[0].name} -> ${integrals[integrals.length - 1].name} : ${cell.edge}`
     : (cell.edge && integrals.length === 1 ? `${integrals[0].name} -> : ${cell.edge}` : '');

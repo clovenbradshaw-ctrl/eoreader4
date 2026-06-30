@@ -103,7 +103,7 @@ const computeProjection = (log, frame) => {
   for (const e of events) {
     if (retracted.has(e.seq)) continue;
     // A carved absence — the document witnessing that a relation slot is VOID
-    // (the four VOID emitters; an explicit_void note `A --rel--> [void]`, or a
+    // (the four VOID emitters; an explicit_void note `A -> [void] : rel`, or a
     // DEF to VOID). It is content, not silence: the edge-grounding veto compares
     // a talker claim against it for the CONTRADICTED verdict, the libel-grade
     // catch (edge-grounding §3/§10). Kept out of the edge/entity passes — a void

@@ -172,8 +172,8 @@ export const attributesConflict = (attrType, a, b, opts = {}) => {
 // (so the caller DEFERS to the geometric check, never false-fires). Two catches:
 //
 //   disjoint-axiom   — the same ordered pair (src→tgt) already carries a relation
-//                      disjoint with the claim's (Gregor --sister--> Grete vs a
-//                      claimed Gregor --mother--> Grete). Hard contradiction.
+//                      disjoint with the claim's (Gregor -> Grete : sister vs a
+//                      claimed Gregor -> Grete : mother). Hard contradiction.
 //   functional-axiom — a functional, gender-matched slot on src is already filled
 //                      by a DIFFERENT target. Requires at least one WITNESSED
 //                      filler (`!e.derived`) so two derived guesses never refuse —

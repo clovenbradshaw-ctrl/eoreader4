@@ -66,7 +66,7 @@ const readLine = (docId, lines, k) => {
   const nm = (id) => label.get(id) || id;
   const bonds = ev
     .filter((e) => (e.op === 'CON' || e.op === 'SIG') && e.sentIdx === at)
-    .map((e) => `${nm(e.src)} --${e.via}--> ${nm(e.tgt)}`);
+    .map((e) => `${nm(e.src)} -> ${nm(e.tgt)} : ${e.via}`);
   return {
     bayesSurprise: round3(r.bayesBits),
     bridgeSurprise: round3(r.bridge),

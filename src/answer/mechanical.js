@@ -192,7 +192,7 @@ export const answerWho = (doc, question) => {
 
 // A relational "who" — "who is Gregor's sister?", "who is the captain of the ship?"
 // — is not a definition lookup; it is a one-hop GRAPH SURF. The document already
-// logged the tie as a typed CON edge (Gregor --sister--> Grete), so the answer is
+// logged the tie as a typed CON edge (Gregor -> Grete : sister), so the answer is
 // the node on the other end. We resolve the owner, TYPE the asked relation, and
 // read the matching edge straight off the projection. Crucially this runs BEFORE
 // the entity-name `answerWho`, which would otherwise bind "Gregor's sister" to

@@ -22,7 +22,7 @@ out:
   answer shipped anyway.
 - t1/t4 factcheck: `contradicted: 0, offDiagonal: 0` — a flatly false claim drew
   no contradiction, because the edge-grounding veto checks a claimed edge against
-  the document reading's edges, and `Gregor --transformed-into--> insect` was
+  the document reading's edges, and `Gregor -> insect : transformed-into` was
   never in that reading to contradict against.
 - t2: `retrieve.top: 1` on the literal token `prove` — the broom sentence ("to
   prove it she gave Gregor's body another shove") — because the demonstrative was
@@ -64,7 +64,7 @@ pass; the closing line is the absence clause, not a length clause.
 
 ## §2 — The arrows leave the prompt
 
-The `Notes from the document:` block (the fold's `A --rel--> B` arrows) no longer
+The `Notes from the document:` block (the fold's `A -> B : rel` arrows) no longer
 reaches the talker. A model reads an arrow as a causal claim even when the edge
 encodes only adjacency (the post-hoc fallacy), and the arrows shipping were
 degraded verb-fragments — noise, not spine. `serializeNotes` and the substrate
@@ -89,7 +89,7 @@ read-only permutation; the text is untouched.
 ## §4 — Emit the kinship / role / change-of-state edges the veto checks (flagged)
 
 The real unlock, and the half the prompt cannot reach. The edge-grounding veto is
-correct, but the reading held no `Gregor --transformed-into--> insect`, so the
+correct, but the reading held no `Gregor -> insect : transformed-into`, so the
 father-claim corresponded to nothing. Behind `RULES_REV`, with golden parity:
 
 - **Change-of-state algebra** (`core/relation-types.js`). A `becomes` primitive

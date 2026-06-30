@@ -18,7 +18,7 @@ test('the document parse logs the kinship edge (the witness to corroborate again
   const doc = docOf(KIN);
   const edges = (doc.projectGraph ? doc.projectGraph() : projectGraph(doc.log)).edges || [];
   const sib = edges.find(e => e.from === 'gregor-samsa' && e.to === 'grete' && e.via === 'sister');
-  assert.ok(sib, 'doc graph carries gregor-samsa --sister--> grete');
+  assert.ok(sib, 'doc graph carries gregor-samsa -> grete : sister');
 });
 
 test('equativeKinEdges recovers both phrasings as the same owner->name edge', () => {
