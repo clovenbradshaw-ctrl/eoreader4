@@ -274,6 +274,9 @@
                       </sc-if>
                     </div>
                   </sc-if>
+                  <sc-if value="{{ m.thinking }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ m.thinkRowStyle }}"><span style="{{ m.thinkSpinnerStyle }}"></span><span>{{ m.think }}</span></div>
+                  </sc-if>
                   <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                   <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
                   </sc-if>
@@ -821,6 +824,9 @@
                       </div>
                     </sc-if>
                   </div>
+                </sc-if>
+                <sc-if value="{{ m.thinking }}" hint-placeholder-val="{{ false }}">
+                <div style="{{ m.thinkRowStyle }}"><span style="{{ m.thinkSpinnerStyle }}"></span><span>{{ m.think }}</span></div>
                 </sc-if>
                 <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                 <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>

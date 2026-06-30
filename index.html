@@ -290,6 +290,9 @@
                       </sc-if>
                     </div>
                   </sc-if>
+                  <sc-if value="{{ m.thinking }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ m.thinkRowStyle }}"><span style="{{ m.thinkSpinnerStyle }}"></span><span>{{ m.think }}</span></div>
+                  </sc-if>
                   <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                   <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
                   </sc-if>
@@ -837,6 +840,9 @@
                       </div>
                     </sc-if>
                   </div>
+                </sc-if>
+                <sc-if value="{{ m.thinking }}" hint-placeholder-val="{{ false }}">
+                <div style="{{ m.thinkRowStyle }}"><span style="{{ m.thinkSpinnerStyle }}"></span><span>{{ m.think }}</span></div>
                 </sc-if>
                 <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                 <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
@@ -2826,7 +2832,9 @@ class Component extends DCLogic {
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
       if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true}]};
+      // Seed the bubble with a thinking status so the spinner is up from the very first frame —
+      // no bare-"…" flash before routing/grounding sets the real status a beat later.
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Thinking…'}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
@@ -2968,9 +2976,11 @@ class Component extends DCLogic {
     // Fold what we found into what this chat is About, so the answer is grounded in it and
     // the source chips reflect the new reading.
     for(const u of new Set(walk.readUrls))this.addChatSource(u);
-    // Mark the trail done (so it collapses to a summary), then answer into the same bubble.
+    // Mark the trail done (so it collapses to a summary), then answer into the same bubble. Seed
+    // the thinking status in the SAME update so the spinner carries straight over from the research
+    // trail to the write-up — no bare-"…" gap while the answer path spins up.
     this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].research)m[li]={...m[li],research:{...m[li].research,done:true,readCount,hops}};
+      if(li>=0&&m[li].research)m[li]={...m[li],research:{...m[li].research,done:true,readCount,hops},think:'Writing it up…'};
       return {...c,messages:m};})}));
     // Answer about the SUBJECT (not the literal "do more research" message) grounded in what was
     // read. The longform intent rides from the ORIGINAL turn ("write me an essay…") so stripping
@@ -3595,12 +3605,18 @@ class Component extends DCLogic {
       const researchEarlierLabel='+'+Math.max(0,researchSteps.length-RLIVE)+' earlier step'+((researchSteps.length-RLIVE)!==1?'s':'');
       // While researching with no answer yet, the trail IS the message — suppress the empty
       // pulsing bubble. Once the answer streams in (or for a normal turn) the bubble shows.
-      const showBubble=!(researchRunning&&!m.text);
-      // main's streaming fills m.text on a still-pending bubble; show it as it arrives. Until the
-      // first token, show the live "thinking" line (what the model is doing right now) instead of
-      // a bare ellipsis — only falling back to "…" before any status has been set.
+      // Until the first token, show the live "thinking" line (what the model is doing right now)
+      // as its OWN row — a continuously spinning loader + steady text — not the answer bubble.
+      // A spinner gives motion at every instant (CSS runs even between re-renders); the old
+      // opacity pulse read as the feedback "fading out", which is the opposite of reassuring.
       const thinking=!!m.pending&&!m.text&&!!m.think;
-      return {isUser,pending:!!m.pending,thinking,showBubble,text:m.pending?(m.text||m.think||'…'):m.text,isMd,plain:!isMd,html:bodyHtml,onCite:(e)=>this._onCite(e),
+      // While researching with no answer, the trail is the message; while thinking, the spinner
+      // row is — either way suppress the empty bubble. Once a token streams in, the bubble shows.
+      const showBubble=!(researchRunning&&!m.text)&&!thinking;
+      // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
+      return {isUser,pending:!!m.pending,thinking,think:m.think||'',showBubble,text:m.pending?(m.text||m.think||'…'):m.text,isMd,plain:!isMd,html:bodyHtml,onCite:(e)=>this._onCite(e),
+        thinkRowStyle:'max-width:80%;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;color:var(--ink2);',
+        thinkSpinnerStyle:'flex:0 0 auto;width:14px;height:14px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;',
         hasResearch,researchRunning,researchSteps,researchOpen:resOn,researchTitle,
         researchLiveOn,researchFullOn,researchLive,researchHasEarlier,researchEarlierLabel,
         researchLiveBox:'margin-top:7px;display:flex;flex-direction:column;gap:5px;',
@@ -3633,7 +3649,7 @@ class Component extends DCLogic {
         relatedMoreStyle:'font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
         hasNote:!!m.modelNote,note:m.modelNote||'',
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
-        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(thinking?'font-style:italic;':'')+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
+        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
         noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
