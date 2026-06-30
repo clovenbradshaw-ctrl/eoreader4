@@ -27,3 +27,9 @@ export {
   predictGrained, gradeGrained, predictionTaskGraph,
   prefixOverlap, phraseSimilarity, surpriseBoundaries,
 } from './grained.js';
+// Learned phrase segmentation — the SEG cut derived from the note grain's own
+// surprise (signal-set threshold), so the grain-nested predictor needs no
+// hand-fed boundaries. → segment.js
+export {
+  learnBoundaries, learnBoundariesFromSurprise, segmentationScore,
+} from './segment.js';
