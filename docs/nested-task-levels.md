@@ -168,6 +168,57 @@ goal `Pattern` then fails to split it, the confab is surfaced. A plain planner
 omits the grain and its genuine (self-chosen) leaves stay coherent Figures, so
 the guard never raises a false alarm.
 
+## Omnimodal: the same grains improve prediction (music)
+
+Generation here *is* prediction (`spec-generation.md`'s autoregressive closure),
+and prediction is over **moves at a grain**, so the grain stack carries straight
+into the predictor — `src/predict/grained.js`, tested in
+`tests/predict-grained.test.js`, demo `npm run grained`.
+
+A melody is grained (note → phrase → piece). The flat sequence reader
+(`surfer/sequence.js`) predicts from **one** grain — an order-k note n-gram — and
+its own comment names the wall: *"order 1 cannot hold a melody, whose figure is
+the PHRASE."* `predictGrained` composes two grains:
+
+- **Figure (note)** — `INS`: the existing note n-gram.
+- **Pattern (phrase)** — `SYN/REC`: a phrase model learned online, with phrases
+  identified by **overlap equivalence** (the same Level-1 set/prefix overlap that
+  discovers octave equivalence) so non-identical repeats still generalise, plus a
+  phrase-transition n-gram for the boundary notes.
+
+**The cube guard is the composition gate:** route to the Pattern grain only where
+the note grain is *unsure* (its top pick holds little mass) — a committed note
+prediction is never overridden ("do not apply a Pattern fix where the note grain
+holds"). The gate reads the note grain's own confidence, never the actual that
+landed, so it is strictly causal. Composed through the task graph
+(`predictionTaskGraph`), each phrase is a Pattern branch and each phrase-boundary
+note is a leaf **declared Pattern** — so the holon's grain-coherence flags it: the
+surprise the note grain can't absorb, routed up.
+
+Measured on *Frère Jacques ×2* (the engine's own predictor, deterministic):
+
+| predictor | next-note hit rate |
+| --- | --- |
+| flat n-gram order 1 (Markov) | 25% |
+| flat n-gram order 2 | 37% |
+| flat n-gram order 3 | 37% (no gain) |
+| **grain-nested: order-1 Figure + Pattern** | **43%** |
+| grain-nested: order-2 Figure + Pattern | 46% |
+
+**Composing a small note model with a phrase grain (43%) beats the bigger flat
+order-2 and order-3 models (37%).** Raising the n-gram order saturates — it cannot
+reach the phrase grain at any order; adding a grain does. This is the "small
+models as the engine" thesis on prediction, and it is **falsification-checked**: a
+random signal gets no spurious lift (≤3%) and a periodic signal the note grain
+already reads is never harmed (composite = figure exactly) — both asserted in the
+tests.
+
+**Honest limits.** Boundary-note prediction stays weak (2/15 here): each phrase
+transition is still seen only a few times, so the transition model rarely commits.
+And segmentation (where the phrases are) is taken as input — auto-segmenting from
+surprise over-fired badly in testing (24 phrases for 8). The grain *composition*
+is the result; learned segmentation and warm transition models are the next work.
+
 ## The guards (runaway only)
 
 Length and shape are emergent — the tree is as deep and wide as `decompose`

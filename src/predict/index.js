@@ -20,3 +20,10 @@ export { predictNextMove } from './predictor.js';
 export {
   scoreSeries, persistenceAccuracy, marginalAccuracy, shuffleMoves,
 } from './evaluate.js';
+// The grain-nested predictor: the flat note n-gram (Figure) composed with a
+// learned phrase model (Pattern), with boundary-surprise routed up through the
+// task graph's grain-coherence. → grained.js
+export {
+  predictGrained, gradeGrained, predictionTaskGraph,
+  prefixOverlap, phraseSimilarity, surpriseBoundaries,
+} from './grained.js';

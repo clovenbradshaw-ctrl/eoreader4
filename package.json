@@ -24,6 +24,7 @@
     "layered-generate": "node scripts/layered-generate.mjs",
     "layered-stack": "node scripts/layered-stack-demo.mjs",
     "structural-significance": "node scripts/structural-significance.mjs",
+    "grained": "node scripts/predict-grained.mjs",
     "mechanics": "node eoreader4-eval/mechanics/run.mjs ABCD"
   },
   "engines": {
