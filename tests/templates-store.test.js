@@ -7,8 +7,41 @@ import { join } from 'node:path';
 import {
   templateToJSON, templateFromJSON, TEMPLATE_SCHEMA,
   loadTemplatesDir, saveTemplate, templatePersister,
+  loadTemplatesLocal, saveTemplateLocal, removeTemplateLocal, templateLocalPersister,
   createSpecLibrary, acquireSpec, createTaskSpec, needsResearch,
 } from '../src/tasks/index.js';
+
+// a minimal in-memory localStorage stand-in
+const mockStorage = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
+
+// ── browser store (localStorage) — the templates.html viewer's backing ────────
+test('the localStorage store round-trips a learned shape and forgets it', () => {
+  const s = mockStorage();
+  const tmpl = { kind: 'sonnet', organ: 'text', size: 600,
+    sections: [{ role: 'octave', share: 1, dir: { act: 'open' } }, { role: 'sestet', share: 1, dir: { act: 'close' } }] };
+  saveTemplateLocal(tmpl, s);
+  const back = loadTemplatesLocal(s);
+  assert.equal(back.sonnet.kind, 'sonnet');
+  assert.equal(back.sonnet.sections.length, 2);
+  removeTemplateLocal('sonnet', s);
+  assert.deepEqual(loadTemplatesLocal(s), {}, 'forgotten');
+});
+
+test('templateLocalPersister wires a library to localStorage', () => {
+  const s = mockStorage();
+  const lib = createSpecLibrary({ onLearn: templateLocalPersister(s) });
+  lib.define('haiku', { organ: 'text', size: 120, sections: [{ role: 'line', share: 1, dir: { act: 'open' } }] });
+  assert.equal(Object.keys(loadTemplatesLocal(s)).length, 1, 'persisted on learn');
+  // a fresh library seeded from the store knows it
+  const lib2 = createSpecLibrary({ seed: loadTemplatesLocal(s) });
+  assert.ok(lib2.learned('haiku'));
+});
+
+test('the store degrades to empty when no localStorage is present', () => {
+  assert.deepEqual(loadTemplatesLocal(null), {});
+  // a no-op, not a throw
+  saveTemplateLocal({ kind: 'x', sections: [{ role: 'a', share: 1, dir: { act: 'open' } }] }, null);
+});
 
 // ── pure (de)serialization — browser-safe ─────────────────────────────────────
 test('templateToJSON / templateFromJSON round-trip a neutral-directive shape', () => {

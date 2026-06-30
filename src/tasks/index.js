@@ -56,6 +56,7 @@ export { learnStructureFromExamples, exampleQuery, parsePoem } from './learn.js'
 export {
   TEMPLATE_SCHEMA, templateToJSON, templateFromJSON,
   loadTemplatesDir, saveTemplate, templatePersister,
+  LOCAL_KEY, loadTemplatesLocal, saveTemplateLocal, removeTemplateLocal, templateLocalPersister,
 } from './templates.js';
 
 // The output membrane (organs/out): the renderers a task leaf dispatches to, the

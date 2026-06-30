@@ -118,3 +118,51 @@ export const saveTemplate = async (dir, tmpl) => {
 // not sink a run), and the returned promise always resolves.
 export const templatePersister = (dir) => (kind, tmpl) =>
   saveTemplate(dir, tmpl).catch((e) => { console.warn(`templates: could not save ${kind}: ${e?.message || e}`); });
+
+// ── Browser store (localStorage) — the templates/ folder's in-browser twin ─────
+// The Node helpers above read/write files; in the browser the durable memory is
+// localStorage, one JSON map under `eo_templates`. Same role: seed a library, persist
+// what it learns, and let a viewer (templates.html) list them. Browser-safe — a missing
+// or throwing `localStorage` degrades to empty/no-op, never an error.
+export const LOCAL_KEY = 'eo_templates';
+const safeStorage = (s) => s || (typeof globalThis !== 'undefined' ? globalThis.localStorage : null) || null;
+
+const readMap = (storage) => {
+  const s = safeStorage(storage);
+  if (!s) return {};
+  try { return JSON.parse(s.getItem(LOCAL_KEY) || '{}') || {}; } catch { return {}; }
+};
+const writeMap = (map, storage) => {
+  const s = safeStorage(storage);
+  if (!s) return;
+  try { s.setItem(LOCAL_KEY, JSON.stringify(map)); } catch { /* quota / disabled — best effort */ }
+};
+
+// loadTemplatesLocal(storage?) → { kind: template } seed map, validated, for
+// createSpecLibrary({ seed }). Skips any malformed entry.
+export const loadTemplatesLocal = (storage) => {
+  const seed = {};
+  for (const [kind, json] of Object.entries(readMap(storage))) {
+    const t = templateFromJSON(json);
+    if (t) seed[t.kind || kind] = t;
+  }
+  return seed;
+};
+
+// saveTemplateLocal(tmpl, storage?) → write one shape into the map (keyed by kind).
+export const saveTemplateLocal = (tmpl, storage) => {
+  if (!tmpl || !tmpl.kind) return;
+  const map = readMap(storage);
+  map[tmpl.kind] = templateToJSON(tmpl);
+  writeMap(map, storage);
+};
+
+// removeTemplateLocal(kind, storage?) → forget a learned/installed shape.
+export const removeTemplateLocal = (kind, storage) => {
+  const map = readMap(storage);
+  if (kind in map) { delete map[kind]; writeMap(map, storage); }
+};
+
+// templateLocalPersister(storage?) → an `onLearn(kind, tmpl)` for createSpecLibrary that
+// persists to localStorage — the browser analogue of templatePersister(dir).
+export const templateLocalPersister = (storage) => (kind, tmpl) => saveTemplateLocal(tmpl, storage);
