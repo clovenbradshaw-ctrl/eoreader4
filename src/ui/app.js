@@ -35,6 +35,7 @@ import { mountPredict } from './predict-view.js';
 import { mountIdle } from './idle-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 import { exportChat } from './chat-export.js';
+import { exportActivity } from './activity-export.js';
 
 // CHATBOT SURFACE. The chat pane is a bare chatbot — a thinking indicator and
 // the answer, nothing else. The full per-turn record (the trace, the verbatim
@@ -357,6 +358,9 @@ const renderDocChips = () => {
   root.innerHTML = '';
   root.hidden = false;                  // the pinned Mind chip is always present
   renderMindChip(root);
+  // A loaded document is exportable activity (its reading log), so keep the
+  // Export menu's enabled state in step with the doc set.
+  refreshExportChat();
   for (const [id] of STATE.docs) {
     const on = STATE.selected.has(id);
     const chip = document.createElement('span');
@@ -1094,9 +1098,16 @@ if (els.exportChatBtn && els.exportChatMenu) {
   els.exportChatMenu.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-mode]');
     if (!b) return;
-    const ok = exportChat(b.dataset.mode, { history: STATE.history, turns: STATE.audit.turns });
+    // "activity" is the single-file, all-the-activity export: the transcript,
+    // the full audit, AND every loaded document's reading log in one JSON file.
+    // The other two modes export just the chat window (Markdown).
+    const ok = b.dataset.mode === 'activity'
+      ? exportActivity({ history: STATE.history, audit: STATE.audit, docs: STATE.docs })
+      : exportChat(b.dataset.mode, { history: STATE.history, turns: STATE.audit.turns });
     setStatus(ok
-      ? (b.dataset.mode === 'full' ? 'exported chat — full audit (.md)' : 'exported chat — transcript (.md)')
+      ? (b.dataset.mode === 'activity' ? 'exported all activity (.json)'
+        : b.dataset.mode === 'full' ? 'exported chat — full audit (.md)'
+        : 'exported chat — transcript (.md)')
       : 'nothing to export yet');
     closeMenu();
   });
@@ -1104,11 +1115,17 @@ if (els.exportChatBtn && els.exportChatMenu) {
   document.addEventListener('click', (e) => { if (!els.exportChatWrap?.contains?.(e.target)) closeMenu(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu(); });
 }
-// Enable the chat-export button once anything is in the window — a recorded turn
-// or a transcript a fork seeded in.
-const refreshExportChat = () => {
-  if (els.exportChatBtn) els.exportChatBtn.disabled = !(STATE.history.length || STATE.audit.turns.length);
-};
+// Enable the Export menu once there is anything to hand back — a recorded turn,
+// a transcript a fork seeded in, or a loaded document (whose reading log the
+// "Everything" export carries even before the first chat turn). A hoisted
+// declaration so renderDocChips (which runs at init, before this point) can call
+// it without tripping the temporal dead zone.
+function refreshExportChat() {
+  if (els.exportChatBtn) {
+    els.exportChatBtn.disabled =
+      !(STATE.history.length || STATE.audit.turns.length || STATE.docs.size);
+  }
+}
 STATE.audit.subscribe(refreshExportChat);
 refreshExportChat();
 
