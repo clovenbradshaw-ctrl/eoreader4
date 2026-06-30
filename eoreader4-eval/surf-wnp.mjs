@@ -56,23 +56,26 @@ writeFileSync(join(HERE, 'surf-wnp-results.json'), JSON.stringify({ meta, result
 const L = [];
 L.push(`# Surf → War and Peace — saved results for evaluation\n`);
 L.push(`${meta.sentences} sentences → ${meta.coarseUnits} ${meta.grain} units · read ${(readMs / 1000).toFixed(0)}s\n`);
-L.push(`Two channels, gated and never blended (the firewall):`);
-L.push(`- 🟦 **SOURCE (σ)** — cited document material + the narrator's *attributed* evaluative operation. Every span traces to a sentence index; audit it against the text.`);
-L.push(`- 🟥 **INTERPRETATION (ρ)** — the reader's/talker's own verdict. The surf withholds it; a talker renders it in a *separate* call, as a visibly distinct channel. Here it is left open for you.\n`);
+L.push(`Three levels, gated so they never blend (the cube's Site face at the output boundary):`);
+L.push(`- 🟩 **VERBATIM (existence)** — the source, word for word. Checkable character for character.`);
+L.push(`- 🟦 **STRUCTURE (objective)** — objective *about* the source but not *in* it verbatim: relations, cast, argument links, and the narrator's *attributed* evaluative operation. A reading, re-derivable, not a quote; each cites a verbatim index.`);
+L.push(`- 🟥 **INTERPRETATION (ρ)** — the reader's/talker's own verdict. The surf withholds it; a talker renders it in a *separate* call. Left open for you.\n`);
 for (let i = 0; i < results.length; i++) {
   const r = results[i];
   L.push(`\n## Q${i + 1}. ${r.question}\n`);
   L.push(`*domain → ${r.domain}*  ·  keys: ${r.keys.join(', ')}\n`);
-  L.push(`### 🟦 SOURCE — what the reading surfaces (cited)\n`);
-  for (const reg of r.source.regions) {
+  L.push(`### 🟩 VERBATIM — the source, word for word\n`);
+  for (const q of r.verbatim.quotes) L.push(`- [s${q.sentIdx}] "${q.text}"`);
+  L.push(`\n### 🟦 STRUCTURE — objective about the source (re-derivable), not verbatim\n`);
+  for (const reg of r.structure.regions) {
     L.push(`\n**▸ ${reg.title || '(span)'}**  · s${reg.lo}–${reg.hi} (${reg.sentences}s) · cast: ${reg.cast.join(', ') || '—'}`);
-    if (reg.evaluation) L.push(`  · narrator's evaluative operation (attributed): **${reg.evaluation.carrier || '—'}** (score ${reg.evaluation.score}, owner ${reg.evaluation.owner.replace('mind:', '')})`);
+    if (reg.narratorOperation) L.push(`  · narrator's evaluative operation (attributed, owner ${reg.narratorOperation.owner.replace('mind:', '')}): **${reg.narratorOperation.carrier || '—'}** (score ${reg.narratorOperation.score})`);
     const al = Object.entries(reg.argumentLinks);
     if (al.length) L.push(`  · argument links: ${al.map(([k, v]) => `${k}×${v}`).join(', ')}`);
-    for (const b of reg.bonds) L.push(`  - \`${b.src} --${b.via}--> ${b.tgt}\` [s${b.sentIdx}] — "${b.quote}"`);
+    for (const b of reg.bonds) L.push(`  - \`${b.src} --${b.via}--> ${b.tgt}\`  →[s${b.sentIdx}]`);
   }
-  const ns = r.source.narratorStance;
-  if (ns) L.push(`\n> narrator's sharpest judgment near this material (attributed, owner **${ns.owner.replace('mind:', '')}**): _${ns.carrier}_ @s${ns.sentIdx} — "${ns.quote}"`);
+  const ns = r.structure.narratorStance;
+  if (ns) L.push(`\n> narrator's sharpest judgment near this material (attributed, owner **${ns.owner.replace('mind:', '')}**): _${ns.carrier}_ →[s${ns.sentIdx}]`);
   L.push(`\n### 🟥 INTERPRETATION — the reader's verdict (ρ, withheld by the surf)\n`);
   L.push(`> _${r.interpretation.discipline}._ The surf renders no verdict; this is yours, or a talker's separate call.`);
 }
