@@ -119,6 +119,11 @@ const computeProjection = (log, frame) => {
     }
     switch (e.op) {
       case 'INS': {
+        // A LIMNER view artifact is an INS of a RENDER, not of a figure
+        // (organs/out/limner/emit.js, docs/limner.md §7). It rides the same log
+        // so the render is archived and addressable, but it is not graph content
+        // — skip it so a render never appears as a node in the doc it draws.
+        if (e.kind === 'view') break;
         const ent = entities.get(e.id) || {
           id: e.id, label: e.label, props: {}, sightings: 0, firstSeen: e.seq,
         };

@@ -313,6 +313,28 @@ export const finalizeThinking = (el, text, sources, opts = {}) => {
   if (root) root.scrollTop = root.scrollHeight;
 };
 
+// finalizeSvg — close a thinking bubble with a LIMNER render (organs/out/limner).
+// The render is a deterministic <svg> the model never touched a coordinate of;
+// we drop it into the message body inline, beneath a short caption. The SVG is
+// pasted as trusted markup because it is OUR template's output (render.js), with
+// every text node escaped at the source — no model string reaches innerHTML raw.
+export const finalizeSvg = (el, svg, opts = {}) => {
+  if (!el) return;
+  if (el._elapsedTimer) { clearInterval(el._elapsedTimer); el._elapsedTimer = null; }
+  clearImpression(el);
+  el.classList.remove('thinking');
+  el.classList.remove('streaming');
+  el.querySelectorAll(':scope > .msg-actions, :scope > .retry').forEach(n => n.remove());
+  const body = el.querySelector('.body');
+  if (body) {
+    const caption = opts.caption ? `<div class="limner-caption">${escapeHtml(opts.caption)}</div>` : '';
+    body.innerHTML = `${caption}<div class="limner-figure">${svg}</div>`;
+  }
+  attachMessageActions(el, 'assistant', opts.caption || 'SVG render', { quote: false, fork: false });
+  const root = el.parentElement;
+  if (root) root.scrollTop = root.scrollHeight;
+};
+
 // The full, verbose render of a finished turn — every block the engine can
 // surface inline. Kept intact behind finalizeThinking's `opts.verbose` gate so
 // the machinery is one flag away for debugging, while the default chat stays a

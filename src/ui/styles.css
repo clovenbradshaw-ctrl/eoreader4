@@ -174,6 +174,12 @@ section h2 {
 .msg.assistant .body li { margin: .2rem 0; }
 .msg.assistant .body strong { font-weight: 650; color: #f4f4f5; }
 
+/* LIMNER figure — a /svg render dropped inline (docs/limner.md). The deterministic
+   SVG scales to the message width; the caption sits above it, muted. */
+.msg.assistant .body .limner-caption { font-size: .8rem; color: #a1a1aa; margin: 0 0 .4rem; }
+.msg.assistant .body .limner-figure { margin: .2rem 0; }
+.msg.assistant .body .limner-figure svg { display: block; width: 100%; height: auto; max-width: 100%; }
+
 /* Explore leads — the trailing "want me to go deeper" list, made clickable. Each item re-asks
    as a fresh turn, so it reads as a chip-row of next steps rather than plain bullets. */
 .msg.assistant .body ul.explore-leads { list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: .35rem; }

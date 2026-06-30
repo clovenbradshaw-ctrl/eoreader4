@@ -24,7 +24,8 @@ import { createHorizon, structuralGround } from '../surfer/index.js';
 import { createCast } from '../converse/index.js';
 import { renderUserMessage, createThinkingMessage, renderAssistantMessage, setMessageActionHandlers,
          updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
-         renderWebProposal, renderWebResult, renderSearchNote, setThinkingNote, buildPropositions } from './chat.js';
+         renderWebProposal, renderWebResult, renderSearchNote, setThinkingNote, buildPropositions, finalizeSvg } from './chat.js';
+import { limn, VIEW_KINDS } from '../organs/out/limner/index.js';
 import { createMind } from '../mind/index.js';
 import { foldImpression } from '../write/index.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
@@ -485,10 +486,58 @@ const setTab = (name) => {
   if (name === 'idle')    STATE.idle?.refresh();
 };
 
+// LIMNER (docs/limner.md): render the active document's EO state to deterministic
+// SVG and drop it into the chat. The grounded document is the SELECTED set's
+// first member (the same scope the turn grounds on), falling back to the open
+// doc. `arg` is "[kind] [focus]" — an optional leading view kind, then free text
+// naming a figure to centre on.
+const runSvg = async (rawQuestion, arg) => {
+  renderUserMessage(els.messages, rawQuestion);
+  const doc = [...STATE.selected].map(id => STATE.docs.get(id)).filter(Boolean)[0] || STATE.doc;
+  const think = createThinkingMessage(els.messages, 'drawing…');
+  if (!doc || typeof doc.projectGraph !== 'function') {
+    finalizeThinking(think, 'Load a document first — /svg renders the graph of what you have read.',
+      [], { route: 'chat', mode: STATE.grounding });
+    return;
+  }
+  // Split a leading view kind off the argument; the remainder centres the view.
+  const tokens = arg ? arg.split(/\s+/) : [];
+  let kind = 'graph';
+  if (tokens.length && VIEW_KINDS.includes(tokens[0].toLowerCase())) kind = tokens.shift().toLowerCase();
+  const focus = tokens.join(' ').trim();
+  try {
+    const { svg, spec, vetoed } = await limn({
+      doc, kind, scope: focus ? { focus } : {}, site: { kind: 'session', docId: doc.docId },
+    });
+    if (!spec.nodes.length) {
+      finalizeThinking(think, focus
+        ? `Nothing to draw around “${focus}” yet — no matching figure in this document's graph.`
+        : 'No figures admitted yet — the graph fills in as names recur. Read more, then try /svg again.',
+        [], { route: 'chat', mode: STATE.grounding });
+      return;
+    }
+    const caption = `${kind}${focus ? ` · ${focus}` : ''} — ${spec.nodes.length} node${spec.nodes.length > 1 ? 's' : ''}, ${spec.edges.length} edge${spec.edges.length === 1 ? '' : 's'}`
+      + (vetoed ? ` · ${vetoed.fired.length} ungrounded ref${vetoed.fired.length === 1 ? '' : 's'} dropped` : '');
+    // The render is its own record: limn() emitted an INS view event into the
+    // doc's log (organs/out/limner/emit.js), content-addressed by render_hash.
+    finalizeSvg(think, svg, { caption });
+  } catch (err) {
+    finalizeThinking(think, `Couldn't draw that: ${err?.message || err}`, [],
+      { route: 'error', mode: STATE.grounding });
+  }
+};
+
 // Run one query through the pipeline and render it. Factored out of the composer so
 // an errored turn can offer a one-click retry (re-runs the very same question).
 const runQuery = async (rawQuestion) => {
   if (!rawQuestion) return;
+  // LIMNER SVG MODE (docs/limner.md): "/svg [kind] [focus]" renders the active
+  // document's EO state as deterministic SVG — graph (default), timeline,
+  // void_map, or path — optionally centred on a figure named by the focus text.
+  // No model is in the loop: the organ projects the graph and the layout engine
+  // computes geometry, so this short-circuits the whole turn pipeline.
+  const svgCmd = /^\/svg\b[\s:]*/i.exec(rawQuestion);
+  if (svgCmd) { await runSvg(rawQuestion, rawQuestion.slice(svgCmd[0].length).trim()); return; }
   // DEEP RESEARCH MODE (docs/deep-research.md): "/research <query>" (or "/deep <query>") asks the
   // engine to dig HARD — plan several angles on the concise query (multiple prompt generation), walk
   // each one deep following its curiosity, and write up everything it found with full provenance. A
