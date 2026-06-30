@@ -190,7 +190,8 @@ export const stubModel = () => ({
     const user = messages.find(m => m.role === 'user')?.content || '';
     // Pull the established focus/subject/object names the cursor handed in (surface only).
     const names = [...user.matchAll(/(?:Focus|Subject|Object|Also): ([^\n—]+?)(?: —|$)/gm)].map(m => m[1].trim());
-    const edge = user.match(/--([\w-]+)-->/)?.[1] || null;
+    // The relation rides in EOT surface now (A -> B : rel), not the retired flat arrow.
+    const edge = user.match(/->\s*[^\n:]*:\s*([\w-]+)/)?.[1] || null;
     const hedged = /holding-open|not settled/.test(user);
     const subj = names[0] || 'They';
     const obj = names[1] || null;

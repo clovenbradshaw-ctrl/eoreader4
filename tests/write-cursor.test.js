@@ -31,7 +31,8 @@ test('the MEMBRANE INVARIANT: no hashId ever reaches the model input (§5)', () 
   // the model saw the surface names and the typed edge, never the hashes
   assert.match(serial, /Gregor Samsa/);
   assert.match(serial, /Grete/);
-  assert.match(serial, /--tends-->/);
+  assert.match(serial, /-> [^\n:]+ : tends/);   // EOT LINK surface, never the retired flat arrow
+  assert.doesNotMatch(serial, /--tends-->/);
 });
 
 test('MULTI-SITE: the integral is handed for EVERY argument Site, not just one focus (§5)', () => {
