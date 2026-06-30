@@ -2716,7 +2716,7 @@ class Component extends DCLogic {
   // Collapse / expand the researched-source subtree under a parent source in the left tree.
   toggleSrcCollapse(url){this.setState(s=>{const c={...(s.collapsedSrc||{})};c[url]=!c[url];return {collapsedSrc:c};});}
   // Lazily load the chat model (the old app's backends). Cached on the instance.
-  async ensureChatModel(){
+  async ensureChatModel(onTick){
     const name=this.state.backend||'webllm';
     if(this._chatModel&&this._chatModel.id===name)return this._chatModel;
     if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
@@ -2726,6 +2726,9 @@ class Component extends DCLogic {
     // full re-render on each one makes typing in the chat box stutter while the model loads.
     let lastTick=0,lastPct=-1;
     await model.load(p=>{const pct=Math.round((p&&p.pct||0)*100);const now=Date.now();
+      // `onTick` is the stall guard's liveness feed — call it on EVERY tick (before the throttle's
+      // early-return) so a slow-but-progressing download keeps re-arming the deadline.
+      if(typeof onTick==='function')onTick(p);
       if(pct===lastPct||(now-lastTick<300&&pct<100))return;
       lastTick=now;lastPct=pct;
       this.setState({modelStatus:name+' · '+((p&&p.phase)||'loading')+(pct?(' '+pct+'%'):'')});});
@@ -2786,6 +2789,29 @@ class Component extends DCLogic {
   // answer has to work from. No matches → it's reasoning from the meaning graph / its own read.
   _thinkGround(ground){const n=(ground&&ground.spans&&ground.spans.length)||0;
     return n?('Re-reading '+n+' matching passage'+(n!==1?'s':'')+'…'):'Working out the answer…';}
+  // STALL GUARD — the chat model loads on first use and decodes on the CPU, and EITHER step can
+  // hang outright: a weights download that stops mid-stream, or a decode that never emits a first
+  // token. Both leave a promise that neither resolves nor rejects, so `await ensureChatModel()` /
+  // `await streamPhrase()` wait forever and the assistant bubble pulses "…" with no end — the
+  // stalled session. (The catch blocks only fire on a REJECTION; a hang reaches neither.) This is
+  // a NO-PROGRESS watchdog, not a flat timeout: `feed()` re-arms the deadline and is called on
+  // every load tick and every streamed token, so a slow-but-live model runs to completion, while
+  // one that goes silent for `ms` trips — aborting the attempt (signal, honoured by the wllama /
+  // webllm backends) and rejecting `race`, which drops the answer paths into the grounded
+  // fallback they already carry instead of waiting on a model that will never answer.
+  _stallGuard(ms=60000){
+    const ctrl=(typeof AbortController!=='undefined')?new AbortController():{abort(){},signal:null};
+    let timer=null,tripped=false,trip=null;
+    const clear=()=>{if(timer){clearTimeout(timer);timer=null;}};
+    const arm=()=>{if(tripped)return;clear();timer=setTimeout(()=>{tripped=true;timer=null;
+      try{ctrl.abort();}catch(e){}if(trip)trip(Object.assign(new Error('the chat model stalled'),{stalled:true}));},ms);};
+    const race=new Promise((_,rej)=>{trip=rej;});
+    // Swallow the rejection if nobody is racing it at trip time (e.g. after clear()), so a tripped
+    // guard never surfaces as an unhandled rejection; the answer path's own race still sees it.
+    race.catch(()=>{});
+    arm();
+    return {signal:ctrl.signal,feed:arm,clear,tripped:()=>tripped,race};
+  }
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
@@ -2821,8 +2847,9 @@ class Component extends DCLogic {
     // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
     //    graph, so it speaks from the document instead of as a blank-slate assistant.
     this._setThink(id,this._thinkGround(ground));
+    const guard=this._stallGuard();
     try{
-      const model=await this.ensureChatModel();
+      const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
       // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
@@ -2850,9 +2877,10 @@ class Component extends DCLogic {
       this._setThink(id,'Composing the answer…');
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
-      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
-      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken});
+      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
+      guard.clear();
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       // Surface grounding for EVERY answer, honestly. Matched lines show as citations; a
       // summary that leaned on the source's opening shows those lines, disclosed as such;
@@ -2862,12 +2890,14 @@ class Component extends DCLogic {
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
       this._pivotChatPanel(q+' '+text);
     }catch(e){
-      // model unavailable — answer structurally from what's read, or say so plainly
+      // model unavailable OR stalled — answer structurally from what's read, or say so plainly
+      guard.clear();
       const fb=this.answerQuestion(q,sources);
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
-      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,groundKind:relevant?'matched':undefined,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — the chat model didn’t load'+note+'.'});
+      const why=(e&&e.stalled)?'the chat model stalled':'the chat model didn’t load';
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,groundKind:relevant?'matched':undefined,related:this.relatedDocs(q,sources),modelNote:'Answered from your reading — '+why+note+'.'});
       this._pivotChatPanel(q+' '+(fb.text||''));
       this.setState({modelStatus:''});
     }
@@ -2979,8 +3009,9 @@ class Component extends DCLogic {
     if(!this._subjectsKnown(q,sources.length?sources:[...new Set([...(gathered||[])])])){finish(this._noSubjectPatch(q,sources));return;}
     const ground=this.groundNotes(q,sources);
     this._setThink(id,this._thinkGround(ground));
+    const guard=this._stallGuard();
     try{
-      const model=await this.ensureChatModel();
+      const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
       const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
       let messages;
       // The research/web chat path: same librarian register (+ sectioned shape on a broad question).
@@ -2992,19 +3023,22 @@ class Component extends DCLogic {
       this._setThink(id,'Composing the answer…');
       let acc='',raf=0;
       const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
-      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
-      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken});
+      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
+      guard.clear();
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
       const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
       const gr=this._groundReport(ground,grounded);
       finish({text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
     }catch(e){
+      guard.clear();
       const fb=this.answerQuestion(q,sources);
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
-      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,groundKind:relevant?'matched':undefined,related:this.relatedDocs(q,sources),modelNote:'Answered from what I gathered — the chat model didn’t load.'});
+      const why=(e&&e.stalled)?'the chat model stalled':'the chat model didn’t load';
+      finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:relevant?fb.sources:[],passages,groundKind:relevant?'matched':undefined,related:this.relatedDocs(q,sources),modelNote:'Answered from what I gathered — '+why+'.'});
       this.setState({modelStatus:''});
     }
   }
@@ -3054,7 +3088,9 @@ class Component extends DCLogic {
     // SEG — cluster the pool into themes; each becomes one section. <2 themes → single answer.
     const plan=this._clusterSpans(pool,q).slice(0,6);
     if(plan.length<2)return this._answerSingle(id,q,gathered);
-    let model=null;try{model=await this.ensureChatModel();}catch(e){model=null;}
+    // Guard the load too: a hung download would otherwise wedge the whole arc. On a stall the arc
+    // degrades gracefully (model=null → each fold writes its section structurally from the spans).
+    let model=null;try{const lg=this._stallGuard();model=await Promise.race([this.ensureChatModel(lg.feed),lg.race]);lg.clear();}catch(e){model=null;}
     const NOVELTY=0.2;
     const covered=new Set(),parts=[],usedHead=new Set(),allEnts=new Set(poolEnts),allSrcs=new Set(),allPass=[];
     let acc='',raf=0;
@@ -3071,14 +3107,18 @@ class Component extends DCLogic {
       acc=(parts.join('\n\n')+(parts.length?'\n\n':'')+head);paint();
       let body='',streamed='';
       if(model){
+        const fg=this._stallGuard();
         try{
           const srcs=[...new Set(spans.map(s=>s.u).filter(Boolean))];const gscope=srcs.length?srcs:urls;
           const msgs=this._ME.buildGroundedMessages({question:q,spans,graph:this.meaningGraph(gscope),
             orientation:this.chatOrientation(gscope),task:'answer',conversation:{pastTurns:[]},now:new Date()});
           const base=acc;
-          const onToken=(piece)=>{const t=String(piece||'');if(!t)return;streamed+=t;acc=base+streamed;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-          body=this.normMd(await this._ME.streamPhrase(model,msgs,{maxTokens:384,temperature:0.4,onToken}))||this.normMd(streamed);
+          const onToken=(piece)=>{const t=String(piece||'');if(!t)return;fg.feed();streamed+=t;acc=base+streamed;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+          // A stall here keeps whatever streamed and falls through to the structural fallback below,
+          // so one wedged section never wedges the whole essay.
+          body=this.normMd(await Promise.race([this._ME.streamPhrase(model,msgs,{maxTokens:384,temperature:0.4,onToken,signal:fg.signal}),fg.race]))||this.normMd(streamed);
         }catch(e){body=this.normMd(streamed);}
+        fg.clear();
       }
       if(!body)body=spans.slice(0,3).map(s=>this._clipPassage(s.text)).join(' ');   // structural fallback, bounded
       parts.push(head+body);
