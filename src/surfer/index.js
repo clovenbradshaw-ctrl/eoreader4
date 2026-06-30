@@ -112,3 +112,8 @@ export { surfToAnswer } from './answer.js';
 // query-blindness and the provenance stamp hold self-similarly at every storey, or the spiral
 // degrades to a hall of mirrors (dreaming gone wrong / opinion laundered into fact).
 export { promote, spiralStep, cutIsQueryBlind, provenanceIntact, SELF } from './spiral.js';
+// Metacognition: the Born rule testing whether any content COHERES into a reading (meaningfulness
+// = the spectrum concentrating above the noise floor) vs. a diffuse smear — the measurable gate
+// the spiral consults before promoting a verdict (provenance retained). And traceReading makes the
+// reading VISIBLE in EOT as it happens, so a chat shows what it parses through, not a spinner.
+export { meaningfulness, metacognize, traceReading } from './metacognition.js';
