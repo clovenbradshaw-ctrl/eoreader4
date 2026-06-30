@@ -97,12 +97,25 @@ the learning is acquired on demand:
 2. **The universal arc** — the floor, when the kind has not been learned and no
    research is available.
 
-The acquisition is `acquireSpec` (folded into `runArtifact`): when handed a
-`webSearch` and asked for a kind it has not learned, it **researches how to make the
-thing well** (`researchQuery(kind)`), parses the result with
-`deriveSpecFromDefinition` — mapping each found section to a neutral directive act by
-its place in the arc — and caches it in the library, which persists it to
-`templates/`. The next request, this session or a future one, reads it back with no
+The acquisition is `acquireSpec` (folded into `runArtifact`), and it prefers **learning
+from examples over trusting an authority**:
+
+1. **Examples (preferred)** — handed an injected `exampleSearch`, it finds good
+   *examples* of the kind (`exampleQuery`) and **the core engine learns the form from
+   them** (`learnStructureFromExamples`, `src/tasks/learn.js`). It reads actual Emily
+   Dickinson poems, not an essay about how they work; the line/stanza cut is the SEG
+   learner's (`predict/segment.js` — `learnBoundariesFromSurprise`, the same cut that
+   finds musical phrases), not a regex. Nothing about the form is pre-loaded: reading
+   Dickinson yields 4-line quatrains in 8-6-8-6 common meter ending on her dash; reading
+   limericks yields five lines; reading haiku yields three — each read off its own
+   examples. The learned regularities ride in a `form` field (lines per stanza, syllable
+   pattern, terminator) — the seam to **logit control**: the constraints a `propose()`-
+   gated generator would bias toward (the next slice).
+2. **Definition (fallback)** — handed a `webSearch`, it fetches a how-to and parses the
+   structure with `deriveSpecFromDefinition`, mapping each found section to a neutral
+   directive act by its place in the arc.
+
+Either way the learned shape is cached in the library, which persists it to `templates/`. The next request, this session or a future one, reads it back with no
 search. The engine never touches the network itself: `webSearch` is injected
 (proposer-only, the [web-search](web-search.md) discipline), exactly as the runner
 never imports a model. `deriveSpecFromDefinition` is guarded like

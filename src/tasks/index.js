@@ -47,6 +47,10 @@ export {
   deriveSpecFromDefinition, createSpecLibrary, acquireSpec, needsResearch, researchQuery,
 } from './spec.js';
 
+// Learning a structure by READING EXAMPLES (the preferred acquisition): the core engine
+// (predict/segment) finds the form from the examples' own surprise, not from an authority.
+export { learnStructureFromExamples, exampleQuery, parsePoem } from './learn.js';
+
 // The templates store (templates/): how a learned/installed shape becomes durable JSON.
 // Pure (de)serialization is browser-safe; the fs helpers lazy-import node:fs.
 export {
