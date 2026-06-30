@@ -22,10 +22,11 @@ const setup = (text) => {
   return doc;
 };
 
-test('math now reaches the talker — the mechanical short-circuit is retired', async () => {
-  // The model-free math/smalltalk/metadata short-circuits were removed: every turn goes
-  // through grounding + the talker, where the guards adjudicate what it says. With a doc
-  // loaded the turn grounds and the llm stage runs — no arithmetic answered at the route.
+test('math short-circuits at the route — math.js answers, the talker never warms', async () => {
+  // Math is the one model-free short-circuit kept live (answer/math.js): the answer is
+  // provably correct and document-independent, so it terminates at the route and the llm
+  // stage never runs — even with a document loaded. The smalltalk/metadata short-circuits
+  // stay retired (those shipped ungrounded claims past the guards).
   const doc = setup('Anything.');
   const model = createModel('echo');
   await model.load();
@@ -34,7 +35,23 @@ test('math now reaches the talker — the mechanical short-circuit is retired', 
     question: 'What is 2 + 2?',
     doc, model, embedder: createHashEmbedder(), auditLog: audit,
   });
-  assert.notEqual(result.turn.route, 'math', 'no mechanical math short-circuit');
+  assert.equal(result.turn.route, 'math', 'arithmetic answered mechanically at the route');
+  assert.equal(result.answer, '2 + 2 = 4', 'the evaluated expression rides as the answer');
+  assert.ok(!result.turn.steps.find(s => s.name === 'llm'), 'the talker never warms');
+});
+
+test('a real question with a number in it is NOT captured by the math gate', async () => {
+  // The gate is strict: a question carrying real words falls through to the grounded turn,
+  // even though it contains a numeral. Nothing short-circuits to math here.
+  const doc = setup('Widgets are small machines. They spin in factories.');
+  const model = createModel('echo');
+  await model.load();
+  const audit = createAuditLog();
+  const result = await runTurn({
+    question: 'what are the 2 widgets?',
+    doc, model, embedder: createHashEmbedder(), auditLog: audit,
+  });
+  assert.notEqual(result.turn.route, 'math', 'a worded question is not arithmetic');
   assert.ok(result.turn.steps.find(s => s.name === 'llm'), 'the talker runs');
 });
 
@@ -185,7 +202,7 @@ test('runs without a doc — chat mode, no veto noise', async () => {
   assert.ok(result.turn.steps.find(s => s.name === 'llm'));
 });
 
-test('math without a doc now reaches the talker (chat) — no mechanical short-circuit', async () => {
+test('math without a doc short-circuits to math.js — answered with or without a document', async () => {
   const model = createModel('echo');
   await model.load();
   const audit = createAuditLog();
@@ -196,8 +213,9 @@ test('math without a doc now reaches the talker (chat) — no mechanical short-c
     embedder: createHashEmbedder(),
     auditLog: audit,
   });
-  assert.equal(result.turn.route, 'chat', 'no doc → chat, not a mechanical math answer');
-  assert.ok(result.turn.steps.find(s => s.name === 'llm'), 'the talker runs');
+  assert.equal(result.turn.route, 'math', 'arithmetic answered mechanically, no doc needed');
+  assert.equal(result.answer, '7 * 6 = 42', 'the evaluated expression rides as the answer');
+  assert.ok(!result.turn.steps.find(s => s.name === 'llm'), 'the talker never warms');
 });
 
 // The flag-and-tell sentinel — that a veto rides ALONGSIDE the model's answer and never

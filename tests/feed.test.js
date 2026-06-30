@@ -33,15 +33,16 @@ test('buildFeed assembles the grounded model feed without calling a model', asyn
   assert.equal(feed.answer, undefined);
 });
 
-// Mechanical short-circuits are retired — an arithmetic question is now a real turn that
-// grounds against the document and builds a model feed like any other.
-test('buildFeed builds a real feed for arithmetic — no mechanical short-circuit', async () => {
+// Math is the one mechanical short-circuit kept live (answer/math.js): an arithmetic
+// question terminates at the route with a computed answer and feeds no model.
+test('buildFeed short-circuits arithmetic to math.js — no model feed', async () => {
   const doc = setup('Anything at all.');
   const feed = await buildFeed({ question: 'what is 2 + 2?', doc, embedder: createHashEmbedder() });
 
-  assert.notEqual(feed.terminate, true, 'the turn does not terminate at the route');
-  assert.notEqual(feed.route, 'math', 'no mechanical math answer');
-  assert.ok(feed.messages.some(m => m.role === 'system'), 'a real prompt is built');
+  assert.equal(feed.terminate, true, 'the turn terminates at the route');
+  assert.equal(feed.route, 'math', 'arithmetic is answered mechanically');
+  assert.equal(feed.answer, '2 + 2 = 4', 'the evaluated expression is the answer');
+  assert.ok(!feed.messages, 'no prompt is built — the model is never fed');
 });
 
 // With no document the feed degrades to the chat prompt — no excerpts, no graph.
