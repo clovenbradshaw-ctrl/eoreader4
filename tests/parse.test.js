@@ -6,7 +6,24 @@ import { isChrome } from '../src/perceiver/parse/chrome.js';
 import { createEntityAdmission } from '../src/perceiver/parse/entities.js';
 import { segmentSentences } from '../src/perceiver/parse/sentences.js';
 import { tok } from '../src/perceiver/parse/tokenize.js';
+import { headVerb } from '../src/perceiver/parse/relations.js';
 import { projectGraph } from '../src/core/project.js';
+
+test('a determiner/quantifier at the clause head is never read as the verb — fail to silence', () => {
+  // The dolphin-audit junk: a clause with no admitted subject ("All these families
+  // belong to Odontoceti", "Several species…") fell to the inherited-subject fill and
+  // its head walk took the leading quantifier as the relation, minting "X --All--> Y",
+  // "--Several-->", "--Some-->", "--including-->" bonds on an unrelated running figure.
+  // A determiner heads a NOUN PHRASE, never a predicate, so headVerb must return null
+  // (no bond) rather than name the quantifier the verb.
+  for (const w of ['All these families belong to Odontoceti', 'Some species use tools',
+                   'Several dolphins live here', 'Various porpoises hunt', 'Each calf nurses',
+                   'including the families Monodontidae and Phocoenidae'])
+    assert.equal(headVerb(w), null, `"${w.slice(0, 18)}…" must yield no head verb`);
+  // ...while a genuine verb-initial continuation ("…, and belong to …") still reads.
+  assert.equal(headVerb('belong to the parvorder Odontoceti')?.verb, 'belong');
+  assert.equal(headVerb('use their teeth for grasping')?.verb, 'use');
+});
 
 test('chrome gate holds only degenerate structure — roles are semantic', () => {
   assert.ok(isChrome('III'));           // a bare roman numeral

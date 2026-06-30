@@ -2319,8 +2319,16 @@ class Component extends DCLogic {
     const t={s:subject,v:verb,o:object,grain,reader,conf:Math.round(conf*100)/100};
     if(neg)t.neg=true;if(irr)t.irr=true;if(speech)t.speech=true;
     if(u)t.src=this.srcId(u);if(e.sentIdx!=null)t.sent=e.sentIdx;
+    t.rel=this.eotRel(verb,neg);            // canonical EOT relation token (hyphenated, not- for negation)
+    t.eot=this.eotSurface(t);               // the proposition in EOT LINK surface — never the flat arrow
     return t;
   }
+  // The EOT relation token (docs/eot-surface-syntax.md §5.3): the verb, hyphenated so it
+  // reads as one label, with the spec's `not-` carrying negation. Mirrors perceiver/surfaces.plainRel.
+  eotRel(verb,neg){const v=String(verb||'').trim().replace(/[.!?]+$/,'').replace(/\s+/g,'-')||'linked-to';return (neg?'not-':'')+v;}
+  // A proposition in EOT surface (docs/eot-surface-syntax.md): a relation is a LINK
+  // `SUBJECT -> OBJECT : relation`, never the retired flat `subject --relation--> object` arrow.
+  eotSurface(t){return `${t.s} -> ${t.o} : ${t.rel!=null?t.rel:this.eotRel(t.v,t.neg)}`;}
   entityTriples(id){
     const subj=[],obj=[],seen=new Set();
     for(const e of this.edgesOf(id)){
@@ -3357,7 +3365,7 @@ class Component extends DCLogic {
       const i=rows.length,gc=GRAINC[t.grain]||'#6b7280',exp=(this.state.memExpand===i);
       const ev=(e.seq!=null&&this.master.events[e.seq])||null;
       const u=t.sent!=null?this.master.sentenceSource[t.sent]:null;
-      rows.push({idx:i,s:t.s,v:(t.neg?'¬':'')+t.v,o:t.o,arrow:(t.irr?'⤏':'→'),src:t.src||'',grain:t.grain,conf:t.conf.toFixed(2),
+      rows.push({idx:i,s:t.s,o:t.o,rel:t.rel,eot:t.eot,src:t.src||'',grain:t.grain,conf:t.conf.toFixed(2),
         expanded:exp,caret:(exp?'▾':'▸'),
         json:exp?this._safeJson({edge:{from:e.from,to:e.to,via:e.via,relType:e.relType,kind:e.kind,op:e.op,seq:e.seq,sentIdx:e.sentIdx,weight:e.weight,grain:e.grain,confidence:e.confidence,polarity:e.polarity,modality:e.modality,reader:e.reader},event:ev,source:u,sentence:t.sent!=null?this.master.sentences[t.sent]:null}):'',
         hasSrc:!!u,onOpenSrc:u?(()=>{this.setState({memOpen:false});this.openSource(u);}):(()=>{}),
@@ -3383,7 +3391,7 @@ class Component extends DCLogic {
       if(seen.has(k))continue;seen.add(k);
       const ev=(e.seq!=null&&this.master.events[e.seq])||null;
       const u=t.sent!=null?this.master.sentenceSource[t.sent]:null;
-      out.push({subject:t.s,relation:(t.neg?'¬':'')+t.v,object:t.o,grain:t.grain,
+      out.push({eot:t.eot,subject:t.s,relation:t.rel,object:t.o,grain:t.grain,
         confidence:t.conf,negated:!!t.neg,irrealis:!!t.irr,speech:!!t.speech,reader:t.reader,
         srcId:t.src||null,sourceUrl:u||null,sentenceIdx:(t.sent!=null?t.sent:null),
         sentence:(t.sent!=null?this.master.sentences[t.sent]:null),

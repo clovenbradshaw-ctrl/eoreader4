@@ -2526,7 +2526,27 @@ var NOT_HEAD = /* @__PURE__ */ new Set([
   "seven",
   "eight",
   "nine",
-  "ten"
+  "ten",
+  "all",
+  "some",
+  "any",
+  "each",
+  "every",
+  "both",
+  "either",
+  "neither",
+  "several",
+  "many",
+  "few",
+  "fewer",
+  "other",
+  "another",
+  "various",
+  "numerous",
+  "multiple",
+  "enough",
+  "certain",
+  "including"
 ]);
 var NEGATION = /* @__PURE__ */ new Set(["not", "never", "cannot"]);
 var MODAL_EPISTEMIC = /* @__PURE__ */ new Set(["could", "would", "might", "may"]);
