@@ -144,6 +144,20 @@ not just an absence of output. See
 `scripts/controls.mjs`, `scripts/abstain.mjs`, `scripts/refusal-trace.mjs`, and
 `scripts/void-boundary.mjs`.
 
+And one modality lower still, into the **genetic code** (`scripts/dna-code.mjs`,
+`docs/genetic-code.md`). Hand the reader the 64 codons as bare triplets — no codon
+table, no synonymy, no hint that the third base is redundant — read each codon as its
+prefixes the way a tone was read as its overtones, and the **same Level-1 set-overlap**
+with the **same mutual-nearest `SYN` merge** collapses 64 codons into exactly the 16
+first-two-base boxes of the standard table. Eight are a single amino acid; the rest
+split two-and-two on the third base — the wobble position, the place the code is
+redundant, is exactly the place the reader treats as not-distinguishing, the same
+shape as octaves collapsing while the fifth stays separate. And it is falsified
+against: a flat (unordered) base-bag fuses all 64 into one meaningless blob, and a
+random code matches the real code's 8/16 functional boxes 0 times in 5000 — the
+emergent grouping is real reading order, and the real code is non-randomly organised
+so the redundancy the reader finds is functional.
+
 ## Three levels of reading — three kinds of math
 
 Reading happens at three levels, the three domains of the EO cube read top to
