@@ -3254,6 +3254,68 @@ class Component extends DCLogic {
     }
     return {rows:rows.slice(0,600),count:rows.length,shown:Math.min(600,rows.length)};
   }
+  // ── Full audit export ────────────────────────────────────────────────────
+  // Everything in memory, uncapped, in one self-describing JSON file. The modal
+  // tabs only ever *show* a window (sources collapse muted lines; EO notation
+  // caps at 600 rows) — for auditing we dump the whole thing: every source
+  // (muted included), every proposition with its raw logged edge/event/source,
+  // and every entity. No truncation, no slicing.
+  _auditProps(){
+    if(!this.master||!this.graph)return [];
+    const seen=new Set(),out=[];
+    for(const e of this.graph.edges){
+      if(e.from===e.to)continue;
+      if(this.isURLish(this.labelOf(e.from))||this.isURLish(this.labelOf(e.to)))continue;
+      const t=this.edgeTriple(e),k=t.s+'|'+t.v+'|'+t.o+'|'+(t.sent==null?'':t.sent);
+      if(seen.has(k))continue;seen.add(k);
+      const ev=(e.seq!=null&&this.master.events[e.seq])||null;
+      const u=t.sent!=null?this.master.sentenceSource[t.sent]:null;
+      out.push({subject:t.s,relation:(t.neg?'¬':'')+t.v,object:t.o,grain:t.grain,
+        confidence:t.conf,negated:!!t.neg,irrealis:!!t.irr,speech:!!t.speech,reader:t.reader,
+        srcId:t.src||null,sourceUrl:u||null,sentenceIdx:(t.sent!=null?t.sent:null),
+        sentence:(t.sent!=null?this.master.sentences[t.sent]:null),
+        edge:{from:e.from,to:e.to,via:e.via,relType:e.relType,kind:e.kind,op:e.op,seq:e.seq,sentIdx:e.sentIdx,weight:e.weight,grain:e.grain,confidence:e.confidence,polarity:e.polarity,modality:e.modality,reader:e.reader},
+        event:ev});
+    }
+    return out;
+  }
+  exportMemory(){
+    try{
+      const fmt=ts=>{try{return new Date(ts).toISOString();}catch(e){return null;}};
+      const sources=this.state.pages.map(p=>{const muted=this._muted.has(p.url);
+        const lines=this.master?this.master.sentenceSource.filter(u=>u===p.url).length:0;
+        return {srcId:muted?null:this.srcId(p.url),url:p.url,title:p.title||this.short(p.url),host:this.short(p.url),
+          lines,via:(p.via==='REAFFERENCE'?'researched':'opened'),readAt:fmt(p.ts),muted};});
+      const entities=[];
+      if(this.graph)for(const e of this.graph.entities.values()){
+        const l=this.labelOf(e.id);if(this.isURLish(l))continue;
+        entities.push({id:e.id,label:l,mentions:(this.mentionsOf?this.mentionsOf(e.id).length:undefined)});
+      }
+      const props=this._auditProps();
+      const payload={
+        kind:'eoreader-memory-audit',version:1,
+        exportedAt:fmt(Date.now()),
+        stats:{sources:this.master?this.master.pages.length:0,lines:this.master?this.master.sentences.length:0,
+          entities:this.graph?this.graph.entities.size:0,propositions:props.length},
+        sources,propositions:props,entities,
+        events:(this.master&&this.master.events)?this.master.events:[],
+        sentences:(this.master&&this.master.sentences)?this.master.sentences.map((t,i)=>({idx:i,source:this.master.sentenceSource[i]||null,text:t})):[]
+      };
+      const json=this._safeJson(payload);
+      const stamp=(payload.exportedAt||'').replace(/[:.]/g,'-').replace('T','_').slice(0,19);
+      const name='eo-memory-audit'+(stamp?'_'+stamp:'')+'.json';
+      try{
+        const blob=new Blob([json],{type:'application/json'});
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');a.href=url;a.download=name;
+        document.body.appendChild(a);a.click();
+        setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(url);}catch(e){}},0);
+      }catch(e){
+        // No DOM download path (older/embedded host) — fall back to a data URI.
+        const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(json);a.download=name;a.click();
+      }
+    }catch(e){try{console.error('exportMemory failed',e);}catch(_){}}
+  }
   previewVals(){const p=this.state.previewWiki;if(!p)return null;
     return {title:p.title,loading:!!p.loading&&!p.extract,err:!!p.err,
       extract:p.extract||'',hasExtract:!!(p.extract&&p.extract.length>0),
@@ -4139,7 +4201,7 @@ class Component extends DCLogic {
     const _acc=this.curAccent();
     const base={accentVar:_acc,accbgVar:this.mixWhite(_acc,.90),acclineVar:this.mixWhite(_acc,.70),
       settingsOpen:this.state.settingsOpen,onToggleSettings:()=>this.toggleSettings(),onCloseSettings:()=>this.closeSettings(),
-      memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
+      memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},onExportMem:()=>this.exportMemory(),mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
       memTab:this.state.memTab||'sources',memTabSources:(this.state.memTab||'sources')==='sources',memTabLog:this.state.memTab==='log',
       onMemSources:()=>this.setState({memTab:'sources'}),onMemLog:()=>this.setState({memTab:'log'}),
       memSourcesTabStyle:((this.state.memTab||'sources')==='sources'?'background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);'),
