@@ -8,7 +8,7 @@
 // Vetoes are flag-only — they never substitute the model's answer.
 // The user sees what the model actually said, with a flag pinned to it.
 
-import { answerVoid } from '../answer/index.js';
+import { answerVoid, answerMathAsync } from '../answer/index.js';
 import { retrieveHybrid, reserveBySource, pickRetrievalEmbedder, selectExcerpts, retrieveStructural, queryTouchesDoc, retrieveLexical } from '../retrieve/index.js';
 import { parseText } from '../perceiver/parse/index.js';
 import { think, worthSayingAloud, inferGenders } from '../write/index.js';
@@ -114,19 +114,24 @@ const significanceOpts = async (ctx, anchor) => {
 
 export const stages = {
 
-  // No model-free mechanical short-circuits — every turn goes through grounding + the
-  // talker, where the edge-grounding and diagonal guards adjudicate what it says.
-  // P0 already retired the DOCUMENT mechanical paths (confirm / relation / who); the
-  // non-document smalltalk / math / metadata short-circuits are now retired too. They
-  // shipped confident, ungrounded answers that bypassed the veto/fact-check layer
-  // entirely — the load-bearing case being "when was this written?" answering the
-  // Project Gutenberg *release date* as if it were the work's composition date, tagged
-  // a green "answered from the document" with no flag. Routing arithmetic and greetings
-  // through the talker is slower, but it keeps one honest path: nothing is asserted that
-  // the downstream guards did not see. The answerers (answer/mechanical.js,
-  // answer/metadata.js) are kept for unit tests and the feed probe, just not wired here.
+  // MATH is the one model-free short-circuit kept live. The DOCUMENT paths (confirm /
+  // relation / who) and the smalltalk / metadata short-circuits stay retired: they shipped
+  // confident, UNGROUNDED claims past the veto/fact-check layer — the load-bearing harm
+  // being "when was this written?" answering a Project Gutenberg *release date* as if it
+  // were the work's composition, tagged a green "answered from the document" with no flag.
+  // Arithmetic is the opposite case: math.js (answer/math.js — mathjs in the browser, a
+  // built-in evaluator offline) computes a PROVABLY correct value that does not depend on
+  // any document, so there is nothing for grounding to adjudicate. `2 + 2 = 4` holds with
+  // or without a file loaded, so it terminates here and never warms the model. The gate is
+  // strict — only a question that reduces to a pure math expression matches; anything with
+  // real words falls straight through to the grounded/chat turn below, byte-identical.
   //   else → grounded (doc) or chat (no doc).
   async route(ctx) {
+    // The math short-circuit. Cheap sync gate first (isMathQuery, inside answerMathAsync),
+    // so a non-math turn never awaits the evaluator or the CDN load — it returns null at once.
+    const math = await answerMathAsync(ctx.question);
+    if (math) return { ...ctx, ...math, mechanical: true, terminate: true };
+
     // Read the TASK register (intent.js): the prompt register (summary guard) and the
     // token ceiling — the real length bound.
     //

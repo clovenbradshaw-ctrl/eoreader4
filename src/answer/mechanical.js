@@ -8,6 +8,7 @@ import { tok } from '../perceiver/parse/index.js';
 import { editWithin, fuzzCeiling } from '../perceiver/parse/index.js';
 import { projectGraph, boundedNull } from '../core/index.js';
 import { typeOf, areDisjoint } from '../core/index.js';
+import { answerMathSync } from './math.js';
 
 // The non-relational confirm "Yes" line. It is DERIVED (boundedNull) from the
 // field's own chance overlap, not declared; CONFIRM_FLOOR is only the fallback,
@@ -17,22 +18,11 @@ import { typeOf, areDisjoint } from '../core/index.js';
 const CONFIRM_FLOOR = 0.6;
 const CONFIRM_ALPHA = 0.05;
 
-export const answerMath = (question) => {
-  const m = String(question || '').match(/(-?\d+(?:\.\d+)?)\s*([+\-*/x])\s*(-?\d+(?:\.\d+)?)/);
-  if (!m) return null;
-  const a = parseFloat(m[1]);
-  const b = parseFloat(m[3]);
-  const op = m[2];
-  let v;
-  switch (op) {
-    case '+': v = a + b; break;
-    case '-': v = a - b; break;
-    case '*': case 'x': v = a * b; break;
-    case '/': v = b === 0 ? null : a / b; break;
-  }
-  if (v == null) return null;
-  return { route: 'math', text: `${a} ${op} ${b} = ${v}`, sources: [] };
-};
+// The mechanical (sync, model-free) math answerer. The single-operator regex this used
+// to be is retired — it is now math.js (answer/math.js): a full expression evaluator
+// (parentheses, powers, functions, constants) backed by mathjs in the browser. This sync
+// re-export keeps tryMechanical and the unit tests on the dependency-free path.
+export const answerMath = answerMathSync;
 
 // A relational confirm question — "is grete his mother?" — types its relation and
 // resolves its subject, or returns null (not a relation the algebra knows, or a
