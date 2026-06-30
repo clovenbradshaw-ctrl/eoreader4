@@ -50,21 +50,6 @@
         <div style="width:21px;height:21px;border-radius:6px;background:var(--acc);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:800;letter-spacing:.02em;box-shadow:0 1px 2px rgba(91,52,214,.35);">EO</div>
         <span style="font-size:12.5px;font-weight:700;color:var(--ink);letter-spacing:-.01em;">Reader</span>
       </div>
-      <sc-if value="{{ hasTabs }}" hint-placeholder-val="{{ false }}">
-        <div style="display:flex;align-items:flex-end;gap:4px;min-width:0;overflow:hidden;">
-          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="1">
-            <div onclick="{{ t.onClick }}" style="{{ t.tabStyle }}">
-              <span style="{{ t.dotStyle }}"></span>
-              <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.label }}</span>
-              <span onclick="{{ t.onClose }}" title="Close tab" style="width:16px;height:16px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--ink3);font-size:12px;line-height:1;" style-hover="background:rgba(0,0,0,.08);color:var(--ink)">✕</span>
-            </div>
-          </sc-for>
-        </div>
-      </sc-if>
-      <sc-if value="{{ hasTabs }}" hint-placeholder-val="{{ true }}">
-        <div style="display:flex;align-items:center;gap:7px;padding:7px 12px 8px;font-size:12px;color:var(--ink3);">New tab</div>
-      </sc-if>
-      <button onclick="{{ onNewTab }}" title="New tab" style="width:24px;height:24px;flex:0 0 auto;margin-bottom:6px;border:none;background:transparent;border-radius:6px;color:var(--ink2);font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:rgba(0,0,0,.07);color:var(--ink)">+</button>
     </div>
 
     <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--card);">
@@ -380,6 +365,18 @@
               <sc-if value="{{ reading.canToggleMode }}" hint-placeholder-val="{{ false }}">
                 <button onclick="{{ reading.onToggleMode }}" title="{{ reading.modeTitle }}" style="{{ reading.modeStyle }}">⇄ {{ reading.modeLabel }}</button>
               </sc-if>
+              <sc-if value="{{ hasTabs }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:5px;min-width:0;overflow-x:auto;flex:0 1 auto;">
+                  <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="1">
+                    <div onclick="{{ t.onClick }}" style="{{ t.tabStyle }}">
+                      <span style="{{ t.dotStyle }}"></span>
+                      <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.label }}</span>
+                      <span onclick="{{ t.onClose }}" title="Close tab" style="width:15px;height:15px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--ink3);font-size:11px;line-height:1;" style-hover="background:rgba(0,0,0,.08);color:var(--ink)">✕</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <button onclick="{{ onNewTab }}" title="New tab" style="width:25px;height:25px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;color:var(--ink2);font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)">+</button>
               <sc-if value="{{ reading.isBook }}" hint-placeholder-val="{{ false }}">
               <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);flex:0 0 auto;">Reading</span>
               <span style="display:inline-flex;align-items:center;gap:3px;flex:0 0 auto;">
@@ -5417,7 +5414,7 @@ class Component extends DCLogic {
   closeTab(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hist.splice(i,1);if(this._hpos>=i&&this._hpos>0)this._hpos--;if(this._hpos>=this._hist.length)this._hpos=this._hist.length-1;if(this._hpos>=0)this._applyLoc(this._hist[this._hpos]);else this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
   newTab(){this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
   tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?('🔎 '+this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
-  buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';return {label:lab,i,active,isWeb,dotStyle:'width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';',onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};});return all.slice(-6);}
+  buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';return {label:lab,i,active,isWeb,dotStyle:'width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';',onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:6px;max-width:200px;min-width:88px;padding:5px 8px 5px 11px;border-radius:8px;cursor:pointer;font-size:12px;'+(active?'background:var(--accbg);color:var(--acc);font-weight:600;border:1px solid var(--accline);':'background:var(--app);color:var(--ink2);border:1px solid var(--line2);')};});return all.slice(-6);}
   // ---- live embed of the page shown in the CENTER viewport ----
   // A readable "book" rendering of an imported text source. The author's own
   // paragraphs (blank-line separated) are kept; if the text has no such structure
