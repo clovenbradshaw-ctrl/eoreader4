@@ -2850,6 +2850,20 @@ class Component extends DCLogic {
   // answer has to work from. No matches → it's reasoning from the meaning graph / its own read.
   _thinkGround(ground){const n=(ground&&ground.spans&&ground.spans.length)||0;
     return n?('Re-reading '+n+' matching passage'+(n!==1?'s':'')+'…'):'Working out the answer…';}
+  // COMPOSING, made legible. The bare "Composing the answer…" sat frozen for the whole decode —
+  // the model can prefill a grounded prompt for many seconds before the first token, and that dead
+  // air is exactly what the live trail exists to kill. So the opening beat NAMES the grounded supply
+  // the answer is written FROM (the passages / memory it stands on), and the streaming header below
+  // ticks a live word count — content motion, not just a clock. Honest signal only: it reflects the
+  // real basis and the real words drawn, never invented stages.
+  _composeOpen(grounded,ground){const n=(ground&&ground.spans&&ground.spans.length)||0;
+    if(n)return '✍️ Composing from '+n+' passage'+(n!==1?'s':'')+'…';
+    if(grounded)return '✍️ Composing from memory…';
+    return '✍️ Composing the answer…';}
+  // The live header during the decode: the word count drawn so far. Before the first word lands (the
+  // prefill gap) it keeps the bare label, so the status line never reads empty.
+  _composeTick(acc){const w=(String(acc||'').match(/\S+/g)||[]).length;
+    return w?('✍️ Writing the answer… · '+w+' word'+(w!==1?'s':'')):'✍️ Composing the answer…';}
   // STALL GUARD — the chat model loads on first use and decodes on the CPU, and EITHER step can
   // hang outright: a weights download that stops mid-stream, or a decode that never emits a first
   // token. Both leave a promise that neither resolves nor rejects, so `await ensureChatModel()` /
@@ -2973,9 +2987,9 @@ class Component extends DCLogic {
       // streamPhrase drives the backend's onToken when it can decode incrementally
       // (webllm, echo), and falls back to draw-then-emit otherwise — either way it
       // returns the full reply, which `finish` then re-renders as bound markdown.
-      this._setThink(id,'Composing the answer…');
+      this._setThink(id,this._composeOpen(grounded,ground));
       let acc='',raf=0;
-      const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+      const paint=()=>{raf=0;const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
       const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
@@ -3121,9 +3135,9 @@ class Component extends DCLogic {
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
-      this._setThink(id,'Composing the answer…');
+      this._setThink(id,this._composeOpen(grounded,ground));
       let acc='',raf=0;
-      const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+      const paint=()=>{raf=0;const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
       const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
