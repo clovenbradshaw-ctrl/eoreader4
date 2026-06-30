@@ -221,6 +221,7 @@ test('every built-in template has ordered sections with positive shares', () => 
   for (const [kind, t] of Object.entries(ARTIFACT_TEMPLATES)) {
     assert.ok(t.sections.length >= 1, `${kind} has sections`);
     assert.ok(t.sections.every((s) => (s.share ?? 1) > 0), `${kind} shares are positive`);
-    assert.ok(typeof t.tokens === 'number' && t.tokens > 0, `${kind} has a token total`);
+    assert.ok(typeof t.size === 'number' && t.size > 0, `${kind} has a size total`);
+    assert.ok(typeof t.organ === 'string', `${kind} names an output organ`);
   }
 });

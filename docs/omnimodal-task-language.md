@@ -1,10 +1,16 @@
 # The omnimodal task language — lowering a task onto an output organ
 
-> Design note (no code yet). The [task creator](task-creator.md) plans a generative
-> artifact as a grain tree of budgeted leaves, but its leaf contract is text-coded.
-> This note specifies the **modality-neutral task IR** and the **`organs/out`
-> conversion** that lowers each leaf onto whatever output organ renders it — the
-> mirror of how `organs/in` raises a modality onto the spine.
+> The [task creator](task-creator.md) plans a generative artifact as a grain tree of
+> budgeted leaves; this note specifies the **modality-neutral task IR** and the
+> **`organs/out` conversion** that lowers each leaf onto whatever output organ renders
+> it — the mirror of how `organs/in` raises a modality onto the spine.
+>
+> **Status — first slice landed** (`src/organs/out/`, `src/tasks/spec.js`,
+> `tests/output-organs.test.js`). The output membrane, the `withOrgans` dispatch, and
+> a second (music) organ exist: the same `createTaskSpec`/`runTaskGraph` now plan and
+> run a **melody** (budgeted in beats) as well as an essay (budgeted in tokens),
+> differing only in which renderer the leaves dispatch to. What is built and what is
+> still deferred is summarized in [§ Status](#status--what-landed) at the end.
 
 ## The asymmetry to close
 
@@ -182,6 +188,31 @@ The essay path is then byte-identical; a second organ (music, image) is purely
 additive — the falsifiable proof that the task language is no longer text-shaped is
 a non-text artifact planned by the *same* `createTaskSpec` and run by the *same*
 `runTaskGraph`, differing only in which `organs/out` renderer the leaves dispatch to.
+
+## Status — what landed
+
+The first slice is the seam, proven by a non-text artifact:
+
+- **`src/organs/out/`** — the output membrane. `text.js` (today's behaviour, native
+  unit tokens) and `music.js` (native unit beats) each export a pure plan-time
+  **descriptor** (`unit`, `ceiling`, `minBudget`, `contextOf`) and a run-time
+  **render** factory built from an injected generator. `index.js` is the registry
+  (`organFor`, `createOutputRegistry`) — model-free, the runner's discipline kept.
+- **`src/tasks/spec.js`** — the budget math now reads off the leaf's organ descriptor
+  instead of text-coded globals: `createTaskSpec` sizes the artifact in the organ's
+  unit, and the Figure/Pattern split fires off the organ's own `ceiling`. The leaf
+  contract gained `organ` / `extent` / `unit` (with a back-compat `tokens` alias on
+  the text path). `withOrgans(plan, registry)` is the dispatch; `runArtifact` takes
+  `organs:` for the omnimodal path and keeps `generate:` as the text shorthand.
+- **A melody runs end-to-end** through the *same* `runTaskGraph`: a long melody's
+  development section overflows the 16-beat phrase ceiling and nests into sub-phrases,
+  exactly as a long essay paragraph splits — `incoherent: []` confirms it split rather
+  than jammed.
+
+Deferred (the open questions below, unchanged): the `directive` is still carried as a
+text instruction even on a music leaf; per-organ SYN composition (`assembleOutput`
+still string-joins); and cross-modal bundles. The seam is crossed; these refine what
+travels across it.
 
 ## Open questions for the build
 

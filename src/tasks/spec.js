@@ -47,6 +47,7 @@ import { GRAINS } from '../core/index.js';
 import { PATTERN, FIGURE } from './grain.js';
 import { MAX_FANOUT } from './constants.js';
 import { runTaskGraph } from './runner.js';
+import { organFor, createOutputRegistry } from '../organs/out/index.js';
 
 // ── The small-model budgets ──────────────────────────────────────────────────
 // LEAF_MAX_TOKENS — the most one small-model reach should emit (a paragraph). A
@@ -85,7 +86,7 @@ export const readLength = (request = '') => {
 // and `answer` is the default — a request that names no artifact decomposes to a
 // single leaf (the degenerate task graph the runner's doc promises ≡ one generation).
 export const ARTIFACT_KINDS = Object.freeze([
-  'essay', 'report', 'story', 'review', 'letter', 'list', 'summary', 'answer',
+  'essay', 'report', 'story', 'review', 'letter', 'list', 'summary', 'melody', 'answer',
 ]);
 
 export const classifyArtifact = (request = '') => {
@@ -98,6 +99,9 @@ export const classifyArtifact = (request = '') => {
   if (/\b(letter|email|e-?mail|note\s+to|message\s+to)\b/.test(q)) return 'letter';
   if (/\b(list|bullet(?:ed|s)?|enumerate|rundown)\b/.test(q)) return 'list';
   if (/\b(summary|summari[sz]e|overview|recap|tl;?dr)\b/.test(q)) return 'summary';
+  // a non-text artifact, planned by the same machinery — its leaves render through the
+  // music output organ instead of text (docs/omnimodal-task-language.md).
+  if (/\b(melody|tune|jingle|riff|theme\s+music)\b/.test(q)) return 'melody';
   return 'answer';
 };
 
@@ -131,9 +135,11 @@ export const subjectOf = (request = '') => {
 // the artifact), a `share` (its slice of the total budget, relative — normalised at
 // build), a `goal(subject[, i, n])` that becomes the small model's instruction, and
 // an optional `repeat` (the body of an essay is N paragraphs, one section each).
-// `tokens` is the kind's default total at length 1; `format` rides to each leaf as a
-// rendering hint (prose / markdown / bullets).
-const T = (kind, format, tokens, note, sections) => Object.freeze({ kind, format, tokens, note, sections, source: 'builtin' });
+// `size` is the kind's default total at length 1, in the OUTPUT ORGAN's native unit
+// (tokens for text, beats for music); `organ` names that output organ (default text);
+// `format` rides to each leaf as a within-organ styling hint (prose / markdown / bullets).
+const T = (kind, format, size, note, sections, organ = 'text') =>
+  Object.freeze({ kind, format, size, organ, note, sections, source: 'builtin' });
 
 export const ARTIFACT_TEMPLATES = Object.freeze({
   essay: T('essay', 'prose', 700, 'a thesis opened, defended in ordered paragraphs, and closed', [
@@ -170,6 +176,14 @@ export const ARTIFACT_TEMPLATES = Object.freeze({
   summary: T('summary', 'prose', 320, 'one section — the whole drawn together briefly', [
     { role: 'summary', share: 1.0, goal: (s) => `Write a brief summary of ${s}: the main points, drawn together.` },
   ]),
+  // A NON-TEXT artifact, planned by the same machinery — its leaves render through the
+  // music output organ (native unit: BEATS, not tokens). Proof that the task language is
+  // not text-shaped: same createTaskSpec, same runTaskGraph, a different output organ.
+  melody: T('melody', 'notes', 32, 'a short melodic arc — opening motif, development, cadence', [
+    { role: 'opening motif', share: 1.0, goal: (s) => `State the opening motif of a melody evoking ${s}.` },
+    { role: 'development', share: 1.6, goal: (s) => `Develop the motif of the melody evoking ${s}: vary and extend it.` },
+    { role: 'cadence', share: 1.0, goal: (s) => `Close the melody evoking ${s}: resolve to a cadence.` },
+  ], 'music'),
   // The default: no artifact named, so no shape to impose — a single goal, one leaf,
   // byte-identical to one small-model call (the runner's degenerate graph).
   answer: T('answer', 'prose', 256, 'no artifact shape — a single grounded reach', [
@@ -225,23 +239,36 @@ export const createTaskSpec = ({ request = '', library = null, length = null } =
   const subject = subjectRaw && subjectRaw.toLowerCase() !== kind ? subjectRaw : 'the requested topic';
 
   const template = (library && library.get(kind)) || ARTIFACT_TEMPLATES[kind] || ARTIFACT_TEMPLATES.answer;
+
+  // The OUTPUT ORGAN governs the budget math: its native unit, its single-reach ceiling
+  // (a paragraph for text, a phrase for music), its floor, and its context width. The
+  // share→budget conversion that used to be text-coded globals now reads off the organ,
+  // so the same creator sizes a melody in beats and an essay in tokens
+  // (docs/omnimodal-task-language.md).
+  const organ = organFor(template.organ || 'text');
+  const baseSize = template.size ?? template.tokens ?? ARTIFACT_TEMPLATES.answer.size;
   const len = length ? { label: length === 'normal' ? '' : length, scale: LENGTH_SCALE[length] ?? 1 } : readLength(request);
-  const total = Math.max(LEAF_MIN_TOKENS, Math.round((template.tokens || ARTIFACT_TEMPLATES.answer.tokens) * len.scale));
+  const total = Math.max(organ.minBudget, Math.round(baseSize * len.scale));
 
   const expanded = expandSections(template, subject);
   const shareSum = expanded.reduce((s, x) => s + x.share, 0) || 1;
 
   const sections = expanded.map((x, i) => {
-    const tokens = clamp(Math.round((total * x.share) / shareSum), LEAF_MIN_TOKENS, total);
+    const extent = clamp(Math.round((total * x.share) / shareSum), organ.minBudget, total);
     return Object.freeze({
       id: `${i}`,
       role: x.role,
       goal: x.goal,
-      tokens,
-      // budget IS the grain: a section that overflows one reach is a Pattern goal the
-      // decomposer must split; one that fits is a Figure leaf.
-      grain: tokens > LEAF_MAX_TOKENS ? PATTERN : FIGURE,
-      contextSpans: clamp(Math.round(tokens / 40), 3, 10),
+      organ: organ.id,
+      extent,            // the leaf's budget in the organ's native unit
+      unit: organ.unit,
+      // budget IS the grain: a section over the organ's single-reach ceiling is a Pattern
+      // goal the decomposer must split; one that fits is a Figure leaf.
+      grain: extent > organ.ceiling ? PATTERN : FIGURE,
+      contextSpans: organ.contextOf(extent),
+      // back-compat alias: the text path has always exposed `tokens`. Present only when
+      // the native unit IS tokens, so a music leaf never carries a misleading token count.
+      ...(organ.unit === 'tokens' ? { tokens: extent } : {}),
     });
   });
 
@@ -257,13 +284,17 @@ export const createTaskSpec = ({ request = '', library = null, length = null } =
   return Object.freeze({
     kind,
     subject: subjectRaw,
+    organ: organ.id,
     format: template.format,
     note: template.note,
     source: template.source || 'builtin',
-    tokens: total,
+    extent: total,            // the artifact's total budget in the organ's native unit
+    unit: organ.unit,
     length: len.label || 'normal',
     goal,
     sections,
+    // back-compat alias for the text path (the spec has always exposed `tokens`).
+    ...(organ.unit === 'tokens' ? { tokens: total } : {}),
   });
 };
 
@@ -294,15 +325,22 @@ export const planArtifact = (specOrArgs = {}) => {
     const sec = registry.get(goal);
     if (!sec || sec.grain !== PATTERN) return [];   // unknown or Figure → a leaf
 
-    // Split a too-big section into leaf-sized parts — the budget-driven SEG cut. Parts
+    // Split a too-big section into leaf-sized parts — the budget-driven SEG cut, off the
+    // section's OWN output-organ ceiling (a paragraph for text, a phrase for music). Parts
     // share the section's budget; a part still over the ceiling stays Pattern and the
     // recursion splits it again (bounded by the runner's MAX_DEPTH guard).
-    const parts = clamp(Math.ceil(sec.tokens / LEAF_MAX_TOKENS), 2, MAX_FANOUT);
-    const each = Math.max(LEAF_MIN_TOKENS, Math.round(sec.tokens / parts));
+    const organ = organFor(sec.organ);
+    const parts = clamp(Math.ceil(sec.extent / organ.ceiling), 2, MAX_FANOUT);
+    const each = Math.max(organ.minBudget, Math.round(sec.extent / parts));
     const subs = [];
     for (let k = 1; k <= parts; k++) {
       const g = `${sec.goalText || goal} — part ${k} of ${parts}`;
-      const sub = { ...sec, goalText: g, role: `${sec.role} · part ${k}`, tokens: each, grain: each > LEAF_MAX_TOKENS ? PATTERN : FIGURE };
+      const sub = {
+        ...sec, goalText: g, role: `${sec.role} · part ${k}`,
+        extent: each, grain: each > organ.ceiling ? PATTERN : FIGURE,
+        contextSpans: organ.contextOf(each),
+        ...(organ.unit === 'tokens' ? { tokens: each } : {}),
+      };
       registry.set(g, sub);
       subs.push({ goal: g, grain: sub.grain });
     }
@@ -318,40 +356,72 @@ export const planArtifact = (specOrArgs = {}) => {
 const resolveGoal = (section, subject) =>
   (typeof section.goal === 'function' ? section.goal(subject || 'the requested topic') : String(section.goal));
 
-// ── The generate face: every leaf handed its budget, role, and format ─────────
+// ── The generate face (text): every leaf handed its budget, role, and format ──
 // The runner hands a leaf its cube identity (Figure-maker); this layer adds the
 // small-model contract — `maxTokens` (the output ceiling for this leaf), `role` (where
 // it sits in the artifact), `format` (how to render), and `contextSpans` (how wide to
 // retrieve). The caller's real `generate` reads these and makes the model call; this
-// module never imports a model, exactly as the runner does not.
+// module never imports a model, exactly as the runner does not. This is the TEXT path,
+// kept as the single-modality shorthand; `withOrgans` is the general dispatch.
 export const withBudgets = (plan, generate) => (view) => {
   const sec = plan.budgetFor(view.goal);
-  const maxTokens = sec ? sec.tokens : Math.min(LEAF_MAX_TOKENS, plan.spec.tokens);
+  const extent = sec ? sec.extent : Math.min(LEAF_MAX_TOKENS, plan.spec.extent ?? plan.spec.tokens);
   return generate({
     ...view,
     spec: plan.spec,
     role: sec ? sec.role : null,
     format: plan.spec.format,
-    maxTokens,
+    maxTokens: extent,
     contextSpans: sec ? sec.contextSpans : CONTEXT_SPANS,
+  });
+};
+
+// ── The omnimodal generate face: dispatch each leaf to its OUTPUT ORGAN ────────
+// The conversion the design note specifies (docs/omnimodal-task-language.md). Each leaf
+// carries an `organ` and an `extent` in that organ's native unit; this looks up the
+// section's budget, builds the modality-neutral leaf view, and dispatches to the organ's
+// renderer in `registry`. The renderer (organs/out) adapts the view to its modality and
+// makes the atom. Falls back to the text renderer for an untagged leaf, so it is a strict
+// superset of `withBudgets`. `runTaskGraph`, the projection, and the grain backstop are
+// unchanged — they fold a leaf whose `output` is prose today and a phrase tomorrow.
+export const withOrgans = (plan, registry) => (view) => {
+  const sec = plan.budgetFor(view.goal);
+  const organId = (sec && sec.organ) || plan.spec.organ || 'text';
+  const render = registry[organId] || registry.text;
+  if (!render) throw new Error(`no output organ for "${organId}"`);
+  const organ = organFor(organId);
+  return render({
+    ...view,
+    spec: plan.spec,
+    role: sec ? sec.role : null,
+    organ: organId,
+    format: plan.spec.format,
+    extent: sec ? sec.extent : organ.minBudget,
+    unit: organ.unit,
+    contextSpans: sec ? sec.contextSpans : organ.contextOf(organ.minBudget),
   });
 };
 
 // ── The convenience: create the task and run it ───────────────────────────────
 // A few lines, the way the runner's doc promises: build the spec, derive the faces,
-// wrap generate with the budgets, run the graph. `generate` is still injected (it
-// makes the model call); `library` lets a learned shape win; `runner` is swappable for
-// tests. Returns the runner's result with the spec attached, so a caller can show both
-// the structure it planned and the output it assembled.
+// wrap generation, run the graph. Pass `generate` for the single-modality (text)
+// shorthand, OR `organs` — a map of per-modality generators ({ text, music, … }) or a
+// bare text generator — to dispatch each leaf to its output organ. `library` lets a
+// learned shape win; `runner` is swappable for tests. Returns the runner's result with
+// the spec attached.
 export const runArtifact = async ({
-  request = '', generate, library = null, length = null,
+  request = '', generate, organs = null, library = null, length = null,
   onUpdate = null, signal = null, runner = runTaskGraph,
 } = {}) => {
   const plan = planArtifact({ request, library, length });
+  // `organs` chooses the omnimodal dispatch; a bare `generate` is the text shorthand.
+  const face = organs
+    ? withOrgans(plan, createOutputRegistry(organs))
+    : withBudgets(plan, generate);
   const res = await runner({
     goal: plan.goal,
     decompose: plan.decompose,
-    generate: withBudgets(plan, generate),
+    generate: face,
     onUpdate,
     signal,
   });
