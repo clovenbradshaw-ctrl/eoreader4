@@ -2046,6 +2046,62 @@ class Component extends DCLogic {
     const hits=(data&&data.query&&data.query.search)||[];
     return hits.map(h=>'https://en.wikipedia.org/wiki/'+encodeURIComponent(String(h.title).replace(/ /g,'_'))).slice(0,n||6);
   }
+  // WIKIPEDIA FIRST — the research guidance. A topic is grounded in its encyclopedia article (and,
+  // through _wikiCitedSources, that article's cited primary sources) BEFORE any open-web search.
+  // The bug this fixes: an open search for "write me an essay about dolphins" handed back a wall of
+  // essay-mill pages (gradesfixer / bartleby / classace) to recap; Wikipedia hands back the Dolphin
+  // article and its references instead. Falls back to the open web (searchLinks → DuckDuckGo) only
+  // when Wikipedia has no article for the query, so an off-encyclopedia topic still finds sources.
+  async _wikiFirstLinks(query,n){
+    let wiki=[];
+    try{wiki=await this._searchWiki(query,Math.min(3,n||3));}catch(e){wiki=[];}
+    if(wiki.length)return wiki;
+    try{return await this.searchLinks(query,n);}catch(e){return [];}
+  }
+  // The CITED external sources of a read Wikipedia article — the references that ground it, which
+  // the walk follows to build a multi-source graph ("go find primary sources"). Pulled from the
+  // article's reference list via the parse API (externallinks), filtered to readable publications
+  // (_rankCitedSources drops Wikimedia infrastructure, ID resolvers, paywalled aggregators, archive
+  // wrappers and search/social), then deduped to ONE per host so the traversal fans out across
+  // distinct sources rather than several links into one site. Returns absolute http(s) URLs.
+  async _wikiCitedSources(articleUrl,n){
+    const m=String(articleUrl||'').match(/\/wiki\/([^#?]+)/i);
+    if(!m)return [];
+    const title=decodeURIComponent(m[1]).replace(/_/g,' ');
+    let links=[];
+    try{
+      const u='https://en.wikipedia.org/w/api.php?action=parse&page='+encodeURIComponent(title)+'&prop=externallinks&format=json&redirects=1&origin=*';
+      const data=await this._wikiJSON(u);
+      links=(data&&data.parse&&data.parse.externallinks)||[];
+    }catch(e){return [];}
+    return this._rankCitedSources(links).slice(0,n||4);
+  }
+  // Is this host citation NOISE rather than a readable source? Wikimedia's own family, ID/lookup
+  // resolvers (doi, worldcat, isbn), paywalled aggregators that never parse (jstor, proquest,
+  // researchgate, ssrn), archive wrappers, and search/social/shopping — all dropped so the walk
+  // spends its hops on pages it can actually read and ground a proposition in.
+  _citationNoise(host){
+    const noise=['archive.org','web.archive.org','webcitation.org','ghostarchive.org','archive.today','archive.ph',
+      'doi.org','dx.doi.org','hdl.handle.net','worldcat.org','isbnsearch.org','ui.adsabs.harvard.edu',
+      'jstor.org','proquest.com','semanticscholar.org','researchgate.net','ssrn.com','academia.edu',
+      'youtube.com','youtu.be','twitter.com','x.com','facebook.com','instagram.com','t.co','reddit.com'];
+    if(noise.includes(host))return true;
+    return /(?:^|\.)(?:wikipedia\.org|wikimedia\.org|wikidata\.org|wiktionary\.org|wikisource\.org|wikivoyage\.org|wikibooks\.org|mediawiki\.org|wmflabs\.org|toolforge\.org)$/.test(host)
+      || /(?:^|\.)google\.[a-z.]+$/.test(host) || /(?:^|\.)bing\.com$/.test(host) || /(?:^|\.)amazon\.[a-z.]+$/.test(host);
+  }
+  _rankCitedSources(links){
+    const out=[],hosts=new Set();
+    for(let h of (links||[])){
+      if(!h)continue;
+      if(h.startsWith('//'))h='https:'+h;
+      if(!/^https?:\/\//i.test(h))continue;
+      let host='';try{host=new URL(h).hostname.replace(/^www\./,'').toLowerCase();}catch(e){continue;}
+      if(!host||this._citationNoise(host)||hosts.has(host))continue;   // one source per host — fan out
+      hosts.add(host);
+      out.push(h.split('#')[0]);
+    }
+    return out;
+  }
 
   rebuild(pages){
     const m={events:[],sentences:[],sentenceSource:[],pages:[]};
@@ -2272,13 +2328,36 @@ class Component extends DCLogic {
     const id=this._chatTopicEntity(text);
     if(id!=null){const lab=this.labelOf&&this.labelOf(id);if(lab)return lab;}
     return null;}
+  // Strip the TASK FRAMING off a request so the walk researches the SUBJECT, not the chore. The
+  // bug: "write me an essay about dolphins" was searched verbatim, so the web handed back other
+  // people's dolphin essays (gradesfixer / bartleby / classace) — essay-mill pages to recap, not
+  // sources to learn from. The subject of the research is "dolphins"; the rest is instructions to
+  // ME, never search terms. So peel a leading "write me a 500-word essay about" / "tell me about" /
+  // "give me an overview of" down to whatever it is ABOUT, and research THAT. Conservative: only a
+  // recognised framing+connector is stripped; a bare topic ("the French Revolution") or a real
+  // question ("what is the capital of France") passes through untouched. Pure string-mapping.
+  _subjectOf(q){
+    const before=this.norm(String(q||'')).replace(/[?.!]+$/,'').trim();
+    if(!before)return before;
+    // 1) "<verb> (me) (a|an|the) [N words] [adjective…] <doc-noun> <connector> SUBJECT"
+    let m=before.replace(
+      /^\s*(?:please\s+|kindly\s+|hey\s+|ok(?:ay)?\s+|so\s+|can\s+you\s+|could\s+you\s+|would\s+you\s+|will\s+you\s+|i(?:'d| would)?\s+(?:like|want|need)(?:\s+you)?\s+to\s+|i\s+(?:want|need)\s+|let'?s\s+|go\s+|now\s+|just\s+)*(?:write|compose|draft|create|produce|generate|make|prepare|put\s+together|do|craft|pen)\s+(?:me\s+|us\s+)?(?:a|an|the|some|one|another)?\s*(?:(?:\d+|one|two|three|four|five|several|a\s+few)[-\s]?(?:word|words|page|pages|paragraph|paragraphs|sentence|sentences|line|lines)\s+)?(?:(?:short|brief|long|longer|detailed|comprehensive|thorough|in[-\s]?depth|quick|simple|full|complete|extensive|well[-\s]?researched|original|persuasive|argumentative|expository|descriptive|informative|academic|formal|creative)\s+)*(?:essays?|reports?|papers?|articles?|pieces?|overviews?|accounts?|guides?|breakdowns?|summar(?:y|ies)|analys[ei]s|reviews?|blog\s+posts?|posts?|stories|story|treatises?|dissertations?|compositions?|write[-\s]?ups?|notes?|outlines?|memos?|briefs?)\s+(?:about|on|regarding|concerning|covering|of|for|describing|detailing|exploring|discussing|that\s+(?:covers?|discusses?|describes?|explores?|explains?|is\s+about))\s+(.+)$/i,'$1');
+    if(m!==before&&m.trim())return m.trim();
+    // 2) bare framing verbs: "tell me about / write about / explain / give me an overview of SUBJECT"
+    m=before.replace(
+      /^\s*(?:please\s+|can\s+you\s+|could\s+you\s+|would\s+you\s+|i(?:'d| would)?\s+(?:like|want)(?:\s+you)?\s+to\s+|let'?s\s+|go\s+|just\s+)*(?:tell\s+me\s+(?:all\s+)?about|write\s+about|talk\s+about|teach\s+me\s+about|explain(?:\s+to\s+me)?|describe|discuss|summari[sz]e|elaborate\s+on|expand\s+on|give\s+(?:me\s+)?(?:an?\s+)?(?:overview|summary|rundown|breakdown|account|explanation)\s+(?:of|on|about|for))\s+(.+)$/i,'$1');
+    if(m!==before&&m.trim())return m.trim();
+    return before;
+  }
   // Resolve a research turn into the topic to chase, the anchor the leash measures drift against,
   // and whether the subject was DERIVED from the chat (a "do more" continuation) rather than named
   // outright. A message that names its own subject is taken as-is; a meta/continuation message
   // hands off to _chatSubject so the walk deepens THIS conversation instead of the word "research".
   _researchSeed(q,cur){
     const intent=this._researchIntent(q);
-    const candidate=(intent&&intent.topic)||q;
+    // Peel the task framing first ("write me an essay about X" → "X") so the SUBJECT, not the chore,
+    // is what gets researched — and so the meta-research test below reads the bare subject.
+    const candidate=this._subjectOf((intent&&intent.topic)||q);
     // A CORRECTION turn ("he is no longer a council member") names no subject of its own — the
     // figure lives in the conversation. Treat it like a continuation: chase the chat's SUBJECT,
     // sharpened with the correction's own content words (the disputed attribute), so the walk
@@ -2815,10 +2894,10 @@ class Component extends DCLogic {
     const extraSeeds=this._researchBattery(topic,seed.derived,this.chatSourcesOf(cur));
     const angles=extraSeeds.map(t=>'“'+this._nextQuery(anchor,t)+'”').join(', ');
     const startText=seed.derived
-      ? ('Picking up this chat — researching “'+topic+'”'+(angles?(' across '+angles):'')+'. I’ll follow what surprises me while it stays on topic.')
+      ? ('Picking up this chat — researching “'+topic+'”'+(angles?(' across '+angles):'')+'. Starting from Wikipedia, then following its cited sources.')
       : lookup
       ? ('Looking up “'+topic+'” — a quick fact, so I’ll read the best source and answer straight.')
-      : ('Researching “'+topic+'”'+(angles?(' — also '+angles):'')+'. I’ll follow what surprises me while it stays on topic.');
+      : ('Researching “'+topic+'”'+(angles?(' — also '+angles):'')+'. Starting from Wikipedia, then following its cited sources to ground it across several.');
     // Append the user turn + a pending assistant bubble carrying a live research trail.
     let id=this.state.activeChat;
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
@@ -2848,8 +2927,10 @@ class Component extends DCLogic {
     this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].research)m[li]={...m[li],research:{...m[li].research,done:true,readCount,hops}};
       return {...c,messages:m};})}));
-    // Answer about the SUBJECT (not the literal "do more research" message) grounded in what was read.
-    await this._answerInto(id,topic,[...new Set(walk.readUrls)]);
+    // Answer about the SUBJECT (not the literal "do more research" message) grounded in what was
+    // read. The longform intent rides from the ORIGINAL turn ("write me an essay…") so stripping
+    // the framing off the subject (now just "dolphins") doesn't lose the essay shape.
+    await this._answerInto(id,topic,[...new Set(walk.readUrls)],{longform:this._longformIntent(q)});
   }
   // Synthesize the grounded answer into the existing pending bubble (which already carries the
   // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
@@ -2859,12 +2940,14 @@ class Component extends DCLogic {
   // target (that fights the model's grounded prior); the request only opts INTO the multi-section
   // shape. How long the answer actually runs is set by how much bindable evidence there is.
   _longformIntent(q){return /\b(essays?|treatise|report|deep[\s-]?dive|comprehensive(?:ly)?|in[\s-]?depth|at length|long[\s-]?form|thorough(?:ly)?|detailed|\d{3,}\s*words?|write\s+(?:me\s+)?(?:a|an)\b[^.?!]*\b(?:essay|report|overview|account|piece|article|guide|breakdown))\b/i.test(String(q||''));}
-  async _answerInto(id,q,gathered){
+  async _answerInto(id,q,gathered,opts){
     // OPT-IN LONGFORM (the arc, in the reader's own primitives): SEG the gathered evidence into one
     // section per source (a fold), CON each grounded ONLY in that source's spans (re-prompt per
     // fold), EVA each fold for new coverage and NUL when it would only re-cite, then assemble. Any
     // other ask — or thin supply — takes the ordinary single answer. Length stays EMERGENT.
-    if(this._longformIntent(q))return this._longformArc(id,q,gathered);
+    // `opts.longform` lets the caller carry the intent from the ORIGINAL turn when `q` has been
+    // reduced to a bare subject (research strips "write me an essay about" down to "dolphins").
+    if((opts&&opts.longform)||this._longformIntent(q))return this._longformArc(id,q,gathered);
     return this._answerSingle(id,q,gathered);
   }
   async _answerSingle(id,q,gathered){
@@ -3058,9 +3141,15 @@ class Component extends DCLogic {
     const topic=new Map();for(const t of this._researchTerms(anchor))topic.set(t,(topic.get(t)||0)+3);
     let baseline=0,topicFrozen=false,stray=0;
     const cfg=this._depthCfg();                 // shallow / deep / obsessive → the walk's reach
-    const frontier=[{query:seed,term:null}];   // FIFO of one-thread-deep leads; the seed leads
-    // EXTRA SEEDS — surprising threads already surfaced in what's been read, chased alongside the
-    // subject so a "go deeper" research turn opens new angles instead of re-reading the same pages.
+    // The frontier is a FIFO of leads; the seed (the Wikipedia entry point for the subject) leads.
+    // A node normally carries {query,term} (searched, Wikipedia-first); a node may instead carry
+    // {url} — a SOURCE cited by a read article, read DIRECTLY rather than searched. Cited sources
+    // are unshifted (read depth-first, right after the article that cited them) so the walk verifies
+    // the subject across the encyclopedia AND its primary sources before fanning out to the battery.
+    const frontier=[{query:seed,term:null}];
+    // EXTRA SEEDS — the battery: a few more ENTRY POINTS for the subject (the salient threads the
+    // reading already raised, plus neutral facets), each its own Wikipedia search, so the walk opens
+    // the topic from several angles instead of chaining off one.
     const extra=(opts&&opts.extraSeeds)||[];
     for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
     // BREADTH × DEPTH: the policy caps the hops — shallow stops at the strongest answer, obsessive
@@ -3068,30 +3157,51 @@ class Component extends DCLogic {
     // A LOOKUP overrides the dial entirely: one hop on the seed, the strongest answer, no fan-out
     // and no curiosity follow — so even on "obsessive" a "what's the temp" stays a quick lookup.
     const lookup=!!(opts&&opts.lookup);
+    // How many CITED sources to follow out of each Wikipedia article — the depth of the source
+    // graph — and a hard cap across the whole walk, so it reads primary sources without reading the
+    // whole afternoon. A lookup follows none (it wants one fast answer, not a graph).
+    const citedPer=lookup?0:(cfg.key==='shallow'?1:(cfg.key==='obsessive'?3:2));
+    const citedMax=citedPer?citedPer+1:0;
+    const harvested=new Set();   // article URLs whose cited sources are already on the frontier
+    let citedTotal=0;
     const maxHops=lookup
       ? frontier.length
-      : Math.max(frontier.length,Math.min(cfg.maxHops,frontier.length+(cfg.key==='obsessive'?4:2)));
+      : Math.max(frontier.length,Math.min(cfg.maxHops+citedMax,frontier.length+citedMax+(cfg.key==='obsessive'?3:1)));
+    // entCount() — the graph is undefined until the FIRST page is folded (rebuild builds it), and a
+    // fresh chat reaches this loop with no graph at all. Reading this.graph.entities.size unguarded
+    // then threw on the first read, discarding the ENTIRE walk — so guard it like every other graph read.
+    const entCount=()=>(this.graph&&this.graph.entities&&this.graph.entities.size)||0;
+    // After a Wikipedia article is read, enqueue its cited primary sources as the NEXT hops (unshift
+    // = depth-first), narrated so the sources grounding the answer are visible in real time.
+    const harvestCited=async(url,title)=>{
+      if(!citedPer||citedTotal>=citedMax||harvested.has(url)||!/wikipedia\.org\/wiki\//i.test(url))return;
+      harvested.add(url);
+      let cited=[];try{cited=await this._wikiCitedSources(url,citedPer);}catch(e){cited=[];}
+      cited=cited.filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u)&&!frontier.find(f=>f.url===u));
+      if(!cited.length)return;
+      step('lead','“'+(title||this.short(url))+'” cites '+cited.length+' source'+(cited.length!==1?'s':'')+' — following '+(cited.length===1?'it':'them')+' to verify: '+cited.map(u=>this.short(u)).join(', '));
+      for(let i=cited.length-1;i>=0;i--){if(citedTotal>=citedMax)break;frontier.unshift({url:cited[i],term:'source',via:'wiki-cite'});citedTotal++;}
+    };
     while(hops.length<maxHops&&frontier.length){
       const node=frontier.shift();
-      step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching the web for “'+node.query+'”'));
+      const isUrl=!!node.url;
       let links=[];
-      // A single provider hiccup must not end the whole walk — searchLinks already falls back from
-      // DuckDuckGo to Wikipedia; if even that fails, treat the thread as dry and try the next one
-      // (two dry threads in a row ends it), so an extra-seed thread can still find sources.
-      try{links=await this.searchLinks(node.query,6);}catch(e){step('warn','Search unavailable on that thread — '+((e&&e.message)||e));hops.push({query:node.query,term:node.term,got:0,next:null,error:String((e&&e.message)||e)});if(++stray>=cfg.patience)break;continue;}
+      if(isUrl){
+        links=[node.url];
+        step('read','Reading a source cited by Wikipedia — '+this.short(node.url)+' …');
+      }else{
+        step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching Wikipedia for “'+node.query+'”'));
+        // WIKIPEDIA FIRST (then its sources). A provider hiccup must not end the whole walk —
+        // _wikiFirstLinks falls back to the open web; if even that fails, the thread is dry and we
+        // try the next one (`patience` dry threads in a row ends it).
+        try{links=await this._wikiFirstLinks(node.query,6);}catch(e){step('warn','Search unavailable on that thread — '+((e&&e.message)||e));hops.push({query:node.query,term:node.term,got:0,next:null,error:String((e&&e.message)||e)});if(++stray>=cfg.patience)break;continue;}
+      }
       links=(links||[]).filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u));
-      if(!links.length){step('warn','No fresh sources on that thread.');hops.push({query:node.query,term:node.term,got:0,next:null,empty:true});if(++stray>=cfg.patience)break;continue;}
-      const want=node.term?cfg.want:cfg.wantSeed;let got=0,attempts=0;const keptText=[];
-      // entCount() — the graph is undefined until the FIRST page is folded (rebuild builds it),
-      // and a fresh chat ("everything you've read", nothing read yet) reaches this loop with no
-      // graph at all. Reading `this.graph.entities.size` unguarded then threw on the first read,
-      // and the throw discarded the ENTIRE walk (chatResearch's catch leaves walk empty) — so the
-      // web silently "didn't trigger" and the model answered from bare general knowledge. Guard it
-      // the same way every other graph read in this file does.
-      const entCount=()=>(this.graph&&this.graph.entities&&this.graph.entities.size)||0;
+      if(!links.length){if(!isUrl)step('warn','No fresh sources on that thread.');hops.push({query:node.query||node.url,term:node.term,got:0,next:null,empty:true});if(++stray>=cfg.patience)break;continue;}
+      const want=isUrl?1:(node.term?cfg.want:cfg.wantSeed);let got=0,attempts=0;const keptText=[];
       for(let i=0;i<links.length&&got<want&&attempts<5;i++){
         const url=links[i];attempts++;
-        step('read','Reading '+this.short(url)+' …');
+        if(!isUrl)step('read','Reading '+this.short(url)+' …');
         // A single bad page (a parse/ingest throw) must not kill the walk and lose every hop
         // already gathered — isolate each read so the walk degrades to skipping that candidate.
         try{
@@ -3105,6 +3215,9 @@ class Component extends DCLogic {
           got++;readUrls.push(url);keptText.push(this._pageText(url));
           const grew=Math.max(0,entCount()-preEnts);
           step('graph','Read “'+(res.title||this.short(url))+'” · +'+grew+' new entit'+(grew===1?'y':'ies'));
+          // The grounding move: a freshly read Wikipedia article's cited sources become the next
+          // hops, so the answer stands on the encyclopedia AND its primary sources, not essay mills.
+          await harvestCited(url,res.title);
         }catch(e){step('warn','Couldn’t read '+this.short(url)+' — '+((e&&e.message)||e));}
       }
       // CURIOSITY: of everything just kept, what's the most surprising NEW turn? That becomes
@@ -3117,7 +3230,7 @@ class Component extends DCLogic {
         if(!lookup&&leads.length&&hops.length+1<maxHops){next=leads[0].term;chased.add(next);frontier.push({query:this._nextQuery(anchor,next),term:next});
           step('lead','The most surprising turn here is “'+next+'” — chasing it next.');}
       }
-      hops.push({query:node.query,term:node.term,got,next});
+      hops.push({query:node.query||node.url,term:node.term,got,next});
       if(!got){if(++stray>=cfg.patience)break;}else stray=0;
     }
     return {readUrls,hops};
@@ -5703,7 +5816,11 @@ class Component extends DCLogic {
       depthTitle:'How much research per question: shallow (the strongest answer) · deep (several angles) · obsessive (exhaust the threads). Click to cycle.',
       depthStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
       backend:this.state.backend||'webllm',
-      backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},{v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
+      backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},
+        {v:'qwen-coder-1.5b',label:'Qwen2.5-Coder 1.5B · code model, WebGPU'},
+        {v:'qwen-coder-7b',label:'Qwen2.5-Coder 7B · code model, WebGPU ~6GB'},
+        {v:'qwen-coder-0.5b',label:'Qwen2.5-Coder 0.5B · code model, CPU'},
+        {v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
       sources:[],srcCount:0,srcEmpty:true,rightOpen:this.state.rightOpen,rightClosed:!this.state.rightOpen,onToggleRight:()=>this.toggleRight(),panelProfileOn:false,panelListOn:true,panelPageOn:false,pageOverview:null,listFromPage:false,onShowAllEntities:()=>this.showAllEntities(),onShowOverview:()=>this.showOverview(),panelProfile:null,previewOn:false,preview:null,
       pageLinked:this.state.linkMode,onTogglePlain:()=>this.toggleLinkMode(),
