@@ -1456,13 +1456,20 @@ class Component extends DCLogic {
   }
   // THE ARC, in the reader's own primitives — multi-section grounded longform (spec-the-arc).
   // The document is a fold of its events; the turn a fold of its stages; the ARC a fold of a
-  // section plan. Here the plan's sections are the SOURCES the chat has gathered/read: one
-  // grounded section per source, re-prompted at that fold, appended while it adds coverage.
-  //   SEG  rank the in-scope sources by how much they bear on the question → the section plan.
-  //   CON  generate each section grounded ONLY in that source's spans (a re-prompt per fold).
-  //   EVA  does this fold add NEW coverage (terms not already covered)? …
-  //   NUL  …if it would only re-cite, skip it. Saturation, not a token target, sets the length.
-  // Degrades to the single answer when supply is thin (<2 groundable sources) or anything throws.
+  // section plan. The plan's sections are THEMES, not sources. The old fold ran one section PER
+  // SOURCE: with eight pages all ABOUT one subject (the dolphin essays), every section re-told
+  // the same material — evolution, communication, intelligence, pods — and each was headed by a
+  // raw page title ("Dolphins Essay - 1049 Words | Bartleby"). So instead: POOL every relevant
+  // span across the in-scope sources, then cluster the pool by what the spans are ABOUT. One
+  // section now reads on one idea drawn from wherever it was read, headed by the theme — the
+  // repetition and the page-title headings both fall out.
+  //   POOL  gather every relevant span across the in-scope sources; drop near-duplicates.
+  //   SEG   cluster the pool into themes by shared distinctive terms → the section plan, ranked.
+  //   LEAD  open with one short grounded paragraph over the strongest spans overall (no heading).
+  //   CON   generate each section grounded ONLY in its theme's spans (a re-prompt per fold).
+  //   EVA   does this fold add NEW coverage (terms not already covered)? …
+  //   NUL   …if it would only re-cite, skip it. Saturation, not a token target, sets the length.
+  // Degrades to the single answer when supply is thin (<4 spans / <2 themes) or anything throws.
   async _longformArc(id,q,gathered){
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
@@ -1473,58 +1480,113 @@ class Component extends DCLogic {
     // The named-subject gate: don't build a multi-section essay about a subject the in-scope
     // reading never names (the Grok case) — answer honestly instead of confabulating sections.
     if(!this._subjectsKnown(q,urls)){finish(this._noSubjectPatch(q,scope));return;}
-    // SEG — the section plan: each in-scope source that actually bears on the question, ranked.
-    const plan=[];
+    // POOL — every relevant span across the in-scope sources, near-duplicates removed so two
+    // sources phrasing the same fact don't seed two sections.
+    const pool=[],seenKey=new Set(),poolEnts=new Set();
     for(const u of urls){
       const g=this.groundNotes(q,[u]);
-      const spans=(g.spans||[]).filter(s=>s.text&&s.text.length>24);
-      if(g.relevant&&spans.length)plan.push({url:u,title:this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),70),
-        spans:spans.slice(0,6),entities:g.entities||[],score:spans.reduce((a,s)=>a+(s.score||0),0)});
+      if(!g.relevant)continue;
+      for(const e of (g.entities||[]))poolEnts.add(e);
+      for(const s of (g.spans||[])){
+        if(!s.text||s.text.length<=24)continue;
+        const key=s.text.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().slice(0,72);
+        if(!key||seenKey.has(key))continue;seenKey.add(key);
+        pool.push(s);
+      }
     }
-    plan.sort((a,b)=>b.score-a.score);
-    if(plan.length<2)return this._answerSingle(id,q,gathered);   // not enough supply for a multi-section piece
+    if(pool.length<4)return this._answerSingle(id,q,gathered);   // thin supply — a flat answer reads better
+    // SEG — cluster the pool into themes; each becomes one section. <2 themes → single answer.
+    const plan=this._clusterSpans(pool,q).slice(0,6);
+    if(plan.length<2)return this._answerSingle(id,q,gathered);
     let model=null;try{model=await this.ensureChatModel();}catch(e){model=null;}
-    const MAXSEC=6,NOVELTY=0.2;
-    const covered=new Set(),parts=[],allEnts=new Set(),allSrcs=new Set(),allPass=[];
+    const NOVELTY=0.2;
+    const covered=new Set(),parts=[],usedHead=new Set(),allEnts=new Set(poolEnts),allSrcs=new Set(),allPass=[];
     let acc='',raf=0;
     const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
-    for(const sec of plan){
-      if(parts.length>=MAXSEC)break;
-      // EVA → NUL: a fold whose terms are already covered would only re-cite — skip it.
-      const terms=new Set(sec.spans.flatMap(s=>this._researchTerms(s.text)));
-      const fresh=[...terms].filter(t=>!covered.has(t));
-      if(parts.length&&terms.size&&fresh.length/terms.size<NOVELTY)continue;
-      // CON — generate this section grounded ONLY in this source's spans.
-      const header='## '+sec.title;
-      acc=(parts.join('\n\n')+(parts.length?'\n\n':'')+header+'\n\n');paint();
-      let body='';
+    // A grounded fold: stream `spans` into the running essay under an optional `header`, then
+    // append the result to `parts`. Shared by the LEAD (no header) and each CON theme section.
+    // ACCUMULATE the streamed tokens (`streamed`), don't REPLACE — each onToken piece is one
+    // token, so `acc=base+streamed` grows the live view left-to-right (the shape _answerSingle
+    // uses with `acc+=s`). Kept outside the try so a late hiccup (streamPhrase returns empty or
+    // throws AFTER streaming real prose) keeps what was written instead of dropping to a fragment.
+    const fold=async(spans,header)=>{
+      const head=header?('## '+header+'\n\n'):'';
+      acc=(parts.join('\n\n')+(parts.length?'\n\n':'')+head);paint();
+      let body='',streamed='';
       if(model){
-        // ACCUMULATE the streamed tokens (`streamed`), don't REPLACE — each onToken piece is
-        // one token, so `acc=base+streamed` grows the live view left-to-right (the same shape
-        // _answerSingle uses with `acc+=s`). The old `acc=base+t` showed only the latest token,
-        // so the essay flashed "one token at a time" and never built up. Kept outside the try so
-        // a late hiccup (streamPhrase returns empty or throws AFTER streaming real prose) keeps
-        // what was already written instead of dropping back to a bare source fragment.
-        let streamed='';
         try{
-          const msgs=this._ME.buildGroundedMessages({question:q,spans:sec.spans,graph:this.meaningGraph([sec.url]),
-            orientation:this.chatOrientation([sec.url]),task:'answer',conversation:{pastTurns:[]},now:new Date()});
+          const srcs=[...new Set(spans.map(s=>s.u).filter(Boolean))];const gscope=srcs.length?srcs:urls;
+          const msgs=this._ME.buildGroundedMessages({question:q,spans,graph:this.meaningGraph(gscope),
+            orientation:this.chatOrientation(gscope),task:'answer',conversation:{pastTurns:[]},now:new Date()});
           const base=acc;
           const onToken=(piece)=>{const t=String(piece||'');if(!t)return;streamed+=t;acc=base+streamed;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
           body=this.normMd(await this._ME.streamPhrase(model,msgs,{maxTokens:384,temperature:0.4,onToken}))||this.normMd(streamed);
         }catch(e){body=this.normMd(streamed);}
       }
-      if(!body)body=sec.spans.slice(0,3).map(s=>this._clipPassage(s.text)).join(' ');   // structural fallback, bounded
-      parts.push(header+'\n\n'+body);
-      for(const t of terms)covered.add(t);
-      for(const e of sec.entities)allEnts.add(e);
-      allSrcs.add(sec.url);
-      for(const s of sec.spans.slice(0,2))allPass.push({text:s.text,u:s.u,i:s.i});
+      if(!body)body=spans.slice(0,3).map(s=>this._clipPassage(s.text)).join(' ');   // structural fallback, bounded
+      parts.push(head+body);
+      for(const s of spans.slice(0,2))allPass.push({text:s.text,u:s.u,i:s.i});
+      for(const s of spans)if(s.u)allSrcs.add(s.u);
       acc=parts.join('\n\n');paint();
+    };
+    // LEAD — open on the strongest spans across the whole pool (a frame, not a theme section).
+    await fold([...pool].sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,5),null);
+    // CON — one grounded section per theme, headed by the theme, while it still adds coverage.
+    for(const sec of plan){
+      // EVA → NUL: a fold whose terms are already covered would only re-cite — skip it.
+      const terms=new Set(sec.spans.flatMap(s=>this._researchTerms(s.text)));
+      const fresh=[...terms].filter(t=>!covered.has(t));
+      if(covered.size&&terms.size&&fresh.length/terms.size<NOVELTY)continue;
+      let head=(sec.heading&&!usedHead.has(sec.heading.toLowerCase()))?sec.heading:null;
+      if(head)usedHead.add(head.toLowerCase());
+      await fold(sec.spans,head);
+      for(const t of terms)covered.add(t);
     }
-    if(!parts.length)return this._answerSingle(id,q,gathered);
+    if(parts.length<2)return this._answerSingle(id,q,gathered);
     finish({text:parts.join('\n\n'),entities:[...allEnts].slice(0,8),sources:[...allSrcs],
       passages:allPass.slice(0,12),groundKind:'matched',related:this.relatedDocs(q,scope)});
+  }
+  // SEG for the arc: group pooled spans into THEMES, one section each. A theme IS a salient
+  // content word — the spans that share it are its section, and that word (Title-Cased) is its
+  // heading, clean by construction. So grouping and naming are the same act: no separate
+  // heading-derivation step that can name a section "Even" or "Have". The subject's own words
+  // and a stoplist of function/verb/adverb/generic words are barred from being theme words (else
+  // every span shares them and the pool is one blob). Each span lands in its single best theme;
+  // themes are ranked by how many spans they organize, capped at six.
+  _clusterSpans(pool,q){
+    const stop=this._themeStop();
+    const subj=new Set();for(const t of this._researchTerms(q)){subj.add(t);subj.add(t.replace(/s$/,''));subj.add(t+'s');}
+    const ok=t=>t.length>=4&&t.length<=14&&!subj.has(t)&&!stop.has(t)&&/^[a-z][a-z'’-]*$/.test(t);
+    const termsOf=s=>[...new Set(this._researchTerms(s.text).filter(ok))];
+    const items=pool.map((s,idx)=>({s,idx,terms:termsOf(s)})).filter(it=>it.terms.length);
+    if(!items.length)return [];
+    // term → the spans that carry it. A term in ≥2 spans is a candidate theme (it recurs).
+    const byTerm=new Map();
+    for(const it of items)for(const t of it.terms){if(!byTerm.has(t))byTerm.set(t,new Set());byTerm.get(t).add(it.idx);}
+    const cands=[...byTerm.entries()].filter(([,set])=>set.size>=2)
+      .sort((a,b)=>b[1].size-a[1].size||(a[0]<b[0]?-1:1));   // most-organizing first, stable by name
+    // Greedily claim themes: each takes its still-unclaimed spans; a theme needs ≥2 of them.
+    const MAXSEC=6,claimed=new Set(),themes=[];
+    for(const [t,set] of cands){
+      if(themes.length>=MAXSEC)break;
+      const idxs=[...set].filter(i=>!claimed.has(i));
+      if(idxs.length<2)continue;
+      for(const i of idxs)claimed.add(i);
+      themes.push({heading:this._titleCase(t),spans:idxs.map(i=>pool[i]),score:idxs.length});
+    }
+    return themes;
+  }
+  _titleCase(t){t=String(t||'');return t?t.charAt(0).toUpperCase()+t.slice(1):t;}
+  // Words barred from being a theme/heading — function words, light verbs, adverbs, and generic
+  // nouns that recur everywhere and name nothing. Built once. Folds in the reader's STOP set.
+  _themeStop(){
+    if(this._themeStopSet)return this._themeStopSet;
+    const extra=('also even ever just like much many more most less least very really quite rather still only both each every all any some other others another such including include includes included around within without along among between toward towards regarding concerning despite although though however therefore thus hence because since while whereas about above below over under into onto from with without been being have has had does did done able about often well able about '+
+      'observe observed observes observing show shows showed shown showing know knows knew known knowing make makes made making become becomes became becoming use uses used using found find finds finding call calls called calling allow allows allowed help helps helped need needs needed want wants wanted give gives gave given keep kept take takes took taken come comes came see sees saw seen get gets got go goes went develop develops developed exhibit exhibits exhibited range ranges ranged consist consists consisting include '+
+      'thing things way ways kind kinds sort sorts lot lots number numbers amount amounts part parts piece pieces example examples variety varieties form forms type types group groups member members aspect aspects fact facts case cases point points level levels area areas place places time times day days '+
+      'able such must can could would should shall will might may said say says tell told known').split(/\s+/).filter(Boolean);
+    const s=new Set(extra);if(this.STOP)for(const t of this.STOP)s.add(t);
+    return (this._themeStopSet=s);
   }
   // The curiosity walk, in the reader's own primitives (searchLinks / readURL / the graph).
   // CURIOSITY steers (chase the most surprising new term), COMPETENCY leashes (only follow
