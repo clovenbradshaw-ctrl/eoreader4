@@ -23,6 +23,7 @@ import { createFold } from '../write/fold.js';
 import { createIdleLoop, seededRng } from '../write/idle.js';
 import { openLedger } from '../write/voids.js';
 import { firm } from '../core/index.js';
+import { restIconSvg, restStateLabel } from './rest-icon.js';
 
 // ── the derivation: what the first ingress left open (pure) ──────────────────
 // Read the projected graph and split each entity's edges at an INGRESS HORIZON (a
@@ -248,7 +249,9 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
       `<div class="iv-wrap">` +
         `<div class="iv-field">` +
           `<div class="iv-top">` +
-            `<span class="iv-state ${phase}"><span class="iv-dot"></span>${stateName}</span>` +
+            // a little phosphor-esque glyph for the current posture — eye open while
+            // surfing, the moon once it rests (rest-icon.js; docs/how-to-rest.md).
+            `<span class="iv-state ${phase}">${restIconSvg(stateName, { size: 15, title: restStateLabel(stateName) })}${stateName}</span>` +
             `<span class="iv-tele">read through c${Math.min(reach, st.S)} / ${st.S} · ${ledger.length} open</span>` +
           `</div>` +
           `<canvas class="iv-canvas" width="600" height="48" aria-hidden="true"></canvas>` +
