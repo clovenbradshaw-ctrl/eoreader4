@@ -1528,6 +1528,10 @@ class Component extends DCLogic {
       // It scales the battery size, the hop budget, pages-per-thread, and leash patience.
       researchDepth:(()=>{try{return localStorage.getItem('eo_depth')||'deep';}catch(e){return 'deep';}})(),
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
+      // Entities the reader has explicitly RESEARCHED (the ✦ button). Once an entity
+      // has been researched, its side-panel profile leads with the cross-source reading
+      // — what the newly folded sources add — instead of staying pinned to the page line.
+      researched:{},
       // Temporal cursor on the entity summary. Keyed by entity id → a fraction in
       // [0,1] of the way through that entity's attested record. Undefined means the
       // latest (right edge); dragging left rewinds the summary to what the record
@@ -5212,6 +5216,21 @@ class Component extends DCLogic {
     let rep=null; if(!ctxDef&&!wikiText){rep=this.repQuote(id);}
     const ctxLabel=ctxKind==='page'?'From this page':(ctxKind==='pageMention'?'As used on this page — not yet defined':(ctxKind==='synth'?'Synthesized from your sources':(ctxKind==='stitch'?'Stitched from your sources':(ctxKind==='gist'?'Composed from your sources — not yet attested':''))));
     const ctxHeading=(ctxKind==='page'||ctxKind==='pageMention')?"In context · on this page":"In context · what we've learned together";
+    // PROMOTE after research. Once this entity has been researched, the new sources are
+    // what the reader asked for — so lead the IN CONTEXT block with the cross-source
+    // reading (what those sources add) and demote the on-page line to the block below.
+    // Only swaps when there IS cross-source content and the lead is currently page-pinned;
+    // when the entity isn't on this page, ctxDef already carries the cross-source stitch.
+    const _researched=!!(this.state.researched&&this.state.researched[id]);
+    const promote=_researched&&hasCross&&(ctxKind==='page'||ctxKind==='pageMention');
+    const crossHeading=promote?"In context · what we've learned together":'In context · across your sources';
+    const crossLabel=promote?('Across '+crossSrcN+' source'+(crossSrcN!==1?'s':'')+' beyond this page'):(crossSrcN+' other source'+(crossSrcN!==1?'s':''));
+    let leadDef=ctxDef,leadHeading=ctxHeading,leadLabel=ctxLabel,leadCites=cites,
+        subDef=crossDef,subHas=hasCross,subHeading=crossHeading,subLabel=crossLabel,subCites=crossCites;
+    if(promote){
+      leadDef=crossDef;leadHeading=crossHeading;leadLabel=crossLabel;leadCites=crossCites;
+      subDef=ctxDef;subHas=!!ctxDef;subHeading=ctxHeading;subLabel=ctxLabel;subCites=cites;
+    }
     const pd=this.provData(id),pOpen=!!this.state.panelProvOpen;
     // Connected entities — the graph already ranks neighbors by bond weight and carries
     // the relation(s) on each edge. Surface the top ones as a pivotable list so the
@@ -5225,20 +5244,20 @@ class Component extends DCLogic {
     const lr=this.state.liveResearch||{},researching=!!(lr.on&&lr.focal===id),justDone=(!lr.on&&lr.focal===id&&lr.phase==='done');
     const researchMsg=researching?(lr.phase==='read'?('Reading '+(lr.host||'a new source')+'…'):('Searching the web for more on '+lab+'…')):(justDone?((lr.addedFocal>0)?('Added '+lr.addedFocal+' new line'+(lr.addedFocal!==1?'s':'')+' about '+lab+(lr.srcFocal>0?(' · +'+lr.srcFocal+' source'+(lr.srcFocal!==1?'s':'')):'')+'.'):('Read '+(lr.added||0)+' lines into memory — but nothing new about '+lab+' yet. The new sources were about something else.')):'');
     const webViz=this.egoGraphMini(id,nbrs);
-    const lens=this.lensBlock(id,vu,ctxDef,cites);
+    const lens=this.lensBlock(id,vu,leadDef,leadCites);
     return {name:lab,av:this.initials(lab),avStyle:this.avatar(lab,40),avStyleSm:this.avatar(lab,30),
       webViz:webViz, hasWeb:!!webViz, webMeta:nbrs.filter(n=>!this.isURLish(this.labelOf(n.id))).length+' connected', lens:lens,
       srcList:this.sourcePanel(id),
       gzLabel:Math.round(((this.state.gz&&this.state.gz.k)||1)*100)+'%',
       onGzIn:()=>this.gzZoom(1.25),onGzOut:()=>this.gzZoom(1/1.25),onGzReset:()=>this.gzReset(),
       contextual:!!_genAnchor, contextAnchorLabel:_genAnchor?this.labelOf(_genAnchor):'', onContextAnchor:_genAnchor?(()=>this.clickEntity(_genAnchor)):(()=>{}),
-      hasCtx:!!ctxDef, ctxDef:ctxDef||'', ctxHeading:ctxHeading,
-      hasCtxLabel:!!ctxLabel, ctxLabel:ctxLabel,
+      hasCtx:!!leadDef, ctxDef:leadDef||'', ctxHeading:leadHeading,
+      hasCtxLabel:!!leadLabel, ctxLabel:leadLabel,
       ctxBadgeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;color:var(--ink3);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;',
-      cites:cites,hasCites:cites.length>0,
-      hasCross:hasCross,crossDef:crossDef||'',crossHeading:'In context · across your sources',
-      crossLabel:crossSrcN+' other source'+(crossSrcN!==1?'s':''),
-      crossCites:crossCites,hasCrossCites:crossCites.length>0,
+      cites:leadCites,hasCites:leadCites.length>0,
+      hasCross:subHas,crossDef:subDef||'',crossHeading:subHeading,
+      crossLabel:subLabel,
+      crossCites:subCites,hasCrossCites:subCites.length>0,
       hasWikiDef:!!wikiText, wikiText:wikiText||'', wikiUrl:wikiUrl, wikiTitle:wikiTitle,
       isQuote:!!rep, isVoid:!ctxDef&&!wikiText&&!rep,
       rep:rep||{text:'',srcId:'',host:'',when:'',hasWhen:false,jumpUrl:'',onOpen:()=>{},onGo:()=>{}},
@@ -5952,7 +5971,7 @@ class Component extends DCLogic {
     if(!got)this.feedLine('warn','Every candidate was blocked or off-topic — paste a specific URL up top to read it directly.');
     const d={ents:this.graph.entities.size-before.ents,srcs:this.state.pages.length-before.srcs};
     this.feedLine('done','Done. Memory gained '+d.ents+' entities across '+d.srcs+' new source'+(d.srcs!==1?'s':'')+'. '+focal+' now has '+this.sourcesOf(id).length+' sources.');
-    this._busy=false;this.setState({busy:false,liveResearch:{on:false,focal:id,phase:'done',host:'',added:this.master.sentences.length-preSent,addedFocal:this.mentionsOf(id).length-preMF,srcFocal:this.sourcesOf(id).length-preSF}});
+    this._busy=false;this.setState(s=>({busy:false,researched:{...s.researched,[id]:true},liveResearch:{on:false,focal:id,phase:'done',host:'',added:this.master.sentences.length-preSent,addedFocal:this.mentionsOf(id).length-preMF,srcFocal:this.sourcesOf(id).length-preSF}}));
     setTimeout(()=>{ if(this.state.liveResearch&&this.state.liveResearch.phase==='done')this.setState({liveResearch:{on:false}}); },4000);
   }
 
