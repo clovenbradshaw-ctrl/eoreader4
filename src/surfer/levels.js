@@ -100,6 +100,7 @@ export const encodeLevels = (doc, opts = {}) => {
     bonds: new Map(),                        // src|via|tgt → strongest edge (backbone)
     links: [],                               // inter-proposition edges in this unit
     cast: 0, meaning: 0,                     // the two-channel operator profile
+    conObj: 0, npObj: 0,                      // concrete-register proxy: share of bonds whose object is an NP referent
     text: '',
   }));
   if (!segs.length) return { mode, grain: mode, segments: [], sentenceCount: sents.length, labelOf };
@@ -116,6 +117,7 @@ export const encodeLevels = (doc, opts = {}) => {
       seg.figureCount.set(id, (seg.figureCount.get(id) || 0) + 1);
     } else if (e.op === 'CON' || e.op === 'SIG') {
       if (e.linkKind === 'inter-proposition') { seg.links.push(e); continue; }
+      if (e.op === 'CON') { seg.conObj++; if (e.tgtKind === 'np') seg.npObj++; }  // concrete-register proxy
       if ((e.confidence ?? 0) < BACKBONE_CONFIDENCE) continue;   // backbone is the sure spine
       const key = `${rep(e.src)}|${e.via}|${rep(e.tgt)}`;
       const prev = seg.bonds.get(key);
@@ -142,6 +144,9 @@ export const encodeLevels = (doc, opts = {}) => {
       figures, bonds, links: seg.links,
       domain: Object.freeze({ cast: seg.cast, meaning: seg.meaning,
                               meaningDensity: tot ? Math.round(1000 * seg.meaning / tot) / 1000 : 0 }),
+      // concrete-register proxy (§ defamiliarization): the share of this unit's bonds whose
+      // object is an NP referent, a physical thing, not a named figure acting.
+      npShare: seg.conObj ? Math.round(1000 * seg.npObj / seg.conObj) / 1000 : 0,
       text: norm(sents.slice(seg.lo, seg.hi).join(' ')),
     });
   });

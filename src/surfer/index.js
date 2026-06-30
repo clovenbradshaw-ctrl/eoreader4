@@ -92,3 +92,8 @@ export * from './sequence.js';
 // spine routed by the question's domain. This is what lets a whole-book question reach the
 // regions it lives in without surfing every sentence at full resolution.
 export { encodeLevels, detectGrain, coarseSurf, routeDomain, CAST_OPS, MEANING_OPS } from './levels.js';
+// The MODELER (faculty #2): read the narrator's evaluative OPERATION into the theory-of-mind
+// graph — owner-attributed (narrator, or ambiguous under free-indirect discourse), σ-side,
+// divergence-preserving. NOT the machine's endorsement (faculty #3, the read-time evaluator,
+// the veto guard's sibling on the rhetoric axis), which stays out of the graph as a node.
+export { attributedEvaluation, NARRATOR } from './evaluation.js';
