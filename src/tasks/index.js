@@ -34,3 +34,15 @@ export {
   objectGrainOf, holonGrainOf, cubeCellOf, actsOf, grainCoherence, annotateGrain,
 } from './grain.js';
 export { MAX_DEPTH, MAX_FANOUT, MAX_NODES } from './constants.js';
+
+// The task creator (spec.js): a generative request → an artifact spec → the two
+// runTaskGraph faces, sized for small models. Reads the kind/subject/length off the
+// request, picks a shape (learned → built-in → research), and decomposes it into
+// leaf-sized, budgeted generations.
+export {
+  LEAF_MAX_TOKENS, LEAF_MIN_TOKENS, CONTEXT_SPANS,
+  ARTIFACT_KINDS, ARTIFACT_TEMPLATES,
+  classifyArtifact, subjectOf, readLength,
+  createTaskSpec, planArtifact, withBudgets, runArtifact,
+  deriveSpecFromDefinition, createSpecLibrary, needsResearch, researchQuery,
+} from './spec.js';
