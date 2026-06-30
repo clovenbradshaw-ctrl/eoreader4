@@ -117,3 +117,8 @@ export { promote, spiralStep, cutIsQueryBlind, provenanceIntact, SELF } from './
 // the spiral consults before promoting a verdict (provenance retained). And traceReading makes the
 // reading VISIBLE in EOT as it happens, so a chat shows what it parses through, not a spinner.
 export { meaningfulness, metacognize, traceReading } from './metacognition.js';
+// The reader — the ρ-side self that FEELS surprise (the interpretation level's live number, the
+// me-ness against the accumulated Horizon ρ). `interpret` fills interpretation.surprise on a σ-side
+// surf result at read-time (firewall held); `curiosity` is meta-surprise; `curiousSurf` lets the
+// surf follow what it is curious about — the surprise gradient through the material, not keywords.
+export { createReader, interpret, curiousSurf } from './reader.js';

@@ -66,10 +66,19 @@ export const meaningfulness = (vectors, { alpha = 0.05 } = {}) => {
   const floor = deriveNull(lambda, { alpha });
   const signalReadings = Number.isFinite(floor) ? lambda.filter((w) => w > floor).length
                                                 : lambda.filter((w) => w > 2 / n).length;
+  // The verdict is the BORN judgment, not a number: does a reading stand out above what chance
+  // would throw up (deriveNull)? "More interesting than chance" or not — that is the whole signal.
+  // The scalars ride along for machinery, but the answer is qualitative.
+  const meaningful = signalReadings >= 1 && departure > 1e-6;
   return Object.freeze({
-    meaningful: signalReadings >= 1 && departure > 1e-6,
+    meaningful,
+    // "THIS is interesting" — the OBJECTIVE claim: the content beats chance (against σ, the noise
+    // floor), reader-independent. The subjective counterpart, "I find this interesting" (against the
+    // reader's own ρ), is the reader's to say (reader.js), never the content's.
+    verdict: meaningful ? 'this is interesting' : 'this is no more interesting than chance',
+    signalReadings,                                   // how many readings beat the noise floor
     concentration, departure: round(departure), entropy: round(S), purity,
-    topWeight: round(lambda[0] || 0), signalReadings,
+    topWeight: round(lambda[0] || 0),
     noiseFloor: Number.isFinite(floor) ? round(floor) : null,
     readings: lambda.length, dim: n,
   });
@@ -117,7 +126,8 @@ export const traceReading = (content, { max = 40, totalRead = true } = {}) => {
   return Object.freeze({
     lines,
     meaningfulness: m,
-    // a one-line EOT-shaped summary a chat surface can show as the closing metacognitive beat.
-    summary: `read: ${m.readings} readings, concentration ${m.concentration} — ${m.meaningful ? 'meaningful' : 'no reading stands out (a smear)'}`,
+    // the closing metacognitive beat — the Born judgment, not a number: did a reading stand out
+    // above chance, or is it a smear? That is what we care about.
+    summary: `read: ${m.meaningful ? 'a reading stands out — this is interesting' : 'nothing beats chance — a smear'}`,
   });
 };

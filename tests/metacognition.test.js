@@ -51,7 +51,7 @@ test('traceReading makes the metacognition VISIBLE — EOT lines for what it par
   // a figure entering and a bond forming both show, in EOT surface syntax.
   assert.ok(t.lines.some((l) => l.op === 'INS' && /^exists: /.test(l.eot)), 'figures shown as they enter');
   assert.ok(t.lines.some((l) => /\S -> \S.* : \S/.test(l.eot)), 'bonds shown as EOT LINK triples');
-  assert.ok(t.summary.includes('readings'), 'a closing metacognitive summary');
+  assert.ok(/interesting|smear/.test(t.summary), 'a closing metacognitive summary (the Born judgment)');
   assert.equal(typeof t.meaningfulness.meaningful, 'boolean');
 });
 
