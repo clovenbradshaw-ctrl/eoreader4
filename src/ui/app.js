@@ -616,9 +616,13 @@ const runQuery = async (rawQuestion) => {
       // As soon as the fold has read the passage, type its IMPRESSION into the bubble
       // while the talker warms — model-free streaming during the long time-to-first-
       // token (docs/streaming-answer.md). Cleared when the real answer begins. This
-      // exposes the engine's internal reading (the figures/edges it settled on), so it
-      // stays behind the verbose gate — the bare chatbot just shows "reading…".
-      if (CHAT_VERBOSE && name === 'fold' && ctx?.surf && !thinking._impression) {
+      // exposes the engine's internal reading (the figures it settled on, the edges it
+      // drew, what it holds open), so the silent "…" wait reads as the substrate
+      // thinking out loud rather than a dead spinner. It ships in the DEFAULT surface —
+      // decoupled from the verbose audit gate (which only governs the heavy blocks:
+      // raw prompt, retrieved spans, the per-stage trace). The preview is muted/italic
+      // and always replaced by the real answer, so it never reads as the answer itself.
+      if (name === 'fold' && ctx?.surf && !thinking._impression) {
         try { streamImpression(thinking, foldImpression(ctx).phrases); } catch { /* preview only */ }
       }
     },
