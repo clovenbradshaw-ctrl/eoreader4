@@ -97,3 +97,8 @@ export { encodeLevels, detectGrain, coarseSurf, routeDomain, CAST_OPS, MEANING_O
 // divergence-preserving. NOT the machine's endorsement (faculty #3, the read-time evaluator,
 // the veto guard's sibling on the rhetoric axis), which stays out of the graph as a node.
 export { attributedEvaluation, NARRATOR } from './evaluation.js';
+// Autopoietic holons by the Born rule — the grain DETECTED from the reading's own cast-closure
+// (ρ over the cast, its eigenlenses the self-coupled communities) rather than imposed by chapter
+// markers. The lens-switch boundaries are the cast-turnover surprise, so this is also the
+// multi-grain surprise encoding. `holarchy` nests coarse arcs into their scenes.
+export { detectHolons, holarchy } from './holons.js';
