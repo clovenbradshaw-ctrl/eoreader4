@@ -1,0 +1,16 @@
+{
+  "capability": "the omnimodal reading COUNT is signal-derived, not a universal constant: readingCount reads how many readings a field holds as a void over its eigengap spectrum (deriveNull, log scale) — generating readings where a real elbow is found and dissipating to a single reading (abstaining) where the spectrum is flat",
+  "claim": "the Born rule (assign each unit to argmax |<u|lens>|^2) is the UNIVERSAL invariant across modalities; the segmentation COUNT is not. A geography-derived count (readingCount) beats both hand-rolled fixed-count rules — 90%-Born-mass (over-segments: saturates the cap-12 and flickers) and eigenvalues-above-the-void-floor (over-abstains on flat high-rank spectra) — on aggregate boundary F1 across a multilingual + hard-problem battery, AND it abstains correctly (zero boundaries) on every flat-geography stream where the two fixed rules hallucinate or misfire",
+  "predictions": {
+    "born_universal": "the same argmax-Born assignment is used unchanged by all three readers; only the count k differs, so any F1 difference is the count policy's own effect",
+    "dissociation": "no single fixed count wins everywhere — mass wins on high-rank sequences (hard_high_k), null wins on the abstain trio; readingCount adapts to each geography and wins on the mean",
+    "abstention": "flat spectra (isotropic noise, a single register, a collinear field) yield k=1 and ZERO detected boundaries — structure is not asserted where the basis does not admit it",
+    "honest_limits": "near-degenerate multiplicity (hard_two_balls) and an adjacent-recurrence boundary (hard_adjacent_recurrence, the A|A cut) stay invisible to lens-switching by construction; CJK/Devanagari char-trigram bases (text_zh/ja/hi) are too flat to separate registers, so the engine abstains rather than flicker — a front-end (basis) limit surfaced honestly, not an engine failure"
+  },
+  "abstain_streams": ["hard_pure_noise", "hard_single", "hard_collinear", "text_zh", "text_ja", "text_hi"],
+  "min_margin": 0.03,
+  "verdict_tag": "geography-derived count > both fixed rules on the mean, abstention exact on the flat streams; Born assignment held universal",
+  "control": "readingCount is a NEW pure export (src/core/voidnull.js); the default engine paths are byte-identical (node --test tests/*.test.js green, 1756 prior tests unchanged). The regression lock is tests/omnimodal-reading-count.test.js. The measure reads only each stream's `units`; the boundaries/labels/tol are the held key the scorer joins.",
+  "mechanism": "readingCount(eigenvalues) forms the leading gap spectrum, takes the largest gap as the elbow, and keeps it only if it clears deriveNull over the gaps on a LOG scale (gap-spacings are heavy-tailed order statistics). Cleared → k = max(2, elbow) readings; not cleared → k=1, abstain. Born assignment to the top-k eigenlenses then segments by assignment switching (median-smoothed).",
+  "disposition": "PROMOTED as an OPT-IN core export (readingCount), not wired into any default reader — it is the geography-derived count an omnimodal organ calls in place of a hand-set K. Parity preserved; the experiment battery + lock hold it."
+}

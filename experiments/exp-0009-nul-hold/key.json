@@ -1,0 +1,14 @@
+{
+  "capability": "NUL (hold) is the reader's third response to a unit — neither LIFT it into a reading (SIG/SYN/INS) nor assert it VOID (DEF to VOID), but HOLD it as-is, contributing no opinion; the hold keeps the standing readings clean, is lossless, and is recoverable (INS lifts the cohered reserve)",
+  "claim": "an honest reader owes an ambiguous or emerging unit a HOLD, not a forced reading. A reader with no NUL must lift every unit into the nearest standing reading — a false opinion that drags that reading's lens off true, collapsing distinct readings into one corrupted blob. NUL holds the uncohered unit (weight 0, the additive identity on ρ), so the standing readings stay true; the held reserve is lossless and, once it coheres (DEF finds a reading in it), lifted (INS) as a fresh reading. NUL is held DISTINCT from VOID: a held unit is present and recoverable, not an assertion of absence.",
+  "predictions": {
+    "clean_readings": "NUL keeps the established readings (A, B) at high fidelity to their true directions; the forcing reader drags them off true absorbing the novel units",
+    "novel_recovered": "NUL recovers the novel group (C) as its OWN reading (high fidelity); the forcing reader loses C into A/B",
+    "lossless_reserve": "NUL holds the uncohered in a reserve and keeps A/B/C as distinct readings; forcing collapses them into one",
+    "no_opinion": "a held unit contributes nothing to ρ (weight 0 = additive identity) — verified at the primitive level in tests/hold.test.js"
+  },
+  "verdict_tag": "NUL holds the uncohered without corrupting the reading; the hold is lossless, recoverable, and distinct from VOID — the cube's last cell",
+  "control": "NUL is a NEW pure export (src/core/spectral.js); every default engine path is byte-identical (node --test tests/*.test.js green). The regression lock is tests/hold.test.js. The measure reads only each stream's units; the true directions are the held key.",
+  "mechanism": "stream A B C A B (C orthogonal-novel, A/B return). Both readers REC-match units and SYN-merge; they differ only on a novel (−1) unit: `force` lifts it into the nearest standing reading (SIG) — no hold; `nul` HOLDS it in a reserve (NUL) and INS-lifts once the reserve coheres (DEF). Fidelity = max cos² of any final reading to each true direction.",
+  "disposition": "NUL PROMOTED as an opt-in core primitive — the hold (non-transformation) cell of the operator cube at the spectral grain. With it the 3×3 grid is COMPLETE: NUL SIG INS / SEG CON SYN / DEF EVA REC all realised on ρ. Wired into no default reader. Parity preserved."
+}

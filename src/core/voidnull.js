@@ -147,7 +147,7 @@ export const deriveNull = (background, { scale = 'linear', alpha = 0.01, N, grai
   return Math.max(projection, grainFloor);
 };
 
-// ---- readingCount: how many readings the field's geography holds ------------
+// ---- DEF: how many readings the field's geography holds ------------
 //
 // eigenLenses ranks a field's readings by Born weight, but HOW MANY readings the
 // field actually holds is not a universal constant — it is a property of the
@@ -175,7 +175,7 @@ export const deriveNull = (background, { scale = 'linear', alpha = 0.01, N, grai
 //
 // Returns { k, gap, floor, abstain }. Pure on its input — reads no module state and
 // never mutates the array (parity: same spectrum, same reading count, forever).
-export const readingCount = (eigenvalues, { alpha = 0.05, maxK = 12, window = 20 } = {}) => {
+export const DEF = (eigenvalues, { alpha = 0.05, maxK = 12, window = 20 } = {}) => {
   const ev = (eigenvalues || []).filter(Number.isFinite);
   if (ev.length < 2) return { k: ev.length, gap: 0, floor: null, abstain: true };
   const lim = Math.min(ev.length, Math.max(2, window | 0));
@@ -220,7 +220,7 @@ export const boundedNull = (background, { alpha = 0.05, leaveOut = null, grain =
   return (Number.isFinite(line) && line < ceiling) ? line : fallback;
 };
 
-// ---- voidPeaks: the change-point complement to boundedNull -----------------
+// ---- SEG: the change-point complement to boundedNull -----------------
 //
 // A boundary detector reads a per-position score CURVE — a departure (relEntropy),
 // an incommensurability (commutator norm), any streaming change signal — and must
@@ -230,7 +230,7 @@ export const boundedNull = (background, { alpha = 0.05, leaveOut = null, grain =
 // bounded per-decision line (boundedNull — a change-point score is a bounded departure,
 // not a heavy tail, so it takes the N=2 Born line, never the log-tail bound), then
 // suppress any two chosen peaks within `tol` so one boundary is not counted twice.
-// boundedNull sets the line; voidPeaks reads the curve against it. Pure — no state.
+// boundedNull sets the line; SEG reads the curve against it. Pure — no state.
 //
 //   scores   the per-position score curve (non-finite / ≤0 entries are ignored).
 //   alpha    the bounded-void tolerance (default 0.05).
@@ -240,7 +240,7 @@ export const boundedNull = (background, { alpha = 0.05, leaveOut = null, grain =
 //
 // Returns the chosen peak positions, ascending. Empty when the background is too thin
 // to derive a line (cold start) — abstain rather than cut on an untrusted floor.
-export const voidPeaks = (scores, { alpha = 0.05, tol = 1, indices = null } = {}) => {
+export const SEG = (scores, { alpha = 0.05, tol = 1, indices = null } = {}) => {
   const at = (k) => (indices ? indices[k] : k);
   const vals = [];
   for (const s of scores) if (Number.isFinite(s) && s > 0) vals.push(s);
@@ -261,46 +261,6 @@ export const voidPeaks = (scores, { alpha = 0.05, tol = 1, indices = null } = {}
   const chosen = [];
   for (const c of cand) if (chosen.every((x) => Math.abs(x - c.i) > tol)) chosen.push(c.i);
   return chosen.sort((a, b) => a - b);
-};
-
-// ---- nul: hold the uncohered — the ninth cell (Differentiate × Existence) ----
-//
-// The operator cube's ACT face is now built on ρ but for one cell: NUL, `hold
-// (non-transformation)` (core/operators.js). Every other operator is a positive act —
-// SEG cuts (voidPeaks), DEF counts (readingCount), SIG assigns, CON bonds, EVA
-// reinforces, INS/SYN/REC birth/merge/carry. NUL transforms nothing: it HOLDS material
-// that is present but does not cohere into structure. It is the resting state the void
-// already names — "SYN fires when the proposed structure beats the noise null; NUL holds
-// it and VOID asserts absence when it does not" (this file's head) — surfaced as a
-// first-class set instead of silently dropped.
-//
-// The three-way, kept distinct: SYN (it clears the null → cohered structure), VOID (it is
-// determinately absent → assert the hole), NUL (present, below the null → hold it,
-// assert nothing). NUL is NOT a claim of absence (that is VOID); it is the honest record
-// of "seen, unresolved" — the anti-confabulation of the other direction: do not erase
-// material that is there but does not cohere.
-//
-//   scores  per-item scores; non-finite / ≤0 are ABSENT (not NUL's concern — nothing to
-//           hold), a finite positive score is PRESENT.
-//   alpha   the bounded-void tolerance (default 0.05).
-//
-// Returns { held, cohered, line }: `held` are the present-but-uncohered item indices (the
-// NUL set), `cohered` beat the noise-null (SYN-able), `line` is the Born boundary. A thin
-// background (cold start) holds everything — assume nothing coheres until the void is
-// measured, exactly the abstention the rest of the file takes.
-export const nul = (scores = [], { alpha = 0.05 } = {}) => {
-  const present = [];
-  const vals = [];
-  scores.forEach((s, i) => { if (Number.isFinite(s) && s > 0) { present.push(i); vals.push(s); } });
-  if (vals.length < MIN_SAMPLES) return { held: present.slice(), cohered: [], line: null };
-  const line = boundedNull(vals, { alpha, ceiling: Infinity, fallback: median(vals) });
-  if (!Number.isFinite(line)) return { held: present.slice(), cohered: [], line: null };
-  const held = [], cohered = [];
-  scores.forEach((s, i) => {
-    if (!Number.isFinite(s) || s <= 0) return;      // absent — VOID's concern, not NUL's
-    (s >= line ? cohered : held).push(i);
-  });
-  return { held, cohered, line };
 };
 
 // ---- the streaming estimator: causal, adaptive, updated each step ----------

@@ -320,10 +320,10 @@ The seams still open, now correctly ordered:
 
 **The resolution.** The negative result above — the cadence is not in the move-predictor —
 points somewhere specific: it is in the **boundary geography of the generated field**. The
-ingestion experiments (exp-0003's `readingCount`, exp-0004's atmosphere/paradigm) read
+ingestion experiments (exp-0003's `DEF`, exp-0004's atmosphere/paradigm) read
 exactly those boundaries on incoming streams, and generation is that act run forward. The
 turn (REC) is a basis rotation (`commutator`); the self-fold I bolted on is a poor-man's
-density departure (`relEntropy`); quiesce is `readingCount` going flat. See
+density departure (`relEntropy`); quiesce is `DEF` going flat. See
 [`generation-by-field-reading.md`](generation-by-field-reading.md).
 
 ## 9. The one-line version

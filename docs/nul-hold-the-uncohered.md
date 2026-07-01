@@ -26,7 +26,7 @@ there but does not resolve. It is the honest "seen, unresolved."
    transforms nothing; it is what is left when nothing else fires.
 2. **It was already implicit.** `voidnull.js` already says: "SYN fires when the structure beats
    the noise null; NUL holds it and VOID asserts absence when it does not." Every abstention —
-   `deriveNull → Infinity`, `readingCount` abstaining, `voidPeaks` empty — *is* a NUL. It just
+   `deriveNull → Infinity`, `DEF` abstaining, `SEG` empty — *is* a NUL. It just
    had no name, because it is the default the other eight fall back to.
 3. **You cannot test it like the others.** Their experiments score a positive signal (boundary
    F1, birth count, defeat timing). NUL's "output" is correctly holding non-structure — no
@@ -43,19 +43,23 @@ with no NUL to render. So NUL is not just cube-completion; it fixes a live failu
 
 ## What was built
 
-**The primitive** (`core/voidnull.js` → `nul`). Partitions present items (finite, > 0)
-against their Born noise-null into `{ held, cohered, line }`: `cohered` beat the null (SYN-able),
-`held` are present-but-uncohered (the NUL set). Absent items (0/NaN) are VOID's concern, not
-NUL's. Cold start holds everything — assume nothing coheres until the void is measured. This
-is the ninth export beside `voidPeaks`/`readingCount`.
+**The operator** (`core/spectral.js` → `NUL`). One NUL, on ρ: the credence hold —
+`NUL(reserve, unit)` folds a novel/ambiguous unit into a reserve at **weight 0**, the
+additive identity, so holding it leaves the standing readings *exactly* unchanged instead of
+dragging them off true (exp-0009: a NUL reader keeps A/B/C clean at 98/97/95%, where a
+*forcing* reader collapses them to one corrupted blob). NUL ≠ VOID: the reserve is lossless
+and recoverable (INS lifts it once it coheres). This is the ninth cell; the generation and
+projection uses below are the **same operator run forward** — hold the uncohered rather than
+force it — not a second NUL.
 
 **The projection surfaces it** (`core/project.js`). Under a Born floor (`edge_floor: 'born'`),
 the edges below the line are no longer dropped — they are returned as `held`. Every edge is
 now either `edges` (cohered) or `held` (uncohered); with no floor, `held` is empty and nothing
 changes. Holds the uncohered instead of erasing it.
 
-**The generation gate** (`longgen/nul.js` → `nulGate`, on by default). Before the walk, read
-the ground's own coherence. The Born measure of "does this field cohere" is the
+**The generation gate — NUL at the answer grain** (`longgen/nul.js` → `nulGate`, on by
+default). Before the walk, read the ground's own coherence. The Born measure of "does this
+field cohere" is the
 **participation ratio** — `(Σw)² / Σw²`, the effective number of items carrying weight:
 degenerate (one live, rest ~0) → ~1; a usable spread of N real scores → ~N. (A noise-null
 "stand-out" test is wrong here: a smooth spread of real scores has nothing standing above the
@@ -78,7 +82,7 @@ honest floor on *both* over-assertion and silent erasure.
 
 ## Files
 
-- the primitive: `src/core/voidnull.js` (`nul`)
+- the operator: `src/core/spectral.js` (`NUL`), locked by `tests/hold.test.js`
 - the projection: `src/core/project.js` (`held`)
 - the generation gate: `src/longgen/nul.js` (`nulGate`, `participationRatio`)
 - tests: `tests/nul.test.js`
