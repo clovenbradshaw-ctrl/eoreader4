@@ -67,8 +67,9 @@ test('the grounded prompt is the subjective frame: the lines you read, no arrows
     orientation: 'pg5200.txt · text · 757 sentences',
   });
   assert.equal(system.role, 'system');
-  // The boundary is stated honestly: what surfaced for this question, not the whole source (§1).
-  assert.match(system.content, /came to mind for this question/i);
+  // The boundary is stated honestly, as a reading result: what the reading turned up on this
+  // question, not the whole source (§1).
+  assert.match(system.content, /your reading turned up/i);
   // The ONE channel — the verbatim lines under the reader-register header (§2).
   assert.match(user.content, new RegExp(EXCERPTS_HEADER));
   assert.match(user.content, /Topps slammed the man to the ground\./);
