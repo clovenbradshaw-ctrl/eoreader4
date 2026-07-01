@@ -220,6 +220,49 @@ export const boundedNull = (background, { alpha = 0.05, leaveOut = null, grain =
   return (Number.isFinite(line) && line < ceiling) ? line : fallback;
 };
 
+// ---- voidPeaks: the change-point complement to boundedNull -----------------
+//
+// A boundary detector reads a per-position score CURVE — a departure (relEntropy),
+// an incommensurability (commutator norm), any streaming change signal — and must
+// answer WHERE the real cuts are. The two failure modes are symmetric: a fixed
+// threshold either floods the curve with noise peaks or rejects every real one. This
+// reads the curve against the void instead: keep the LOCAL maxima that clear the
+// bounded per-decision line (boundedNull — a change-point score is a bounded departure,
+// not a heavy tail, so it takes the N=2 Born line, never the log-tail bound), then
+// suppress any two chosen peaks within `tol` so one boundary is not counted twice.
+// boundedNull sets the line; voidPeaks reads the curve against it. Pure — no state.
+//
+//   scores   the per-position score curve (non-finite / ≤0 entries are ignored).
+//   alpha    the bounded-void tolerance (default 0.05).
+//   tol      the suppression radius: chosen peaks sit > tol apart (default 1).
+//   indices  optional positions to report instead of array indices (e.g. a windowed
+//            score that starts at offset W maps peak k → indices[k]).
+//
+// Returns the chosen peak positions, ascending. Empty when the background is too thin
+// to derive a line (cold start) — abstain rather than cut on an untrusted floor.
+export const voidPeaks = (scores, { alpha = 0.05, tol = 1, indices = null } = {}) => {
+  const at = (k) => (indices ? indices[k] : k);
+  const vals = [];
+  for (const s of scores) if (Number.isFinite(s) && s > 0) vals.push(s);
+  if (vals.length < MIN_SAMPLES) return [];
+  const line = boundedNull(vals, { alpha, ceiling: Infinity, fallback: median(vals) });
+  if (!Number.isFinite(line)) return [];
+  const rad = Math.max(1, tol | 0);
+  const cand = [];
+  for (let k = 0; k < scores.length; k++) {
+    const v = scores[k];
+    if (!Number.isFinite(v) || v <= line) continue;
+    let isMax = true;
+    for (let j = Math.max(0, k - rad); j <= Math.min(scores.length - 1, k + rad); j++)
+      if (j !== k && Number.isFinite(scores[j]) && scores[j] > v) { isMax = false; break; }
+    if (isMax) cand.push({ i: at(k), v });
+  }
+  cand.sort((a, b) => b.v - a.v);
+  const chosen = [];
+  for (const c of cand) if (chosen.every((x) => Math.abs(x - c.i) > tol)) chosen.push(c.i);
+  return chosen.sort((a, b) => a - b);
+};
+
 // ---- the streaming estimator: causal, adaptive, updated each step ----------
 
 // Maintain the background score distribution as a streaming estimate. `observe`

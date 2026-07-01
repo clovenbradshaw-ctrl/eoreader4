@@ -1,0 +1,18 @@
+{
+  "capability": "atmosphere (relEntropy — the local density DEPARTURE) and paradigm (commutator — the local INCOMMENSURABILITY) are complementary boundary channels: each detects a KIND of boundary lens-switching cannot, and their abstention-gated union raises omnimodal segmentation over lens-switching alone",
+  "claim": "lens-switching segments by WHICH global reading a unit assigns to, and is blind to boundaries where the reading label does not change (near-degenerate multiplicity) or where the label is the same but the subspace rotates (adjacent recurrence). Atmosphere and paradigm read the field LOCALLY — the departure and the incommensurability between the window before a cursor and the window after — and peak exactly at those boundaries. Fused as a union GATED by the geography abstention (readingCount), they beat lens-switching on mean boundary F1 while keeping every flat-geography stream clean; a naive (ungated) union does NOT, because atmosphere/paradigm do not abstain and flood the flat streams with false peaks",
+  "predictions": {
+    "complementarity": "no single channel wins everywhere; the oracle best-of (~54%) far exceeds any single channel (lens 38%), so the channels see DIFFERENT boundaries",
+    "atmosphere_cracks_multiplicity": "atmosphere detects the near-degenerate two-reading boundary (hard_two_balls) that lens-switching scores 0 on — its global top-2 lenses are mixtures, but the local densities differ",
+    "paradigm_cracks_recurrence": "paradigm detects the adjacent-recurrence A|A boundary (hard_adjacent_recurrence) that lens-switching scores 0 on — the reading label is unchanged but the local eigenbasis rotates, and the commutator sees it",
+    "gate_required": "the win is real ONLY with the abstention gate; ungated union regresses (flat streams: noise/single/collinear crash 100% -> 0%), because a change-point score has no built-in void"
+  },
+  "atmosphere_cracks": "hard_two_balls",
+  "paradigm_cracks": "hard_adjacent_recurrence",
+  "abstain_streams": ["hard_pure_noise", "hard_single", "hard_collinear"],
+  "min_margin": 0.03,
+  "verdict_tag": "atmosphere + paradigm are complementary void-gated channels; the gated union beats lens-switching on the mean, cracks the two boundaries lens is blind to, and preserves abstention",
+  "control": "voidPeaks is a NEW pure export (src/core/voidnull.js) beside boundedNull; the change-point channels reuse the existing relEntropy (Track B) and commutator (Track D). Every default engine path is byte-identical (node --test tests/*.test.js green). The regression lock is tests/void-peaks.test.js. The measure reads only each stream's units; boundaries/labels/tol are the held key.",
+  "mechanism": "over the top-M reading subspace (M = 2*readingCount, capped 12) and a window W ~ 5% of the stream: score(b) = symmetric S(rho_left ‖ rho_right) (atmosphere) or ‖[rho_left, rho_right]‖_F (paradigm); voidPeaks picks the local maxima that clear the bounded per-decision void line (boundedNull — a departure is a bounded score, not a heavy tail). The union of lens+atmo+para is taken unless readingCount abstains, in which case no channel fires.",
+  "disposition": "voidPeaks PROMOTED as an opt-in core primitive (the bounded-void change-point detector). The atmosphere/paradigm channels + gated-union fusion live in the experiment measure as the demonstrated omnimodal capability; not wired into any default reader. Parity preserved."
+}
