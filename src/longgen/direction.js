@@ -18,25 +18,61 @@ import { applyPhaseBias } from './shape.js';
 
 // The move the loop opens with when there is no self-history yet: CON, the
 // workhorse grounded move (assert a relation tied to a span). A draw cannot run
-// over an empty log, so the first step is seeded rather than predicted.
+// over an empty log, so the first step is seeded rather than predicted. Under the
+// significance arc the OPEN phase sets terms, so `seedMove` lets the loop seed DEF
+// instead — an essay opens by defining, not by asserting a bare relation.
 export const SEED_MOVE = 'CON';
 
 // Build the self move-log the predictor runs over. One move per accepted unit —
-// the move-type it realized — and a frame per cursor whose strain is the floor's
-// verdict read back. `frameByCursor` is keyed by the unit's `cursor`, exactly the
-// shape structuralPrior expects (the per-unit fold state).
-export const selfMoveLog = (units = []) => {
+// the move-type it realized — and a frame per cursor whose strain is read back. Two
+// strain sources, and they are DIFFERENT things (essay-backwards):
+//
+//   drift strain      = 1 − boundFraction. The FLOOR's grounding verdict. High when
+//                       the model confabulated. In the live loop this is ~0 on every
+//                       APPENDED unit (the floor drops or re-binds drift), so on its
+//                       own it never licenses a REC — the turn is dead.
+//   semantic strain   = how far this unit's content has moved from the frame the
+//                       opening set (a lexical self-fold, `opts.semanticStrain`). High
+//                       where the grounded, developed material STRAINS the frame — an
+//                       argument's turn, which happens on clean-binding prose. This is
+//                       the first cut of "read self back through the perceiver"
+//                       (spec-generation.md); the full form reads the accepted prose
+//                       back through the document reader.
+//
+// The ratio the structural prior reads is the MAX of the two: a turn fires REC whether
+// it came from a grounding break or from the argument straining its own frame.
+export const selfMoveLog = (units = [], opts = {}) => {
   const moves = units.map((u, i) => Object.freeze({
     op: u.move || SEED_MOVE,
     cursor: i,
     i,
   }));
-  const frameByCursor = units.map((u) => {
+  // The running self-fold — the content words said SO FAR. Strain at cursor i is how
+  // much new direction unit i opens against everything before it. Accumulated causally:
+  // the novelty of unit i is measured against units 0..i−1 only, never itself or later.
+  const useSemantic = !!opts.semanticStrain;
+  const seen = new Set();
+
+  // The field-read strain (docs/generation-by-field-reading.md), when the caller has
+  // read the accepted atoms back as a density field: strainByCursor[i] = 1 at a turn (a
+  // void-cleared atmosphere/paradigm boundary). It is the principled form of the lexical
+  // self-fold below and OVERRIDES it when present — the real density departure, not a
+  // spelling proxy.
+  const field = opts.strainByCursor || null;
+
+  const frameByCursor = units.map((u, i) => {
     const bf = typeof u.boundFraction === 'number' ? u.boundFraction : 1;
-    const strain = clamp01(1 - bf);          // drift IS strain — the weld
+    const driftStrain = clamp01(1 - bf);     // the floor's verdict read back
+    let semStrain = 0;
+    if (field) {
+      semStrain = clamp01(field[i] || 0);    // the field boundary IS the strain
+    } else if (useSemantic) {
+      const w = contentWords(unitText(u));
+      semStrain = i === 0 ? 0 : noveltyVs(w, seen);  // the opener sets terms, never a turn
+      for (const t of w) seen.add(t);                // the fold grows AFTER the measure
+    }
+    const strain = Math.max(driftStrain, semStrain);
     return Object.freeze({
-      // ratio is strain against threshold; with no separate threshold the drift
-      // fraction is the ratio directly (1 = a unit that bound nothing).
       ratio: strain,
       // a clean unit reads as a live (non-flat) field; a fully-drifted unit reads
       // as flat so the structural prior also nudges NUL/VOID, not only REC.
@@ -46,6 +82,33 @@ export const selfMoveLog = (units = []) => {
     });
   });
   return { moves, frameByCursor, alphabet: MOVE_ALPHABET };
+};
+
+// A unit's text for the self-fold — its rendered prose, falling back to its sub-claim.
+const unitText = (u) => String(u?.text || u?.subClaim || '');
+
+// Content words: lowercased word runs, stopwords and very short tokens dropped, so the
+// novelty measure reads topical drift, not function-word churn.
+const STOP = new Set(('the a an of to in on at by for and or but is are was were be been ' +
+  'it its this that these those with as from into over under about not no so than then ' +
+  'they them their we our you your he she his her i me my one two more most such what which ' +
+  'who whom whose when where why how all any each every some out up down off').split(' '));
+const contentWords = (s) => {
+  const out = new Set();
+  for (const m of String(s).toLowerCase().match(/[a-z][a-z']{2,}/g) || []) {
+    if (!STOP.has(m)) out.add(m);
+  }
+  return out;
+};
+
+// Novelty of a word set against the running self-fold: the fraction of this unit's
+// content words that have NOT been said before. 1 = an all-new direction (a turn);
+// 0 = pure restatement (the routine body). Empty unit → 0 (nothing to turn on).
+const noveltyVs = (words, seen) => {
+  if (!words.size) return 0;
+  let fresh = 0;
+  for (const w of words) if (!seen.has(w)) fresh++;
+  return fresh / words.size;
 };
 
 // Predict the next move from the self-history. Returns the drawn move, the ranked
@@ -65,9 +128,9 @@ export const selfMoveLog = (units = []) => {
 // dictated: a near-zero move stays near zero and a dominant weld signal survives.
 export const predictDirection = (units = [], opts = {}) => {
   if (units.length === 0) {
-    return { move: SEED_MOVE, seeded: true, flat: false, sharpness: null, posterior: null };
+    return { move: opts.seedMove || SEED_MOVE, seeded: true, flat: false, sharpness: null, posterior: null };
   }
-  const log = selfMoveLog(units);
+  const log = selfMoveLog(units, { semanticStrain: opts.semanticStrain, strainByCursor: opts.strainByCursor });
   const i = log.moves.length - 1;            // predict the move AFTER the last unit
   const pred = predictNextMove(log, i, { weights: opts.weights });
 

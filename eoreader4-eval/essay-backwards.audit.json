@@ -1,0 +1,824 @@
+{
+ "version": 1,
+ "label": "dynamics-turning-ground",
+ "question": "",
+ "config": {
+  "arc": true,
+  "selfRegister": true,
+  "semanticStrain": false,
+  "fieldRead": true,
+  "interleave": false,
+  "dynamics": true,
+  "confine": true,
+  "temperature": 1
+ },
+ "summary": {
+  "atoms": 14,
+  "stop": "arc-closed",
+  "moves": [
+   "DEF",
+   "EVA",
+   "INS",
+   "EVA",
+   "INS",
+   "EVA",
+   "INS",
+   "EVA",
+   "INS",
+   "EVA",
+   "REC",
+   "DEF",
+   "EVA",
+   "SYN"
+  ],
+  "sources": [
+   0,
+   1,
+   2,
+   3,
+   4,
+   5
+  ],
+  "wantedType": null,
+  "fieldBoundaries": [],
+  "fieldK": 2
+ },
+ "atoms": [
+  {
+   "i": 0,
+   "move": "DEF",
+   "drew": "CON",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "define",
+   "action": "truncate",
+   "text": "a small model is fluent past its knowledge They asked you: a small model is fluent past its knowledge Answer them now, in your own words. [s0]",
+   "sources": [
+    0
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "defining",
+    "forbidClose": false,
+    "openness": 0.64,
+    "address": {
+     "operator": "DEF",
+     "terrain": "Lens",
+     "stance": "Dissecting"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "DEF",
+    "activations": {
+     "DEF": 1,
+     "SIG": 1,
+     "CON": 1,
+     "INS": 1
+    },
+    "currents": {
+     "DEF": 1.71,
+     "SIG": 1.71,
+     "CON": 1.71,
+     "INS": 1.71
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 0,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "open"
+  },
+  {
+   "i": 1,
+   "move": "EVA",
+   "drew": "DEF",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "truncate",
+   "text": "a small model is fluent past its knowledge They asked you: a small model is fluent past its knowledge Answer them now, in your own words. [s0]",
+   "sources": [
+    0
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 2,
+   "move": "INS",
+   "drew": "INS",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "instantiate",
+   "action": "truncate",
+   "text": "handed a gap the model will fill the gap They asked you: handed a gap the model will fill the gap Answer them now, in your own words. [s1]",
+   "sources": [
+    1
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "minting",
+    "forbidClose": false,
+    "openness": 1,
+    "address": {
+     "operator": "INS",
+     "terrain": "Void",
+     "stance": "Cultivating"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "INS",
+    "activations": {
+     "DEF": 0.713,
+     "SIG": 0.628,
+     "CON": 0.68,
+     "INS": 1
+    },
+    "currents": {
+     "SEG": 0.498,
+     "DEF": 2.179,
+     "SIG": 2.081,
+     "CON": 2.141,
+     "EVA": 0.959,
+     "INS": 2.509
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 3,
+   "move": "EVA",
+   "drew": "SEG",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "truncate",
+   "text": "handed a gap the model will fill the gap They asked you: handed a gap the model will fill the gap Answer them now, in your own words. [s1]",
+   "sources": [
+    1
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 4,
+   "move": "INS",
+   "drew": "EVA",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "instantiate",
+   "action": "truncate",
+   "text": "the fill is fluent and often wrong They asked you: the fill is fluent and often wrong Answer them now, in your own words. [s2]",
+   "sources": [
+    2
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "minting",
+    "forbidClose": false,
+    "openness": 1,
+    "address": {
+     "operator": "INS",
+     "terrain": "Void",
+     "stance": "Cultivating"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "INS",
+    "activations": {
+     "DEF": 0.713,
+     "SIG": 0.628,
+     "CON": 0.68,
+     "INS": 1
+    },
+    "currents": {
+     "SEG": 0.498,
+     "DEF": 2.179,
+     "SIG": 2.081,
+     "CON": 2.141,
+     "EVA": 0.959,
+     "INS": 2.509
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 5,
+   "move": "EVA",
+   "drew": "INS",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "truncate",
+   "text": "the fill is fluent and often wrong They asked you: the fill is fluent and often wrong Answer them now, in your own words. [s2]",
+   "sources": [
+    2
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 6,
+   "move": "INS",
+   "drew": "EVA",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "instantiate",
+   "action": "truncate",
+   "text": "a planner decides every structural move first They asked you: a planner decides every structural move first Answer them now, in your own words. [s3]",
+   "sources": [
+    3
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "minting",
+    "forbidClose": false,
+    "openness": 1,
+    "address": {
+     "operator": "INS",
+     "terrain": "Void",
+     "stance": "Cultivating"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "INS",
+    "activations": {
+     "DEF": 0.713,
+     "SIG": 0.628,
+     "CON": 0.68,
+     "INS": 1
+    },
+    "currents": {
+     "SEG": 0.498,
+     "DEF": 2.179,
+     "SIG": 2.081,
+     "CON": 2.141,
+     "EVA": 0.959,
+     "INS": 2.509
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 7,
+   "move": "EVA",
+   "drew": "INS",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "truncate",
+   "text": "a planner decides every structural move first They asked you: a planner decides every structural move first Answer them now, in your own words. [s3]",
+   "sources": [
+    3
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 8,
+   "move": "INS",
+   "drew": "EVA",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "instantiate",
+   "action": "truncate",
+   "text": "the planner grounds each claim on a span They asked you: the planner grounds each claim on a span Answer them now, in your own words. [s4]",
+   "sources": [
+    4
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "minting",
+    "forbidClose": false,
+    "openness": 1,
+    "address": {
+     "operator": "INS",
+     "terrain": "Void",
+     "stance": "Cultivating"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "INS",
+    "activations": {
+     "DEF": 0.713,
+     "SIG": 0.628,
+     "CON": 0.68,
+     "INS": 1
+    },
+    "currents": {
+     "SEG": 0.498,
+     "DEF": 2.179,
+     "SIG": 2.081,
+     "CON": 2.141,
+     "EVA": 0.959,
+     "INS": 2.509
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 9,
+   "move": "EVA",
+   "drew": "INS",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "truncate",
+   "text": "the planner grounds each claim on a span They asked you: the planner grounds each claim on a span Answer them now, in your own words. [s4]",
+   "sources": [
+    4
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 10,
+   "move": "REC",
+   "drew": "INS",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "restructure",
+   "action": "truncate",
+   "text": "a small model is fluent past its knowledge They asked you: a small model is fluent past its knowledge Answer them now, in your own words. [s0]",
+   "sources": [
+    0
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "restructuring",
+    "forbidClose": false,
+    "openness": 1,
+    "address": {
+     "operator": "REC",
+     "terrain": "Paradigm",
+     "stance": "Composing"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "REC",
+    "activations": {
+     "DEF": 0.123,
+     "SIG": 0.234,
+     "CON": 0.254,
+     "INS": 0.323,
+     "REC": 1
+    },
+    "currents": {
+     "DEF": 1.26,
+     "SIG": 1.612,
+     "CON": 1.672,
+     "EVA": 0.443,
+     "INS": 1.893,
+     "REC": 4.033
+    }
+   },
+   "field": {
+    "boundaries": [
+     2,
+     8
+    ],
+    "k": 2,
+    "abstain": false,
+    "strainHere": 1
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 11,
+   "move": "DEF",
+   "drew": "DEF",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "define",
+   "action": "truncate",
+   "text": "a floor truncates whatever fails to bind They asked you: a floor truncates whatever fails to bind Answer them now, in your own words. [s5]",
+   "sources": [
+    5
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "defining",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "DEF",
+     "terrain": "Lens",
+     "stance": "Dissecting"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "DEF",
+    "activations": {
+     "DEF": 1,
+     "SIG": 1,
+     "CON": 1,
+     "INS": 1
+    },
+    "currents": {
+     "DEF": 1.71,
+     "SIG": 1.71,
+     "CON": 1.71,
+     "INS": 1.71
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 0,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "open"
+  },
+  {
+   "i": 12,
+   "move": "EVA",
+   "drew": "SIG",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "truncate",
+   "text": "a floor truncates whatever fails to bind They asked you: a floor truncates whatever fails to bind Answer them now, in your own words. [s5]",
+   "sources": [
+    5
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.56,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 13,
+   "move": "SYN",
+   "drew": "INS",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "synthesize",
+   "action": "append",
+   "text": "a small model is fluent past its knowledge the fill is fluent and often wrong a planner decides every structural move first [s3]",
+   "sources": [
+    3
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "closing",
+    "forbidClose": false,
+    "openness": 0.42,
+    "address": {
+     "operator": "SYN",
+     "terrain": "Network",
+     "stance": "Composing"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "SYN",
+    "activations": {
+     "DEF": 0.221,
+     "SIG": 0.264,
+     "CON": 0.16,
+     "INS": 0.754,
+     "SYN": 1
+    },
+    "currents": {
+     "SEG": 0.427,
+     "DEF": 1.372,
+     "SIG": 1.428,
+     "CON": 1.291,
+     "EVA": 0.971,
+     "INS": 2.075,
+     "SYN": 2.4,
+     "REC": 0.141
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 2,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "land"
+  }
+ ],
+ "traceKinds": [
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append"
+ ],
+ "answer": "a small model is fluent past its knowledge They asked you: a small model is fluent past its knowledge Answer them now, in your own words. [s0]\n\na small model is fluent past its knowledge They asked you: a small model is fluent past its knowledge Answer them now, in your own words. [s0]\n\nhanded a gap the model will fill the gap They asked you: handed a gap the model will fill the gap Answer them now, in your own words. [s1]\n\nhanded a gap the model will fill the gap They asked you: handed a gap the model will fill the gap Answer them now, in your own words. [s1]\n\nthe fill is fluent and often wrong They asked you: the fill is fluent and often wrong Answer them now, in your own words. [s2]\n\nthe fill is fluent and often wrong They asked you: the fill is fluent and often wrong Answer them now, in your own words. [s2]\n\na planner decides every structural move first They asked you: a planner decides every structural move first Answer them now, in your own words. [s3]\n\na planner decides every structural move first They asked you: a planner decides every structural move first Answer them now, in your own words. [s3]\n\nthe planner grounds each claim on a span They asked you: the planner grounds each claim on a span Answer them now, in your own words. [s4]\n\nthe planner grounds each claim on a span They asked you: the planner grounds each claim on a span Answer them now, in your own words. [s4]\n\na small model is fluent past its knowledge They asked you: a small model is fluent past its knowledge Answer them now, in your own words. [s0]\n\na floor truncates whatever fails to bind They asked you: a floor truncates whatever fails to bind Answer them now, in your own words. [s5]\n\na floor truncates whatever fails to bind They asked you: a floor truncates whatever fails to bind Answer them now, in your own words. [s5]\n\na small model is fluent past its knowledge the fill is fluent and often wrong a planner decides every structural move first [s3]",
+ "checks": {
+  "stops_on_own": {
+   "ok": true,
+   "why": "stop = 'arc-closed' (a token count would be 'max-steps')"
+  },
+  "opens": {
+   "ok": true,
+   "why": "first move 'DEF' sets terms (a node op)"
+  },
+  "develops": {
+   "ok": true,
+   "why": "8 self-operations (the essay's substance)"
+  },
+  "turns": {
+   "ok": true,
+   "why": "a REC fired where the field rotated (boundaries [])"
+  },
+  "lands": {
+   "ok": true,
+   "why": "ends on 'SYN' / stop 'arc-closed'"
+  },
+  "grounded": {
+   "ok": true,
+   "why": "every atom is witnessed (sources, or a void/self-op)"
+  },
+  "floor_on": {
+   "ok": true,
+   "why": "the void floor is on for every atom"
+  },
+  "decision_traced": {
+   "ok": true,
+   "why": "every atom carries WHY it was chosen (relaxation)"
+  },
+  "working": true,
+  "verdict": "WORKING — opens, develops, grounded, stops on 'arc-closed'; quality 2/2 (turn ✓, land ✓)"
+ }
+}

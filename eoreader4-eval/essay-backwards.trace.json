@@ -1,0 +1,43 @@
+{
+  "about": "Target move-trace for generate-then-read parity (spec-planner.md §13, spec-generation.md 'generate-then-read parity'). Decomposed by hand from a compelling Claude essay about the program's own philosophy; see docs/essay-backwards.md. Each atom is one deposited sentence. `register` is the ground it resolves against: EXT = a node/edge of the subject concept graph; SELF-k = it operates on the proposition already deposited at atom k. `freshSpan` is whether it consumes a fresh external span — the column that shows an essay is ~75% self-operation, which the current resolver (src/longgen/resolve.js) cannot produce.",
+  "arc": ["open", "reframe", "develop", "turn", "land"],
+  "conceptNodes": [
+    "small-model", "fluency", "open-slot", "confabulation", "planner",
+    "proposition", "render-division", "grounding", "span", "floor",
+    "source-switch", "self-reading", "weld-strain", "two-scale-principle"
+  ],
+  "atoms": [
+    { "i": 1,  "move": "DEF", "stance": "set-terms",   "register": "EXT:small-model/fluency",             "freshSpan": true,  "gist": "a small model is not stupid, it is fluent past its knowledge" },
+    { "i": 2,  "move": "CON", "stance": "assert",      "register": "SELF-1+EXT:training-objective",       "freshSpan": "partial", "gist": "hand it a gap and it fills it, that is all it was trained to do" },
+    { "i": 3,  "move": "EVA", "stance": "test",        "register": "SELF-2",                              "freshSpan": false, "gist": "the fill is confident-and-wrong, indistinguishable from confident-and-right" },
+    { "i": 4,  "move": "REC", "stance": "reframe",     "register": "SELF-1,2,3",                          "freshSpan": false, "gist": "the problem was never competence, it was the open slot" },
+    { "i": 5,  "move": "DEF", "stance": "set-terms",   "register": "EXT:the-wager",                       "freshSpan": true,  "gist": "the wager: close the slot without a bigger model" },
+    { "i": 6,  "move": "CON", "stance": "assert",      "register": "SELF-5",                              "freshSpan": false, "gist": "never ask the model to decide what can be decided where it is checked" },
+    { "i": 7,  "move": "INS", "stance": "mint-figure", "register": "EXT:the-planner",                     "freshSpan": true,  "gist": "a separate engine, the planner, makes every structural decision first" },
+    { "i": 8,  "move": "CON", "stance": "elaborate",   "register": "SELF-7",                              "freshSpan": false, "gist": "it chooses next, resolves to one proposition, hands over one sentence" },
+    { "i": 9,  "move": "EVA", "stance": "test",        "register": "SELF-8+EXT:what-model-is-good-at",    "freshSpan": "partial", "gist": "the model shrinks to the thing it is good at: proposition to sentence" },
+    { "i": 10, "move": "REC", "stance": "payoff",      "register": "SELF-6,8",                            "freshSpan": false, "gist": "nothing is left open, so nothing to confabulate into" },
+    { "i": 11, "move": "DEF", "stance": "deepen",      "register": "EXT:where-decisions-come-from",       "freshSpan": true,  "gist": "the deeper move: where the planner gets its decisions" },
+    { "i": 12, "move": "CON", "stance": "assert",      "register": "SELF-11+EXT:reading-vs-prose",        "freshSpan": "partial", "gist": "it reads the source like the model would, keeps the reading not the prose" },
+    { "i": 13, "move": "SIG", "stance": "attribute",   "register": "SELF-12",                             "freshSpan": false, "gist": "every planned claim is one it can point at: a span, an edge" },
+    { "i": 14, "move": "EVA", "stance": "test/floor",  "register": "SELF-13",                             "freshSpan": false, "gist": "a sentence it cannot ground, it does not plan" },
+    { "i": 15, "move": "REC", "stance": "consequence", "register": "SELF-14",                             "freshSpan": false, "gist": "when the render drifts off the span, the floor truncates or drops it" },
+    { "i": 16, "move": "SYN", "stance": "close-middle","register": "SELF-12,13,14,15",                    "freshSpan": false, "gist": "grounding becomes a gate every sentence passes, not a hope" },
+    { "i": 17, "move": "DEF", "stance": "turn",        "register": "EXT:long-generation",                 "freshSpan": true,  "gist": "the hard case: long generation, each sentence follows the last" },
+    { "i": 18, "move": "CON", "stance": "source-switch","register": "SELF-17+EXT:doc-to-self",            "freshSpan": "partial", "gist": "the planner switches what it reads from the document to its own output" },
+    { "i": 19, "move": "EVA", "stance": "elaborate",   "register": "SELF-18",                             "freshSpan": false, "gist": "it reads what it said the way it read the source, plans the continuation" },
+    { "i": 20, "move": "REC", "stance": "weld",        "register": "SELF-18,19+EXT:judged-vs-bare",       "freshSpan": "partial", "gist": "it reads its own sentences with the verdict attached, never the bare claim" },
+    { "i": 21, "move": "EVA", "stance": "consequence", "register": "SELF-20",                             "freshSpan": false, "gist": "a drifted sentence raises strain, a confabulating run turns toward stopping" },
+    { "i": 22, "move": "SYN", "stance": "land",        "register": "SELF-17..21",                         "freshSpan": false, "gist": "length is a consequence of how much it can still ground, not a target" },
+    { "i": 23, "move": "SYN", "stance": "close-whole", "register": "SELF-4,16,22",                        "freshSpan": false, "gist": "one idea at two scales: low says what high admits, high wants what low can ground" }
+  ],
+  "summary": {
+    "atoms": 23,
+    "freshExternalSpans": 5,
+    "partialExternal": 5,
+    "pureSelfOperations": 13,
+    "selfOperationFraction": 0.565,
+    "nodeMovesVsEdgeMoves": { "node": ["DEF", "INS", "CON", "SIG"], "edge": ["EVA", "REC", "SYN", "NUL"] },
+    "finding": "13/23 atoms consume no external span; another 5 only lean on one concept while their content is a relation to a prior atom. The current resolver (resolve.js) launders CON/SIG/INS/REC/DEF/SEG/NUL into assertProposition(ranked[0]) and stops with ground-exhausted when the span pool empties (~3 atoms in). It walks nodes; an essay walks edges."
+  }
+}

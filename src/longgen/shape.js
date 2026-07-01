@@ -42,11 +42,16 @@ export const arcPhase = ({ stepIndex = 0, units = [], remainingFrac = 1 } = {}) 
   return 'develop';
 };
 
-// The operators each phase leans on (the significance-row order, opened out).
+// The operators each phase leans on (the significance-row order, opened out). In the
+// `land` phase the external pool is spent, so the NODE ops (DEF/INS/CON/SIG) have no
+// fresh ground to introduce — leaning on them is exactly the walk that stops early
+// (essay-backwards). So `land` boosts the SELF ops that develop and close what the
+// pool bought (EVA/REC to develop, SYN to land) and SUPPRESSES the node ops below 1,
+// so the multiplicative bias steers the draw off the unrealizable moves.
 const PHASE_OPS = Object.freeze({
   open:    { DEF: 2.4, INS: 1.8, SIG: 1.3 },
   develop: { CON: 1.8, EVA: 1.8, SIG: 1.2 },
-  land:    { SYN: 3.0 },
+  land:    { SYN: 3.0, REC: 2.0, EVA: 2.0, CON: 0.2, DEF: 0.2, INS: 0.2, SIG: 0.5 },
 });
 
 // A multiplicative bias over the alphabet for a phase — 1 for every operator the
@@ -59,6 +64,14 @@ export const phaseBias = (phase) => {
   for (const op of MOVE_ALPHABET) bias[op] = lean[op] ?? 1;
   return bias;
 };
+
+// NOTE (essay-backwards, a negative result): biasing this posterior off the last move
+// to force the interleave cadence (introduce→develop→turn) does NOT work. Even at
+// recurrence weight 0 the structure+grammar priors trap the walk on whatever op last
+// repeated (CON·EVA·EVA·…), and no multiplier overcomes them without becoming a
+// dictate. The fine cadence is not coaxable out of the reader's move-predictor; it is
+// the §4.2 plan→proposition resolver on a real referent-and-relation graph, where the
+// SITE structure dictates the order. See docs/essay-backwards.md §8.
 
 // Apply a bias to a ranked posterior ([[op, p], …]), renormalising. Returns a new
 // ranked posterior (descending). Pure; direction.js draws the temperature reach off

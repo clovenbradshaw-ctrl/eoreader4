@@ -147,6 +147,52 @@ export const deriveNull = (background, { scale = 'linear', alpha = 0.01, N, grai
   return Math.max(projection, grainFloor);
 };
 
+// ---- readingCount: how many readings the field's geography holds ------------
+//
+// eigenLenses ranks a field's readings by Born weight, but HOW MANY readings the
+// field actually holds is not a universal constant — it is a property of the
+// spectrum's own shape. A flat spectrum (isotropic noise, a single register, a
+// collinear field) holds ONE reading; a spectrum with a real elbow holds as many
+// readings as sit above it. The two hand-rolled rules both fail: "top lenses to 90%
+// Born mass (cap 12)" saturates the cap on any spread spectrum (every reading
+// flickers, over-segmenting), and "eigenvalues above the void floor" over-abstains on
+// a flat-but-high-rank spectrum (many near-equal readings read as noise).
+//
+// This finds the count the same way the void finds any structure — but pointed at the
+// GAP spectrum, not the eigenvalues. The reading count is the elbow: the largest
+// eigenvalue drop, kept only if it exceeds what the gaps' own background would produce
+// by chance. Gap-spacings are heavy-tailed order statistics, so the void reads them on
+// the LOG scale (deriveNull's percolation setting). No significant gap → the spectrum
+// is flat → k=1 and abstain (assert one reading, no internal boundary), so the SAME
+// test that counts the readings also yields the abstention. The count "generates" where
+// structure is found and "dissipates" to one where it is not — no universal segmenter,
+// a geography-derived one. The Born assignment on top of the k lenses stays universal.
+//
+//   eigenvalues  the Born spectrum, descending (eigenLenses(rho).map(l => l.weight)).
+//   alpha        tolerated false-elbow rate (default 0.05).
+//   maxK         cap on the returned count (default 12).
+//   window       how many leading eigenvalues to weigh the elbow over (default 20).
+//
+// Returns { k, gap, floor, abstain }. Pure on its input — reads no module state and
+// never mutates the array (parity: same spectrum, same reading count, forever).
+export const readingCount = (eigenvalues, { alpha = 0.05, maxK = 12, window = 20 } = {}) => {
+  const ev = (eigenvalues || []).filter(Number.isFinite);
+  if (ev.length < 2) return { k: ev.length, gap: 0, floor: null, abstain: true };
+  const lim = Math.min(ev.length, Math.max(2, window | 0));
+  const gaps = [];
+  for (let i = 1; i < lim; i++) gaps.push(ev[i - 1] - ev[i]);   // descending → gaps ≥ 0
+  let kGap = 1, maxGap = -Infinity;
+  for (let i = 0; i < gaps.length; i++) if (gaps[i] > maxGap) { maxGap = gaps[i]; kGap = i + 1; }
+  const floor = deriveNull(gaps, { scale: 'log', alpha, N: gaps.length, leaveOut: maxGap });
+  // A cleared gap is a drop BETWEEN a top group and the tail — by construction that is
+  // at least two distinguishable reading groups, so a significant elbow reads ≥2. A flat
+  // spectrum clears nothing and abstains to one reading. (The min-2 only ever applies on
+  // the structure branch; noise never reaches it.)
+  if (Number.isFinite(floor) && maxGap > floor)
+    return { k: Math.max(2, Math.min(maxK, kGap)), gap: maxGap, floor, abstain: false };
+  return { k: 1, gap: Number.isFinite(maxGap) ? maxGap : 0, floor: Number.isFinite(floor) ? floor : null, abstain: true };
+};
+
 // ---- the bounded-signal boundary: a per-decision Born line -----------------
 
 // deriveNull's extreme-value bound answers "what is the MAX of N chance draws" —
@@ -172,6 +218,49 @@ export const deriveNull = (background, { scale = 'linear', alpha = 0.01, N, grai
 export const boundedNull = (background, { alpha = 0.05, leaveOut = null, grain = 0, ceiling = 1, fallback } = {}) => {
   const line = deriveNull(background, { scale: 'linear', alpha, N: 2, grain, leaveOut });
   return (Number.isFinite(line) && line < ceiling) ? line : fallback;
+};
+
+// ---- voidPeaks: the change-point complement to boundedNull -----------------
+//
+// A boundary detector reads a per-position score CURVE — a departure (relEntropy),
+// an incommensurability (commutator norm), any streaming change signal — and must
+// answer WHERE the real cuts are. The two failure modes are symmetric: a fixed
+// threshold either floods the curve with noise peaks or rejects every real one. This
+// reads the curve against the void instead: keep the LOCAL maxima that clear the
+// bounded per-decision line (boundedNull — a change-point score is a bounded departure,
+// not a heavy tail, so it takes the N=2 Born line, never the log-tail bound), then
+// suppress any two chosen peaks within `tol` so one boundary is not counted twice.
+// boundedNull sets the line; voidPeaks reads the curve against it. Pure — no state.
+//
+//   scores   the per-position score curve (non-finite / ≤0 entries are ignored).
+//   alpha    the bounded-void tolerance (default 0.05).
+//   tol      the suppression radius: chosen peaks sit > tol apart (default 1).
+//   indices  optional positions to report instead of array indices (e.g. a windowed
+//            score that starts at offset W maps peak k → indices[k]).
+//
+// Returns the chosen peak positions, ascending. Empty when the background is too thin
+// to derive a line (cold start) — abstain rather than cut on an untrusted floor.
+export const voidPeaks = (scores, { alpha = 0.05, tol = 1, indices = null } = {}) => {
+  const at = (k) => (indices ? indices[k] : k);
+  const vals = [];
+  for (const s of scores) if (Number.isFinite(s) && s > 0) vals.push(s);
+  if (vals.length < MIN_SAMPLES) return [];
+  const line = boundedNull(vals, { alpha, ceiling: Infinity, fallback: median(vals) });
+  if (!Number.isFinite(line)) return [];
+  const rad = Math.max(1, tol | 0);
+  const cand = [];
+  for (let k = 0; k < scores.length; k++) {
+    const v = scores[k];
+    if (!Number.isFinite(v) || v <= line) continue;
+    let isMax = true;
+    for (let j = Math.max(0, k - rad); j <= Math.min(scores.length - 1, k + rad); j++)
+      if (j !== k && Number.isFinite(scores[j]) && scores[j] > v) { isMax = false; break; }
+    if (isMax) cand.push({ i: at(k), v });
+  }
+  cand.sort((a, b) => b.v - a.v);
+  const chosen = [];
+  for (const c of cand) if (chosen.every((x) => Math.abs(x - c.i) > tol)) chosen.push(c.i);
+  return chosen.sort((a, b) => a - b);
 };
 
 // ---- the streaming estimator: causal, adaptive, updated each step ----------
