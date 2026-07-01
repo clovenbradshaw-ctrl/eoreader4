@@ -1068,6 +1068,10 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 .iv-state.surfing { color: #93c5fd; }
 .iv-state.surfing .rest-icon { animation: iv-breathe 2.4s ease-in-out infinite; }
 .iv-state.surfing .iv-dot { background: #93c5fd; box-shadow: 0 0 0 0 rgba(147,197,253,.5); animation: iv-pulse 1.5s ease-out infinite; }
+/* asleep — the sticky posture the sleep toggle holds: moonlight indigo, the glyph
+   breathing slowly (a longer, dimmer cycle than surfing). */
+.iv-state.asleep { color: #818cf8; }
+.iv-state.asleep .rest-icon { animation: iv-breathe 4.2s ease-in-out infinite; }
 @keyframes iv-pulse { 0% { box-shadow: 0 0 0 0 rgba(147,197,253,.45); } 100% { box-shadow: 0 0 0 8px rgba(147,197,253,0); } }
 @keyframes iv-breathe { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .iv-state .rest-icon { animation: none; } }
@@ -1097,6 +1101,12 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 .iv-drive { display: flex; gap: .5rem; margin-top: .6rem; padding-top: .5rem; border-top: 1px solid #1f1f23; flex-wrap: wrap; }
 .iv-drive button[disabled] { opacity: .4; cursor: default; }
 .iv-dream { color: #c4b5fd !important; border-color: #4c1d95 !important; }
+/* the sleep toggle — moonlight indigo; pressed (asleep) it reads as the active posture. */
+.iv-sleep { color: #a5b4fc !important; border-color: #3730a3 !important; }
+.iv-sleep[aria-pressed="true"] { background: rgba(99,102,241,.14) !important; }
+/* asleep the whole field dims — a darker card, the telemetry muted (the eyes closed). */
+.iv-field.asleep { background: #0e0e12; border-color: #1c1c22; }
+.iv-field.asleep .iv-tele, .iv-field.asleep .iv-note { color: #52525b; }
 
 /* ── the Dream panel (dream-view.js) — pruning and strengthening, side by side ──────
    A night held still. Violet is the dreaming register (distinct from the green rest and

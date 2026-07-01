@@ -26,6 +26,8 @@ test('awake and surfing share the eye; resting and night share the moon', () => 
   );
   // …and night folds onto the resting glyph (asleep, integrating).
   assert.equal(restIconSvg('night'), restIconSvg('resting'), 'night draws the resting moon');
+  // asleep (the sleep toggle's sticky posture) draws the same moon — eyes closed.
+  assert.equal(restIconSvg('asleep'), restIconSvg('resting'), 'asleep draws the resting moon');
   // an unknown posture falls back to awake, never throwing
   assert.equal(restIconSvg('nonsense'), restIconSvg('awake'));
 });
@@ -51,6 +53,7 @@ test('a title makes the glyph an accessible image', () => {
 test('restStateLabel speaks each posture', () => {
   assert.equal(restStateLabel('blink'), 'blinking');
   assert.equal(restStateLabel('night'), 'resting');
+  assert.equal(restStateLabel('asleep'), 'asleep');
   assert.equal(restStateLabel('rested'), 'rested');
   assert.equal(restStateLabel('surfing'), 'surfing');
 });

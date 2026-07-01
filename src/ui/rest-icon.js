@@ -15,17 +15,20 @@
 // it has settled — the waking ladder, drawn.
 
 // The posture vocabulary. The cycle's own states ('awake' | 'resting') plus the cadence
-// the UI flashes ('blink' | 'night') and the idle loop's siblings ('surfing' | 'rested'),
-// so one glyph serves both the rest cycle and the §15 idle view. Unknown names fall back
+// the UI flashes ('blink' | 'night'), the idle loop's siblings ('surfing' | 'rested'),
+// and 'asleep' — the posture the Rest view holds when you deliberately put the instrument
+// down (a sticky night: the frontier held still, integrating, not reading on). One glyph
+// serves the rest cycle, the §15 idle view, and the sleep toggle. Unknown names fall back
 // to 'awake'.
-export const REST_STATES = Object.freeze(['awake', 'surfing', 'blink', 'resting', 'night', 'rested']);
+export const REST_STATES = Object.freeze(['awake', 'surfing', 'blink', 'resting', 'night', 'rested', 'asleep']);
 
 // Normalize a free state name to a glyph key. surfing ≈ awake (eyes open, looking out);
-// night ≈ resting (asleep, integrating); rested is its own settled glyph.
+// night ≈ asleep ≈ resting (the moon, integrating); rested is its own settled glyph.
 const glyphKey = (state) => {
   switch (state) {
     case 'surfing': return 'awake';
     case 'night': return 'resting';
+    case 'asleep': return 'resting';
     case 'blink': return 'blink';
     case 'rested': return 'rested';
     case 'resting': return 'resting';
@@ -76,6 +79,7 @@ export const restStateLabel = (state) => {
     case 'awake': return 'awake';
     case 'blink': return 'blinking';
     case 'night': return 'resting';
+    case 'asleep': return 'asleep';
     case 'resting': return 'resting';
     case 'rested': return 'rested';
     default: return String(state || 'awake');

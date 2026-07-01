@@ -179,11 +179,12 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
   let reach = 0;             // the sentence index processed up to (the deeper read)
   let cands = [];            // surfaced reafferent candidates awaiting your verdict
   let phase = 'resting';     // resting | surfing — drives the field
+  let asleep = false;        // sticky: the instrument deliberately put down (the sleep toggle)
   let dream = null;          // the last night's report (buildDream) — null until told to dream
   let raf = 0, amp = 2, targetAmp = 2, t = 0;
 
   const empty = () => {
-    built = null; st = null; cands = []; dream = null;
+    built = null; st = null; cands = []; dream = null; asleep = false;
     stopField();
     root.innerHTML = `<div class="feed-empty">Load a document, then come back here to watch the instrument keep ` +
       `working what the first read left open — referents it introduced but could not yet characterize, names ` +
@@ -201,6 +202,7 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
       cands = [];
       dream = null;
       phase = 'resting';
+      asleep = false;
       render();
       startField();
     } catch (err) {
@@ -211,7 +213,7 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
   // process further: extend the read, run the governed idle loop, collect what it
   // learns. One arrival drains every void the new reach can resolve, then quiesces.
   const processFurther = () => {
-    if (!st || reach >= st.S) return;
+    if (!st || reach >= st.S || asleep) return;   // asleep the frontier is held still — no reading on
     const step = Math.max(1, Math.ceil((st.S - st.horizon) / 3));
     reach = Math.min(st.S, reach + step);
     phase = 'surfing'; targetAmp = 13; render();
@@ -227,6 +229,18 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
   };
 
   const restNow = () => { phase = 'resting'; targetAmp = 2; if (st) st.reach = reach; render(); };
+
+  // toggleSleep — put the instrument down, or wake it. Sleep is a STICKY posture (unlike
+  // the ambient "let it rest"): the eye closes to the moon, the field quiets to a low
+  // swell, and reading on is held — the frontier stays still so the day can integrate
+  // (docs/how-to-rest.md: rest is integration, the pass that needs the eyes closed).
+  // Waking returns it to the resting posture, ready to read on or dream again.
+  const toggleSleep = () => {
+    asleep = !asleep;
+    phase = 'resting';
+    targetAmp = asleep ? 1 : 2;
+    render();
+  };
 
   // dreamNow — tell the model to DREAM: hold the frontier still and run a night over the
   // document's real graph — prune the spurious, re-project the loud day toward baseline,
@@ -261,18 +275,24 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
     if (!st) return;
     const ledger = openLedger(st.fold, { resolution: st.resolution });
     const done = reach >= st.S;
-    const stateName = phase === 'surfing' ? 'surfing' : (done && !cands.length ? 'rested' : 'resting');
+    // asleep is the sticky posture and overrides the ambient derivation; otherwise the
+    // state reads off the loop (surfing while it works, rested once nothing is left open).
+    const stateName = asleep ? 'asleep' : (phase === 'surfing' ? 'surfing' : (done && !cands.length ? 'rested' : 'resting'));
+    const note = asleep
+      ? 'asleep — the frontier held still; integrating the day, not reading on'
+      : (phase === 'surfing' ? 're-surfing the open set against what was just read'
+         : (done ? 'nothing more to fold in — the rest is genuinely open' : 'idle — re-reads on its own; it will not call you back'));
     root.innerHTML =
       `<div class="iv-wrap">` +
-        `<div class="iv-field">` +
+        `<div class="iv-field${asleep ? ' asleep' : ''}">` +
           `<div class="iv-top">` +
             // a little phosphor-esque glyph for the current posture — eye open while
-            // surfing, the moon once it rests (rest-icon.js; docs/how-to-rest.md).
-            `<span class="iv-state ${phase}">${restIconSvg(stateName, { size: 15, title: restStateLabel(stateName) })}${stateName}</span>` +
+            // surfing, the moon once it rests or sleeps (rest-icon.js; docs/how-to-rest.md).
+            `<span class="iv-state ${stateName}">${restIconSvg(stateName, { size: 15, title: restStateLabel(stateName) })}${stateName}</span>` +
             `<span class="iv-tele">read through c${Math.min(reach, st.S)} / ${st.S} · ${ledger.length} open</span>` +
           `</div>` +
           `<canvas class="iv-canvas" width="600" height="48" aria-hidden="true"></canvas>` +
-          `<div class="iv-note">${phase === 'surfing' ? 're-surfing the open set against what was just read' : (done ? 'nothing more to fold in — the rest is genuinely open' : 'idle — re-reads on its own; it will not call you back')}</div>` +
+          `<div class="iv-note">${note}</div>` +
         `</div>` +
 
         `<div class="iv-sec-h">Open<span class="iv-rule"></span></div>` +
@@ -290,10 +310,11 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
         `</div>` +
 
         `<div class="iv-drive">` +
-          `<button type="button" class="small iv-more"${done ? ' disabled' : ''}>Process further ▸</button>` +
-          `<button type="button" class="small iv-rest">Let it rest</button>` +
+          `<button type="button" class="small iv-more"${(done || asleep) ? ' disabled' : ''}>Process further ▸</button>` +
+          `<button type="button" class="small iv-rest"${asleep ? ' disabled' : ''}>Let it rest</button>` +
           `<button type="button" class="small iv-dream">Dream ☾</button>` +
-          (dream ? `<button type="button" class="small iv-wake">Wake</button>` : '') +
+          `<button type="button" class="small iv-sleep"${asleep ? ' aria-pressed="true"' : ''}>${asleep ? 'Wake ☀' : 'Sleep ☾'}</button>` +
+          (dream ? `<button type="button" class="small iv-wake">End dream</button>` : '') +
         `</div>` +
         (dream
           ? (dream.error
@@ -305,6 +326,7 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
     root.querySelector('.iv-more')?.addEventListener('click', processFurther);
     root.querySelector('.iv-rest')?.addEventListener('click', restNow);
     root.querySelector('.iv-dream')?.addEventListener('click', dreamNow);
+    root.querySelector('.iv-sleep')?.addEventListener('click', toggleSleep);
     root.querySelector('.iv-wake')?.addEventListener('click', wakeFromDream);
     root.querySelectorAll('[data-confirm]').forEach(b => b.addEventListener('click', () => confirm(b.dataset.confirm)));
     root.querySelectorAll('[data-dismiss]').forEach(b => b.addEventListener('click', () => dismiss(b.dataset.dismiss)));
@@ -340,11 +362,16 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
     const draw = () => {
       raf = requestAnimationFrame(draw);
       if (!ctx || !cv) return;
-      amp += (targetAmp - amp) * 0.06; t += phase === 'surfing' ? 0.05 : 0.012;
+      // asleep is the calmest posture: a slow, dim swell (the frontier held still), below
+      // the ambient resting green and well below the active surfing blue.
+      const active = asleep ? 'asleep' : phase;
+      amp += (targetAmp - amp) * 0.06; t += active === 'surfing' ? 0.05 : active === 'asleep' ? 0.006 : 0.012;
       const w = cv.width, h = cv.height, mid = h / 2;
       ctx.clearRect(0, 0, w, h);
       ctx.lineWidth = 1.5;
-      ctx.strokeStyle = phase === 'surfing' ? 'rgba(147,197,253,.85)' : 'rgba(110,231,183,.5)';
+      ctx.strokeStyle = active === 'surfing' ? 'rgba(147,197,253,.85)'
+        : active === 'asleep' ? 'rgba(129,140,248,.35)'
+        : 'rgba(110,231,183,.5)';
       ctx.beginPath();
       for (let x = 0; x <= w; x += 2) {
         const k = x / w * Math.PI * 6;
