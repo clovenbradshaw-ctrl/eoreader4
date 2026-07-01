@@ -18,6 +18,7 @@
 // same key, same result.
 
 import { discriminatorIndex, evaluateSameAs, normLabel } from './asterisk.js';
+import { deriveNull } from './voidnull.js';
 
 export const DEFAULT_PROJECTION_RULES = Object.freeze({
   // Mass decays at γ per unit of stream-distance from the cursor (unit.js —
@@ -245,22 +246,57 @@ const computeProjection = (log, frame) => {
   // exponential γ kernel in reading distance from the cursor (engine.js
   // Pass 2.5), gated by a weight floor. Everything is read from frame.rules —
   // the projection touches no module scope.
+  // Edge weight, the Born way — no hardcoded decay rate, no hardcoded floor
+  // (docs/born-edge-weight.md). The base amplitude is bilinear in the endpoint log-mass,
+  // scaled by the bond's coupling. Two coefficients used to be invented:
+  //
+  //   • the recency decay was γ^dist with a fixed γ=0.7 per sentence — calibrated for a
+  //     short read at a local cursor, it drove every edge more than ~40 sentences away to
+  //     zero, so a 1242-line document collapsed to a ~1e-193 field with one live edge. The
+  //     rate is now DERIVED: the kernel width τ is the reading's OWN mean edge-distance, so
+  //     it spans the read whatever its length (exp(−dist/τ) is O(1), never underflows).
+  //   • the keep line was `edge_weight_floor`, a constant. It is now the Born noise-null
+  //     over the weight background (deriveNull — "the Born rule for the engine", voidnull.js):
+  //     an edge is kept iff it beats what the field's own non-cohering background produces by
+  //     chance. `alpha` (the tolerated false-positive rate) is the one policy input, read
+  //     from the rules; a thin background makes deriveNull abstain → keep all (cold start).
+  //
+  // decay_gamma / edge_weight_floor are read only as explicit legacy overrides.
   const cursor = (frame.cursor == null || !isFinite(frame.cursor)) ? Infinity : frame.cursor;
-  const γ      = frame.rules.decay_gamma;
-  const floor  = frame.rules.edge_weight_floor;
+  const alpha  = frame.rules.edge_alpha ?? 0.05;
 
-  const edgesOut = [];
+  // Pass 1 — base amplitude and reading-distance; accumulate τ, the reading's own scale.
+  const raw = [];
+  let distSum = 0, distN = 0;
   for (const e of edges) {
     const f = find(e.from), t = find(e.to);
     const fS = merged.get(f)?.sightings || 1;
     const tS = merged.get(t)?.sightings || 1;
-    let w = (Math.log(1 + fS) + Math.log(1 + tS)) * (e.coupling ?? 1);
-    if (isFinite(cursor) && e.sentIdx != null) {
-      const dist = Math.abs(cursor - e.sentIdx);
-      w *= Math.pow(γ, dist);
-    }
-    if (w >= floor) edgesOut.push({ ...e, from: f, to: t, weight: w });
+    const base = (Math.log(1 + fS) + Math.log(1 + tS)) * (e.coupling ?? 1);
+    const dist = (isFinite(cursor) && e.sentIdx != null) ? Math.abs(cursor - e.sentIdx) : 0;
+    if (dist > 0) { distSum += dist; distN += 1; }
+    raw.push({ e, f, t, base, dist });
   }
+  const τ = distN ? distSum / distN : 0;                 // DERIVED — not a hardcoded rate
+  for (const r of raw) r.weight = r.base * (τ > 0 ? Math.exp(-r.dist / τ) : 1);
+
+  // The keep line. Default keeps every edge (floor 0 was never a salience coefficient, just
+  // "no floor") so the τ change stays ranking-safe. `edge_floor: 'born'` (or
+  // `edge_weight_floor: 'born'`) opts into the Born noise-null — keep only edges that beat
+  // what the field's own non-cohering background produces by chance, dropping the cruft an
+  // ingest picks up (citation footers, markup). A thin background makes deriveNull abstain →
+  // keep all. An explicit numeric legacy floor still wins.
+  const legacyFloor = frame.rules.edge_weight_floor;
+  const wantBorn = frame.rules.edge_floor === 'born' || legacyFloor === 'born';
+  let line = 0;
+  if (Number.isFinite(legacyFloor) && legacyFloor > 0) line = legacyFloor;
+  else if (wantBorn) {
+    const born = deriveNull(raw.map(r => r.weight), { scale: 'linear', alpha });
+    line = Number.isFinite(born) ? born : 0;
+  }
+
+  const edgesOut = [];
+  for (const r of raw) if (r.weight >= line) edgesOut.push({ ...r.e, from: r.f, to: r.t, weight: r.weight });
 
   // Canonicalise void endpoints through the same union-find the edges use, so a
   // carved absence on a merged referent matches a claim about any of its aliases.
