@@ -184,6 +184,41 @@ export const eigenLenses = (rho, { k = Infinity } = {}) => {
   return Number.isFinite(k) ? pairs.slice(0, Math.max(0, k | 0)) : pairs;
 };
 
+// ── bornAssign ───────────────────────────────────────────────────────────────
+//
+// Assign a direction to the reading it most belongs to under the Born rule — the
+// measurement that turns a unit into a label, the atom every segmenter switches on.
+//
+// `signed = false` (default) ranks by |⟨u|lensᵢ⟩|² — the Born probability. This is
+// SIGN-BLIND: a bipolar reading's two poles square to the same value, so when a
+// BALANCED split is centred it collapses onto one axis (the two clusters become ±v of a
+// single eigenvector) and both sides read as the SAME reading — no boundary. That silent
+// failure is why a two-ball multiplicity, or the coarse level of a nested stream, reads
+// as one reading under the squared rule.
+//
+// `signed = true` ranks by the SIGNED projection over the ± poles and returns a pole
+// index (2i for +lensᵢ, 2i+1 for −lensᵢ), so the two sides of a balanced split land in
+// different readings and the boundary appears. Unimodal readings are unaffected (every
+// unit picks the same pole). Default stays squared, so existing callers are byte-identical.
+//
+//   dir     a (unit) direction vector.
+//   lenses  eigenLenses output ({weight, lens}) or a bare array of lens vectors.
+// Returns the reading index (squared) or pole index (signed). Pure.
+export const bornAssign = (dir, lenses, { signed = false } = {}) => {
+  let best = -Infinity, idx = 0;
+  for (let i = 0; i < lenses.length; i++) {
+    const lens = lenses[i]?.lens || lenses[i];
+    let c = 0; for (let j = 0; j < dir.length; j++) c += dir[j] * lens[j];
+    if (signed) {
+      if (c > best) { best = c; idx = 2 * i; }
+      if (-c > best) { best = -c; idx = 2 * i + 1; }
+    } else {
+      const v = c * c; if (v > best) { best = v; idx = i; }
+    }
+  }
+  return idx;
+};
+
 // ── vonNeumann ───────────────────────────────────────────────────────────────
 //
 // S = −Σ λ ln λ over the eigenvalue spectrum — the concentration of readings (the
