@@ -61,6 +61,21 @@ test('templateToJSON / templateFromJSON round-trip a neutral-directive shape', (
   assert.equal(back.sections[1].dir.act, 'close');
 });
 
+test('the learned content half survives the JSON round-trip', () => {
+  const tmpl = {
+    kind: 'substack', organ: 'text', format: 'verse', size: 300, source: 'learned',
+    content: { lexicon: ['substack', 'culture', 'writers'], phrases: ['great culture'] },
+    sections: [{ role: 'stanza 1', share: 1, dir: { act: 'open', detail: '2 lines — about culture' } }],
+  };
+  const back = templateFromJSON(templateToJSON(tmpl));
+  assert.deepEqual([...back.content.lexicon], ['substack', 'culture', 'writers']);
+  assert.deepEqual([...back.content.phrases], ['great culture']);
+  // a malformed content block is dropped, not fatal
+  const noisy = templateFromJSON({ kind: 'x', content: { lexicon: 'nope', phrases: [3] },
+    sections: [{ role: 'a', share: 1, dir: { act: 'open' } }] });
+  assert.equal(noisy.content, undefined);
+});
+
 test('a goal builder serializes via the {subject} placeholder and rehydrates', () => {
   const json = templateToJSON({ kind: 'note', sections: [{ role: 'body', share: 1, goal: (s) => `Write about ${s}.` }] });
   assert.match(json.sections[0].goal, /\{subject\}/);

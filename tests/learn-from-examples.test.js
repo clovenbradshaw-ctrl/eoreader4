@@ -55,6 +55,35 @@ test('learnStructureFromExamples reads the poems and learns the form', () => {
   assert.match(tmpl.sections[0].dir.detail, /8-6-8-6/);
 });
 
+test('the learner reads the CONTENT too — lexicon, and per-section themes in the details', () => {
+  const tmpl = learnStructureFromExamples('emily dickinson poem', DICKINSON);
+  // the kind's lexicon: open-class words off the examples, no grammar words
+  assert.ok(tmpl.content, 'a content half was learned');
+  assert.ok(tmpl.content.lexicon.length > 0);
+  assert.ok(tmpl.content.lexicon.includes('carriage'), 'the poems\' own words, not just counts');
+  assert.ok(tmpl.content.lexicon.every((w) => !['the', 'and', 'that', 'could'].includes(w)), 'stopwords stay out');
+  // each section's directive says what that position is ABOUT, not just the meter
+  assert.match(tmpl.sections[0].dir.detail, /about carriage|death/, 'stanza 1 carries its matter');
+  assert.match(tmpl.sections[0].dir.detail, /8-6-8-6/, '…alongside its form');
+});
+
+test('repeated word runs are learned as the kind\'s stock phrases', () => {
+  const copy = [
+`The subscription network for independent writers and creators.
+Substack is the home for great culture.
+
+Start writing. Start podcasting. Start a community.
+Substack gives you a direct line to your audience.
+
+Great culture is worth paying for.
+Writers and creators earn real money on Substack.`,
+  ];
+  const tmpl = learnStructureFromExamples('substack', copy);
+  assert.ok(tmpl.content.phrases.includes('great culture'), 'the refrain surfaces');
+  assert.ok(tmpl.content.phrases.includes('writers and creators'));
+  assert.ok(tmpl.content.lexicon.includes('substack'), 'the copy\'s own vocabulary is the lexicon');
+});
+
 test('learnStructureFromExamples returns null on non-poems (arc floor stands)', () => {
   assert.equal(learnStructureFromExamples('x', []), null);
   assert.equal(learnStructureFromExamples('x', ['']), null);

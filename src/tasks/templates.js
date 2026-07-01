@@ -42,8 +42,19 @@ export const templateToJSON = (tmpl = {}) => {
     source: tmpl.source || 'learned',
     ...(tmpl.provenance ? { provenance: tmpl.provenance } : {}),
     ...(tmpl.form ? { form: tmpl.form } : {}),
+    ...(tmpl.content ? { content: tmpl.content } : {}),
     sections,
   };
+};
+
+// The learned content block, validated: string arrays only, anything else dropped.
+const contentFromJSON = (c) => {
+  if (!c || typeof c !== 'object') return null;
+  const strings = (xs) => (Array.isArray(xs) ? xs.filter((x) => typeof x === 'string' && x) : []);
+  const lexicon = strings(c.lexicon);
+  const phrases = strings(c.phrases);
+  if (!lexicon.length && !phrases.length) return null;
+  return Object.freeze({ lexicon: Object.freeze(lexicon), phrases: Object.freeze(phrases) });
 };
 
 // templateFromJSON(json) → a validated template, or null when malformed (a bad install
@@ -64,6 +75,7 @@ export const templateFromJSON = (json) => {
     return null;
   }).filter(Boolean);
   if (!sections.length) return null;
+  const content = contentFromJSON(j.content);
   return Object.freeze({
     kind: String(j.kind),
     organ: j.organ || 'text',
@@ -73,6 +85,7 @@ export const templateFromJSON = (json) => {
     source: j.source || 'installed',
     ...(j.provenance ? { provenance: j.provenance } : {}),
     ...(j.form ? { form: j.form } : {}),
+    ...(content ? { content } : {}),
     sections,
   });
 };
