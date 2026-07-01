@@ -28,6 +28,7 @@ import { answerabilityGate, followUpOffer } from './answerable.js';
 import { arcPhase, phaseBias } from './shape.js';
 import { speculateNext, readWindow } from './prompt.js';
 import { fieldStrain, MIN_FIELD } from './field.js';
+import { holonicConfinement } from './confine.js';
 
 const MAX_STEPS = 24;            // runaway backstop; saturation should bind first
 const MAX_DRIFT = 2;             // consecutive drops that read as "the frame is gone"
@@ -60,6 +61,7 @@ export const runContinuation = async ({
   fieldRead = false,      // generation-by-field-reading — read atoms back as a density field
   embed = null,           // the embedder the field read needs (text → vector); required by fieldRead
   interleave = false,     // generation-by-field-reading — develop each node right after introducing it
+  confine = false,        // holonic-token-confinement — record each atom's address→confinement
   signal = null,
 } = {}) => {
   // RECONSTRUCT — the tail and the fold, reused wholesale. Computed once: the same
@@ -266,6 +268,9 @@ export const runContinuation = async ({
       boundFraction: gated.boundFraction,
       vetoes: gated.vetoes,
       action,
+      // The atom's holonic address → its token confinement (docs/holonic-token-confinement.md).
+      // Recorded here; it drives the lens-port's logit bias when a real renderer is present.
+      ...(confine ? { confinement: holonicConfinement({ proposition: prop, phase }) } : {}),
     };
     units.push(unit);
     // Interleave: a node introduce owes a develop beat next (an EVA on this atom), so the
