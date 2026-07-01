@@ -65,6 +65,14 @@ export const phaseBias = (phase) => {
   return bias;
 };
 
+// NOTE (essay-backwards, a negative result): biasing this posterior off the last move
+// to force the interleave cadence (introduce→develop→turn) does NOT work. Even at
+// recurrence weight 0 the structure+grammar priors trap the walk on whatever op last
+// repeated (CON·EVA·EVA·…), and no multiplier overcomes them without becoming a
+// dictate. The fine cadence is not coaxable out of the reader's move-predictor; it is
+// the §4.2 plan→proposition resolver on a real referent-and-relation graph, where the
+// SITE structure dictates the order. See docs/essay-backwards.md §8.
+
 // Apply a bias to a ranked posterior ([[op, p], …]), renormalising. Returns a new
 // ranked posterior (descending). Pure; direction.js draws the temperature reach off
 // the result so the phase shapes WHICH operator the reach lands on.

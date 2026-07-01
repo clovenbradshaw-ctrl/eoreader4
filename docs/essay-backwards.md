@@ -284,15 +284,36 @@ ops front-load all the concepts before the body develops, so nothing novel is le
 strain the frame. The essay *interleaves* — introduce, develop, turn, introduce — and
 that per-cursor node/edge rhythm is the fine-grain seam below.
 
-## 8. The seams still open
+## 8. The interleave — a negative result that names the real seam
 
-- the open is node-led but **CON-led, not DEF-led** — seeding `DEF` makes the predictor
-  quiesce at one atom (a lone `DEF` gives a flat posterior), so the open op mix waits on
-  the fine rhythm too, not a one-line seed change;
-- the **fine rhythm** — *which* develop, *when* to turn, *when* to introduce vs develop —
-  is the interleave the REC finding above needs, and the "read self back through the
-  perceiver" seam names it (`spec-generation.md`). This cut lands the *macro* arc
-  (open→develop→land); the sentence-by-sentence cadence is the next increment;
+The self-fold needs the walk to *interleave* (introduce a node → develop it while it is
+still novel → turn → introduce the next), or there is no fresh material to strain the
+frame. The obvious fix is to bias the direction draw off the last move — the
+significance-row micro-cycle, `node → EVA → (REC) → node`. **We built it and it does not
+work.** Biasing the posterior off the last move traps the walk on `CON·EVA·EVA·…`: once
+an op repeats, the structure and grammar priors concentrate on it and no multiplier
+short of a dictate pulls the draw off — and this holds **even at recurrence weight 0**,
+so it is not a recurrence artifact. Cranking the bias higher stops being a *lean* and
+becomes the router `§8` exists to forbid.
+
+The negative result is the finding: **the fine cadence is not coaxable out of the
+reader's move-predictor.** The predictor models *reading* dynamics — given a move-log, what
+follows — and steering it to *generate* a desired rhythm works against its grain. The
+cadence lives one level down, in the **§4.2 plan→proposition resolver on a real
+referent-and-relation graph**: the order in which edges become schedulable (the arity
+gate, Centering off the frontier, spreading activation — `spec-planner.md §5`) is what
+makes atom *k* open on what atom *k−1* touched. The site structure dictates the cadence;
+the move-predictor only says which *operator*. So the rhythm bias was reverted, and the
+self-fold is kept as the correct mechanism it is — unit-verified, waiting on the graph
+resolver to give it an interleaved walk to fire on.
+
+The seams still open, now correctly ordered:
+
+- **the §4.2 graph resolver** — the one that makes the walk interleave, so both the
+  self-fold (REC) and a non-front-loaded open become reachable. This is the load-bearing
+  unbuilt piece; everything cadence-shaped waits on it;
+- the open op mix (**CON-led not DEF-led**) is downstream of the same thing — seeding
+  `DEF` makes the predictor quiesce at one atom, so it is not a one-line fix either;
 - a real **relation-carrying prompt** for edge moves (two referents, not one span) and
   **building the external graph from a corpus** rather than authoring it are steps 3–4
   of §5, still ahead.

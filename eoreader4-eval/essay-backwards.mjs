@@ -78,8 +78,10 @@ const main = async () => {
   console.log(`    the self-fold that licenses REC on CLEAN-binding prose is unit-verified`);
   console.log(`    (tests/essay-backwards.test.js); it does not fire in THIS walk because the`);
   console.log(`    node ops front-load all ${CONCEPT_GROUND.length} concepts before the body develops, so nothing`);
-  console.log(`    novel is left to strain the frame. Firing it live needs the interleave rhythm`);
-  console.log(`    (introduce → develop → turn → introduce) — the fine-grain seam.`);
+  console.log(`    novel is left to strain the frame. Firing it live needs the INTERLEAVE cadence`);
+  console.log(`    — and that is not coaxable from the move-predictor (biasing it off the last`);
+  console.log(`    move traps on CON·EVA·EVA·…, even at recurrence weight 0). It is the §4.2`);
+  console.log(`    plan→proposition resolver on a real graph. docs/essay-backwards.md §8.`);
 
   // The macro-arc: a run of node moves (open), then self-op develops (the body), then
   // a SYN close (land). The essay's shape, read off the realized trace.
