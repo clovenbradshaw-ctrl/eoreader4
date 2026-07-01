@@ -218,6 +218,7 @@ test('runTurnWithDeepResearch with no gather just runs the turn (no scope change
 
 test('deepResearchAnnouncement names the subject, the angles, and the depth budget', () => {
   const line = deepResearchAnnouncement('quantum computing', ['quantum computing', 'quantum computing hardware'], { maxHops: 14 });
+  assert.match(line, /research/i);                 // names the decision: I'm going to research this
   assert.match(line, /quantum computing/);
   assert.match(line, /angles/);
   assert.match(line, /14 hops/);

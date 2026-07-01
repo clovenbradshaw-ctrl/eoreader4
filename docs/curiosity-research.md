@@ -147,10 +147,15 @@ over `[web + docs]`, with a `research` trace (hops + curiosity per hop + kept so
 (`tests/research.test.js`).
 
 In the app (`src/ui/app.js`), the `auto` gather now runs the walk instead of the single search.
-`STATE.researchHops` (default 4) is the budget. A per-hop progress beat shows the live thread
-(`🔎 hop 2/4: "X-Files revival coogler"…`), and the verbose web-result block surfaces the full hop
-trace collapsed (`renderWebResult` → `.wr-hops`): which thread, how many bits of surprise, kept or
-dropped as a dead seam — so "it followed its curiosity" is legible, not a black box.
+`STATE.researchHops` (default 4) is the budget. The feedback runs in the order the work happens:
+first `formulateSearchQuery` (web.js) rewrites the chat turn into a standalone search query with an
+LLM call — surfaced as `🔎 I'm going to research this — working out what to search for…` while it
+runs — then `researchAnnouncement(q)` promotes that query into voice
+(`I'm going to research this. Here's what I'm searching for: "…" — I'll follow what surprises me…`),
+so the user sees the DECISION and the exact query before any hop. A per-hop progress beat then shows
+the live thread (`🔎 hop 2/4: "X-Files revival coogler"…`), and the verbose web-result block surfaces
+the full hop trace collapsed (`renderWebResult` → `.wr-hops`): which thread, how many bits of
+surprise, kept or dropped as a dead seam — so "it followed its curiosity" is legible, not a black box.
 
 ## What is next
 

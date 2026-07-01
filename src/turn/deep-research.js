@@ -377,5 +377,5 @@ export const deepResearchAnnouncement = (seed, facets = [], { maxHops = 14 } = {
   const from = angles.length
     ? ` from ${angles.length + 1} angles (${[q, ...angles].slice(0, 3).map(a => `“${a}”`).join(', ')}${angles.length > 2 ? ', …' : ''})`
     : '';
-  return `Researching “${q}” deeply${from} — I'll follow what surprises me while it stays on topic, up to ${maxHops} hops, then write up everything I found with its sources.`;
+  return `I'm going to research “${q}” deeply${from} — I'll follow what surprises me while it stays on topic, up to ${maxHops} hops, then write up everything I found with its sources.`;
 };
