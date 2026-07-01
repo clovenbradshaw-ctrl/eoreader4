@@ -30,6 +30,7 @@ import { speculateNext, readWindow } from './prompt.js';
 import { fieldStrain, MIN_FIELD } from './field.js';
 import { holonicConfinement } from './confine.js';
 import { relaxMove } from './relax.js';
+import { nulGate } from './nul.js';
 
 const MAX_STEPS = 24;            // runaway backstop; saturation should bind first
 const MAX_DRIFT = 2;             // consecutive drops that read as "the frame is gone"
@@ -64,6 +65,7 @@ export const runContinuation = async ({
   interleave = false,     // generation-by-field-reading — develop each node right after introducing it
   confine = false,        // holonic-token-confinement — record each atom's address→confinement
   dynamics = false,       // decision-as-relaxation — occupancy currents settle into the move (no gauge)
+  nul = true,             // nul — hold uncohered ground honestly instead of hedging (default on)
   signal = null,
 } = {}) => {
   // RECONSTRUCT — the tail and the fold, reused wholesale. Computed once: the same
@@ -85,6 +87,16 @@ export const runContinuation = async ({
       trace: [{ step: 0, kind: 'refuse', wantedType: gate.wantedType, reason: r.reason }],
       state: { units: [], covered: [] }, fold: fold.stats,
     };
+  }
+
+  // NUL (§ the ninth cell) — the walk is the RIGHT TYPE, but does the ground COHERE? A
+  // field that is present but does not clear its own Born noise-null (the degenerate weights
+  // a bad projection produces) is held, not walked: the honest "I have these sources, they
+  // do not resolve" instead of hedged pseudo-prose. Conservative — fires only on a genuinely
+  // uncohered field, so a normal grounded walk is untouched.
+  if (nul) {
+    const heldResponse = nulGate(ground);
+    if (heldResponse) return { ...heldResponse, wantedType: gate.wantedType, fold: fold.stats };
   }
 
   // Resume from prior state, or start fresh. `units` are the accepted self-units
