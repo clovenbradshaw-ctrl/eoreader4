@@ -27,14 +27,14 @@ different projections of the same field.
 
 Two more pieces make it honest, and both matter downstream:
 
-- **the geography gate** — `readingCount` (the void applied to the eigengap spectrum):
+- **the geography gate** — `DEF` (the void applied to the eigengap spectrum):
   how many readings the field actually holds is a property of its own spectrum, not a
   constant. A flat spectrum holds one reading and **abstains** — no boundary may fire. The
   same test that counts the readings yields the abstention. "Generate where structure is
   found, dissipate to one where it is not."
-- **the void** — `deriveNull`/`boundedNull`/`voidPeaks`: a proposed structure fires only
+- **the void** — `deriveNull`/`boundedNull`/`SEG`: a proposed structure fires only
   if it beats what the field's own non-cohering background would produce by chance (the
-  Born noise-null, extreme-value corrected). `voidPeaks` reads a change-point curve and
+  Born noise-null, extreme-value corrected). `SEG` reads a change-point curve and
   keeps only the peaks that clear that line.
 
 ## The mapping to generation (each open seam, answered)
@@ -64,16 +64,16 @@ not. The predictor says *which operator*; the field says *whether this is a boun
 That division is the whole resolution: stop steering the operator sequence, read the field
 the operators are laying down.
 
-**3. Quiesce / stop — `readingCount` going flat.**
+**3. Quiesce / stop — `DEF` going flat.**
 `essay-backwards.md` stopped on span-exhaustion or a coarse land rule. The principled stop
 is the geography gate: when the field of accepted atoms holds only one reading
-(`readingCount` abstains), there is nothing left to distinguish — the honest move is to
+(`DEF` abstains), there is nothing left to distinguish — the honest move is to
 close. The same abstention that keeps ingestion from cutting flat noise keeps generation
 from developing a field that has gone flat. Length dissipates to one atom exactly where the
 evidence does.
 
 **4. The floor (SYN/NUL/VOID) — already the same void.**
-The generator's floor and the ingestion void are one mechanism. `voidPeaks`/`boundedNull`
+The generator's floor and the ingestion void are one mechanism. `SEG`/`boundedNull`
 is the Born noise-null; SYN fires when a proposed structure beats it, NUL holds, VOID
 asserts absence. The generation weld and the ingestion gate are the same firing rule,
 modality-blind, pointed at self instead of world.
@@ -94,7 +94,7 @@ argument is such a diagonal: a small model asked to "write a turning sentence" r
 its priors and confabulates a turn. So the planner must not ask it to. The **field**
 constructs the turn (the boundary is a fact about ρ, computed, not emitted), and the model
 only renders the proposition the boundary resolves to. The self-register and the self-fold
-were the first two steps toward that; atmosphere/paradigm/`readingCount` are the organ.
+were the first two steps toward that; atmosphere/paradigm/`DEF` are the organ.
 
 SURFER already navigates ingestion by surprise — the KL rate, a diagonal you can only feel
 against the expected (`common-sense.md`, SURFER coupling). Generation navigates the self
@@ -113,14 +113,14 @@ density field each step:
 2. at each interior cursor compute **atmosphere** `relEntropy(ρ_L, ρ_R)` and **paradigm**
    `commutator(ρ_L, ρ_R)` over trailing windows (skipping the rank-1 frontier, which reads
    as a spurious departure against any field);
-3. pick the turns with the **Born void** `voidPeaks` over each curve, union them (exp-0004's
+3. pick the turns with the **Born void** `SEG` over each curve, union them (exp-0004's
    fusion), and mark the boundary and its wake as the `strain` the structural prior reads —
    *replacing* `1 − boundFraction` and the lexical self-fold;
-4. read `readingCount` over the field spectrum; a flat field with no turn **quiesces**;
+4. read `DEF` over the field spectrum; a flat field with no turn **quiesces**;
 5. the `interleave` scheduler walks the ground introduce/develop so a turn lands right after
    an EVA, where the loop realizes it as a **REC**.
 
-`src/core/voidnull.js` now carries `readingCount`/`voidPeaks` (brought over from
+`src/core/voidnull.js` now carries `DEF`/`SEG` (brought over from
 `claude/new-session-qnyzcs`, identical source so it merges clean); `relEntropy`/`commutator`/
 `eigenLenses`/`buildDensity` were already on `main`. **Result** (`npm run essay-backwards`,
 and `tests/essay-backwards.test.js`): on a three-topic turning ground the loop walks
@@ -193,7 +193,7 @@ wiring is verified and waiting.
 ## Files referenced
 
 - ingestion channels: `experiments/exp-0003-omnimodal-sense/`, `experiments/exp-0004-atmosphere-paradigm/` (branch `claude/new-session-qnyzcs`)
-- the void + count: `src/core/voidnull.js` (`deriveNull`, `boundedNull`, `voidPeaks`, `readingCount`) — same branch
+- the void + count: `src/core/voidnull.js` (`deriveNull`, `boundedNull`, `SEG`, `DEF`) — same branch
 - the field primitives (on `main`): `src/core/spectral.js` (`buildDensity`, `eigenLenses`, `relEntropy`, `commutator`)
 - the common sense / Meno frame: `docs/common-sense.md`, `docs/thalamus.md` (branch `claude/parameter-mapping-organs-wu2vuy`)
 - the generation investigation this bridges from: `docs/essay-backwards.md`

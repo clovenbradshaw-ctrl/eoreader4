@@ -4,8 +4,8 @@
 // of the move-predictor, and the lexical self-fold that licenses REC is a poor-man's
 // proxy. The ingestion experiments (exp-0004) read a stream's boundaries as a density
 // field: ATMOSPHERE = the local density departure (relEntropy), PARADIGM = the eigenbasis
-// rotating (commutator), unioned and picked by the Born void (voidPeaks), gated by the
-// geography abstention (readingCount). Generation is that act run forward, over the field
+// rotating (commutator), unioned and picked by the Born void (SEG), gated by the
+// geography abstention (DEF). Generation is that act run forward, over the field
 // the generation is itself laying down. This module reads the accepted atoms back as a
 // field and returns, per cursor, whether it is a turn — the concrete first cut of
 // spec-generation.md's "read self back through the perceiver".
@@ -14,9 +14,9 @@
 // is only ever the past. Pure but async (the embed call is async); the strain it returns
 // is consumed synchronously by selfMoveLog.
 
-import { buildDensity, eigenLenses, relEntropy, commutator, readingCount, voidPeaks } from '../core/index.js';
+import { buildDensity, eigenLenses, relEntropy, commutator, DEF, SEG } from '../core/index.js';
 
-// voidPeaks needs ≥ MIN_SAMPLES departures to derive its line; below a handful of atoms
+// SEG needs ≥ MIN_SAMPLES departures to derive its line; below a handful of atoms
 // there is no field to read, so the field strain is silent and the loop runs on drift
 // strain alone (exactly the cold-start abstention the void takes everywhere).
 export const MIN_FIELD = 5;
@@ -54,7 +54,7 @@ export const fieldStrain = async (units, { embed, window = 5, alpha = 0.05, tol 
   // quiesce gate below uses it only in concert with "no boundary fired", so the common
   // mode (which keeps the raw spectrum low-rank) never forces a premature stop.
   const lenses = eigenLenses(buildDensity(vecs).rho);
-  const rc = readingCount(lenses.map((l) => l.weight));
+  const rc = DEF(lenses.map((l) => l.weight));
 
   // The two departure curves over adjacent trailing windows: atmosphere (density
   // departure) and paradigm (basis rotation), at each interior cursor. A cursor is
@@ -73,8 +73,8 @@ export const fieldStrain = async (units, { embed, window = 5, alpha = 0.05, tol 
   }
   // Each curve read against the Born void; the union is the turn set (exp-0004's fusion).
   const boundaries = [...new Set([
-    ...voidPeaks(atmo, { alpha, tol, indices: idx }),
-    ...voidPeaks(para, { alpha, tol, indices: idx }),
+    ...SEG(atmo, { alpha, tol, indices: idx }),
+    ...SEG(para, { alpha, tol, indices: idx }),
   ])].filter((i) => i >= 0 && i < n).sort((a, b) => a - b);
 
   // Strain rides the turn AND its wake: mark the boundary cursor and the next, so once a

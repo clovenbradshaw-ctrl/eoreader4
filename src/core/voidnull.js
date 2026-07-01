@@ -286,30 +286,3 @@ export const createNoiseFloor = ({ scale = 'linear', alpha = 0.01, grain = 0, N 
     beats(s, opts = {}) { return s > this.threshold(opts); },
   };
 };
-
-// ---- nul: hold the uncohered (the generation-side ninth cell, docs/nul-hold-the-uncohered.md).
-//
-// DEF/SEG/SIG/REC/EVA/CON name the spectral operators; this `nul` is the void-side partition
-// the generation gate reads: given per-item scores, which are PRESENT-but-uncohered (below
-// the Born noise-null, held) vs COHERED (above it, SYN-able). Absent items (0/NaN) are VOID's
-// concern, not NUL's. Cold start holds everything. It is not the spectral NUL (a novelty
-// reserve over ρ); it is NUL at the answer grain — the honest "seen, unresolved".
-export const nul = (scores = [], { alpha = 0.05 } = {}) => {
-  const present = [];
-  const vals = [];
-  scores.forEach((s, i) => { if (Number.isFinite(s) && s > 0) { present.push(i); vals.push(s); } });
-  if (vals.length < MIN_SAMPLES) return { held: present.slice(), cohered: [], line: null };
-  const line = boundedNull(vals, { alpha, ceiling: Infinity, fallback: median(vals) });
-  if (!Number.isFinite(line)) return { held: present.slice(), cohered: [], line: null };
-  const held = [], cohered = [];
-  scores.forEach((s, i) => {
-    if (!Number.isFinite(s) || s <= 0) return;      // absent — VOID's concern, not NUL's
-    (s >= line ? cohered : held).push(i);
-  });
-  return { held, cohered, line };
-};
-
-// Back-compat aliases — the descriptive names the pre-rename consumers import. DEF/SEG are
-// the canonical operator names now (exp: "name the spectral primitives after their operators").
-export const readingCount = DEF;
-export const voidPeaks = SEG;

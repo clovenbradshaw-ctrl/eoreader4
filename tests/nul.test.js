@@ -10,34 +10,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { nul } from '../src/core/index.js';
 import { createLog } from '../src/core/log.js';
 import { projectGraph, DEFAULT_PROJECTION_RULES } from '../src/core/project.js';
 import { nulGate, participationRatio, runContinuation } from '../src/longgen/index.js';
 import { createModel } from '../src/model/interface.js';
 import '../src/model/echo.js';
 
-// ── the primitive: hold what does not cohere ──────────────────────────────────
-
-test('nul partitions present items: the standout coheres, the noise is held', () => {
-  // one clear signal over a floor of noise — the collapsed field a bad projection makes
-  const scores = [0.9, 1e-6, 2e-6, 1e-6, 3e-6, 2e-6, 1e-6, 2e-6];
-  const { held, cohered } = nul(scores);
-  assert.ok(cohered.includes(0), 'the signal coheres');
-  assert.ok(held.length >= 5 && !held.includes(0), 'the noise is held, not the signal');
-});
-
-test('nul cold-starts by holding all — assume nothing coheres until the void is measured', () => {
-  const { held, cohered } = nul([0.5, 0.4, 0.3]);   // < MIN_SAMPLES
-  assert.equal(cohered.length, 0);
-  assert.equal(held.length, 3, 'too thin to judge → hold everything');
-});
-
-test('nul does not treat absence as held: zero/NaN are VOID\'s concern, not NUL\'s', () => {
-  const { held, cohered } = nul([0.9, 0, NaN, 0.8, 0.85, 0.7, 0.75, 0.6]);
-  const all = [...held, ...cohered];
-  assert.ok(!all.includes(1) && !all.includes(2), 'the absent entries are neither held nor cohered');
-});
+// NUL at the generation and projection grains. The OPERATOR NUL — the credence hold that
+// keeps standing readings clean by folding a novel unit at weight 0 (the additive identity
+// on ρ) — is `core/spectral.js` NUL, locked by `tests/hold.test.js`. Here NUL is the SAME
+// operator run forward: hold uncohered GROUND (the nulGate) rather than force it into a
+// hedged answer, and hold uncohered EDGES (the projection's `held`) rather than drop them.
 
 // ── the participation ratio: a degenerate field vs a usable spread ────────────
 

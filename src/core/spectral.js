@@ -227,7 +227,7 @@ export const SIG = (dir, lenses, { signed = false } = {}) => {
 // reading is born (INS); a non-negative return is a returning reading the unit merges
 // into (SYN); and a reading set carried over from a prior context (REC) recognizes its
 // known readings through exactly this call. It is the streaming complement to
-// readingCount's batch void: a per-unit novelty gate against a set of standing readings.
+// DEF's batch void: a per-unit novelty gate against a set of standing readings.
 //
 //   dir     a (unit) direction.
 //   lenses  the standing readings (eigenLenses output or bare vectors).
