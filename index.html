@@ -70,29 +70,11 @@
 <div data-acc="" style="--acc:{{ accentVar }};--accbg:{{ accbgVar }};--accline:{{ acclineVar }};height:100vh;background:var(--app);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;display:grid;grid-template-rows:{{ appRows }};grid-template-columns:minmax(0,1fr);position:relative;">
 
   <div style="background:#dee1e6;border-bottom:1px solid var(--line);">
-    <div style="display:flex;align-items:flex-end;gap:6px;padding:8px 14px 0;">
-      <div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;margin:0 6px 7px 0;">
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--card);">
+      <div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-right:4px;">
         <div style="width:21px;height:21px;border-radius:6px;background:var(--acc);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:800;letter-spacing:.02em;box-shadow:0 1px 2px rgba(91,52,214,.35);">EO</div>
         <span style="font-size:12.5px;font-weight:700;color:var(--ink);letter-spacing:-.01em;">Reader</span>
       </div>
-      <sc-if value="{{ hasTabs }}" hint-placeholder-val="{{ false }}">
-        <div style="display:flex;align-items:flex-end;gap:4px;min-width:0;overflow:hidden;">
-          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="1">
-            <div onclick="{{ t.onClick }}" style="{{ t.tabStyle }}">
-              <span style="{{ t.dotStyle }}">{{ t.dotGlyph }}</span>
-              <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.label }}</span>
-              <span onclick="{{ t.onClose }}" title="Close tab" style="width:16px;height:16px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--ink3);font-size:12px;line-height:1;" style-hover="background:rgba(0,0,0,.08);color:var(--ink)">✕</span>
-            </div>
-          </sc-for>
-        </div>
-      </sc-if>
-      <sc-if value="{{ hasTabs }}" hint-placeholder-val="{{ true }}">
-        <div style="display:flex;align-items:center;gap:7px;padding:7px 12px 8px;font-size:12px;color:var(--ink3);">New tab</div>
-      </sc-if>
-      <button onclick="{{ onNewTab }}" title="New tab" style="width:24px;height:24px;flex:0 0 auto;margin-bottom:6px;border:none;background:transparent;border-radius:6px;color:var(--ink2);font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:rgba(0,0,0,.07);color:var(--ink)">+</button>
-    </div>
-
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--card);">
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
         <button onclick="{{ toggleLeft }}" title="{{ leftTitle }}" style="width:27px;height:27px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3">{{ leftIcon }}</button>
       </sc-if>
@@ -269,10 +251,29 @@
     </sc-if>
 
     <sc-if value="{{ mainShow }}" hint-placeholder-val="{{ true }}">
-    <main style="overflow-y:auto;min-height:0;min-width:0;position:relative;order:{{ mainOrder }};">
+    <main style="overflow:hidden;min-height:0;min-width:0;position:relative;display:flex;flex-direction:column;order:{{ mainOrder }};">
       <sc-if value="{{ askPageOn }}" hint-placeholder-val="{{ false }}">
         <button onclick="{{ onAskPage }}" class="eo-askfab" title="Ask about this page" style="position:absolute;right:20px;bottom:20px;z-index:18;display:inline-flex;align-items:center;font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;box-shadow:0 6px 18px rgba(20,24,30,.2);cursor:pointer;line-height:1;"><span style="font-size:15px;flex:0 0 auto;">✦</span><span class="eo-askfab-lbl">Ask about this page</span></button>
       </sc-if>
+      <!-- Center-stage tabs — the open pages of this workspace, spanning the reading column. -->
+      <div style="flex:0 0 auto;display:flex;align-items:flex-end;gap:4px;padding:6px 14px 0;background:#dee1e6;border-bottom:1px solid var(--line);min-width:0;overflow:hidden;">
+        <sc-if value="{{ hasTabs }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:flex-end;gap:4px;min-width:0;overflow:hidden;">
+            <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="1">
+              <div onclick="{{ t.onClick }}" style="{{ t.tabStyle }}">
+                <span style="{{ t.dotStyle }}">{{ t.dotGlyph }}</span>
+                <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.label }}</span>
+                <span onclick="{{ t.onClose }}" title="Close tab" style="width:16px;height:16px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--ink3);font-size:12px;line-height:1;" style-hover="background:rgba(0,0,0,.08);color:var(--ink)">✕</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ hasTabs }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:7px;padding:7px 12px 8px;font-size:12px;color:var(--ink3);">New tab</div>
+        </sc-if>
+        <button onclick="{{ onNewTab }}" title="New tab" style="width:24px;height:24px;flex:0 0 auto;margin-bottom:6px;border:none;background:transparent;border-radius:6px;color:var(--ink2);font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:rgba(0,0,0,.07);color:var(--ink)">+</button>
+      </div>
+      <div style="flex:1 1 auto;min-height:0;position:relative;overflow-y:auto;">
       <sc-if value="{{ chatOverlayOn }}" hint-placeholder-val="{{ false }}">
         <div style="{{ chat.shellStyle }}">
           <div style="flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--card);">
@@ -844,6 +845,7 @@
           </div>
         </div>
       </sc-if>
+      </div>
     </main>
     </sc-if>
 
