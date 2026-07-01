@@ -38,7 +38,7 @@
         <div style="display:flex;align-items:flex-end;gap:4px;min-width:0;overflow:hidden;">
           <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="1">
             <div onclick="{{ t.onClick }}" style="{{ t.tabStyle }}">
-              <span style="{{ t.dotStyle }}"></span>
+              <span style="{{ t.dotStyle }}">{{ t.dotGlyph }}</span>
               <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.label }}</span>
               <span onclick="{{ t.onClose }}" title="Close tab" style="width:16px;height:16px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;border-radius:5px;color:var(--ink3);font-size:12px;line-height:1;" style-hover="background:rgba(0,0,0,.08);color:var(--ink)">✕</span>
             </div>
@@ -65,7 +65,7 @@
       </div>
       <input type="file" data-eo-import="" accept=".txt,.md,.markdown,.text,text/plain" onchange="{{ onImportFile }}" style="display:none;">
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
-        <button onclick="{{ onImportClick }}" title="Import a book or text file — read it as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">📄</button>
+        <button onclick="{{ onImportClick }}" title="Import a book or text file — read it as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)"><i class="ph">&#xE61E;</i></button>
       </sc-if>
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
         <div title="Layout presets" style="display:flex;gap:2px;background:#eef0f3;border-radius:8px;padding:3px;flex:0 0 auto;">
@@ -136,7 +136,7 @@
 
             <div style="height:1px;background:var(--line);margin:14px 0;"></div>
             <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:8px;">Memory</div>
-            <button onclick="{{ onOpenMem }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px;cursor:pointer;" style-hover="background:var(--card)">🗎 Open memory log</button>
+            <button onclick="{{ onOpenMem }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px;cursor:pointer;" style-hover="background:var(--card)"><i class="ph" style="font-size:14px;">&#xE710;</i>Open memory log</button>
             <div style="font-size:11px;color:var(--ink3);line-height:1.45;margin-top:6px;">Every source read into memory — revisit any, or mute it from the record.</div>
           </div>
         </sc-if>
@@ -312,7 +312,7 @@
             </sc-if>
             <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
               <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
-              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
+              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ depthBtnIcon }}</span>{{ depthBtnLabel }}</button>
               <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -331,7 +331,7 @@
         <div style="height:100%;overflow-y:auto;min-height:0;padding:30px 22px 80px;">
           <div style="max-width:680px;margin:0 auto;">
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-              <span style="font-size:18px;">📚</span>
+              <span class="ph" style="font-size:18px;">&#xE758;</span>
               <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Project Gutenberg · “{{ guten.query }}”</div>
               <sc-if value="{{ guten.hasResults }}" hint-placeholder-val="{{ false }}"><span style="margin-left:auto;flex:0 0 auto;font-size:11px;color:var(--ink3);white-space:nowrap;">{{ guten.countLabel }}</span></sc-if>
               <button onclick="{{ guten.onClear }}" style="flex:0 0 auto;font-size:12px;color:var(--ink2);background:transparent;border:none;cursor:pointer;margin-left:12px;" style-hover="color:var(--ink)">Clear</button>
@@ -757,7 +757,7 @@
             <div style="font-size:18px;font-weight:700;">{{ promptTitle }}</div>
             <div style="font-size:13.5px;color:var(--ink2);margin-top:8px;line-height:1.55;">{{ promptBody }}</div>
             <div style="display:flex;gap:9px;flex-wrap:wrap;justify-content:center;margin-top:18px;">
-              <button onclick="{{ onImportClick }}" style="display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:9px 15px;cursor:pointer;">📄 Import a file</button>
+              <button onclick="{{ onImportClick }}" style="display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:9px 15px;cursor:pointer;"><i class="ph">&#xE61E;</i>Import a file</button>
               <button onclick="{{ onNewChat }}" style="display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px 15px;cursor:pointer;">✦ Start a chat</button>
             </div>
             <div style="font-size:11.5px;color:var(--ink3);margin-top:14px;">or try a book / page:</div>
@@ -868,7 +868,7 @@
           </sc-if>
           <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
             <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
-              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)">{{ depthBtnLabel }}</button>
+              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ depthBtnIcon }}</span>{{ depthBtnLabel }}</button>
             <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
