@@ -101,6 +101,16 @@
         <div id="doc-chips" class="doc-chips" hidden></div>
         <form id="composer">
           <textarea id="input" placeholder="Ask anything — I read the web to answer. Try “/research &lt;topic&gt;” to dig deep…" rows="2"></textarea>
+          <!-- THE ESSAY ORGAN, from the chat (ui/app.js runEssay): the dropdown picks the essay
+               TYPE — a template that LEARNS (organs/out/essay-types.js): every completed essay of
+               a type folds into its stored profile (headings that worked, section length), which
+               steers the next one. The button commissions a ≥2500-word essay on whatever is in
+               the box; "write an essay on X" and "/essay X" take the same path. Options are
+               populated from the type registry at boot. -->
+          <span class="essay-tools">
+            <select id="essay-type" title="Essay type — a template that learns from every essay it writes"></select>
+            <button type="button" id="essay-go" title="Write an essay (2500+ words) on what's in the box">✍ Essay</button>
+          </span>
           <button type="submit" id="send">Send</button>
         </form>
       </section>

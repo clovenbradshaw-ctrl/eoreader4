@@ -1505,3 +1505,48 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
   border: 1px solid #78350f; background: #271a06; border-radius: 4px; padding: .02rem .3rem;
 }
 .lg-flag.refuses { color: #fca5a5; border-color: #7f1d1d; background: #2a1216; }
+
+/* --- The essay organ's thread emission (ui/essay-thread.js) -----------------
+   Shared between the standalone essay surface (essay.html) and the chat, which
+   renders an essay across many messages in its own thread: a title card, one
+   streamed message per section, and a closing card with the word count. */
+.msg.assistant.essay { max-width: 100%; align-self: stretch; }
+.msg.assistant.essay .essay-status {
+  font-size: .8rem; color: #a1a1aa; font-style: italic;
+  display: flex; align-items: center; gap: .4rem; margin-bottom: .4rem;
+}
+.msg.assistant.essay.done .essay-status { color: #6ee7b7; font-style: normal; }
+.msg.assistant.essay .essay-body h1 {
+  font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em;
+  margin: .2rem 0 .35rem; color: #f4f4f5; line-height: 1.25;
+}
+.msg.assistant.essay .essay-body .essay-sub { font-size: .78rem; color: #a1a1aa; margin: 0 0 .5rem; }
+.msg.assistant.essay .essay-body h2 {
+  font-size: 1.05rem; font-weight: 650; margin: .2rem 0 .5rem; color: #e4e4e7;
+}
+.msg.assistant.essay .essay-body p { margin: .6rem 0; line-height: 1.6; }
+.msg.assistant.essay .essay-body .sec { white-space: pre-wrap; line-height: 1.6; }
+.essay-meta {
+  font-size: .78rem; color: #a1a1aa;
+  display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+}
+.essay-meta .under { color: #f59e0b; }
+.essay-actions { display: flex; gap: .4rem; margin-left: auto; }
+/* What the type just learned — the visible face of "types that learn". */
+.essay-learned { font-size: .72rem; color: #71717a; margin-top: .45rem; }
+
+/* The chat composer's essay tools: the TYPE dropdown (a learned template) + the
+   trigger. The dropdown steers the essay organ; the button commissions one from
+   whatever is in the box. */
+.essay-tools { display: flex; gap: .35rem; align-items: stretch; flex-shrink: 0; }
+.essay-tools select {
+  background: #131316; color: #d4d4d8; border: 1px solid #3f3f46;
+  border-radius: 8px; font: inherit; font-size: .78rem; padding: 0 .3rem; max-width: 9.5rem;
+}
+.essay-tools button {
+  font: inherit; font-size: .82rem; padding: .4rem .6rem; cursor: pointer;
+  background: #1e1340; color: #c4b5fd; border: 1px solid #5b21b6; border-radius: 8px;
+  white-space: nowrap;
+}
+.essay-tools button:hover { background: #271854; }
+.essay-tools button:disabled { opacity: .5; cursor: default; }
