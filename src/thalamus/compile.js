@@ -18,7 +18,7 @@
 
 import { makeMapSpec, mapSpecHash } from './schema.js';
 import { normalizer } from './transfer.js';
-import { VALENCE_QUARANTINE } from './channels.js';
+import { VALENCE_QUARANTINE, isAbsenceVar } from './channels.js';
 
 export const THALAMUS_VERSION = '0.1';
 
@@ -50,8 +50,13 @@ const separable = (c, used) => !c.integral_with.some((other) => used.has(other))
 // L8 — valence quarantine: a high-valence channel may carry magnitude only if declared.
 const valenceOk = (v, c, declared) => c.valence <= VALENCE_QUARANTINE || declared.has(`${c.id}|${v.id}`);
 
+// The rest_character channel is SPECIALIZED for absence: legal only for an absence variable, so
+// a plain nominal (recipient) never becomes rests, and absence never becomes a magnitude.
+const restCharacterOk = (v, c) => c.id !== 'rest_character' || isAbsenceVar(v);
+
 const legal = (v, c, used, declared) =>
-  !used.has(c.id) && expressible(v, c) && timeMatches(v, c) && capacityOk(v, c) && separable(c, used) && valenceOk(v, c, declared);
+  !used.has(c.id) && expressible(v, c) && timeMatches(v, c) && capacityOk(v, c) &&
+  separable(c, used) && valenceOk(v, c, declared) && restCharacterOk(v, c);
 
 export const compile = (variables, channels, budget = {}) => {
   const vars  = variables || [];
@@ -74,9 +79,13 @@ export const compile = (variables, channels, budget = {}) => {
     const wantTransient = v.temporal === 'event';
     const wantSustained = v.temporal === 'state';
     const timePref = (c) => ((wantTransient && c.time_character === 'transient') || (wantSustained && c.time_character === 'sustained')) ? 1 : 0;
+    // an absence variable's canonical home is silence — it prefers rest_character above all else
+    // (the way identity's home is smell), a soft tie-break the effectiveness ranking sits under.
+    const absence = isAbsenceVar(v);
+    const restPref = (c) => (absence && c.id === 'rest_character') ? 1 : 0;
     const cands = chans
       .filter((c) => legal(v, c, used, declared))
-      .sort((a, b) => (timePref(b) - timePref(a)) || (b.effectiveness - a.effectiveness));
+      .sort((a, b) => (restPref(b) - restPref(a)) || (timePref(b) - timePref(a)) || (b.effectiveness - a.effectiveness));
     if (!cands.length) { unmapped.push(v.id); return; }
     const c = cands[0];
     used.add(c.id);

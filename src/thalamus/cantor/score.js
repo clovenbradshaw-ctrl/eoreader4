@@ -11,6 +11,9 @@
 //
 // The Web Audio scheduling lives in play.js; nothing here touches an AudioContext.
 
+import { ABSENCE_KINDS as ABSENCE_KIND_LIST } from '../channels.js';
+const ABSENCE_KINDS = new Set(ABSENCE_KIND_LIST);
+
 // ── physical transfer inverses (L3, renderer-owned) ──────────────────────────
 // mel⁻¹: place t linearly on the mel scale between the range endpoints, then to Hz. Equal data
 // steps → equal MEL steps → equal perceived-pitch steps (not equal Hz, which would sound warped).
@@ -77,8 +80,9 @@ export const toScoreSpec = (mapSpec, data, opts = {}) => {
 
   const byChannel = new Map((mapSpec.bindings || []).map((b) => [b.channel, b]));
   const b = (id) => byChannel.get(id) || null;
-  const onset = b('onset'), pitch = b('pitch'), loud = b('loudness'), pan = b('pan'), timbre = b('timbre');
+  const onset = b('onset'), pitch = b('pitch'), loud = b('loudness'), pan = b('pan'), timbre = b('timbre'), rest = b('rest_character');
   const nOnset = onset && normFor(onset), nPitch = pitch && normFor(pitch), nLoud = loud && normFor(loud), nPan = pan && normFor(pan);
+  const restFreq = opts.restFreq ?? 220;
 
   // categorical timbre: the variable's categories → a waveform index (declared on the binding's domain)
   const timbreCats = timbre?.domain || null;
@@ -88,21 +92,42 @@ export const toScoreSpec = (mapSpec, data, opts = {}) => {
     return (opts.timbres || WAVEFORMS)[i % (opts.timbres || WAVEFORMS).length];
   };
 
+  // ── absence → a shaped rest (docs/common-sense.md §IV) ──────────────────────
+  // A row is a REST when its sounding magnitude is absent (a NUL), or when it carries an explicit
+  // kind of absence. The kind picks the timbre OF SILENCE — not a volume, a character:
+  //   destroyed (existed, removed)     → a DECAY: the acoustic ghost of something that was ringing
+  //   never-created (an omission)      → a CLEAN gap: a silence that was always silent
+  //   withheld (held out of reach)     → a LOADED rest: a quiet held tension, the nothing straining
+  const voiceVar = pitch?.variable || loud?.variable || null;
+  const restVar  = rest?.variable || null;
+  const CHARACTER_OF = { destroyed: 'decay', never_created: 'clean', withheld: 'loaded' };
+
   const events = [];
   for (let i = 0; i < n; i++) {
     const row = rows[i];
     const t = nOnset ? (nOnset(row[onset.variable]) ?? i / Math.max(1, n)) : i / Math.max(1, n);
+    const at = Math.round(t * duration * 1e3) / 1e3;
+    const ref = opts.refKey ? String(row[opts.refKey]) : `row:${i}`;
+    const panAt = nPan ? Math.round((2 * (nPan(row[pan.variable]) ?? 0.5) - 1) * 1e3) / 1e3 : 0;
+
+    const kind = restVar ? String(row[restVar] ?? '') : '';
+    const voiceAbsent = voiceVar != null && numeric(row[voiceVar]) == null;
+    if (ABSENCE_KINDS.has(kind) || voiceAbsent) {
+      events.push({
+        kind: 'rest', ref, t: at, dur: noteDur, pan: panAt,
+        character: CHARACTER_OF[kind] || 'clean',   // a bare NUL with no stated kind reads as a clean gap
+        freq: restFreq, gain: 0,
+      });
+      continue;
+    }
     events.push({
-      ref:    opts.refKey ? String(row[opts.refKey]) : `row:${i}`,
-      t:      Math.round(t * duration * 1e3) / 1e3,
-      dur:    noteDur,
-      freq:   nPitch ? freqOf(nPitch(row[pitch.variable]) ?? 0.5, opts.pitchRange) : (opts.baseFreq ?? 440),
-      gain:   nLoud ? gainOf(nLoud(row[loud.variable]) ?? 0.5, opts.phonRange) : 0.5,
-      pan:    nPan ? Math.round((2 * (nPan(row[pan.variable]) ?? 0.5) - 1) * 1e3) / 1e3 : 0,
+      kind: 'note', ref, t: at, dur: noteDur, pan: panAt,
+      freq: nPitch ? freqOf(nPitch(row[pitch.variable]) ?? 0.5, opts.pitchRange) : (opts.baseFreq ?? 440),
+      gain: nLoud ? gainOf(nLoud(row[loud.variable]) ?? 0.5, opts.phonRange) : 0.5,
       timbre: timbre ? waveOf(row[timbre.variable]) : (opts.timbres?.[0] || 'sine'),
     });
   }
-  events.sort((a, c) => a.t - c.t || a.freq - c.freq);
+  events.sort((a, c) => a.t - c.t || (a.freq || 0) - (c.freq || 0));
 
   const channels = (mapSpec.bindings || []).map((x) => x.channel).filter((c) => AUDITORY_IDS.has(c));
   return makeScoreSpec({

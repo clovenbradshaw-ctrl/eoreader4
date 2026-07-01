@@ -15,29 +15,53 @@ export const playScore = (score, ctx, { destination = null, when = 0.06 } = {}) 
   const t0 = (ctx.currentTime || 0) + when;
   const voices = [];
 
-  for (const e of score.events || []) {
+  // one oscillator + gain (+ optional pan), wired and scheduled to run over [start,end].
+  const voice = ({ freq, detune = 0, pan = 0, type = 'sine', start, end }) => {
     const osc = ctx.createOscillator();
-    osc.type = e.timbre || 'sine';
-    if (osc.frequency && 'value' in osc.frequency) osc.frequency.value = e.freq;
-
+    osc.type = type;
+    if (osc.frequency && 'value' in osc.frequency) osc.frequency.value = freq;
+    if (detune && osc.detune && 'value' in osc.detune) osc.detune.value = detune;
     const gain = ctx.createGain();
     gain.gain.value = 0;
-
-    const pan = typeof ctx.createStereoPanner === 'function' ? ctx.createStereoPanner() : null;
-    if (pan && pan.pan && 'value' in pan.pan) pan.pan.value = e.pan || 0;
-
+    const panner = typeof ctx.createStereoPanner === 'function' ? ctx.createStereoPanner() : null;
+    if (panner && panner.pan && 'value' in panner.pan) panner.pan.value = pan;
     osc.connect(gain);
-    if (pan) { gain.connect(pan); pan.connect(out); } else { gain.connect(out); }
-
-    const start = t0 + e.t;
-    const end   = start + e.dur;
-    // a short attack/release envelope so events read as discrete notes, not clicks.
-    gain.gain.setValueAtTime?.(0, start);
-    gain.gain.linearRampToValueAtTime?.(e.gain, start + 0.012);
-    gain.gain.linearRampToValueAtTime?.(0, end);
+    if (panner) { gain.connect(panner); panner.connect(out); } else { gain.connect(out); }
     osc.start?.(start);
     osc.stop?.(end + 0.02);
     voices.push(osc);
+    return gain;
+  };
+
+  for (const e of score.events || []) {
+    const start = t0 + e.t;
+    const end   = start + e.dur;
+
+    // A REST is a SHAPED SILENCE (docs/common-sense.md §IV): the character is the timbre of the
+    // nothing, never its volume. `clean` schedules no voice — the absence is heard as the pulse
+    // that failed to land, in the rhythm around it.
+    if (e.kind === 'rest') {
+      if (e.character === 'clean') continue;                            // the never-created: pure gap
+      if (e.character === 'decay') {                                    // the destroyed: a fading ghost
+        const g = voice({ freq: e.freq, pan: e.pan, start, end });
+        g.gain.setValueAtTime?.(0.14, start);
+        (g.gain.exponentialRampToValueAtTime || g.gain.linearRampToValueAtTime)?.call(g.gain, 0.0001, end);
+      } else if (e.character === 'loaded') {                            // the withheld: held, beating tension
+        for (const detune of [-6, 6]) {
+          const g = voice({ freq: e.freq, detune, pan: e.pan, start, end });
+          g.gain.setValueAtTime?.(0, start);
+          g.gain.linearRampToValueAtTime?.(0.05, start + 0.03);        // quiet, strained, sustained
+          g.gain.linearRampToValueAtTime?.(0, end);
+        }
+      }
+      continue;
+    }
+
+    // A NOTE: a short attack/release envelope so events read as discrete notes, not clicks.
+    const g = voice({ freq: e.freq, pan: e.pan, type: e.timbre || 'sine', start, end });
+    g.gain.setValueAtTime?.(0, start);
+    g.gain.linearRampToValueAtTime?.(e.gain, start + 0.012);
+    g.gain.linearRampToValueAtTime?.(0, end);
   }
 
   return {

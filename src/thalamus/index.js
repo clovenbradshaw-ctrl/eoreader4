@@ -28,7 +28,7 @@ export {
   makeVariable, makeChannel, makeBinding, makeMapSpec, validateMapSpec, mapSpecHash,
 } from './schema.js';
 export { profile, profileColumn }                       from './profile.js';
-export { VISUAL_CHANNELS, AUDITORY_CHANNELS, channelsFor, VALENCE_QUARANTINE } from './channels.js';
+export { VISUAL_CHANNELS, AUDITORY_CHANNELS, channelsFor, VALENCE_QUARANTINE, ABSENCE_KINDS, isAbsenceVar } from './channels.js';
 export { normalizer, applyTransfer, describeTransfer }  from './transfer.js';
 export { compile, THALAMUS_VERSION }                       from './compile.js';
 export { critique, critiqueBySeverity }                 from './critique.js';

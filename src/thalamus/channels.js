@@ -41,7 +41,24 @@ export const AUDITORY_CHANNELS = Object.freeze([
   makeChannel({ id: 'timbre',     modality: 'auditory', order: 'categorical', time_character: 'sustained', capacity: 6, transfer: 'linear', polarity: null,      valence: 0.30, effectiveness: 0.50 }),
   makeChannel({ id: 'mode',       modality: 'auditory', order: 'ordered', time_character: 'sustained', capacity: 2,   transfer: 'linear', polarity: 'more_major', valence: 0.90, effectiveness: 0.20 }),
   makeChannel({ id: 'dissonance', modality: 'auditory', order: 'ordered', time_character: 'sustained', capacity: 4,   transfer: 'linear', polarity: 'more_tense', valence: 0.95, effectiveness: 0.30 }),
+  // The ear's channel for ABSENCE — a rest, shaped. Categorical, because the kinds of nothing
+  // (destroyed / never-created / withheld) have no order: a withheld record is not "more absent"
+  // than a destroyed one, only OTHER. So absence routes here as difference, never as magnitude,
+  // and the compiler forbids it a magnitude channel (docs/common-sense.md §IV). A rest is an
+  // event in time (a beat that fails to land), hence transient. CANTOR sounds each character as
+  // a different silence: a decaying ghost, a clean gap, a loaded held tension.
+  makeChannel({ id: 'rest_character', modality: 'auditory', order: 'categorical', time_character: 'transient', capacity: 4, transfer: 'linear', polarity: null, valence: 0.20, effectiveness: 0.40 }),
 ]);
+
+// The kinds of nothing (docs/common-sense.md §IV). A DESTROYED record existed and was removed;
+// a NEVER-CREATED one is a lawful-or-not omission; a WITHHELD one exists and is held out of reach.
+// A nominal variable whose categories are these is an absence variable — its canonical sensory
+// home is silence (the rest_character channel), the way identity's home is smell. Callers
+// normalize their own labels onto these three.
+export const ABSENCE_KINDS = Object.freeze(['destroyed', 'never_created', 'withheld']);
+export const isAbsenceVar = (v) =>
+  v?.measurement === 'nominal' && Array.isArray(v.categories) && v.categories.length > 0 &&
+  v.categories.every((c) => ABSENCE_KINDS.includes(String(c)));
 
 // channelsFor(modality) — the catalog a target draws from. 'cross' offers both, so a finding
 // can be compiled to eye and ear from one call (the modality-independence proof, docs/thalamus.md).
