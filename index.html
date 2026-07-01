@@ -3766,8 +3766,8 @@ class Component extends DCLogic {
       // Grounding chips: the verbatim passages the answer leaned on (the richest, most
       // mechanical trail), then the source(s) and the entities it named. Each passage chip
       // opens its source; entity chips pivot the panel.
-      const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this.goWeb(p.u)}));
-      const sources=(m.sources||[]).map(u=>({label:titleForUrl(u),title:u,onOpen:()=>this.goWeb(u)}));
+      const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this.openHero(p.u)}));
+      const sources=(m.sources||[]).map(u=>({label:titleForUrl(u),title:u,onOpen:()=>this.openHero(u)}));
       const cites=passages.length?passages:sources;   // prefer passages; fall back to bare sources
       // Each entity carries the DOMAIN it was read from — the source provenance, shown as a muted
       // suffix on the chip. The primary source is the one that mentions the entity most (stable,
@@ -3775,14 +3775,16 @@ class Component extends DCLogic {
       // This is what surfaces the entity-collision case at a glance — "Dolphin · ifaw.org" reads
       // apart from "Dolphins · miamidolphins.com" without opening either.
       const entities=(m.entities||[]).map(id=>{
-        let dom='',extra=0;
+        let dom='',extra=0,primary='';
         if(this.master&&this.graph){
           const cnt={};
           for(const i of this.mentionsOf(id)){const u=this.master.sentenceSource[i];if(u)cnt[u]=(cnt[u]||0)+1;}
           const srcs=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
-          if(srcs.length){dom=this.short(srcs[0]);extra=srcs.length-1;}
+          if(srcs.length){primary=srcs[0];dom=this.short(srcs[0]);extra=srcs.length-1;}
         }
-        return {label:this.labelOf(id),domain:dom,hasDomain:!!dom,hasExtra:extra>0,extraLabel:'+'+extra,onClick:()=>this.clickEntity(id),
+        // Clicking a chip opens its source in the hero (centre) and slides the chat into its
+        // right-hand drawer; with no known source it falls back to pivoting to the entity profile.
+        return {label:this.labelOf(id),domain:dom,hasDomain:!!dom,hasExtra:extra>0,extraLabel:'+'+extra,onClick:primary?(()=>this.openHero(primary)):(()=>this.clickEntity(id)),
           style:'display:inline-flex;align-items:baseline;gap:5px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;',
           domStyle:'font-size:9px;font-weight:500;color:var(--acc);opacity:.55;letter-spacing:.02em;white-space:nowrap;'};
       });
@@ -3808,7 +3810,7 @@ class Component extends DCLogic {
       // (featured-snippet research); longer than the old 46-char chip, clamped in the view so it
       // stays tidy. Each ref also carries its source identity (favicon + domain) and a hasIcon flag.
       const refOf=(u,n,text)=>({n,label:titleForUrl(u),domain:this.short(u)||titleForUrl(u),
-        preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.goWeb(u)});
+        preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.openHero(u)});
       let refs=[];
       if(liveReg){
         refs=Object.keys(liveReg).map(i=>liveReg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
@@ -3839,7 +3841,7 @@ class Component extends DCLogic {
       // Related docs — other read sources ranked by relevancy. Default to the top 3; a
       // "+N more" reveals the rest. Offered alongside an answer (and instead of weak
       // grounding when the in-scope sources didn't actually match the question).
-      const relAll=(m.related||[]).map(r=>({label:r.title,title:r.url,onOpen:()=>this.goWeb(r.url),
+      const relAll=(m.related||[]).map(r=>({label:r.title,title:r.url,onOpen:()=>this.openHero(r.url),
         chipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'}));
       const relKey=cur.id+':'+mi+':rel', relOn=!!gOpen[relKey];
       const related=relOn?relAll:relAll.slice(0,3);
@@ -5447,6 +5449,11 @@ class Component extends DCLogic {
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
   goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
+  // Open a source in the CENTRE (the hero) WITHOUT dropping the chat — unlike goWeb, which
+  // clears activeChat and so closes the thread. Clicking a chip inside a chat answer opens
+  // the source as the hero and, because viewUrl is now set, the chat reflows out of the
+  // centre into its right-hand drawer (chatVals' `docked`) instead of disappearing.
+  openHero(url){url=this.norm(url);if(!url)return;if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,rightOpen:true,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});
     // Now that the page is read it has propositions — re-render the open view in the
     // chosen mode (reader book, or the native page with its contents + flagged passages),
