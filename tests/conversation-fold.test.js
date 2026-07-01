@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  projectFold, routeStance, stanceDescOf, isExplicitCompose,
+  projectFold, routeStance, stanceDescOf, isExplicitCompose, switchesFromCompose,
   composeKind, composeSubject, transitionPrompt, clearFoldMemo,
 } from '../src/core/conversation-fold.js';
 
@@ -89,6 +89,30 @@ test('after a compose turn, "write me one" routes to compose with the model COLD
   assert.equal(routeStance('do it', f), 'compose');
   assert.equal(routeStance('now one about the city', f), 'compose');
   assert.equal(routeStance('make it shorter', f), 'compose');
+});
+
+test('a self-contained question switches OUT of a compose thread (cold-path §5 seed)', () => {
+  clearFoldMemo();
+  const f = projectFold([user('write an emily dickinson poem'), compose('emily dickinson poem', null)], { chatId: 'c1' });
+  // Fresh, self-contained questions leave the compose path (→ null, the app's ground/web path).
+  assert.equal(routeStance('what is 237 * 637?', f), null);
+  assert.equal(routeStance('who wrote Hamlet?', f), null);
+  assert.equal(routeStance('how do HTML forms work?', f), null);
+  // Anaphoric compose follow-ups still continue — the switch seed is narrow by design.
+  assert.equal(routeStance('write me one', f), 'compose');
+  assert.equal(routeStance('make it shorter', f), 'compose');
+  assert.equal(routeStance('now one about the city', f), 'compose');
+  assert.equal(routeStance('can you make it shorter?', f), 'compose');   // question-shaped but anaphoric
+  assert.equal(routeStance('what if it were about the sea?', f), 'compose');
+});
+
+test('switchesFromCompose fires only on self-contained, non-compose questions', () => {
+  assert.equal(switchesFromCompose('what is 237 * 637?'), true);
+  assert.equal(switchesFromCompose('who wrote Hamlet?'), true);
+  assert.equal(switchesFromCompose('write me another poem'), false);    // explicit compose stays compose
+  assert.equal(switchesFromCompose('do it'), false);                    // not question-shaped
+  assert.equal(switchesFromCompose('make it shorter'), false);
+  assert.equal(switchesFromCompose('what if it were shorter?'), false); // anaphoric refinement
 });
 
 test('after a ground turn, a follow-up continues as ground (today’s behavior preserved)', () => {

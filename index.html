@@ -3141,7 +3141,9 @@ class Component extends DCLogic {
     // transition INTO grounding — a structural marker (§5), not an anaphor — so it
     // breaks continuation and takes the web path below. Everything else in a composing
     // thread continues to compose.
-    if(fold.stance==='compose'&&!this._researchIntent(q))return this.composeArtifact(q,fold);
+    // …but a self-contained question ("what is 237 * 637?") is a SWITCH out of composing, not
+    // an anaphoric follow-up — it must not be answered as another poem. (§5 cold-path seed.)
+    if(fold.stance==='compose'&&!this._researchIntent(q)&&!this._switchesFromCompose(q))return this.composeArtifact(q,fold);
     // The grounding scope for this turn: isolated (net-new, ground nothing from reading),
     // everything (sources:[]), or the tagged sources. An isolated chat answers plainly.
     const _sc=this._answerScope(cur,null);const isolated=_sc.isolated;const sources=_sc.sources;
@@ -3352,6 +3354,22 @@ class Component extends DCLogic {
     const s=String(q||'');
     return new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s)&&new RegExp('\\b(?:'+this._CK()+')\\b','i').test(s);
   }
+  // Mirror of conversation-fold.js switchesFromCompose — the model-free switch-OUT seed
+  // (docs/conversation-fold.md §5/§11). Continuation-by-default keeps a compose thread
+  // composing; a clearly SELF-CONTAINED question ("what is 237 * 637?", "who wrote Hamlet?")
+  // with no back-reference to the piece is a fresh turn and must LEAVE the compose path, not be
+  // answered as another poem. Narrow on purpose: an anaphoric follow-up ("make it shorter",
+  // "another") carries no fresh subject and is left to continue. Rung 4's warm model is the real
+  // detector; this covers the common switch offline until it's wired.
+  _switchesFromCompose(q){
+    const s=String(q||'').trim();
+    if(!s||this._composeIntent(s))return false;
+    const wh=/^(?:what|whats|what's|who|who's|whos|why|how|when|where|which|whose|whom)\b/i.test(s);
+    const endsQ=/\?\s*$/.test(s);
+    if(!wh&&!endsQ)return false;
+    const backRef=/\b(?:it|its|it's|this|that|those|them|they|one|another|again|more|shorter|longer|instead|version|the\s+(?:poem|story|piece|song|essay|draft|version))\b/i.test(s);
+    return !backRef;
+  }
   // The KIND phrase, kept whole ("emily dickinson poem", "haiku"), length/style words peeled. Used
   // only to label the work ("Writing a haiku…"); the model gets the request itself, not this.
   _composeKind(q){
@@ -3377,14 +3395,13 @@ class Component extends DCLogic {
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
       if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,draft:true,think:'Writing '+a+' '+kind+'…'}]};
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Writing '+a+' '+kind+'…'}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();this._thinkClock();
-    // finish firms the draft to the final piece (draft:false) unless a patch says otherwise,
-    // and tags the turn `stance:'compose'` with its focus so the fold carries the compose
-    // activity forward — the next "write me one" / "do it" continues it (§2, §5).
+    // finish settles the turn, tags it `stance:'compose'` with its focus so the fold carries the
+    // compose activity forward — the next "write me one" / "do it" continues it (§2, §5).
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,draft:false,stance:'compose',focus,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,stance:'compose',focus,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const guard=this._stallGuard();
     let model=null;
     try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
@@ -3400,20 +3417,21 @@ class Component extends DCLogic {
     let raw='';
     try{raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:700,temperature:0.85,onToken,signal:guard.signal}),guard.race]);}
     catch(e){raw=acc;}
-    // THE FIRST GO, THEN EVALUATE. "Let me take a first go, and then I'll update if I need to." The
-    // draft above is the first go; now the writer reads it back against the request and only rewrites
-    // if it falls short. This is the lag posture (spec-enacted-writer §6) and the self-fold weld: read
-    // your own output, judge it, re-enter — write→evaluate→(maybe)revise, not plan-it-all-up-front.
+    // THE FIRST GO, THEN EVALUATE (the lag posture, spec-enacted-writer §6). The piece shown above
+    // is a NORMAL answer, not a tentative "first go" — the writer still reads it back once and may
+    // rewrite, but that pass is surfaced only in the working banner ("Reading it back…") and the
+    // bubble swaps ONLY if a real rewrite actually lands. No "first go" label promising a revision
+    // that (at this model size) usually never comes.
     let out=this.normMd(raw)||acc;
+    let revised=false;
     if(out&&out.trim()&&!guard.signal.aborted){
-      out=await this._reviseIfNeeded(model,q,out,guard,(t)=>{
-        // surface the second look in the bubble's status (the first go stays visible underneath)
-        this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-          if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],think:t};return {...c,messages:m};})}));
-      });
+      const firstGo=out;
+      out=await this._reviseIfNeeded(model,q,out,guard,(t)=>{this.setState({modelStatus:t});});
+      this.setState({modelStatus:''});
+      revised=(out!==firstGo);   // _reviseIfNeeded returns the SAME string on OK, a new one on rewrite
     }
     guard.clear();
-    finish({text:out||'(the model returned nothing to write)'});
+    finish(revised?{text:out,modelNote:'Revised after a second look'}:{text:out||'(the model returned nothing to write)'});
   }
   // Read the first go back and update only if it falls short. One extra pass: the writer judges its
   // own draft against the request — replies OK when it already lands, or a better full version when it
@@ -4023,9 +4041,6 @@ class Component extends DCLogic {
       // Render the model's markdown LIVE — even while the bubble is still pending — so lists, bold
       // and line breaks form as the answer streams in, not only once it finishes. User turns stay plain.
       const isMd=!isUser&&!!m.text;
-      // The FIRST GO: the draft is shown tentative — lighter, italic, labelled "here is my first go"
-      // — while the writer reads it back. On the final pass the flag clears and it firms to full ink.
-      const isDraft=!isUser&&!!m.draft;
       // Inline footnotes. The longform arc bakes ⟦cN⟧ sentinels into the text AS IT STREAMS and
       // rides its own registry on `m.cites`, so the superscripts grow with the essay — use it
       // directly (pending and settled). Any other answer gets the post-hoc binder once it settles
@@ -4180,9 +4195,9 @@ class Component extends DCLogic {
         relatedStyle:'max-width:80%;margin-top:7px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;',
         relatedHeadStyle:'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:1px;',
         relatedMoreStyle:'font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
-        hasNote:!!m.modelNote||isDraft,note:isDraft?'(here is my first go)':(m.modelNote||''),
+        hasNote:!!m.modelNote,note:(m.modelNote||''),
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
-        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+((m.pending&&!m.text)||isDraft?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(isDraft?'font-style:italic;':'')+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
+        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+((m.pending&&!m.text)?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
         noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
