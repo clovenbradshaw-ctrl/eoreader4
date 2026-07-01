@@ -243,6 +243,36 @@ export const recognize = (dir, lenses, { floor = 0, signed = false } = {}) => {
   return (c * c > floor) ? idx : -1;
 };
 
+// ── evaluate (EVA) ───────────────────────────────────────────────────────────
+//
+// The evaluate operator — test a standing reading against the stream and reinforce or
+// strain it. bornAssign/recognize decide WHICH reading a unit belongs to; evaluate scores
+// how well the reading is HOLDING and, when it stops, defeats it. It is what makes a
+// reading (or a carried REC prior) DEFEASIBLE rather than a fact: a fit at or above the
+// expected membership `expect` reinforces (support ← γ·support + surplus, strain decays);
+// a fit below it strains (strain ← γ·strain + shortfall, support decays); the reading is
+// DEFEATED once strain overtakes support with enough evidence. The γ-decay makes both
+// accumulators leaky, so a transient dip strains without defeating — only a SUSTAINED
+// misfit (a genuine drift, a stale prior the world moved past) crosses over. This closes
+// the DEF·EVA·REC loop: DEF asserts a reading, EVA tests it, REC revises on defeat.
+//
+//   ledger  the reading's running { support, strain } (missing → 0,0).
+//   fit     how well this unit fits the reading (e.g. |⟨u|lens⟩|²), in [0,1].
+//   gamma   the leak (default 0.85): lower forgets faster, higher holds a grudge longer.
+//   expect  the membership a holding reading is expected to reach (the reinforce/strain
+//           split point).
+//   minEvidence  strain+support must exceed this before a defeat can fire (no defeat on
+//           one or two units — a reading is given a chance to establish).
+// Returns { support, strain, defeated }. Pure — a fold step, no state of its own.
+export const evaluate = (ledger, fit, { gamma = 0.85, expect = 0.3, minEvidence = 0.8 } = {}) => {
+  const s0 = ledger?.support ?? 0, t0 = ledger?.strain ?? 0;
+  let support, strain;
+  if (fit >= expect) { support = gamma * s0 + (fit - expect); strain = gamma * t0; }
+  else { strain = gamma * t0 + (expect - fit); support = gamma * s0; }
+  const defeated = (support + strain > minEvidence) && strain > support;
+  return { support, strain, defeated };
+};
+
 // ── coupling ─────────────────────────────────────────────────────────────────
 //
 // The two-way holon coupling, as one atom. Given a `part` signal and the `whole` it

@@ -1,0 +1,15 @@
+{
+  "capability": "EVA (evaluate) is the operator that makes a reading DEFEASIBLE — it reinforces a reading that keeps fitting, strains one that stops, and defeats it when strain overtakes support; the γ-leak forgives a transient but not a sustained drift, closing the DEF·EVA·REC loop the REC prior needed",
+  "claim": "exp-0007 left a reading (a REC prior) that could not lose — a stale convention kept mis-holding because nothing evaluated it. EVA is that evaluation. It is NOT a segmentation operator (SEG/voidPeaks finds boundaries; SYN/INS births and merges); it is a LEDGER operator over a reading's {support, strain}, governing the reading's LIFECYCLE. A reading that keeps fitting survives; one the world drifts past accumulates strain and is defeated; a transient blip strains without defeating because both accumulators leak. This is why the boundary-F1 metric could not see EVA's value — it lives on the convention ledger, not the boundary stream.",
+  "predictions": {
+    "survive_stationary": "a reading over a stationary stream is never defeated (support persists)",
+    "forgive_transient": "a brief (a few-unit) excursion strains the reading but does NOT defeat it — the leak forgets a blip",
+    "defeat_drift": "a steady rotation away defeats the reading at the crossover where strain overtakes support",
+    "defeat_replacement": "a jump to a far direction midway defeats the reading shortly after the replacement",
+    "two_directional": "both directions are the test — defeating on a blip is as wrong as never defeating on a drift"
+  },
+  "verdict_tag": "EVA is two-directional: reinforce holds, sustained strain defeats, transients are forgiven — the reading is now defeasible",
+  "control": "evaluate is a NEW pure export (src/core/spectral.js), a fold step with no state of its own; every default engine path is byte-identical (node --test tests/*.test.js green). The regression lock is tests/evaluate.test.js. The measure reads only each stream's units + window; the `defeats` flag is the held key.",
+  "mechanism": "seed a reading from the opening window; expect = 0.45·(opening self-fit) (self-calibrated membership); fold each unit's fit via evaluate({support,strain}, fit, {gamma:0.9, expect, minEvidence:0.8}); a fit ≥ expect reinforces (support ← γ·support + surplus), below it strains (strain ← γ·strain + shortfall); defeated once strain > support with support+strain > minEvidence.",
+  "disposition": "evaluate PROMOTED as an opt-in core primitive — the EVA cell of the operator cube at the spectral grain, completing the Interpretation row DEF·EVA·REC. It is a lifecycle/ledger operator, not a segmenter; wired into no default reader. Parity preserved. Honest scope: EVA needs enough conviction margin (γ, expect) to separate a transient from a drift — the calibration is the line between the two."
+}
