@@ -1591,10 +1591,55 @@ class Component extends DCLogic {
     return {kind,subject};
   }
 
+  // ── MATH: the one model-free short-circuit, brought to the path this UI runs ──
+  // A pure arithmetic turn ("what is 2+2?", "sqrt(16)*3", "5!") is answered by math.js —
+  // math.js (answer/math.js): mathjs in the browser, a dependency-free built-in evaluator
+  // offline. The answer is provably correct and does not depend on any document, so it
+  // never warms the model and never goes to the web. The Reader answers in its OWN sendChat,
+  // never through src/turn/stages.js where this short-circuit already lives — so it is wired
+  // in here too. The gate is strict (the module's extractExpression): anything carrying real
+  // words falls straight through to the grounded/chat turn below.
+  //
+  // A cheap sync pre-gate keeps every NON-math turn from paying an import: a math turn needs a
+  // digit AND an operator symbol or a known function name. Loose on purpose (a superset of the
+  // real thing) — the authoritative decision stays with the module, which rejects "9-5 job".
+  _looksMath(q){
+    const s=String(q||'');
+    return /\d/.test(s)&&(/[+\-*/^%!]/.test(s)||/\b(?:sqrt|cbrt|abs|exp|ln|log|log10|log2|sin|cos|tan|asin|acos|atan|sinh|cosh|tanh|floor|ceil|round|sign|trunc|factorial|pow|min|max|hypot|atan2|mod|nthroot|gcd|lcm)\b/i.test(s));
+  }
+  // Lazy-load the shared math module (the same answer/math.js the turn pipeline uses). Self-
+  // contained, memoized on first use, resolved against document.baseURI like the other organs.
+  async _mathMod(){
+    try{ return this._MATH||(this._MATH=await import(new URL('src/answer/math.js',document.baseURI).href)); }
+    catch(e){ return null; }
+  }
+  // Answer a math turn, rendering the user turn + a finished assistant bubble. Returns true when
+  // it handled the turn, false when the question is not pure math (so sendChat continues normally).
+  async _mathChat(q){
+    const s=this.norm(q);
+    const M=await this._mathMod();
+    if(!M||typeof M.answerMath!=='function')return false;
+    let ans=null;
+    try{ ans=await M.answerMath(s); }catch(e){ ans=null; }
+    if(!ans||!ans.text)return false;   // not a math query, or it didn't evaluate to a finite number
+    let id=this.state.activeChat;
+    this.setState(st=>{let chats=st.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(s,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(s,40);
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:s},{role:'asst',pending:false,text:ans.text,modelNote:'Calculated directly — no model, no web.'}]};
+      return {chats,activeChat:id,chatInput:''};});
+    this._scrollChat();
+    return true;
+  }
+
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
     this._stopGen=false;   // a fresh turn clears any prior stop
     if(/^\/svg\b/i.test(q))return this._limnChat(q);
+    // MATH — a pure arithmetic question is computed by math.js, before the web/model routing
+    // below can strip it to a "subject" and research it. The cheap sync pre-gate keeps a
+    // non-math turn from ever loading the module; the module makes the strict final call.
+    if(this._looksMath(q)&&await this._mathChat(q))return;
     // COMPOSE — a generative artifact ("write an emily dickinson poem", "compose a sonnet about
     // the sea") is a make-this, not a question. It must be caught BEFORE _shouldWeb, or the web
     // routing strips it to its subject and researches it — which is exactly why "write an emily
