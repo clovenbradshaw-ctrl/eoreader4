@@ -25,6 +25,7 @@
 
 import { surpriseAt } from '../core/surprise.js';
 import { bornSalience } from '../surfer/salience.js';
+import { makeReadingBin } from './reading-bin.js';
 import { normalizeQuery } from '../ui/prefetch.js';
 import { runTurn } from './pipeline.js';
 
@@ -167,9 +168,11 @@ export const runCuriousResearch = async (seed, {
   searchOpts = {},
   onHop = null,           // (｛ index, query, term ｝) → void — a progress beat fired before each hop's fetch
   signal = null,          // an AbortSignal (the Stop button): stop the walk between hops, keeping what it gathered
+  clock = () => Date.now(),  // the bin's `now` — injected so a strayed reading's lease is deterministic in a test
+  binTtlOpts = {},        // { msPerChar, min, max } — how the bin scales a reading's lease by content processed
 } = {}) => {
   const q0 = String(seed || '').trim();
-  if (typeof search !== 'function' || !q0) return { docs: [], hops: [], frontier: [], prior: new Map(), topic: new Map() };
+  if (typeof search !== 'function' || !q0) return { docs: [], bin: [], hops: [], frontier: [], prior: new Map(), topic: new Map() };
 
   let prior = new Map();
   // The FIXED topic frame the saliency leash measures drift against. It is anchored PRIMARILY on the
@@ -184,6 +187,8 @@ export const runCuriousResearch = async (seed, {
   let topicFrozen = false;
   let baseline = 0;       // the seed page's own saliency to the topic — the "on-topic looks like this" yardstick
   const docs = [];
+  const bin = makeReadingBin({ clock, ...binTtlOpts });   // parsed-but-strayed readings, leased by content processed
+  const seenDocIds = new Set();       // docIds already grounded — never bin a page that is a source
   const hops = [];
   const visited = new Set();          // normalized queries already fetched — never re-fetch
   const seenLeads = new Set();        // lead terms already chased or already in a query — never re-chase
@@ -234,6 +239,7 @@ export const runCuriousResearch = async (seed, {
       if (!topicFrozen) { for (const t of arrival.keys()) topic.set(t, (topic.get(t) || 0) + 1); topicFrozen = true; }   // presence, not counts
       if (hopDocs.length) {
         docs.push(...hopDocs);
+        for (const d of hopDocs) seenDocIds.add(d.docId);
         prior = foldInto(prior, arrival, gamma);
         const leads = leadsFrom(by, { seen: seenLeads, max: 4 });
         for (const lead of leads) { pushLead(lead, salience); seenLeads.add(lead.term); }
@@ -254,8 +260,17 @@ export const runCuriousResearch = async (seed, {
     const strayed = hopDocs.length > 0 && salience < floor;
 
     if (!hopDocs.length || strayed) {
+      // A strayed hop was PARSED but is not salient to the question. It never grounds — but the
+      // reading is not thrown away: bin it, leased to delete after a duration set by how much content
+      // it processed, so a later hop that circles back re-uses it instead of re-reading it cold.
+      let binned = 0;
+      if (strayed) for (const d of hopDocs) {
+        if (seenDocIds.has(d.docId)) continue;   // already grounded — it is a source, not binned
+        bin.hold(d, { query: node.query, term: node.term, curiosity: round(bits), salience: round4(salience), reason: 'strayed' });
+        binned += 1;
+      }
       hops.push({ query: node.query, term: node.term, curiosity: round(bits), salience: round4(salience),
-                  results: hopDocs.length, leads: [], kept: false, reason: strayed ? 'strayed' : 'empty' });
+                  results: hopDocs.length, leads: [], kept: false, reason: strayed ? 'strayed' : 'empty', binned });
       if (++stray >= strayPatience) break;     // wandered off the question — stop, well short of maxHops
       continue;
     }
@@ -265,6 +280,7 @@ export const runCuriousResearch = async (seed, {
     // corroborates and spawns nothing. Either way it is on the question, so the stray run resets.
     stray = 0;
     docs.push(...hopDocs);
+    for (const d of hopDocs) seenDocIds.add(d.docId);
     prior = foldInto(prior, arrival, gamma);
     const novel = bits >= curiosityFloor;
     const leads = novel ? leadsFrom(by, { seen: seenLeads, max: 4 }) : [];
@@ -273,7 +289,7 @@ export const runCuriousResearch = async (seed, {
                 results: hopDocs.length, leads: leads.map(l => l.term), kept: true, exhausted: !novel });
   }
 
-  return { docs, hops, frontier, prior, topic };
+  return { docs, bin: bin.entries(), hops, frontier, prior, topic };
 };
 
 // The prose a hop reads from an admitted doc: the parsed text, falling back to the source's
@@ -316,6 +332,9 @@ export const runTurnWithResearch = async (args, {
       hops: walk.hops,
       kept: walk.hops.filter(h => h.kept).length,
       results: walk.docs.length,
+      // Readings parsed but strayed off the question — held in the bin, NOT listed as sources, each
+      // leased to delete after a content-scaled duration. Rides back so a session can park them.
+      bin: walk.bin || [],
       sources: walk.docs.map(d => ({
         docId: d.docId, title: d.web?.title || d.title || '', url: d.web?.url || d.web?.final_url || '',
         fetched_at: d.web?.fetched_at || null,
