@@ -103,6 +103,24 @@ rides what persists."* (Where snow chance-fakes persistence, **coherence** break
 tie: a shape has extent.) The trajectory is the structure; predicting the next
 position and being surprised when it deviates marks the frame the shape turned.
 
+A second band of adapters turns the same spine on the practical intake a civic record
+needs — every one INGESTS an already-extracted structure and emits the same operators,
+the model or library always INJECTED, never bundled. `ingestAudio` takes a speech
+model's transcript (whisper hears in the browser, `transcribe.html`): utterances are
+units, each timed word is a referent on the reading line of *time*, repeated names
+accumulate mass, and the ear's own unifications arrive as `SYN` merges — so "who was
+named, and when did they say it?" is answerable with a clock. The layout adapters —
+`ingestPdf` (pdf.js text-items, geometry kept not flattened), `ingestOcr` (Tesseract
+word boxes), `ingestDocling` (a SmolDocling VLM's layout-aware DocTags), `ingestWebpage`
+(Readability + Turndown Markdown), `ingestTable` (Papaparse/SheetJS rows as records) and
+`ingestWarc` (the archived record as the frozen, hashable source) — all reduce to one
+span-assembler (`organs/in/document.js`): every unit records its `[charStart,charEnd)`
+into the reconstructed text alongside its page and bounding box, so an EVA event can
+point at *a passage a reader can find on the page*, not a flat blob. The mirror on the
+way out is `organs/out/publish` — an mdast tree so a reader's edit is a node-level patch,
+a pdf-lib plan that embeds the source WARC and passage hashes into the artifact, a Satori
+receipt card, and the resvg-wasm raster seam that keeps an archived PNG matching its hash.
+
 Each of these claims is **falsified against**, not just demonstrated
 (`scripts/controls.mjs`): inharmonic partials collapse octave overlap 0.50→0.00,
 shuffling notes leaves the mass-tonic but kills the predictor, shuffling frames

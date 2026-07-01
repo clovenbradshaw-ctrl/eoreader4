@@ -12,9 +12,22 @@
 //                                           related by imports / definedIn / calls / extends.
 //                                           Emits EOT and lowers it, so a program reads as a
 //                                           traversable EO graph (organs/in/code.js).
+//   ingestAudio(transcript)     speech    → units = utterances (whisper heard; ear injected),
+//                                           words as timed entities on the reading line of time.
+//   ingestPdf(pages)            civic PDF → units = lines with page + bbox + char-range spans
+//                                           (pdf.js text-items injected; geometry kept, not flattened).
+//   ingestOcr(result)           scanned   → units = lines with bbox (Tesseract word boxes injected).
+//   ingestDocling(doctags)      scanned   → units = layout-aware blocks (SmolDocling VLM injected).
+//   ingestWebpage(page)         scraped   → units = markdown blocks (Readability+Turndown injected).
+//   ingestTable(sheet)          CSV/xlsx  → units = rows; columns are DEF facts (Papaparse/SheetJS injected).
+//   readWarc / ingestWarc       archive   → the WARC record as the frozen, addressable source.
 //
-// New modalities (audio, tables, OCR) are new adapters emitting the same
-// operators onto the same log. The spine does not change.
+// These layout adapters share one span-assembler (organs/in/document.js): every unit
+// records its [charStart,charEnd) into the reconstructed text plus its page/bbox, so an
+// EVA event can point at a passage a reader can find — not a flat blob.
+//
+// New modalities are new adapters emitting the same operators onto the same log.
+// The spine does not change.
 //
 // Every doc carries a `metadata` slot (by canonical key: title, author, date, …) —
 // the modality-neutral home for its bibliographic facts. It is the document's FRONT
@@ -33,6 +46,14 @@
 export { ingestText }        from './text.js';
 export { createCompositeDoc, proposeCrossDocSyn, compositeDocIdOf } from './composite.js';
 export { ingestImage }       from './image.js';
+export { ingestAudio }       from './audio.js';
+export { assembleDocument }  from './document.js';
+export { ingestPdf }         from './pdf.js';
+export { ingestOcr }         from './ocr.js';
+export { ingestDocling }     from './docling.js';
+export { ingestWebpage }     from './webpage.js';
+export { ingestTable }       from './table.js';
+export { readWarc, ingestWarc } from './warc.js';
 export { ingestMusic }       from './music.js';
 export { ingestFrequencies } from './frequency.js';
 export { ingestFrames }      from './video.js';
