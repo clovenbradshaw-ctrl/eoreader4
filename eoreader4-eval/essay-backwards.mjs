@@ -18,10 +18,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { runContinuation } from '../src/longgen/index.js';
+import { runContinuation, exportAudit } from '../src/longgen/index.js';
 import { createModel } from '../src/model/interface.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import '../src/model/echo.js';
+import { writeFileSync } from 'node:fs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const trace = JSON.parse(readFileSync(join(HERE, 'essay-backwards.trace.json'), 'utf8'));
@@ -90,14 +91,24 @@ const main = async () => {
     { idx: 6, score: 0.65, text: 'across messages the state persists and resumes' },
     { idx: 7, score: 0.60, text: 'the resumed session widens the running fold' },
   ];
-  const full = await runContinuation({
-    ground: turningGround, model, arc: true, temperature: 1, maxSteps: 40,
-    selfRegister: true, fieldRead: true, embed, interleave: true,
-  });
+  const fullCfg = { arc: true, temperature: 1, maxSteps: 40, selfRegister: true, fieldRead: true, embed, interleave: true, confine: true };
+  const full = await runContinuation({ ground: turningGround, model, ...fullCfg });
   const rFull = report('FULL: self-register + field-read + interleave (the pipeline)', full);
   const fullMoves = movesOf(full);
   const recFired = fullMoves.includes('REC');
   console.log(`  REC (the turn) : ${recFired ? 'YES — fired where the field rotates, after a develop' : 'no'}`);
+
+  // DECISION AS RELAXATION — the cadence emerges from occupancy currents, no scheduler.
+  const dynCfg = { arc: true, temperature: 1, maxSteps: 40, selfRegister: true, fieldRead: true, embed, dynamics: true, confine: true };
+  const dyn = await runContinuation({ ground: turningGround, model, ...dynCfg });
+  report('DYNAMICS: decision as relaxation (cadence emerges, no scheduler)', dyn);
+
+  // THE AUDIT EXPORT — write a self-contained artifact and self-diagnose whether it worked.
+  const audit = exportAudit(dyn, { config: dynCfg, label: 'dynamics-turning-ground' });
+  const path = new URL('./essay-backwards.audit.json', import.meta.url);
+  writeFileSync(path, JSON.stringify(audit, null, 1));
+  console.log(`\n  audit exported → eoreader4-eval/essay-backwards.audit.json`);
+  console.log(`  self-diagnosis : ${audit.checks.verdict}`);
   console.log(`    the field read (relEntropy atmosphere + commutator paradigm, picked by the`);
   console.log(`    Born void voidPeaks, gated by readingCount) locates the turn in the generated`);
   console.log(`    field; the interleave scheduler lands it after an EVA and the loop realizes a`);

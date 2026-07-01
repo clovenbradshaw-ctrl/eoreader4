@@ -15,6 +15,8 @@ export { runContinuation } from './continuation.js';
 export { predictDirection, selfMoveLog, SEED_MOVE } from './direction.js';
 export { fieldStrain, MIN_FIELD } from './field.js';
 export { holonicConfinement, toLensConfig } from './confine.js';
+export { relax, relaxMove } from './relax.js';
+export { exportAudit, diagnose } from './audit.js';
 export { resolveProposition, STANCE, EDGE_OPS } from './resolve.js';
 export {
   classifyWantedType, groundSupplies, answerabilityGate, refusalAtom,

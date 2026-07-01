@@ -29,6 +29,7 @@ import { arcPhase, phaseBias } from './shape.js';
 import { speculateNext, readWindow } from './prompt.js';
 import { fieldStrain, MIN_FIELD } from './field.js';
 import { holonicConfinement } from './confine.js';
+import { relaxMove } from './relax.js';
 
 const MAX_STEPS = 24;            // runaway backstop; saturation should bind first
 const MAX_DRIFT = 2;             // consecutive drops that read as "the frame is gone"
@@ -62,6 +63,7 @@ export const runContinuation = async ({
   embed = null,           // the embedder the field read needs (text → vector); required by fieldRead
   interleave = false,     // generation-by-field-reading — develop each node right after introducing it
   confine = false,        // holonic-token-confinement — record each atom's address→confinement
+  dynamics = false,       // decision-as-relaxation — occupancy currents settle into the move (no gauge)
   signal = null,
 } = {}) => {
   // RECONSTRUCT — the tail and the fold, reused wholesale. Computed once: the same
@@ -125,7 +127,9 @@ export const runContinuation = async ({
       semanticStrain,                        // the self-fold licenses REC on a clean turn
       strainByCursor: field?.strainByCursor, // the field read overrides the lexical proxy
     });
-    if (dir.flat) { stop = 'quiesce'; trace.push({ step, kind: 'quiesce', sharpness: dir.sharpness }); break; }
+    // The prior going flat quiesces the READOUT path; under dynamics the occupancy decides,
+    // so a flat prior is not a stop (the relaxation quiesces on spent occupancy, below).
+    if (dir.flat && !dynamics) { stop = 'quiesce'; trace.push({ step, kind: 'quiesce', sharpness: dir.sharpness }); break; }
 
     // INTERLEAVE (generation-by-field-reading.md) — while the pool still holds fresh
     // ground, STRICTLY alternate introduce (a node op walking the next span) and develop (an
@@ -135,7 +139,21 @@ export const runContinuation = async ({
     // the structural prior licenses a REC. Once the pool is spent the beat releases and the
     // arc's develop/land takes over. The coarse form of the §4.2 scheduler; off by default.
     let drawMove = dir.move;
-    if (interleave && selfRegister) {
+    let relaxAudit = null;
+    if (dynamics) {
+      // DECISION AS RELAXATION (decision-as-relaxation.md) — no gauge consulted. The field's
+      // OCCUPANCY (unspent ground, an undeveloped trailing node, a frontier turn) drives the
+      // operators and the network settles into one attractor; that settling IS the move. It
+      // replaces both the temperature reach and the interleave schedule — the cadence emerges
+      // from the activator–consumer currents, it is not written.
+      const r = relaxMove({ prior: dir.posterior, ground, covered, units, field, phase });
+      // Occupancy spent — nothing to introduce, develop, turn, or close. No attractor; quiesce.
+      if (r.occupancy < 0.5 && units.length) {
+        stop = 'quiesce-spent'; trace.push({ step, kind: 'quiesce-spent', occupancy: round3(r.occupancy) }); break;
+      }
+      drawMove = r.move;
+      relaxAudit = { currents: r.currents, activations: r.activations, occupancy: round3(r.occupancy) };
+    } else if (interleave && selfRegister) {
       const hasUncovered = ground.some((s, i) => !covered.has(s.idx ?? i));
       if (hasUncovered) {
         if (pendingDevelop) {
@@ -276,8 +294,16 @@ export const runContinuation = async ({
     // Interleave: a node introduce owes a develop beat next (an EVA on this atom), so the
     // field boundary a turning node opens lands after an EVA where REC can fire.
     pendingDevelop = interleave && !prop.selfOp && !EDGE_OPS.has(prop.move);
-    trace.push({ step, kind: 'append', move: prop.move, drew: dir.move, stance: prop.stance, action,
-      phase, cited: gated.sources.length, boundFraction: round3(gated.boundFraction), sharpness: dir.sharpness });
+    trace.push({
+      step, kind: 'append', move: prop.move, drew: dir.move, stance: prop.stance, action,
+      phase, cited: gated.sources.length, boundFraction: round3(gated.boundFraction), sharpness: dir.sharpness,
+      selfOp: !!prop.selfOp, band: prop.band,
+      // the decision internals — enough to tell, from an export, WHY this move (audit-schema)
+      posterior: dir.posterior ? dir.posterior.slice(0, 4).map(([o, p]) => [o, round3(p)]) : null,
+      dynamics: relaxAudit ? { winner: prop.move, activations: round3Map(relaxAudit.activations), currents: round3Map(relaxAudit.currents) } : null,
+      field: field ? { boundaries: field.boundaries, k: field.k, abstain: field.abstain, strainHere: field.strainByCursor?.[units.length - 2] || 0 } : null,
+      confinement: unit.confinement ? { register: unit.confinement.register, forbidClose: unit.confinement.forbidClose, address: unit.confinement.address, openness: unit.confinement.openness } : null,
+    });
 
     if (auditLog?.event) {
       try { auditLog.event('longgen:unit', { i: unit.i, move: unit.move, action, boundFraction: round3(unit.boundFraction) }); }
@@ -316,3 +342,11 @@ export const runContinuation = async ({
 };
 
 const round3 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 1000) / 1000 : null);
+
+// Round a map/object of numbers to 3 dp, dropping the near-zero entries so the audit stays
+// legible (only the operators that actually competed appear).
+const round3Map = (m = {}) => {
+  const out = {};
+  for (const k of Object.keys(m)) { const v = round3(m[k]); if (v && Math.abs(v) > 1e-3) out[k] = v; }
+  return out;
+};
