@@ -147,6 +147,52 @@ export const deriveNull = (background, { scale = 'linear', alpha = 0.01, N, grai
   return Math.max(projection, grainFloor);
 };
 
+// ---- readingCount: how many readings the field's geography holds ------------
+//
+// eigenLenses ranks a field's readings by Born weight, but HOW MANY readings the
+// field actually holds is not a universal constant — it is a property of the
+// spectrum's own shape. A flat spectrum (isotropic noise, a single register, a
+// collinear field) holds ONE reading; a spectrum with a real elbow holds as many
+// readings as sit above it. The two hand-rolled rules both fail: "top lenses to 90%
+// Born mass (cap 12)" saturates the cap on any spread spectrum (every reading
+// flickers, over-segmenting), and "eigenvalues above the void floor" over-abstains on
+// a flat-but-high-rank spectrum (many near-equal readings read as noise).
+//
+// This finds the count the same way the void finds any structure — but pointed at the
+// GAP spectrum, not the eigenvalues. The reading count is the elbow: the largest
+// eigenvalue drop, kept only if it exceeds what the gaps' own background would produce
+// by chance. Gap-spacings are heavy-tailed order statistics, so the void reads them on
+// the LOG scale (deriveNull's percolation setting). No significant gap → the spectrum
+// is flat → k=1 and abstain (assert one reading, no internal boundary), so the SAME
+// test that counts the readings also yields the abstention. The count "generates" where
+// structure is found and "dissipates" to one where it is not — no universal segmenter,
+// a geography-derived one. The Born assignment on top of the k lenses stays universal.
+//
+//   eigenvalues  the Born spectrum, descending (eigenLenses(rho).map(l => l.weight)).
+//   alpha        tolerated false-elbow rate (default 0.05).
+//   maxK         cap on the returned count (default 12).
+//   window       how many leading eigenvalues to weigh the elbow over (default 20).
+//
+// Returns { k, gap, floor, abstain }. Pure on its input — reads no module state and
+// never mutates the array (parity: same spectrum, same reading count, forever).
+export const readingCount = (eigenvalues, { alpha = 0.05, maxK = 12, window = 20 } = {}) => {
+  const ev = (eigenvalues || []).filter(Number.isFinite);
+  if (ev.length < 2) return { k: ev.length, gap: 0, floor: null, abstain: true };
+  const lim = Math.min(ev.length, Math.max(2, window | 0));
+  const gaps = [];
+  for (let i = 1; i < lim; i++) gaps.push(ev[i - 1] - ev[i]);   // descending → gaps ≥ 0
+  let kGap = 1, maxGap = -Infinity;
+  for (let i = 0; i < gaps.length; i++) if (gaps[i] > maxGap) { maxGap = gaps[i]; kGap = i + 1; }
+  const floor = deriveNull(gaps, { scale: 'log', alpha, N: gaps.length, leaveOut: maxGap });
+  // A cleared gap is a drop BETWEEN a top group and the tail — by construction that is
+  // at least two distinguishable reading groups, so a significant elbow reads ≥2. A flat
+  // spectrum clears nothing and abstains to one reading. (The min-2 only ever applies on
+  // the structure branch; noise never reaches it.)
+  if (Number.isFinite(floor) && maxGap > floor)
+    return { k: Math.max(2, Math.min(maxK, kGap)), gap: maxGap, floor, abstain: false };
+  return { k: 1, gap: Number.isFinite(maxGap) ? maxGap : 0, floor: Number.isFinite(floor) ? floor : null, abstain: true };
+};
+
 // ---- the bounded-signal boundary: a per-decision Born line -----------------
 
 // deriveNull's extreme-value bound answers "what is the MAX of N chance draws" —

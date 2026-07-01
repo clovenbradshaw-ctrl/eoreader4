@@ -55,7 +55,7 @@ export { INSTRUMENT, READER, isSelf, holderOf, STATUS,
 // VOID boundary, voidnull.js) and the one surprise (D_KL over a γ-decayed profile,
 // surprise.js): a perceiver reads forward surprise, a surfer derives a null, an
 // enactor's gate derives a null, the probe derives a null — one engine, one home.
-export { deriveNull, boundedNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES } from './voidnull.js';
+export { deriveNull, boundedNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES, readingCount } from './voidnull.js';
 // The density operator (spectral.js): the ONE interpretive object the Significance
 // column reads off — ρ = Σ wₖ sₖ |vₖ⟩⟨vₖ|, its eigen-lenses (Born weights), its von
 // Neumann entropy (the NPOV / predictive-uncertainty scalar), the Umegaki relative
