@@ -184,6 +184,142 @@ export const eigenLenses = (rho, { k = Infinity } = {}) => {
   return Number.isFinite(k) ? pairs.slice(0, Math.max(0, k | 0)) : pairs;
 };
 
+// ── SIG ───────────────────────────────────────────────────────────────
+//
+// Assign a direction to the reading it most belongs to under the Born rule — the
+// measurement that turns a unit into a label, the atom every segmenter switches on.
+//
+// `signed = false` (default) ranks by |⟨u|lensᵢ⟩|² — the Born probability. This is
+// SIGN-BLIND: a bipolar reading's two poles square to the same value, so when a
+// BALANCED split is centred it collapses onto one axis (the two clusters become ±v of a
+// single eigenvector) and both sides read as the SAME reading — no boundary. That silent
+// failure is why a two-ball multiplicity, or the coarse level of a nested stream, reads
+// as one reading under the squared rule.
+//
+// `signed = true` ranks by the SIGNED projection over the ± poles and returns a pole
+// index (2i for +lensᵢ, 2i+1 for −lensᵢ), so the two sides of a balanced split land in
+// different readings and the boundary appears. Unimodal readings are unaffected (every
+// unit picks the same pole). Default stays squared, so existing callers are byte-identical.
+//
+//   dir     a (unit) direction vector.
+//   lenses  eigenLenses output ({weight, lens}) or a bare array of lens vectors.
+// Returns the reading index (squared) or pole index (signed). Pure.
+export const SIG = (dir, lenses, { signed = false } = {}) => {
+  let best = -Infinity, idx = 0;
+  for (let i = 0; i < lenses.length; i++) {
+    const lens = lenses[i]?.lens || lenses[i];
+    let c = 0; for (let j = 0; j < dir.length; j++) c += dir[j] * lens[j];
+    if (signed) {
+      if (c > best) { best = c; idx = 2 * i; }
+      if (-c > best) { best = -c; idx = 2 * i + 1; }
+    } else {
+      const v = c * c; if (v > best) { best = v; idx = i; }
+    }
+  }
+  return idx;
+};
+
+// ── REC ────────────────────────────────────────────────────────────────
+//
+// The online reading decision — the branch point of the GENERATE operators. SIG
+// always assigns a unit to its best reading; REC instead ABSTAINS to −1 when even
+// the best reading only matches the unit at the chance `floor`. That −1 is where a new
+// reading is born (INS); a non-negative return is a returning reading the unit merges
+// into (SYN); and a reading set carried over from a prior context (REC) recognizes its
+// known readings through exactly this call. It is the streaming complement to
+// readingCount's batch void: a per-unit novelty gate against a set of standing readings.
+//
+//   dir     a (unit) direction.
+//   lenses  the standing readings (eigenLenses output or bare vectors).
+//   floor   the chance-match ceiling; best |⟨dir|lens⟩|² must exceed it to count as a
+//           match (0 = always match, i.e. plain SIG).
+//   signed  pole-aware matching (see SIG).
+// Returns the matched reading/pole index, or −1 for "novel" (no standing reading fits).
+export const REC = (dir, lenses, { floor = 0, signed = false } = {}) => {
+  if (!lenses?.length) return -1;
+  const idx = SIG(dir, lenses, { signed });
+  const lens = lenses[signed ? idx >> 1 : idx]?.lens || lenses[signed ? idx >> 1 : idx];
+  let c = 0; for (let j = 0; j < dir.length; j++) c += dir[j] * lens[j];
+  return (c * c > floor) ? idx : -1;
+};
+
+// ── EVA (EVA) ───────────────────────────────────────────────────────────
+//
+// The EVA operator — test a standing reading against the stream and reinforce or
+// strain it. SIG/REC decide WHICH reading a unit belongs to; EVA scores
+// how well the reading is HOLDING and, when it stops, defeats it. It is what makes a
+// reading (or a carried REC prior) DEFEASIBLE rather than a fact: a fit at or above the
+// expected membership `expect` reinforces (support ← γ·support + surplus, strain decays);
+// a fit below it strains (strain ← γ·strain + shortfall, support decays); the reading is
+// DEFEATED once strain overtakes support with enough evidence. The γ-decay makes both
+// accumulators leaky, so a transient dip strains without defeating — only a SUSTAINED
+// misfit (a genuine drift, a stale prior the world moved past) crosses over. This closes
+// the DEF·EVA·REC loop: DEF asserts a reading, EVA tests it, REC revises on defeat.
+//
+//   ledger  the reading's running { support, strain } (missing → 0,0).
+//   fit     how well this unit fits the reading (e.g. |⟨u|lens⟩|²), in [0,1].
+//   gamma   the leak (default 0.85): lower forgets faster, higher holds a grudge longer.
+//   expect  the membership a holding reading is expected to reach (the reinforce/strain
+//           split point).
+//   minEvidence  strain+support must exceed this before a defeat can fire (no defeat on
+//           one or two units — a reading is given a chance to establish).
+// Returns { support, strain, defeated }. Pure — a fold step, no state of its own.
+export const EVA = (ledger, fit, { gamma = 0.85, expect = 0.3, minEvidence = 0.8 } = {}) => {
+  const s0 = ledger?.support ?? 0, t0 = ledger?.strain ?? 0;
+  let support, strain;
+  if (fit >= expect) { support = gamma * s0 + (fit - expect); strain = gamma * t0; }
+  else { strain = gamma * t0 + (expect - fit); support = gamma * s0; }
+  const defeated = (support + strain > minEvidence) && strain > support;
+  return { support, strain, defeated };
+};
+
+// ── NUL (NUL) ───────────────────────────────────────────────────────────────
+//
+// The NUL operator — non-transformation. A unit the reader neither lifts into a reading
+// (SIG/SYN/INS) nor asserts absent (DEF to VOID) is HELD: appended to a reserve, untouched.
+// This is the credence NUL — "never-probed → no opinion, return the prior": a held unit
+// contributes NOTHING to the reading. In density terms it is the ADDITIVE IDENTITY — folded
+// with weight 0 it leaves ρ exactly unchanged, so holding an ambiguous unit does not corrupt
+// the standing readings the way forcing it into the nearest one would. NUL is held DISTINCT
+// from VOID: the reserve is lossless and recoverable (INS may later lift it once it coheres),
+// where VOID is a positive assertion that the slot is empty. Pure — returns a new reserve.
+//
+//   reserve  the current held reserve (array), or null/undefined to start one.
+//   unit     the unit to NUL as-is (untransformed).
+// Returns the reserve with `unit` appended. `NUL(r)` with no unit returns r unchanged
+// (or []), so it composes as a fold.
+export const NUL = (reserve, unit) => {
+  const r = Array.isArray(reserve) ? reserve : [];
+  return unit === undefined ? r.slice() : [...r, unit];
+};
+
+// ── CON ─────────────────────────────────────────────────────────────────
+//
+// The two-way holon CON, as one atom. Given a `part` signal and the `whole` it
+// belongs to (a reference signal — a shared mode, a parent trajectory), decompose the
+// part into the component the whole accounts for and the residual it does not:
+//
+//   part = k·whole + residual,   k = ⟨part|whole⟩ / ⟨whole|whole⟩   (the LS fit)
+//
+// `pull` = ⟨part|whole⟩² / (⟨part|part⟩⟨whole|whole⟩) is cos² = R², the fraction of the
+// part's energy the whole sets — the regulative CON, "the high sets the probability
+// of the low." `residual` is the part's OWN motion, its autonomy — and the input to the
+// next holon level down (read the residual and its shared mode is the sub-whole). The
+// SAME coefficient read the other way is how well the part reveals the whole — "the low
+// sets the possibility of the high" — so one number carries both principles for a shared
+// mode; only a separate STRUCTURAL reading (a rigid bond) tells constitution from pull.
+//
+//   part, whole   equal-length signal vectors.
+// Returns { pull ∈ [0,1], k, residual }. Pure. pull=0 and residual=part when whole is null.
+export const CON = (part, whole) => {
+  let pw = 0, ww = 0, pp = 0;
+  for (let i = 0; i < part.length; i++) { pw += part[i] * whole[i]; ww += whole[i] * whole[i]; pp += part[i] * part[i]; }
+  const k = ww > 1e-12 ? pw / ww : 0;
+  const residual = part.map((x, i) => x - k * whole[i]);
+  const pull = (pp > 1e-12 && ww > 1e-12) ? (pw * pw) / (pp * ww) : 0;
+  return { pull, k, residual };
+};
+
 // ── vonNeumann ───────────────────────────────────────────────────────────────
 //
 // S = −Σ λ ln λ over the eigenvalue spectrum — the concentration of readings (the

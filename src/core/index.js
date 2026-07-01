@@ -56,7 +56,7 @@ export { INSTRUMENT, READER, isSelf, holderOf, STATUS,
 // surprise.js): a perceiver reads forward surprise, a surfer derives a null, an
 // enactor's gate derives a null, the probe derives a null — one engine, one home.
 export { deriveNull, boundedNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES,
-         readingCount, voidPeaks, nul } from './voidnull.js';
+         DEF, SEG, readingCount, voidPeaks, nul } from './voidnull.js';
 // The density operator (spectral.js): the ONE interpretive object the Significance
 // column reads off — ρ = Σ wₖ sₖ |vₖ⟩⟨vₖ|, its eigen-lenses (Born weights), its von
 // Neumann entropy (the NPOV / predictive-uncertainty scalar), the Umegaki relative
@@ -64,7 +64,7 @@ export { deriveNull, boundedNull, createNoiseFloor, extremeValueZ, MIN_SAMPLES,
 // incommensurability). Pure on vectors — never an embedder, never a modality — so the
 // column is omnimodal for free, and shaped to feed deriveNull (the Born rule) above.
 export { buildDensity, eigenLenses, vonNeumann, relEntropy, commutator,
-         projectorFrom, symmetricEig, applyStance } from './spectral.js';
+         projectorFrom, symmetricEig, applyStance, SIG, REC, EVA, NUL, CON } from './spectral.js';
 export { surpriseAt, forwardDist, noveltyAmplitude, noveltyFromLensEntropy, NOVELTY_RESERVE } from './surprise.js';
 // The connectivity surprise — the structural sibling of surpriseAt. The mass channel
 // moves on what arrived; this one moves on how a bond COLLAPSES the prior separation

@@ -11,3 +11,11 @@ build/
 .probe/
 mind-index/
 eoreader4-eval/pg2600.txt
+
+experiments/exp-0003-omnimodal-sense/measure_out.json
+experiments/exp-0004-atmosphere-paradigm/measure_out.json
+experiments/exp-0005-holon-levels/measure_out.json
+experiments/exp-0006-holon-coupling/measure_out.json
+experiments/exp-0007-generate-column/measure_out.json
+experiments/exp-0008-eva-defeasible/measure_out.json
+experiments/exp-0009-nul-hold/measure_out.json

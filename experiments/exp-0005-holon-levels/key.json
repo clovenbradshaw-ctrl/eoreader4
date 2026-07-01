@@ -1,0 +1,15 @@
+{
+  "capability": "the observed operates at MULTIPLE holon levels at once, and a single global read collapses the stack; a recursive holon reader — read at a scale, descend with LOCAL re-centering, re-derive the void per level, halt on abstention — recovers the finer levels, and sign-aware Born assignment (bornAssign signed) resolves the balanced splits the squared rule collapses",
+  "claim": "a nested stream carries boundaries at two or three scales simultaneously (a coarse family split, finer sub-readings within each section). Two failures stack: (1) the squared Born rule |<u|lens>|^2 is SIGN-BLIND, so a balanced split centred onto one bipolar axis reads as one reading and no boundary appears — bornAssign signed resolves it; (2) even sign-aware, ONE global read sees only the dominant level and collapses the finer ones. Reading recursively — descend into each segment with LOCAL re-centering so the section's own family becomes the common mode and the finer readings surface, re-deriving readingCount at each level and halting where it abstains — recovers the finer boundaries a single read cannot",
+  "predictions": {
+    "sign_matters": "signed single-level beats squared single-level on all-levels F1 — the coarse balanced split is invisible to the squared rule (both poles square equal), resolved by the signed poles",
+    "levels_collapse": "even the signed SINGLE read misses the finer level (it segments only the dominant scale); the recursive holon reader beats it on all-levels F1",
+    "recursion_recovers_finer": "the recursive reader's finer-level F1 exceeds the single read's finer-level F1 — the descent, via local re-centering, is what surfaces the subordinate boundaries",
+    "abstention_halts": "the descent stops where readingCount abstains (a pure sub-block is a whole holon) — recursion does not run away into noise"
+  },
+  "min_margin": 0.05,
+  "verdict_tag": "sign-aware assignment resolves the balanced splits; recursive holon reading recovers the finer levels a single global read collapses",
+  "control": "bornAssign is a NEW pure export (src/core/spectral.js) whose DEFAULT (squared) is byte-identical to the assignment every prior reader used; the signed pole-split is opt-in. Every default engine path is byte-identical (node --test tests/*.test.js green). The regression lock is tests/born-assign.test.js. The measure reads only each stream's units; the per-level boundaries are the held key.",
+  "mechanism": "segMap(U): local-centre U, buildDensity, eigenLenses, readingCount -> k; if k>1, assign each unit with bornAssign(signed) over the top-k lenses, median-smooth, boundaries = assignment switches (NMS-merged). holons(U): segMap at this scale, then for each resulting segment >= minSeg, recurse with LOCAL re-centering (depth<=2); halt where readingCount abstains. Boundaries are tagged by the level that found them.",
+  "disposition": "bornAssign PROMOTED as an opt-in core primitive (sign-aware Born assignment). The recursive holon reader lives in the experiment measure as the demonstrated multi-level capability; not wired into any default reader. Parity preserved."
+}
