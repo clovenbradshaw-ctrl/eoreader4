@@ -2038,8 +2038,10 @@ class Component extends DCLogic {
       if(t.length>=2&&t.length<=60&&!wikiLinks[t])wikiLinks[t]=base;
     });
     const blocks=[...main.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,dd,td,figcaption')].map(n=>this._chromify(this._decruft(this.norm(n.textContent).replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim()))).filter(t=>t.length>2&&!this._isCreditOnly(t));
-    if(blocks.length<2){ const body=this._chromify(this.norm(main.textContent||'')); if(body.length>=120) return {title,text:this.paras(body).slice(0,60000),image,wikiLinks}; }
-    return {title,text:[...new Set(blocks)].join('\n').slice(0,60000),image,wikiLinks};
+    // No length cap: read the WHOLE work, not the first ~60k chars — a full book (a Project
+    // Gutenberg text) must land in memory entire. Ingestion parses the lot; slow is acceptable.
+    if(blocks.length<2){ const body=this._chromify(this.norm(main.textContent||'')); if(body.length>=120) return {title,text:this.paras(body),image,wikiLinks}; }
+    return {title,text:[...new Set(blocks)].join('\n'),image,wikiLinks};
   }
   // Strip newsroom photo chrome that otherwise gets read as prose and poisons the
   // entity summaries ("Adrian Naranjo/AP hide caption …", "Juan Barreto/Getty Images …").
@@ -2240,13 +2242,21 @@ class Component extends DCLogic {
     this.graph=this.E.projectGraph(shim,{cursor:Math.max(0,m.sentences.length-1),rules:this.E.DEFAULT_PROJECTION_RULES});
     this.incident=new Map();for(const e of this.graph.edges){for(const id of [e.from,e.to])this.incident.set(id,(this.incident.get(id)||0)+(e.weight||0));}
   }
-  async readURL(url,via,parent){
+  async readURL(url,via,parent,opts){
     if(!this.E)return false;
     url=this.norm(url);if(!/^https?:\/\//i.test(url))url='https://'+url;
     if(this.state.pages.find(p=>p.url===url)){this.feedLine('warn','Already read: '+this.short(url));return false;}
     let ex;try{ex=await this.fetchPage(url);}catch(e){this.feedLine('warn','Couldn’t fetch '+this.short(url)+' — '+e.message);return false;}
     if(!ex.text||ex.text.length<60){this.feedLine('warn',this.short(url)+' — too little text');return false;}
-    return this.ingest(url,ex.title,ex.text,via,ex.image,parent,ex.wikiLinks);
+    // A long read (a full book) narrates its progress through opts.onStep and folds in slowly, so
+    // it doesn't land as one silent freeze. Threshold keeps ordinary pages on the fast path.
+    const onStep=opts&&opts.onStep; let onProgress=null;
+    if(onStep&&ex.text.length>40000){
+      onStep('read','“'+ex.title+'” is a long text — folding it in slowly…');
+      let lastPct=0;
+      onProgress=(p)=>{if(!p||!p.total)return;const pct=Math.floor(p.done/p.total*100);if(pct>=lastPct+20&&pct<100){lastPct=pct;onStep('read','Reading “'+ex.title+'” — '+pct+'% ('+p.done+' of '+p.total+' sentences)…');}};
+    }
+    return this.ingest(url,ex.title,ex.text,via,ex.image,parent,ex.wikiLinks,null,onProgress);
   }
   async readText(text,title,meta){
     if(!this.E)return false;
@@ -3916,7 +3926,7 @@ class Component extends DCLogic {
         // already gathered — isolate each read so the walk degrades to skipping that candidate.
         try{
           const preEnts=entCount();
-          const res=await this.readURL(url,'REAFFERENCE',this.state.viewUrl||null);
+          const res=await this.readURL(url,'REAFFERENCE',this.state.viewUrl||null,{onStep:step});
           if(!res)continue;   // blocked / too little text — readURL already logged why; try the next candidate
           const arrival=this._profile(this._pageText(url));
           const sal=this._saliency(topic,arrival);
@@ -4505,8 +4515,14 @@ class Component extends DCLogic {
     this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
     if(r)this.feedLine('done','Read fully · '+(r.propCount!=null?r.propCount:r.sentenceCount)+' propositions — ready to chat');
   }
-  ingest(url,title,text,via,image,parent,wikiLinks,meta){
-    const doc=this.E.parseText(text,{coordSubjects:true});
+  async ingest(url,title,text,via,image,parent,wikiLinks,meta,onProgress){
+    // A long text (a whole book) folds in SLOWLY: given a progress sink the parser yields between
+    // chunks and reports how far it has read, so the tab stays alive and the reader narrates as it
+    // goes. Short texts keep the one-shot synchronous parse. An engine predating the chunked parser
+    // ignores onProgress and parses in a single pass — still correct, just not incremental.
+    const doc=(onProgress&&String(text||'').length>40000)
+      ? await this.E.parseText(text,{coordSubjects:true,chunkSize:250,onProgress})
+      : this.E.parseText(text,{coordSubjects:true});
     const propCount=this.countPropositions(doc.sentences);
     // Keep the raw text on the page so an imported book can be re-rendered as a
     // readable book in the center (see _bookHtml / loadCenter's text: branch).
