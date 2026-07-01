@@ -13,7 +13,7 @@
 import { runTurn } from './pipeline.js';
 import { createCompositeDoc } from '../organs/in/index.js';
 import { createAuditLog } from '../audit/index.js';
-import { resolveQuery, dialogueState } from '../converse/index.js';
+import { discourseFrame } from '../converse/index.js';
 
 // verifyAgainstWeb(answer, corpus) → does the web corpus SUPPORT the answer? An embedder-free
 // lexical check: how many of the answer's salient (content) terms appear in the fetched text.
@@ -69,15 +69,8 @@ export const formulateSearchQuery = async ({ model, question, history = [], fall
   if (!base) return base;
 
   // Read the turn against the discourse: the deterministically-anchored query, the subject in
-  // focus, and the open intent. Best-effort — a parse fault degrades to the raw turn, never throws.
-  let resolved = base, subject = '', openIntent = '';
-  try {
-    const st = dialogueState(history, base);
-    const r = resolveQuery(base, history).replace(/\s+/g, ' ').trim();
-    if (r) resolved = r;
-    subject = st.activeReferent?.label ? String(st.activeReferent.label).trim() : '';
-    openIntent = st.openIntents?.length ? String(st.openIntents[st.openIntents.length - 1].text || '').trim() : '';
-  } catch { /* discourse read failed — the raw turn stands as the anchor */ }
+  // focus, and the open intent (converse/dialogue-state.js). Best-effort by construction.
+  const { resolved, subject, open: openIntent } = discourseFrame(base, history);
 
   if (!model?.phrase) return resolved;   // no model: the discourse-anchored query, not the raw turn
 

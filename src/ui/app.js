@@ -850,7 +850,11 @@ const runQuery = async (rawQuestion) => {
       setThinkingNote(thinking, '🔬 planning the research…');
       const walk = await runDeepResearch(q, {
         search,
-        plan: modelPlanner(STATE.model),
+        // Discourse-aware fan-out: the planner writes each research angle against the conversation
+        // (the subject in focus + what it left open), not the seed string alone. The raw `question`
+        // is threaded so discourseFrame reads the true turn's operator/referent off the dialogue —
+        // so the angles resolve back-references and keep the conversation's subject.
+        plan: modelPlanner(STATE.model, { history: STATE.history, question }),
         anchor: q,
         maxFacets: STATE.researchFacets || 4,
         maxHops: STATE.deepResearchHops || 14,

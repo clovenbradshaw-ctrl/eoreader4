@@ -28,9 +28,15 @@ A concise query is one mouth on a topic; a thorough sweep needs several. `planQu
 max })` turns the one question into a small set of **facets** — distinct angles on the same subject
 (its background, how it works, the evidence, the criticism, the current state):
 
-- **`modelPlanner(model)`** is the planner used in the app: a tiny, low-token talker call (the same
-  discipline as `formulateSearchQuery`) that proposes `max − 1` distinct queries, one per line. The
-  model knows the *shape* of a topic, so it is the right organ to decompose it.
+- **`modelPlanner(model, { history, question })`** is the planner used in the app: a tiny, low-token
+  talker call (the same discipline as `formulateSearchQuery`) that proposes `max − 1` distinct
+  queries, one per line. The model knows the *shape* of a topic, so it is the right organ to
+  decompose it. It is **discourse-aware**: when the app threads the conversation `history` and the
+  raw `question`, the planner reads the `discourseFrame` (converse/dialogue-state.js) — the **subject
+  in focus** (the warm referent) and the **open question** — and hands that frame to the model, so
+  every generated angle resolves back-references and keeps the *conversation's* subject rather than
+  re-guessing a topic from the seed string. Same firewall as the single query: only the grounded
+  referent label and the user's open-intent text ride, never the talker's claims.
 - With **no model**, the seed stands alone and the walk still fans out by surprise — just from one
   mouth instead of several.
 

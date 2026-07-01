@@ -260,3 +260,26 @@ export const resolveQuery = (question, history = []) => {
   }
   return parts.join(' ');
 };
+
+// ── discourseFrame — the discourse read a retrieval-PROMPT builder needs ───────────────
+// A search prompt (one query, or a fan-out of research angles) is discourse-aware when it is
+// written against WHO the conversation is on and WHAT it left open — not the latest sentence in
+// isolation. This packages that read once, so every prompt builder (formulateSearchQuery,
+// modelPlanner) anchors identically:
+//   resolved   the deterministically discourse-anchored query (resolveQuery) — the no-model answer,
+//              a pronoun/stall already bound to its subject ("who is making it?" → "…the figure")
+//   subject    the warm referent the conversation is on (the cast's held figure), '' if none
+//   open       the open intent the turn left dangling (its brief text), '' if none
+// The answer firewall holds: `subject` is a grounded referent LABEL and `open` is the user's own
+// question text — never the talker's claims. Best-effort: a parse fault degrades to the raw turn
+// with no subject/open, never throws — a prompt builder can always lean on `resolved`.
+export const discourseFrame = (question = '', history = []) => {
+  const base = String(question || '').trim();
+  try {
+    const st = dialogueState(history, base);
+    const resolved = resolveQuery(base, history).replace(/\s+/g, ' ').trim() || base;
+    const subject = st.activeReferent?.label ? String(st.activeReferent.label).trim() : '';
+    const open = st.openIntents?.length ? String(st.openIntents[st.openIntents.length - 1].text || '').trim() : '';
+    return { resolved, subject, open };
+  } catch { return { resolved: base, subject: '', open: '' }; }
+};
