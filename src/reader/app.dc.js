@@ -762,24 +762,65 @@ class Component extends DCLogic {
   newChat(scopeUrl){
     const id=this.chatId();
     const title=scopeUrl?(((this.pageOf(scopeUrl)||{}).title)||this.short(scopeUrl)):'New chat';
-    // A chat is ABOUT a set of sources. One to start (the source you opened it from),
-    // and you can add more to chat across them; an empty set ranges over everything read.
+    // A chat is ABOUT a set of sources. Opened from a source, it starts scoped to it.
+    // Opened with no scope it is a NET-NEW space (isolated): nothing you've read is in
+    // scope until you tag "everything" or pick sources — so a fresh chat is a blank slate,
+    // not silently grounded in the whole library.
     const sources=scopeUrl?[scopeUrl]:[];
-    this.setState(s=>({chats:[{id,title,sources,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false,rightOpen:true}));
+    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false,rightOpen:true}));
     return id;
   }
-  // The sources a chat is ABOUT, as a URL list. Empty → it ranges over everything read.
-  // Tolerates the older single-`scope` shape so an in-flight chat keeps working.
+  // The sources a chat is ABOUT, as a URL list. Tolerates the older single-`scope` shape
+  // so an in-flight chat keeps working.
   chatSourcesOf(c){return c?(Array.isArray(c.sources)?c.sources:(c.scope?[c.scope]:[])):[];}
-  // Fold another read source into the active chat so it can be chatted with alongside
-  // the rest. Adding the first source narrows an "everything read" chat to "about this".
+  // Does this chat range over EVERYTHING read? An explicit opt-in (the "Everything you've
+  // read" tag) — never the mere absence of tagged sources.
+  chatScopeAll(c){return !!(c&&c.scopeAll);}
+  // A NET-NEW space: nothing tagged and not ranged over everything. An isolated chat does
+  // NOT draw on what was read — it answers plainly (and the web, if on), never the library.
+  chatIsolated(c){return !this.chatScopeAll(c)&&this.chatSourcesOf(c).length===0;}
+  // Resolve the grounding scope for an answer turn, folding in any freshly-gathered pages.
+  //   {isolated:true}  → net-new space, ground nothing from reading.
+  //   {sources:[]}     → range over everything (the "everything" tag).
+  //   {sources:[…]}    → the tagged/gathered sources only.
+  _answerScope(cur,gathered){
+    const g=(gathered&&gathered.length)?[...new Set(gathered.filter(Boolean))]:[];
+    if(this.chatScopeAll(cur))return {isolated:false,sources:[]};
+    const had=this.chatSourcesOf(cur);
+    if(had.length||g.length)return {isolated:false,sources:[...new Set([...had,...g])]};
+    return {isolated:true,sources:[]};
+  }
+  // Fold another read source into the active chat so it can be chatted with alongside the
+  // rest. Tagging a specific source means the chat is ABOUT it — so it leaves the
+  // "everything" scope (a narrowing), never silently keeps ranging over the whole library.
   addChatSource(url){if(!url)return;this.setState(s=>({chatAddOpen:false,chats:s.chats.map(c=>{
     if(c.id!==s.activeChat)return c;const src=this.chatSourcesOf(c);if(src.includes(url))return c;
     const sources=[...src,url];const title=(c.messages&&c.messages.length)?c.title:(((this.pageOf(sources[0])||{}).title)||this.short(sources[0]));
-    return {...c,sources,title};})}));}
+    return {...c,scopeAll:false,sources,title};})}));}
   removeChatSource(url){this.setState(s=>({chats:s.chats.map(c=>{
     if(c.id!==s.activeChat)return c;return {...c,sources:this.chatSourcesOf(c).filter(u=>u!==url)};})}));}
+  // Tag / untag the "everything you've read" scope. Tagging everything supersedes (and clears)
+  // any specific source chips; untagging drops back to a net-new space.
+  setChatScopeAll(on){this.setState(s=>({chatAddOpen:false,chats:s.chats.map(c=>{
+    if(c.id!==s.activeChat)return c;return {...c,scopeAll:!!on,sources:on?[]:this.chatSourcesOf(c)};})}));}
   toggleChatAdd(){this.setState(s=>({chatAddOpen:!s.chatAddOpen}));}
+  // The sources you can still tag into this chat, as an indented tree: each primary page with
+  // the branching pages found from it (research children) nested underneath — so you pick by
+  // topic, not from a flat list. `excludeSet` drops what's already tagged.
+  _chatAddTree(excludeSet){
+    const pages=(this.master&&this.master.pages)||[];
+    if(!pages.length)return [];
+    const byRecency=[...pages].sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const inSet=u=>!!(u&&pages.find(x=>x.url===u));
+    const childrenOf=u=>byRecency.filter(p=>p.parent===u);
+    const out=[],seen=new Set();
+    const push=(p,depth)=>{if(seen.has(p.url))return;seen.add(p.url);
+      out.push({url:p.url,title:p.title||this.short(p.url),depth:Math.min(depth,2),kids:childrenOf(p.url).length,tagged:excludeSet.has(p.url)});
+      childrenOf(p.url).forEach(c=>push(c,depth+1));};
+    byRecency.filter(p=>!inSet(p.parent)).forEach(p=>push(p,0));
+    byRecency.forEach(p=>{if(!seen.has(p.url))push(p,0);});
+    return out;
+  }
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
   openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false,rightOpen:true});}
@@ -1346,7 +1387,7 @@ class Component extends DCLogic {
   // ("research X", "more about this book") OR names a real subject the in-scope READING doesn't
   // already cover. A summary of the open doc, a bare greeting, or a turn already grounded in folded
   // sources is answered offline. Turning the web off makes this always false → pure offline chat.
-  _shouldWeb(q,sources){
+  _shouldWeb(q,sources,isolated){
     if(this.state.webBrain===false)return false;            // web turned off → never touch it
     if(this.mechanicalAnswer(q))return false;               // a clock question answers itself
     if(this._researchIntent(q)||this._isMetaResearch(q))return true;   // asked for research / "more"
@@ -1354,6 +1395,9 @@ class Component extends DCLogic {
     // A bare pleasantry / acknowledgement names no subject — don't go research "thanks".
     if(/^(?:thanks?|thank you|thx|ty|ok|okay|k|cool|nice|great|awesome|got it|sounds good|sure|yep|yes|no|yeah|nope|lol|haha|hi|hey|hello|yo|sup|np|no problem|cheers|bye|goodbye|good (?:morning|night))[\s.!?]*$/i.test(q))return false;
     if(!this._researchTerms(q).length)return false;         // nothing contentful to chase
+    // A NET-NEW space grounds nothing from the library, so the reading can't "cover" the ask —
+    // a contentful question goes straight to the web (when it's on) instead of consulting spans.
+    if(isolated)return true;
     // A CREATIVE-GENERATION request grounds on its TOPIC ("about iced coffee"), not its frame verb
     // ("write"), which would otherwise overlap a "writer" corpus and wrongly keep the turn offline.
     // Topic the reading doesn't actually cover → go read it before composing.
@@ -1533,12 +1577,15 @@ class Component extends DCLogic {
     // dickinson poem" came back as a memory of Dickinson instead of a poem. composeArtifact does
     // the three steps the request asks for: read examples of the form, then WRITE an original one.
     if(this._composeIntent(q))return this.composeArtifact(q);
-    const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
+    const cur=this.activeChatObj();
+    // The grounding scope for this turn: isolated (net-new, ground nothing from reading),
+    // everything (sources:[]), or the tagged sources. An isolated chat answers plainly.
+    const _sc=this._answerScope(cur,null);const isolated=_sc.isolated;const sources=_sc.sources;
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
     // a question it can't ground in what's been read+folded sends the engine to the web first — it
     // fetches, FOLDS every page into memory (chatResearch → the curiosity walk → readURL→ingest),
     // then answers grounded in the new reading. Raw text only counts once it's parsed and folded.
-    if(this._shouldWeb(q,sources))return this.chatResearch(q);
+    if(this._shouldWeb(q,sources,isolated))return this.chatResearch(q);
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // append the user turn + a pending assistant bubble
     let id=this.state.activeChat;
@@ -1557,21 +1604,25 @@ class Component extends DCLogic {
     // turn (web off, or it would have routed to research above). If the question names a subject
     // the in-scope reading never mentions, do NOT hand the model irrelevant spans and a question
     // about a subject it never read — that is the Grok confabulation. Answer honestly instead.
-    if(!this._subjectsKnown(q,sources)){finish(this._noSubjectPatch(q,sources));return;}
+    // (An isolated / net-new chat skips the reading-scoped gate entirely — there is nothing in
+    // scope to be absent from, and it must not consult the library.)
+    if(!isolated&&!this._subjectsKnown(q,sources)){finish(this._noSubjectPatch(q,sources));return;}
     // 1b) OPT-IN LONGFORM, offline too: an essay/report/"N words" ask over what's ALREADY been read
     // (web off, or the reading already covers it) becomes a multi-section grounded piece — the arc
     // over the in-scope sources — instead of one capped answer. Needs grounded supply; _longformArc
-    // itself falls back to the single answer when supply is thin.
-    if(this._longformIntent(q)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size)))return this._longformArc(id,q,[]);
-    // 2) the spans that surface for this question, scoped to the chat's sources
-    const ground=this.groundNotes(q,sources);
+    // itself falls back to the single answer when supply is thin. Never for an isolated chat.
+    if(!isolated&&this._longformIntent(q)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size)))return this._longformArc(id,q,[]);
+    // 2) the spans that surface for this question, scoped to the chat's sources (none when isolated)
+    const ground=isolated?{spans:[],entities:[],sources:[],relevant:false}:this.groundNotes(q,sources);
     // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
     //    graph, so it speaks from the document instead of as a blank-slate assistant.
     this._setThink(id,this._thinkGround(ground));
     const guard=this._stallGuard();
     try{
       const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
-      const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
+      // An isolated / net-new chat is never "grounded" — it answers as a plain assistant even
+      // when the library is full, so a fresh space stays a blank slate until sources are tagged.
+      const grounded=!isolated&&((ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size));
       let messages;
       // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
       // not an expert holding forth (the librarian cue, every grounded turn). A broad / explanatory
@@ -1602,19 +1653,22 @@ class Component extends DCLogic {
       // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
       const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
       guard.clear();
-      const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
+      // An isolated chat draws on nothing read, so there's no structural fallback to pull from.
+      const text=this.normMd(raw)||(isolated?'':this.answerQuestion(q,sources).text)||'(no answer)';
       // Surface grounding for EVERY answer, honestly. Matched lines show as citations; a
       // summary that leaned on the source's opening shows those lines, disclosed as such;
       // an answer with no read footing says plainly it's the model's own (_groundReport).
       const gr=this._groundReport(ground,grounded);
-      finish({text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
-        groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
-      this._pivotChatPanel(q+' '+text);
+      finish({text:isolated?text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
+        groundKind:gr.groundKind,disclosure:gr.disclosure,related:isolated?[]:this.relatedDocs(q,sources)});
+      if(!isolated)this._pivotChatPanel(q+' '+text);
     }catch(e){
       guard.clear();
       // User stop — stopGeneration already finalized the bubble with whatever streamed. Don't
       // overwrite it with a structural fallback.
       if((e&&e.stopped)||this._stopGen)return;
+      // An isolated chat has no reading to fall back to — say plainly the model didn't load.
+      if(isolated){finish({text:'I couldn’t load a model to answer.',groundKind:'model'});this.setState({modelStatus:''});return;}
       // model unavailable OR stalled — answer structurally from what's read, or say so plainly
       const fb=this.answerQuestion(q,sources);
       const note=this.state.modelStatus?(' · '+this.state.modelStatus):'';
@@ -1819,20 +1873,20 @@ class Component extends DCLogic {
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const cur=this.state.chats.find(c=>c.id===id);
-    const had=this.chatSourcesOf(cur);
-    // Empty `had` means the chat ranges over EVERYTHING read (which already includes the new
-    // pages) — keep it empty. Otherwise widen the scope to include what we just gathered.
-    const sources=had.length?[...new Set([...had,...(gathered||[])])]:[];
+    // Fold the freshly-gathered pages into the chat's scope: "everything" stays everything,
+    // a tagged/gathered set widens to include them, and a net-new chat that gathered nothing
+    // stays isolated (grounds on nothing read) rather than silently falling back to everything.
+    const _sc=this._answerScope(cur,gathered);const isolated=_sc.isolated;const sources=_sc.sources;
     // The named-subject gate again, after the web walk: if the research turned up nothing that
     // names the subject (the corpus still doesn't know it), answer honestly rather than letting
-    // the model confabulate it from whatever was gathered.
-    if(!this._subjectsKnown(q,sources.length?sources:[...new Set([...(gathered||[])])])){finish(this._noSubjectPatch(q,sources));return;}
-    const ground=this.groundNotes(q,sources);
+    // the model confabulate it from whatever was gathered. (Skipped for an isolated chat.)
+    if(!isolated&&!this._subjectsKnown(q,sources.length?sources:[...new Set([...(gathered||[])])])){finish(this._noSubjectPatch(q,sources));return;}
+    const ground=isolated?{spans:[],entities:[],sources:[],relevant:false}:this.groundNotes(q,sources);
     this._setThink(id,this._thinkGround(ground));
     const guard=this._stallGuard();
     try{
       const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
-      const grounded=(ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size);
+      const grounded=!isolated&&((ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size));
       let messages;
       // The research/web chat path: same librarian register (+ sectioned shape on a broad question).
       const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||''].filter(Boolean).join('\n\n'):'';
@@ -1848,14 +1902,15 @@ class Component extends DCLogic {
       const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
       guard.clear();
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
-      const text=this.normMd(raw)||this.answerQuestion(q,sources).text||'(no answer)';
+      const text=this.normMd(raw)||(isolated?'':this.answerQuestion(q,sources).text)||'(no answer)';
       const gr=this._groundReport(ground,grounded);
-      finish({text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
-        groundKind:gr.groundKind,disclosure:gr.disclosure,related:this.relatedDocs(q,sources)});
+      finish({text:isolated?text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
+        groundKind:gr.groundKind,disclosure:gr.disclosure,related:isolated?[]:this.relatedDocs(q,sources)});
     }catch(e){
       guard.clear();
       // User stop — keep the partial bubble stopGeneration already finalized.
       if((e&&e.stopped)||this._stopGen)return;
+      if(isolated){finish({text:'I couldn’t load a model to answer.',groundKind:'model'});this.setState({modelStatus:''});return;}
       const fb=this.answerQuestion(q,sources);
       const relevant=!!(fb.refs&&fb.refs.length);
       const passages=relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[];
@@ -1884,6 +1939,10 @@ class Component extends DCLogic {
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const cur=this.state.chats.find(c=>c.id===id);
+    // A net-new chat that gathered nothing has no reading to build an arc over — don't fall back
+    // to the whole library; answer plainly instead.
+    const _sc=this._answerScope(cur,gathered);
+    if(_sc.isolated)return this._answerSingle(id,q,gathered);
     const had=this.chatSourcesOf(cur);
     const scope=had.length?[...new Set([...had,...(gathered||[])])]:[];
     const allUrls=scope.length?scope:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
@@ -2337,7 +2396,7 @@ class Component extends DCLogic {
     base.chats=(this.state.chats||[]).map(c=>{
       const active=c.id===this.state.activeChat;
       const ss=this.chatSourcesOf(c);
-      const scopeSub=ss.length?(ss.length===1?this.truncLabel(((this.pageOf(ss[0])||{}).title)||'a source',22):ss.length+' sources'):'all sources';
+      const scopeSub=this.chatScopeAll(c)?'everything':(ss.length?(ss.length===1?this.truncLabel(((this.pageOf(ss[0])||{}).title)||'a source',22):ss.length+' sources'):'net-new');
       return {id:c.id,title:this.truncLabel(c.title||'New chat',32),
         sub:scopeSub+' · '+Math.ceil(c.messages.length/2)+' Q',
         active,onOpen:()=>this.openChat(c.id),
@@ -2553,18 +2612,27 @@ class Component extends DCLogic {
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
     });
-    // What this chat is ABOUT — one chip per source, removable, plus the sources you can
-    // still add. An empty set is shown as the "everything you've read" chip (not removable).
+    // What this chat is ABOUT. Three states, shown distinctly in the header:
+    //   isolated  → a NET-NEW space: nothing tagged, grounds on nothing read.
+    //   everything → the explicit "Everything you've read" tag (a removable chip).
+    //   specific  → one removable chip per tagged source.
     const ss=this.chatSourcesOf(cur);
+    const isEvery=this.chatScopeAll(cur), isIso=this.chatIsolated(cur);
     const titleOf=u=>this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),26);
     const aboutChips=ss.map(u=>({label:titleOf(u),url:u,onOpen:()=>this.goWeb(u),
       onRemove:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.removeChatSource(u);},
       chipStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:3px 4px 3px 9px;max-width:200px;',
       xStyle:'border:none;background:transparent;color:var(--acc);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;border-radius:4px;'}));
     const pages=(this.master&&this.master.pages)||[];
-    const addable=pages.filter(p=>!ss.includes(p.url)).map(p=>({label:this.truncLabel(p.title||this.short(p.url),34),host:this.short(p.url),
-      onAdd:()=>this.addChatSource(p.url),
-      rowStyle:'display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 11px;border-radius:8px;cursor:pointer;'}));
+    const nSrc=pages.length;
+    // The "+ Add source" picker, organized by TOPIC: each primary page with the branching
+    // pages found from it nested underneath (indented), so you grab things by subject — not
+    // from a flat list. Already-tagged sources drop out.
+    const addable=this._chatAddTree(new Set(ss)).filter(n=>!n.tagged).map(n=>({label:this.truncLabel(n.title,34),host:this.short(n.url),
+      onAdd:()=>this.addChatSource(n.url),
+      rowStyle:'display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 11px;border-radius:8px;cursor:pointer;'
+        +(n.depth?('margin-left:'+(n.depth*14)+'px;border-left:2px solid var(--line2);border-radius:0 8px 8px 0;'):'')
+        +(n.depth===0&&n.kids?'font-weight:700;':'')}));
     // A turn is live in this chat (model decoding, an arc writing, or a research walk running) —
     // the single signal that lights the "model is working" banner and swaps Ask → Stop.
     const genActive=this._genActive(cur);
@@ -2575,11 +2643,26 @@ class Component extends DCLogic {
       ? (ml+(this.state.modelStatus?(' · '+this.state.modelStatus):' is working — generating your answer…'))
       : (this.state.modelStatus||'');
     base.chat={title:this.truncLabel(cur.title||'New chat',40),drawer,docked,
-      scopeLabel:ss.length?(ss.length===1?titleOf(ss[0]):(ss.length+' sources')):'everything you have read',
-      about:aboutChips,hasAbout:aboutChips.length>0,aboutEmpty:aboutChips.length===0,
+      scopeLabel:isEvery?'everything you have read':(ss.length?(ss.length===1?titleOf(ss[0]):(ss.length+' sources')):'a net-new space'),
+      // The header subtitle spells out what the chat draws on, so isolation is legible.
+      subLabel:isIso?'A net-new space — tag sources to ground it in your reading'
+        :isEvery?('Grounded across everything you’ve read'+(nSrc?(' · '+nSrc+' source'+(nSrc!==1?'s':'')):''))
+        :('Grounded in '+(ss.length===1?('“'+titleOf(ss[0])+'”'):(ss.length+' sources'))),
+      about:aboutChips,hasAbout:aboutChips.length>0,
+      // Distinct chips for the three states: the muted "net new" hint, the removable
+      // "everything" tag, and the "+ tag everything" quick action shown when neither is set.
+      aboutIsolated:isIso,scopeEverythingOn:isEvery,
+      everyLabel:'Everything you’ve read'+(nSrc?(' · '+nSrc+' source'+(nSrc!==1?'s':'')):''),
+      onTagEverything:()=>this.setChatScopeAll(true),onUntagEverything:()=>this.setChatScopeAll(false),
+      // Offer the "everything" tag (inline chip + a row atop the picker) whenever the chat isn't
+      // already ranging over everything and there is at least one source to range over.
+      tagEveryOn:!isEvery&&nSrc>0,
       addOpen:!!this.state.chatAddOpen,addable,hasAddable:addable.length>0,noAddable:addable.length===0,onToggleAdd:()=>this.toggleChatAdd(),
-      addEmptyMsg:pages.length?'All your sources are already in this chat.':'Read a URL or import a book to add a source.',
+      addEmptyMsg:nSrc?'All your sources are already tagged in this chat.':'Read a URL or import a book to tag a source.',
       messages:msgs,empty:msgs.length===0,
+      // The empty-state copy tracks the scope: a fresh space reads as a blank slate.
+      emptyHint:isIso?'A fresh, empty chat.':'Ask anything about what you’ve read.',
+      emptySub:isIso?'Nothing from your reading is in scope yet — tag sources above, or just start typing.':'Answers are quoted from your sources — every claim links back.',
       generating:genActive,
       modelStatus:statusText,hasStatus:genActive||!!this.state.modelStatus,
       // The banner reads as a calm hint while loading, and a live accent pill while the model works —
@@ -2590,7 +2673,10 @@ class Component extends DCLogic {
       shellStyle:drawer
         ? 'position:absolute;top:0;right:0;bottom:0;width:min(440px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
         : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);'+(docked?'border-left:1px solid var(--line);':''),
-      placeholder:this.state.researchMode?'Name a topic to research — I’ll go read about it…':(ss.length?('Ask about '+(ss.length===1?('“'+titleOf(ss[0])+'”'):('these '+ss.length+' sources'))+'…'):'Ask about everything you’ve read…')};
+      placeholder:this.state.researchMode?'Name a topic to research — I’ll go read about it…'
+        :isIso?'Ask anything — nothing tagged yet…'
+        :isEvery?'Ask about everything you’ve read…'
+        :('Ask about '+(ss.length===1?('“'+titleOf(ss[0])+'”'):('these '+ss.length+' sources'))+'…')};
   }
   // ── Project Gutenberg — a source of sources ──────────────────────────────
   // Search the catalog (gutendex), fetched through the same proxy. Returns books
@@ -3782,7 +3868,10 @@ class Component extends DCLogic {
   activePreset(){const L=this.state.leftOpen,R=this.state.rightOpen,C=!!this.activeChatObj();
     if(!L&&!R&&!C)return 'focus'; if(!C&&R&&!L)return 'read'; if(C&&R&&!L)return 'research'; return null;}
   // Toolbar chat toggle: open a chat (scoped to the page if one is open) or close it.
-  onToggleChat(){ if(this.activeChatObj()) this.closeChat(); else this.newChat(this.state.viewUrl||null); }
+  // The header Chat button opens a NET-NEW space — not silently scoped to whatever page is
+  // open. Tag "everything" or pick sources from there. ("Ask about this page" (the FAB) and
+  // the per-source Chat buttons still open a chat pre-scoped to that source, by intent.)
+  onToggleChat(){ if(this.activeChatObj()) this.closeChat(); else this.newChat(null); }
   // ── memory log: every source read into memory, with totals ────────────────────
   memoryLog(){
     if(!this.master)return {rows:[],hasRows:false,statLine:'',empty:true};
@@ -4898,7 +4987,7 @@ class Component extends DCLogic {
       const chatActive=!!this.activeChatObj();
       base.chatToggleOn=chatActive;
       base.onToggleChat=()=>this.onToggleChat();
-      base.chatToggleTitle=chatActive?'Hide chat':'Chat about what you’ve read';
+      base.chatToggleTitle=chatActive?'Hide chat':'Start a net-new chat';
       base.chatToggleStyle='display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'+(chatActive?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);')+'border-radius:7px;padding:5px 10px;flex:0 0 auto;cursor:pointer;';
       // Phone bottom-nav tabs. Chat tab ensures a chat exists before switching pane.
       const pane=this.state.pane||'doc';
@@ -4909,7 +4998,7 @@ class Component extends DCLogic {
         {k:'chat',label:'Chat',pane:'chat'},
         {k:'spine',label:'Spine',pane:'spine'},
       ].map(t=>({key:t.k,label:t.label,style:navSty(pane===t.pane),
-        onPick:()=>{ if(t.pane==='chat'&&!this.activeChatObj())this.newChat(this.state.viewUrl||null); this.setPane(t.pane); }}));
+        onPick:()=>{ if(t.pane==='chat'&&!this.activeChatObj())this.newChat(null); this.setPane(t.pane); }}));
       // Phone single-pane visibility. Off phone, regions follow their own open flags;
       // on phone exactly one region shows, chosen by `pane`. The chat pane is served by
       // the dedicated chat cell (chatDockedOn), so main only shows the reading pane.

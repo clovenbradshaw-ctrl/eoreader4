@@ -61,6 +61,13 @@ What you can do:
   entities/sources it drew on. If no model loads, chat falls back to a structural answer
   from your reading. Chats are first-class: a "New chat" button + a Chats section in the
   left panel, and any source has a ✦ button to chat about just that source.
+- **A new chat is a net-new space.** Hitting the top-bar **Chat** or **New chat** opens an
+  *isolated* chat — nothing you've read is in scope, so it answers as a plain assistant (plus
+  the web, if on) rather than silently drawing on the whole library. From the **About** row you
+  then choose what it draws on: tap **✦ Everything** to ground across everything you've read, or
+  **+ Add source** to pick sources from a picker organized by topic — each primary page with the
+  branching pages found from it nested underneath. "✦ Ask about this page" and a source's ✦
+  button still open a chat pre-scoped to that one source, by intent.
 - **The page stays the hero.** With a page or book open, chat rides as a right-hand
   drawer over it (the page stays readable) — opened by the "✦ Ask about this page" button.
   With nothing open, chat takes the center.
