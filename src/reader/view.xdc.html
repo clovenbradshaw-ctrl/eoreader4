@@ -834,8 +834,8 @@
               </div>
             </sc-if>
             <div style="font-size:11.5px;color:var(--ink3);margin-top:14px;">or try a book / page:</div>
-            <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin-top:8px;">
-              <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="0"><button onclick="{{ s.onPick }}" style="font-size:12px;color:var(--acc);background:var(--card);border:1px solid var(--accline);border-radius:8px;padding:6px 11px;cursor:pointer;">{{ s.label }}</button></sc-for>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:center;align-content:flex-start;margin-top:8px;min-height:{{ suggMinH }};">
+              <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="0"><button onclick="{{ s.onPick }}" style="{{ s.style }}">{{ s.label }}</button></sc-for>
             </div>
           </div>
         </div>

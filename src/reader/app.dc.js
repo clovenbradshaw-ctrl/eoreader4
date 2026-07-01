@@ -398,7 +398,22 @@ class Component extends DCLogic {
     base.showPrompt=true;base.newTabLanding=true;
     base.promptTitle=err?'Engine failed to load':(ready?'New tab':'Loading the reading engine…');
     base.promptBody=err?String(err):'A tab can be a chat, a live website, or a page in a clean Reader view. Type a URL or a search in the bar above, start a chat, or pick a starter below.';
-    base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
+    // Suggestions load asynchronously (a random Wikipedia page + books), so until they
+    // arrive we render dim skeleton chips that hold the same footprint. Together with a
+    // reserved min-height on the row, the centered card never jumps when the real
+    // Wikipedia/book chips swap in.
+    const chip='font-size:12px;color:var(--acc);background:var(--card);border:1px solid var(--accline);border-radius:8px;padding:6px 11px;cursor:pointer;';
+    const skel=(w,h)=>'display:inline-block;box-sizing:border-box;width:'+w+';height:'+h+'px;max-width:100%;border:1px solid var(--line2);border-radius:8px;background:var(--line2);color:transparent;opacity:.4;cursor:default;pointer-events:none;';
+    if(this.SUGG.length){
+      base.suggestions=this.SUGG.map(s=>({label:s.label,style:chip,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
+    }else{
+      // A short Wikipedia-title bar, then three wider book-title bars (~2 lines each) --
+      // the shape the real chips settle into once loaded.
+      base.suggestions=[['58%',30],['88%',50],['82%',50],['66%',30]].map((d,i)=>({label:'',style:skel(d[0],d[1]),onPick:()=>{},key:'sk'+i}));
+    }
+    // Reserve the loaded footprint so the centered card holds still while suggestions
+    // load. Phones wrap the long book titles onto more lines, so they get more room.
+    base.suggMinH=(this.phone()?300:210)+'px';
     const reader=this.state.viewMode==='reader';
     base.landingModeReader=reader;base.landingModeNative=!reader;
     base.onLandingPage=()=>this.setViewModePref('native');
