@@ -42,6 +42,27 @@ export function isExplicitCompose(text) {
   return VERB_RE.test(s) && KIND_RE.test(s);
 }
 
+// A model-free SWITCH-OUT seed (§5 fresh-regex-seed, §11). Continuation-by-default
+// inherits a `compose` stance, but a clearly SELF-CONTAINED question — a wh-opener or a
+// trailing '?' with no back-reference to the piece being made — is a fresh turn, not an
+// anaphoric compose follow-up. It is the cold-path seed for the ONE switch direction the
+// warm detector (rung 4) will own: "what is 237 * 637?" / "who wrote Hamlet?" must leave a
+// composing thread, not be answered as another poem. Deliberately NARROW so it never fights
+// continuation: anything with an anaphor (it/this/one/another/shorter…) or no question shape
+// stays a continuation. Only ever clears a `compose` baseline — a ground stance is untouched.
+export function switchesFromCompose(text) {
+  const s = String(text || '').trim();
+  if (!s) return false;
+  if (isExplicitCompose(s)) return false;   // an explicit make-request stays compose
+  const wh = /^(?:what|whats|what's|who|who's|whos|why|how|when|where|which|whose|whom)\b/i.test(s);
+  const endsQ = /\?\s*$/.test(s);
+  if (!wh && !endsQ) return false;          // not question-shaped → continue composing
+  // A back-reference to the piece keeps it a compose refinement ("what if it were shorter?",
+  // "can you make this about the sea?") — anaphora, not a fresh subject.
+  const backRef = /\b(?:it|its|it's|this|that|those|them|they|one|another|again|more|shorter|longer|instead|version|the\s+(?:poem|story|piece|song|essay|draft|version))\b/i.test(s);
+  return !backRef;
+}
+
 // The KIND phrase for a compose request, kept whole ("emily dickinson poem",
 // "haiku"), length/style words peeled. Mirrors app.dc.js _composeKind. Returns
 // '' when no kind is named (a bare "write me one") so the caller can fall back
@@ -216,6 +237,9 @@ export function routeStance(message, fold, opts = {}) {
   let baseline;
   if (fold && fold.stance) {
     baseline = fold.stance;
+    // A self-contained question switches OUT of a compose thread — the cold-path seed for the
+    // switch direction the warm detector will own at rung 4. Only clears compose; leaves ground.
+    if (baseline === 'compose' && switchesFromCompose(message)) baseline = null;
   } else {
     // Fresh turn — no stance to inherit. Regex earns exactly one job: an instant
     // offline seed. An explicit compose request seeds compose; otherwise defer to
