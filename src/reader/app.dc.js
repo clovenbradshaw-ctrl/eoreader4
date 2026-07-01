@@ -1731,7 +1731,16 @@ class Component extends DCLogic {
   // frame, and it composes. No web hop, no example scaffolding, no "cite your sources / output only"
   // constraints — the prompting was the thing flattening the poem. Essays/reports stay the grounded
   // arc (_longformArc). The gate is a compose VERB plus a creative KIND, so a question never trips it.
-  _CK(){return 'poems?|poetry|sonnets?|haikus?|limericks?|ballads?|odes?|verses?|villanelles?|couplets?|elegy|elegies|epigrams?|hymns?|psalms?|songs?|lyrics?|jingles?|raps?|stories|story|tales?|fables?|fairy[\\s-]?tales?|myths?|legends?|anecdotes?|jokes?|riddles?|dialogues?|monologues?|screenplays?|scripts?|plays?|skits?|rhymes?';}
+  // Creative KINDS — literary forms the model composes from its own craft.
+  _CKlit(){return 'poems?|poetry|sonnets?|haikus?|limericks?|ballads?|odes?|verses?|villanelles?|couplets?|elegy|elegies|epigrams?|hymns?|psalms?|songs?|lyrics?|jingles?|raps?|stories|story|tales?|fables?|fairy[\\s-]?tales?|myths?|legends?|anecdotes?|jokes?|riddles?|dialogues?|monologues?|screenplays?|scripts?|plays?|skits?|rhymes?';}
+  // MADE KINDS — code, markup, and everyday text artifacts the model produces from knowledge, not
+  // from the reading. "write me some sample html" is a make-this exactly like "write me a poem", but
+  // "html"/"code"/"a function" weren't creative KINDS, so it fell into retrieval and answered ABOUT
+  // sample HTML ("the reading doesn't provide any actual code…") over Wikipedia. Grounded prose forms
+  // (essay, report, article, overview, guide, summary) are deliberately NOT here — those stay the
+  // grounded longform arc. These are unambiguously generated, so a compose VERB + one is a write.
+  _CKmade(){return 'html|xhtml|css|scss|sass|svg|json|ya?ml|xml|markdown|code|snippets?|functions?|methods?|programs?|algorithms?|components?|queries|query|sql|regexe?s?|regular\\s+expressions?|apis?|emails?|letters?|cover\\s+letters?|tweets?|captions?|headlines?|slogans?|taglines?|resumes?|recipes?';}
+  _CK(){return this._CKlit()+'|'+this._CKmade();}
   _CV(){return 'write|compose|draft|create|pen|author|generate|make(?:\\s+me|\\s+up)?|come\\s+up\\s+with|give\\s+me|tell\\s+me';}
   _composeIntent(q){
     const s=String(q||'');
