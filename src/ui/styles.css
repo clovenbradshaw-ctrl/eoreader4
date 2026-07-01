@@ -1,3 +1,18 @@
+/* Phosphor Icons (https://phosphoricons.com) — Regular weight, MIT licensed. Vendored
+   locally so the chat app stays self-contained and offline (only the woff2 ships). Icons
+   are placed by Unicode codepoint inside a .ph span, the same convention as index.html. */
+@font-face {
+  font-family: "Phosphor";
+  src: url("../../vendor/phosphor/Phosphor.woff2") format("woff2");
+  font-weight: normal; font-style: normal; font-display: block;
+}
+.ph {
+  font-family: "Phosphor" !important; font-style: normal; font-weight: normal;
+  font-variant: normal; text-transform: none; line-height: 1; speak: never;
+  display: inline-block; vertical-align: -.125em;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body {
@@ -1055,6 +1070,119 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 .rp-cite { color: #60a5fa; font-family: ui-monospace, monospace; font-size: .68rem; cursor: pointer; }
 .rp-cite:hover { text-decoration: underline; }
 .rp-cite-now { color: #93c5fd; }
+
+/* Surfer view — a glass box on the surfer's navigation (focus · cursor · frame) */
+.sv-wrap { display: flex; flex-direction: column; gap: .6rem; height: 100%; }
+.sv-intro { font-size: .76rem; color: #a1a1aa; line-height: 1.5; }
+.sv-intro b { color: #e4e4e7; }
+
+.sv-modes { display: inline-flex; gap: .25rem; background: #131316; border: 1px solid #27272a; border-radius: 8px; padding: .2rem; align-self: flex-start; }
+.sv-mode { background: transparent; border: none; color: #a1a1aa; font-size: .74rem; padding: .28rem .6rem; border-radius: 6px; cursor: pointer; }
+.sv-mode:hover { color: #e4e4e7; }
+.sv-mode.on { background: #232328; color: #c4b5fd; }
+
+.sv-body { display: flex; flex-direction: column; gap: .7rem; }
+
+.sv-bar { display: flex; align-items: center; gap: .5rem; }
+.sv-cursor { flex: 1; accent-color: #c4b5fd; }
+.sv-readout { font-family: ui-monospace, monospace; font-size: .7rem; color: #93c5fd; min-width: 12rem; text-align: right; }
+
+.sv-panel, .sv-detail { display: flex; flex-direction: column; gap: .7rem; }
+
+/* the one-line reading of the surf */
+.sv-sum { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; font-size: .74rem; }
+.sv-badge { display: inline-flex; align-items: center; gap: .25rem; font-family: ui-monospace, monospace; font-size: .7rem; padding: .12rem .45rem; border-radius: 999px; border: 1px solid #27272a; background: #18181b; }
+.sv-anchor { color: #93c5fd; border-color: #1e3a8a; }
+.sv-peak { color: #6ee7b7; border-color: #065f46; }
+.sv-focus { color: #c4b5fd; border-color: #4c1d95; }
+.sv-arrow { color: #52525b; }
+.sv-sum-n { color: #a1a1aa; }
+.sv-rode { margin-left: auto; color: #52525b; font-family: ui-monospace, monospace; font-size: .68rem; }
+
+.sv-strip-label { font-size: .66rem; text-transform: uppercase; letter-spacing: .06em; color: #71717a; }
+
+/* the field strip — the gradient the surfer stepped down, drawn */
+.sv-strip-wrap { display: flex; flex-direction: column; gap: .3rem; }
+.sv-strip { display: flex; align-items: flex-end; gap: 2px; height: 64px; padding: .3rem .2rem 0; background: #131316; border: 1px solid #27272a; border-radius: 6px; overflow-x: auto; }
+.sv-cell { position: relative; flex: 1 0 12px; min-width: 12px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; cursor: pointer; border-radius: 3px; }
+.sv-cell:hover { background: #1c1c20; }
+.sv-cell-bar { display: block; width: 62%; border-radius: 2px 2px 0 0; background: #3f6ad8; }
+.sv-lvl-medium .sv-cell-bar { background: #fbbf24; }
+.sv-lvl-high .sv-cell-bar { background: #fca5a5; }
+.sv-cell.sv-stop .sv-cell-bar { width: 82%; }
+.sv-cell-peak { background: #101d17; }
+.sv-cell-peak .sv-cell-bar { box-shadow: 0 0 0 1px #6ee7b7 inset; }
+.sv-cell-badge { position: absolute; top: -.05rem; font-size: .6rem; line-height: 1; color: #e4e4e7; pointer-events: none; }
+
+/* the stops list */
+.sv-stops { display: flex; flex-direction: column; gap: .3rem; }
+.sv-stop-row { display: flex; align-items: center; gap: .5rem; font-size: .76rem; padding: .12rem 0; }
+.sv-stop-row-peak { background: #0e1a14; border-radius: 5px; padding: .18rem .35rem; }
+.sv-cite { color: #60a5fa; font-family: ui-monospace, monospace; font-size: .68rem; cursor: pointer; flex: none; min-width: 2.2rem; }
+.sv-cite:hover { text-decoration: underline; }
+.sv-reason { font-size: .64rem; font-family: ui-monospace, monospace; padding: .06rem .35rem; border-radius: 999px; border: 1px solid #27272a; flex: none; }
+.sv-reason-anchor { color: #93c5fd; }
+.sv-reason-frame-break { color: #a7f3d0; border-color: #065f46; }
+.sv-reason-surprise-peak { color: #a1a1aa; }
+.sv-reason-peak { color: #6ee7b7; border-color: #065f46; }
+.sv-stop-text { color: #d4d4d8; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-style: italic; }
+.sv-stop-focus { color: #c4b5fd; font-style: normal; }
+.sv-quiet { color: #52525b; }
+.sv-meter { flex: none; width: 4rem; height: .4rem; background: #18181b; border-radius: 999px; overflow: hidden; }
+.sv-meter i { display: block; height: 100%; background: #3f6ad8; }
+.sv-meter-medium i { background: #fbbf24; }
+.sv-meter-high i { background: #fca5a5; }
+
+/* the chat register — the turn list and the selected turn's surf */
+.sv-turns { display: flex; flex-direction: column; gap: .25rem; max-height: 40%; overflow-y: auto; }
+.sv-turn { display: flex; align-items: center; gap: .5rem; text-align: left; background: #131316; border: 1px solid #27272a; border-radius: 6px; padding: .35rem .5rem; cursor: pointer; color: #a1a1aa; }
+.sv-turn:hover { background: #1c1c20; }
+.sv-turn.on { border-color: #4c1d95; background: #17131f; }
+.sv-turn-id { color: #6ee7b7; font-family: ui-monospace, monospace; font-size: .66rem; flex: none; }
+.sv-turn-q { color: #d4d4d8; font-size: .74rem; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sv-turn-meta { color: #52525b; font-family: ui-monospace, monospace; font-size: .66rem; flex: none; }
+.sv-detail-q { font-size: .8rem; color: #e4e4e7; line-height: 1.5; border-left: 2px solid #4c1d95; padding-left: .55rem; }
+
+/* the significance column, when the meaning fold rode it */
+.sv-sig { display: flex; flex-direction: column; gap: .3rem; padding: .5rem .6rem; background: #131316; border: 1px solid #27272a; border-radius: 6px; }
+.sv-kv { display: flex; gap: .6rem; font-size: .74rem; }
+.sv-kv-k { color: #71717a; text-transform: uppercase; letter-spacing: .05em; font-size: .64rem; min-width: 7rem; display: inline-flex; align-items: center; gap: .3rem; }
+.sv-kv-v { color: #d4d4d8; font-family: ui-monospace, monospace; font-size: .7rem; }
+
+/* icons in the surfer view sit inline with the text */
+.sv-wrap i.ph { font-size: 1em; vertical-align: -.12em; }
+.sv-mode i.ph { font-size: 1.05em; margin-right: .1rem; }
+
+/* the transport — play the surf back at various speeds */
+.sv-transport { display: flex; align-items: center; gap: .4rem; }
+.sv-tbtn { display: inline-flex; align-items: center; justify-content: center; width: 1.9rem; height: 1.6rem; background: #18181b; border: 1px solid #27272a; border-radius: 6px; color: #c4b5fd; cursor: pointer; font-size: .95rem; }
+.sv-tbtn:hover { background: #232328; color: #e4e4e7; }
+.sv-play { color: #6ee7b7; }
+.sv-speeds { display: inline-flex; gap: .15rem; margin-left: .2rem; }
+.sv-speed { background: transparent; border: 1px solid transparent; color: #71717a; font-size: .68rem; font-family: ui-monospace, monospace; padding: .12rem .4rem; border-radius: 5px; cursor: pointer; }
+.sv-speed:hover { color: #d4d4d8; }
+.sv-speed.on { background: #232328; color: #c4b5fd; border-color: #3f3f46; }
+.sv-play-readout { margin-left: auto; font-family: ui-monospace, monospace; font-size: .7rem; color: #93c5fd; display: inline-flex; align-items: center; gap: .3rem; }
+.sv-role { font-size: .64rem; padding: .04rem .3rem; border-radius: 999px; border: 1px solid #27272a; }
+.sv-role-anchor { color: #93c5fd; } .sv-role-frame-break { color: #a7f3d0; }
+.sv-role-peak { color: #6ee7b7; } .sv-role-stop { color: #c4b5fd; } .sv-role-gliding { color: #71717a; }
+
+/* the reading playhead — the cursor the surf is currently riding */
+.sv-cell-now { background: #1f2a24; }
+.sv-cell-now .sv-cell-bar { box-shadow: 0 0 0 1px #6ee7b7 inset; }
+.sv-cell-now::after { content: ''; position: absolute; bottom: -3px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 4px solid #6ee7b7; }
+
+/* the 3D register — the surf lifted into its three axes */
+.sv-3d { position: relative; border: 1px solid #27272a; border-radius: 8px; background: radial-gradient(120% 100% at 50% 0%, #16161a 0%, #0e0e11 100%); overflow: hidden; }
+.sv-canvas { display: block; width: 100%; height: 320px; cursor: grab; touch-action: none; }
+.sv-canvas:active { cursor: grabbing; }
+.sv-3d-hint { position: absolute; top: .5rem; right: .6rem; font-size: .66rem; color: #52525b; display: inline-flex; align-items: center; gap: .25rem; pointer-events: none; }
+.sv-axes { position: absolute; left: .6rem; bottom: .5rem; display: flex; flex-direction: column; gap: .1rem; pointer-events: none; }
+.sv-axis { font-size: .62rem; font-family: ui-monospace, monospace; }
+.sv-axis-x { color: #60a5fa; } .sv-axis-y { color: #fca5a5; } .sv-axis-z { color: #c4b5fd; }
+.sv-3d-legend { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; font-size: .72rem; }
+.sv-lanes { display: inline-flex; flex-wrap: wrap; gap: .25rem; margin-left: .3rem; }
+.sv-lane-chip { font-size: .64rem; font-family: ui-monospace, monospace; color: #a1a1aa; background: #131316; border: 1px solid #27272a; border-radius: 999px; padding: .06rem .4rem; }
 
 /* The Rest view — the instrument still reading after the first pass (§15/§16). */
 .iv-wrap { display: flex; flex-direction: column; gap: .6rem; }

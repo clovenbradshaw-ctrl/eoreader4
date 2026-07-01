@@ -35,6 +35,7 @@ import { renderLog } from './log-view.js';
 import { mountFeed } from './feed-view.js';
 import { mountPredict } from './predict-view.js';
 import { mountReplay } from './replay-view.js';
+import { mountSurfer } from './surfer-view.js';
 import { mountIdle } from './idle-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 import { exportChat } from './chat-export.js';
@@ -117,6 +118,7 @@ const els = {
   logView:   document.getElementById('log-view'),
   feedView:  document.getElementById('feed-view'),
   replayView: document.getElementById('replay-view'),
+  surferView: document.getElementById('surfer-view'),
   predictView: document.getElementById('predict-view'),
   idleView:  document.getElementById('idle-view'),
   docTabs:   document.getElementById('doc-tabs'),
@@ -239,6 +241,7 @@ const renderViewedDoc = (doc) => {
   if (STATE.activeTab === 'predict') STATE.predict?.refresh();
   if (STATE.activeTab === 'idle')    STATE.idle?.refresh();
   if (STATE.activeTab === 'replay')  STATE.replay?.refresh();
+  if (STATE.activeTab === 'surfer')  STATE.surfer?.refresh();
 };
 
 // Show the empty placeholders (no document loaded).
@@ -249,6 +252,7 @@ const clearDocPane = () => {
   STATE.graph = renderGraph(null, els.graphView, { onSelectSentence: selectSentence });
   renderLog(null, els.logView, { onSelectSentence: selectSentence });
   STATE.replay?.refresh();   // back to the empty placeholder (clears any running timer)
+  STATE.surfer?.refresh();   // the reading register returns to its "load a document" prompt
 };
 
 // View a loaded document by id (clicking its chip).
@@ -481,6 +485,7 @@ const setTab = (name) => {
   els.graphView.hidden = name !== 'graph';
   els.logView.hidden   = name !== 'log';
   els.replayView.hidden = name !== 'replay';
+  els.surferView.hidden = name !== 'surfer';
   els.feedView.hidden  = name !== 'feed';
   els.predictView.hidden = name !== 'predict';
   els.idleView.hidden  = name !== 'idle';
@@ -489,6 +494,7 @@ const setTab = (name) => {
   // The move-log / open-set / beat list are rebuilt only when the document changed
   // (refresh is a no-op otherwise), so opening the tab is cheap after the first build.
   if (name === 'predict') STATE.predict?.refresh();
+  if (name === 'surfer')  STATE.surfer?.refresh();
   if (name === 'idle')    STATE.idle?.refresh();
   // The replay plays on a timer; refresh when shown, pause when hidden so it never
   // ticks against an unseen surface.
@@ -1383,6 +1389,17 @@ STATE.predict = mountPredict(els.predictView, {
 // beats are read off readingAt(doc, cursor), rebuilt only when the doc changes.
 STATE.replay = mountReplay(els.replayView, {
   getDoc: () => STATE.doc,
+  onSelectSentence: selectSentence,
+});
+
+// The Surfer view: a glass box on the surfer's navigation. In READING mode, drop the
+// anchor anywhere in the loaded document and watch surfFold run live (pure, no model) —
+// the reach it measured, the surprises it arrested on, the frame-breaks, the peak. In
+// CHAT mode, replay exactly what the surfer did on each prompted turn, read off the
+// recorded audit (reading.surf + the fold step's Significance column). No model called.
+STATE.surfer = mountSurfer(els.surferView, {
+  getDoc: () => STATE.doc,
+  getAudit: () => STATE.audit,
   onSelectSentence: selectSentence,
 });
 
