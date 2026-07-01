@@ -83,9 +83,9 @@
   </div>
 
   <label class="drop" id="drop">
-    <div class="g">[ ↓ ]</div><div class="b">Drop an audio file</div>
-    <div class="s">or tap to choose · mp3, m4a, wav, ogg</div>
-    <input type="file" id="file" accept="audio/*">
+    <div class="g">[ ↓ ]</div><div class="b">Drop an audio or video file</div>
+    <div class="s">or tap to choose · any audio or video · only the speech is transcribed</div>
+    <input type="file" id="file" accept="audio/*,video/*">
   </label>
 
   <div class="work" id="work">
@@ -175,10 +175,56 @@ function feedRow(feedId,tag,text,p){ const f=el(feedId); const d=document.create
   d.append(t,x,pp); f.appendChild(d); f.scrollTop=1e9; while(f.children.length>120) f.removeChild(f.firstChild); }
 
 let audioMono=null, actx=null, FRAMES=null;
-async function loadAudio(file){ const buf=await file.arrayBuffer(); const C=window.AudioContext||window.webkitAudioContext; const t=new C();
-  const dec=await t.decodeAudioData(buf.slice(0)); t.close();
+async function loadAudio(file){ const buf=await file.arrayBuffer(); const C=window.AudioContext||window.webkitAudioContext;
+  let dec=null;
+  // Fast path: the browser's own codec pipeline, faster than realtime. Handles wav,
+  // mp3, m4a/aac, ogg, flac, webm — whatever decodeAudioData is willing to swallow.
+  try{ const t=new C(); dec=await t.decodeAudioData(buf.slice(0)); t.close(); }
+  catch(_){ dec=null; }
+  // Fallback: anything the browser can *play* but not decode in one shot — a video
+  // container's audio track, an odd mp4/mov, an opus stream some builds reject. We
+  // play it silently through a media element and capture the samples in realtime, so
+  // "any audio file" means any file this device can sound, not just the tidy ones.
+  if(!dec) dec=await decodeViaMediaElement(file);
   const off=new OfflineAudioContext(1,Math.max(1,Math.ceil(dec.duration*SR)),SR); const src=off.createBufferSource(); src.buffer=dec; src.connect(off.destination); src.start();
   audioMono=(await off.startRendering()).getChannelData(0); return dec.duration; }
+
+// Realtime capture through a media element: covers containers/codecs decodeAudioData
+// rejects. A <video> element plays audio-only files too, and reaches into video files
+// for their audio track. Output is silenced via a zero-gain node so nothing is heard;
+// the tap sits before the gain so the samples are still captured intact.
+function decodeViaMediaElement(file){
+  return new Promise((resolve,reject)=>{
+    const C=window.AudioContext||window.webkitAudioContext;
+    const url=URL.createObjectURL(file);
+    const media=document.createElement('video');
+    media.preload='auto'; media.src=url;
+    let ctx=null,proc=null,source=null,sink=null,started=false,finished=false;
+    const chunks=[]; let total=0, rate=SR;
+    const cleanup=()=>{ try{proc&&(proc.onaudioprocess=null,proc.disconnect());}catch(_){}
+      try{source&&source.disconnect();}catch(_){} try{sink&&sink.disconnect();}catch(_){}
+      try{ctx&&ctx.close();}catch(_){} try{media.pause();}catch(_){} URL.revokeObjectURL(url); };
+    const fail=(m)=>{ if(finished)return; finished=true; cleanup(); reject(new Error(m)); };
+    const finish=()=>{ if(finished)return; finished=true;
+      if(!total){ cleanup(); reject(new Error('no audio track could be decoded from this file')); return; }
+      const buf=ctx.createBuffer(1,total,rate); const ch=buf.getChannelData(0);
+      let o=0; for(const c of chunks){ ch.set(c,o); o+=c.length; } cleanup(); resolve(buf); };
+    media.addEventListener('error',()=>fail('browser cannot decode this file'));
+    media.addEventListener('ended',finish);
+    media.addEventListener('canplay',()=>{
+      if(started||finished)return; started=true;
+      try{
+        ctx=new C(); rate=ctx.sampleRate;
+        source=ctx.createMediaElementSource(media);
+        proc=ctx.createScriptProcessor(4096,1,1);
+        proc.onaudioprocess=(e)=>{ const d=e.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d)); total+=d.length; };
+        sink=ctx.createGain(); sink.gain.value=0;            // capture, but stay silent
+        source.connect(proc); proc.connect(sink); sink.connect(ctx.destination);
+        const p=media.play(); if(p&&p.catch) p.catch(err=>fail((err&&err.message)||'playback blocked'));
+      }catch(err){ fail((err&&err.message)||'decode failed'); }
+    });
+  });
+}
 function clip(a,b){ const s0=Math.floor(a*SR), s1=Math.min(audioMono.length,Math.ceil(b*SR)); return audioMono.subarray(s0,s1); }
 function playSpan(u){ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
   const n=Math.max(1,Math.floor((u.end-u.start)*SR)); const buf=actx.createBuffer(1,n,SR); const ch=buf.getChannelData(0);
