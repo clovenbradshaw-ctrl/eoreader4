@@ -126,3 +126,100 @@ hold:
 Take (1) and (2); defer (3). The fit is semantic, the spec is a decade old with a real
 commons behind it, and most of the work is already done by hand — the remaining tax is
 vocabulary and the discipline of keeping the projection derived.
+
+## The neighbors — which standard owns which corner
+
+A nanopub *bundles* four concerns: a **minimal assertion unit**, **provenance**, **publication /
+attribution metadata**, and **content-addressed immutable identity**. That bundling is its
+appeal and its limit. "Things like nanopub" are standards that nail one or more of those
+corners — often *better* than nanopub does, because they were built for that corner alone.
+
+So the real move is not finding a single replacement. It is knowing **which neighbor owns
+which corner**, so the stack can be assembled from best-in-class rather than adopting one
+monolith. Every one below formalizes something already hand-built here; none forces the
+system off its event-sourced spine.
+
+### The ones to actually look at
+
+- **C2PA / Content Credentials — owns the *output* corner.** The industry standard for
+  content provenance: a cryptographically signed manifest binding assertions (source,
+  author, tool, edit history) to a media artifact, tamper-evident, designed against
+  deepfakes. The publish organ — the pdf-lib plan that embeds the source WARC, passage
+  hashes and the EVA chain into the artifact's own metadata
+  (`src/organs/out/publish/pdf.js`) — is a **bespoke C2PA**. C2PA has real adoption (camera
+  makers, Adobe, major platforms), so an NPJ receipt card or PDF carrying a C2PA manifest is
+  verifiable by tools readers may already have. **Highest priority on the output side.**
+
+- **Robust Links + Memento (RFC 7089) — owns the *citation* corner.** This is *exactly* the
+  claim-to-archived-passage citation, already standardized for scholarship and journalism.
+  Robust Links bundle original URL + archived snapshot + version datetime so a citation
+  survives link rot; Memento is the protocol for "this URL as of datetime T," which
+  archive.org already speaks. Composes directly with the WARC chain (`src/organs/in/warc.js`,
+  where the record is already the frozen, dated, hashable source). **Cheap to adopt, high
+  fit — highest priority on the citation side.**
+
+- **Verifiable Credentials + DIDs (W3C) — the living signed-attestation cousin.** From the
+  identity world rather than the scientific-assertion world: a VC is "issuer asserts claims
+  about a subject, signed, independently verifiable." Model a journalistic claim as
+  *issuer = NPJ, subject = the civic entity, claim = the assertion, evidence = the archived
+  passage*. Strong on **attributable signed claims**; weaker on "smallest node in a global
+  graph." Pairs with DIDs for portable outlet identity.
+
+- **Transparency logs (Certificate Transparency / Sigstore's Rekor / Merkle discipline) —
+  owns the *immutability* corner as proof, not promise.** These formalize what the
+  append-only event log currently holds only by *convention*. A Merkle-hash-chained log with
+  inclusion and consistency proofs turns "we didn't rewrite history" into a **proof**. Rekor
+  is an append-only log for signed attestations with inclusion proofs — "prove this claim
+  existed and was signed at time T." Worth adopting the **discipline** (Merkle chaining over
+  the event log) even without the infrastructure.
+
+- **IPLD / CID + Hashlink — Trusty URIs, generalized.** CIDs are self-describing content
+  hashes over Merkle DAGs; Hashlink (W3C-CCG) embeds an integrity hash into any URL. The
+  IPFS *network* is not required to use the *addressing*. This is the principled version of
+  the passage-hashing in `src/ingest/websource.js` (`webContentHash`) — a self-describing
+  hash rather than a bespoke `fnv:` prefix.
+
+- **Micropublications (Clark / Ciccarese) — the argument-structure cousin.** Built for
+  *claim + evidence + support/challenge chains* rather than a flat assertion. An
+  investigative claim *is* an argument with evidence and rebuttals, and span-level reader
+  edits already arrive as EVA events — so micropublications may model the **contribution
+  graph** better than flat nanopubs. Underused, but conceptually closest to the shape here.
+
+### Adjacent — know they exist
+
+- **PROV-O** — used regardless; entity / activity / agent is the semantic backbone for how a
+  claim derives from a source. EO derivation events map onto PROV activities (already flagged
+  as vocabulary work above).
+- **RDF-star / RDF 1.2** — statement-level provenance without heavy reification; in draft,
+  and Oxigraph has preliminary support — relevant to decision (2)'s projection.
+- **Web Annotation (W3C)** — "this comment targets that passage span" is *literally* the EVA
+  target model (`src/organs/in/document.js` spans as annotation targets).
+
+Three architectural cousins to the Matrix/event-sourcing choice, noted **for comparison, not
+adoption**: **Nostr** (every event signed + hashed + typed — structurally near-identical to
+EO events), **AT Protocol** (signed, content-addressed record repos as Merkle trees with
+portable identity), and **Solid** (user-owned RDF pods — the "sources as first-class
+linked-data nodes" vision).
+
+### The two highest-leverage adoptions, for where the system actually is
+
+**C2PA on the publish side, Robust Links + Memento on the citation side.** Both formalize
+things already hand-built (the embedded-provenance artifact; the archived-passage citation),
+both have ecosystems, and neither forces the system off its event-sourced spine. Everything
+else on this list is a corner to reach for deliberately once those two are in place — the
+same unbundling discipline this note opened with: adopt by corner, not by monolith.
+
+### These are toggles, not a fork
+
+Each standard is a **capability toggle**, one per corner, **all OFF by default**
+(`src/organs/out/publish/standards.js`, `PROVENANCE_STANDARDS`). This is the repo's opt-in
+discipline (the `RULES_REV` pattern, `src/organs/out/speech`): with every flag off, the
+emitters produce exactly what they produce today — the bespoke provenance already hand-built
+— so the default path stays **byte-identical**. Adopting a standard is flipping its flag, not
+maintaining a fork.
+
+Resolution is *default ← env var ← per-call override*, so a corner can be switched on for one
+publish (`provenanceFlags({ c2pa: true })`) or globally (`EO_PROV_C2PA=on`). Each registry
+entry carries an honest `status` (`planned` / `partial` / `wired`), so a flag flipped on while
+still `planned` reads as a **request for that work**, not a silent no-op — the flag is the
+seam the standard lands behind, adopted corner by corner as each is actually built.
