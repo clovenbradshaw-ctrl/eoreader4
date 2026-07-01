@@ -1174,6 +1174,50 @@ class Component extends DCLogic {
       if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
     }
     return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
+  // ── The generation pipeline as the essay path (src/reader/eo-gen.js) ──────────
+  // On unless explicitly disabled — persisted like the other composer toggles.
+  _essayPipelineOn(){try{return localStorage.getItem('eo_essay_pipeline')!=='0';}catch(e){return true;}}
+  toggleEssayPipeline(){let on=true;try{on=!this._essayPipelineOn();localStorage.setItem('eo_essay_pipeline',on?'1':'0');}catch(e){}this.setState(s=>({essayPipeline:on}));}
+  // A RICH ground for the arc: many in-scope sentences scored by keyword overlap (answerQuestion
+  // keeps only the top 3 — too thin to develop). Returns up to `n` spans {i,score,text,u}, the
+  // shape eo-gen.toGround consumes. Prose only; segmentation artifacts skipped. Falls back to the
+  // source's opening prose when the keyword match is thin, so the arc always has body to walk.
+  _essaySpans(q,sources,n=28){
+    if(!this.master||!this.master.sentences.length)return [];
+    const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    const qwords=String(q||'').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
+    const inScope=i=>!scope.length||scope.includes(this.master.sentenceSource[i]);
+    const scored=[];
+    for(let i=0;i<this.master.sentences.length;i++){
+      if(!inScope(i))continue;
+      const s=this.norm(this.master.sentences[i]);
+      if(s.length>this.MAX_PASSAGE)continue;
+      const low=s.toLowerCase();if(!this._proseOk(low))continue;
+      let v=0;for(const w of qwords)if(low.includes(w))v++;
+      if(v>0)scored.push({i,score:v,text:this._clipPassage(s),u:this.master.sentenceSource[i]});
+    }
+    scored.sort((a,b)=>b.score-a.score||a.i-b.i);
+    if(scored.length<6){
+      for(let i=0;i<this.master.sentences.length&&scored.length<n;i++){if(!inScope(i))continue;const s=this.norm(this.master.sentences[i]);if(s.length>this.MAX_PASSAGE)continue;const low=s.toLowerCase();if(!this._proseOk(low))continue;if(!scored.some(x=>x.i===i))scored.push({i,score:0.5,text:this._clipPassage(s),u:this.master.sentenceSource[i]});}
+    }
+    return scored.slice(0,n);
+  }
+  // Walk the arc over the ground (window.eoGen.essay → runContinuation) and finalize into the
+  // pending assistant bubble. The audit is kept for export (this._lastEssayAudit).
+  async _pipelineEssay(id,q,sources){
+    this._stopGen=false;
+    const spans=this._essaySpans(q,sources);
+    const guard=this._stallGuard();
+    try{
+      const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
+      const r=await window.eoGen.essay({spans,model,question:q,signal:guard.signal});
+      this._lastEssayAudit=r.audit;
+      const passages=spans.slice(0,3).map(x=>({text:this.norm(x.text),u:x.u}));
+      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:r.text||'(nothing to say)',stance:'ground',sources:r.sources||[],passages};return {...c,messages:m};})}),()=>this._scrollChat());
+    }catch(e){
+      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'The arc could not complete: '+((e&&e.message)||e),stance:'ground'};return {...c,messages:m};})}));
+    }
+  }
   // CREATIVE GENERATION over a topic — "write an emily dickinson poem about iced coffee",
   // "compose an essay on dolphins", "draft a haiku about the sea". The frame (write/compose/draft
   // + poem/essay/song/…) names a FORM, and the real topic rides in the "about/on X" tail. Taken at
@@ -1813,7 +1857,13 @@ class Component extends DCLogic {
     // (web off, or the reading already covers it) becomes a multi-section grounded piece — the arc
     // over the in-scope sources — instead of one capped answer. Needs grounded supply; _longformArc
     // itself falls back to the single answer when supply is thin. Never for an isolated chat.
-    if(!isolated&&this._longformIntent(q)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size)))return this._longformArc(id,q,[]);
+    if(!isolated&&this._longformIntent(q)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size))){
+      // THE GENERATION PIPELINE (src/reader/eo-gen.js): an essay ask WALKS THE ARC — open,
+      // develop, turn, land — over a rich ground (runContinuation), instead of the capped
+      // grounded blurb. On by default when the module is loaded; the old arc is the fallback.
+      if(typeof window!=='undefined'&&window.eoGen&&this._essayPipelineOn())return this._pipelineEssay(id,q,sources);
+      return this._longformArc(id,q,[]);
+    }
     // 2) the spans that surface for this question, scoped to the chat's sources (none when isolated)
     const ground=isolated?{spans:[],entities:[],sources:[],relevant:false}:this.groundNotes(q,sources);
     // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
