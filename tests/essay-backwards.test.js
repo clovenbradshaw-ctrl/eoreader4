@@ -1,0 +1,105 @@
+// essay-backwards — the SELF register decouples essay length from span exhaustion.
+//
+// Working backwards from a real essay (docs/essay-backwards.md) showed ~75% of its
+// atoms consume no fresh external span: they operate on prior atoms. The resolver
+// before could only spend ground, so an edge op with the pool spent returned null and
+// the loop stopped with `ground-exhausted`. These tests pin the fix: with the SELF
+// register on, an edge op resolves against the accepted units, inheriting their ground
+// and adding no new coverage — and the default (register off) behavior is untouched.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { resolveProposition, STANCE, EDGE_OPS } from '../src/longgen/index.js';
+import { propositionInstruction } from '../src/longgen/index.js';
+
+// A three-span ground pool, and a run of accepted units that already fired on it — the
+// SELF the edge ops operate on. Each unit carries the source idxs it cited (its ground).
+const groundOf = () => ([
+  { idx: 0, score: 0.9, text: 'A small model is fluent past its knowledge.' },
+  { idx: 1, score: 0.7, text: 'Handed a gap, it fills the gap.' },
+  { idx: 2, score: 0.5, text: 'The fill is confident and often wrong.' },
+]);
+const unitsOf = () => ([
+  { i: 0, move: 'DEF', subClaim: 'a small model is fluent past its knowledge', sources: [0], boundFraction: 1 },
+  { i: 1, move: 'CON', subClaim: 'handed a gap it fills the gap', sources: [1], boundFraction: 1 },
+  { i: 2, move: 'CON', subClaim: 'the fill is confident and often wrong', sources: [2], boundFraction: 0.4 },
+]);
+const ALL_COVERED = new Set([0, 1, 2]);
+
+// ── The decoupling: an edge op resolves with the external pool fully spent ─────
+
+test('EVA with the pool spent: OFF → ground-exhausted (null); ON → a self-op', () => {
+  const ground = groundOf();
+  const units = unitsOf();
+
+  // The old behavior — every span covered, an EVA has no fresh span, so null. This is
+  // exactly the `ground-exhausted` stop the loop reads ~3 atoms into an essay.
+  const off = resolveProposition({ move: 'EVA', ground, covered: ALL_COVERED, units });
+  assert.equal(off, null, 'without the self register, a spent pool yields no proposition');
+
+  // The fix — the EVA resolves against the SELF, inheriting the last atom's ground.
+  const on = resolveProposition({ move: 'EVA', ground, covered: ALL_COVERED, units, selfRegister: true });
+  assert.ok(on, 'with the self register, the edge op still resolves');
+  assert.equal(on.selfOp, true);
+  assert.equal(on.move, 'EVA');
+  assert.equal(on.stance, STANCE.EVA);
+  assert.ok(on.against, 'an EVA tests the last claim against the frame the opening set');
+});
+
+test('a self-op inherits already-covered spans and adds no new coverage', () => {
+  const ground = groundOf();
+  const units = unitsOf();
+  const p = resolveProposition({ move: 'EVA', ground, covered: ALL_COVERED, units, selfRegister: true });
+  // Its spanSet is inherited from the atom it operates on (idx 2, the last unit) and is
+  // ALREADY covered — so adding it to `covered` in the loop advances coverage by nothing.
+  assert.deepEqual(p.spanSet, [2]);
+  for (const idx of p.spanSet) assert.ok(ALL_COVERED.has(idx), 'inherited spans are already covered');
+});
+
+test('REC recasts the most-strained atom (the weld) against the frame', () => {
+  const ground = groundOf();
+  const units = unitsOf();                       // unit 2 has boundFraction 0.4 — the strained one
+  const p = resolveProposition({ move: 'REC', ground, covered: ALL_COVERED, units, selfRegister: true });
+  assert.equal(p.selfOp, true);
+  assert.equal(p.move, 'REC');
+  assert.equal(p.recast, true);
+  assert.equal(p.spanSet[0], 2, 'the recast turns on the atom that drifted');
+  // The prompt names a RELATION between two ideas, not one fresh fact.
+  const suffix = propositionInstruction(p);
+  assert.match(suffix, /recasting/);
+});
+
+test('SYN closes over the self — the union of the fired atoms\' spans, no new coverage', () => {
+  const ground = groundOf();
+  const units = unitsOf();
+  const p = resolveProposition({ move: 'SYN', ground, covered: ALL_COVERED, units, selfRegister: true });
+  assert.equal(p.selfOp, true);
+  assert.equal(p.closes, true, 'a SYN over the self lands the arc');
+  assert.ok(p.spanSet.length >= 2, 'it closes over at least two constituents');
+  for (const idx of p.spanSet) assert.ok(ALL_COVERED.has(idx));
+});
+
+test('EDGE_OPS is exactly the self register alphabet', () => {
+  assert.deepEqual([...EDGE_OPS].sort(), ['EVA', 'NUL', 'REC', 'SYN']);
+});
+
+// ── The default is untouched: register off ⇒ span-walk, byte-for-byte ─────────
+
+test('register OFF preserves the existing contract: EVA consumes the next uncovered span', () => {
+  const ground = groundOf();
+  const covered = new Set([0]);                   // span 0 has fired; 1 and 2 are free
+  const p = resolveProposition({ move: 'EVA', ground, covered });   // no selfRegister
+  assert.equal(p.selfOp, undefined, 'the default resolution is not a self-op');
+  assert.equal(p.spanSet[0], 1, 'it still grabs the next uncovered span, as before');
+  assert.ok(p.against, 'and still carries a prior term to test against');
+});
+
+test('a node op never self-resolves, even with the register on', () => {
+  const ground = groundOf();
+  const units = unitsOf();
+  // CON is a node op — with the pool spent it is honestly ground-exhausted even ON,
+  // because a node op introduces fresh external material and there is none left.
+  const p = resolveProposition({ move: 'CON', ground, covered: ALL_COVERED, units, selfRegister: true });
+  assert.equal(p, null, 'the self register frees the EDGE ops only; node ops still spend the pool');
+});

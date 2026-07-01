@@ -222,7 +222,51 @@ reads the essay back as `DEF · CON · EVA · REC · … · SYN · SYN` and not 
 — and the planner, as the docs put it, is the surfer admitting it was always also
 the writer.
 
-## 6. The one-line version
+## 6. What we built, and what it showed
+
+Steps 1–2 of §5 are now in the tree, opt-in behind `selfRegister` (default off, so every
+existing path is byte-identical — the full suite stays green at 1771 tests).
+
+- **`resolve.js`** — `EDGE_OPS = {EVA, REC, SYN, NUL}` and a `resolveSelf` path. An edge
+  op with prior atoms to work on resolves against the **self**, inheriting those atoms'
+  spans (already covered) and adding no new coverage. A self-op is witnessed
+  transitively — it can only reference material a prior atom already bound — which is the
+  existing SYN-close mechanism generalized to the other edge ops.
+- **`continuation.js`** — self-ops are exempt from the external-saturation stop; a node op
+  that can't resolve on a spent pool **falls to developing the self** instead of ending
+  the essay; the unit records the move it **realized** (`prop.move`), not the one drawn,
+  so the weld feeds the predictor the truth; and a coarse **land** rule closes the arc on
+  a `SYN` once the body has developed.
+- **`shape.js`** — the `land` phase now suppresses the node ops (they have no fresh ground
+  to spend) and boosts the self develop/close ops.
+
+The executable control is **`eoreader4-eval/essay-backwards.mjs`** — the loop run over the
+essay's own concept graph, register OFF vs ON, scored against the trace:
+
+| | atoms | stop | move-trace | self-ops |
+|---|---|---|---|---|
+| **register OFF** (spend-only) | 5 | `ground-exhausted` | `CON·CON·CON·CON·CON` | 0 / 5 |
+| **register ON** (self register) | 8 | `arc-closed` | `CON·CON·CON·CON·CON · EVA·EVA · SYN` | 3 / 8 |
+
+The OFF run is the failure the analysis predicted: it walks the five nodes and quits — a
+summary. The ON run spends the pool to open, **operates on what it already said**, and
+lands a `SYN` close. Length is decoupled from span exhaustion; the macro-arc
+open→develop→land holds.
+
+Three gaps remain, and they are honest, not hacks:
+
+- the open is node-led but **CON-led, not DEF-led** — the recurrence seed out-draws the
+  `DEF` the open phase biases toward on a short self-log;
+- **no REC in the body** — the echo model binds every atom clean, so there is no strain
+  for a restructure to turn on; REC appears only with a model that actually drifts;
+- the **fine rhythm** (which develop, when to turn) is still the "read self back through
+  the perceiver" seam (`spec-generation.md`) — this cut lands the *macro* arc, not the
+  sentence-by-sentence cadence.
+
+Steps 3–4 of §5 (a real relation-carrying prompt for edge moves; building the external
+graph from a corpus rather than authoring it) are the next increments.
+
+## 7. The one-line version
 
 We were tuning the renderer and the stop-threshold. The essay says the bug is
 upstream of both: **the resolver only knows how to spend ground, and an essay is

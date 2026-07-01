@@ -57,13 +57,20 @@ export const readWindow = (units = [], n = 2) =>
 // it plainly; a void band asks the writer to hold it open, never assert it.
 export const propositionInstruction = (prop = {}) => {
   const source = (prop.spans || []).map(s => s.text).filter(Boolean).join(' / ');
+  // A self-op (essay-backwards) operates on prior atoms, so its instruction names a
+  // RELATION between two ideas already in play, not a fresh fact: a REC recasts, a NUL
+  // holds the line. The rest fall through to the existing single-idea forms.
   const lead = prop.band === 'void'
     ? `Write one sentence saying the document holds open ${prop.subClaim}; do not assert it.`
-    : prop.against
-      ? `Write one sentence weighing "${prop.subClaim}" against "${prop.against}".`
-      : prop.closes
-        ? `Write one closing sentence drawing together ${prop.subClaim}.`
-        : `Write one sentence saying ${prop.subClaim}.`;
+    : prop.recast
+      ? `Write one sentence recasting "${prop.subClaim}"${prop.against ? ` in light of "${prop.against}"` : ''} — say what it really turns on.`
+      : prop.nul
+        ? `Write one sentence that holds the line on ${prop.subClaim}, adding nothing new.`
+        : prop.against
+          ? `Write one sentence weighing "${prop.subClaim}" against "${prop.against}".`
+          : prop.closes
+            ? `Write one closing sentence drawing together ${prop.subClaim}.`
+            : `Write one sentence saying ${prop.subClaim}.`;
   const firmness = prop.band === 'void'
     ? 'This is not settled — say so.'
     : 'This is supported; state it plainly.';

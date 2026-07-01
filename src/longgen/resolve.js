@@ -23,6 +23,16 @@
 
 import { ceilingFor, FLOOR_TOKENS } from '../arc/index.js';
 
+// The edge operators — the SELF register (spec-planner.md §4.2, docs/essay-backwards.md).
+// Working backwards from a real essay: ~75% of its atoms introduce NO fresh external
+// span. They operate on prior atoms — an EVA tests the last claim against the frame, a
+// REC recasts a strained claim, a SYN closes over what fired, a NUL holds a degenerate
+// line. These INHERIT the ground of the atoms they operate on (already-covered spans)
+// and add no new coverage — the existing SYN-close mechanism, generalized to the other
+// edge ops. That is what decouples essay length from span exhaustion: the node ops
+// (DEF/INS/CON/SIG) spend the external pool; the edge ops develop what the pool bought.
+export const EDGE_OPS = Object.freeze(new Set(['EVA', 'REC', 'SYN', 'NUL']));
+
 // The stance each operator takes when it fires — the verb the proposition is built
 // around. Read off the operator, handed to the prompt contract (§6) so the render
 // is shaped by the move, never improvised.
@@ -44,9 +54,18 @@ export const STANCE = Object.freeze({
 // operator's `stance`, its resolution `band`, and a `closes` flag (a SYN that lands
 // the arc) — or null when the ground is spent. `move` is preserved so the unit
 // records the move-type it realized.
-export const resolveProposition = ({ move = 'CON', ground = [], covered = new Set(), graph = null } = {}) => {
+export const resolveProposition = ({ move = 'CON', ground = [], covered = new Set(), graph = null, units = [], selfRegister = false } = {}) => {
   const cov = covered instanceof Set ? covered : new Set(covered || []);
   const op = String(move || 'CON').toUpperCase();
+
+  // SELF register (opt-in) — an edge op with prior atoms to operate on resolves
+  // against the SELF, inheriting those atoms' ground and consuming no fresh span. It
+  // is tried FIRST for an edge op; if there is no self-target (a SYN with <2 fired, a
+  // NUL with no prior) it falls through to the external resolution below.
+  if (selfRegister && EDGE_OPS.has(op) && units.length) {
+    const self = resolveSelf(op, units, ground);
+    if (self) return self;
+  }
 
   // The ranked uncovered supply — the strongest unspent leaving edges first. Ties
   // keep input order, so a run is reproducible.
@@ -186,4 +205,85 @@ const pickEdgeSpan = (span, op, graph) => {
 const subClaimOf = (span) => {
   const t = String(span?.text || '').replace(/\s+/g, ' ').trim();
   return t.length <= 120 ? t : t.slice(0, 120).replace(/\s+\S*$/, '') + '…';
+};
+
+// ── The SELF register: resolve an edge op against prior atoms ─────────────────
+
+// Resolve an edge op against the SELF — the accepted units so far — inheriting the
+// ground of the atoms it operates on. Returns a self-op proposition (selfOp:true,
+// spanSet already covered) or null when there is no self-target for this op.
+const resolveSelf = (op, units, ground) => {
+  const byIdx = new Map(ground.map((s, i) => [s.idx ?? i, { ...s, idx: s.idx ?? i }]));
+  const spansOf = (u) => (u?.sources || []).map(i => byIdx.get(i)).filter(Boolean);
+  const last = units[units.length - 1];
+  // The frame the essay opened with — the first term-setting atom, the thing an EVA
+  // tests against and a REC recasts. Falls back to the first atom.
+  const frame = units.find(u => u.move === 'DEF' || u.move === 'INS') || units[0];
+
+  switch (op) {
+    case 'EVA': {
+      // Test the last claim against the frame the opening set.
+      const spans = spansOf(last);
+      if (!spans.length) return null;
+      return selfProposition({ op, stance: STANCE.EVA, subClaim: last.subClaim,
+        against: frame && frame !== last ? frame.subClaim : null, spans });
+    }
+    case 'REC': {
+      // Recast the most-strained atom (lowest bound fraction — the weld) in light of
+      // the frame. The strain that a drifting atom raised is what a REC turns on.
+      const strained = [...units].sort((a, b) => (a.boundFraction ?? 1) - (b.boundFraction ?? 1))[0] || last;
+      const spans = spansOf(strained).length ? spansOf(strained) : spansOf(last);
+      if (!spans.length) return null;
+      return selfProposition({ op, stance: STANCE.REC, subClaim: strained.subClaim,
+        against: frame && frame !== strained ? frame.subClaim : null, spans, recast: true });
+    }
+    case 'SYN': {
+      // Close over the atoms that have fired, inheriting the union of their spans. This
+      // is the existing SYN-close, but over UNITS (the self) rather than ground spans.
+      if (units.length < 2) return null;
+      const uniq = dedupeSpans(units.flatMap(spansOf)).slice(0, 4);
+      if (uniq.length < 2) return null;
+      return selfProposition({ op, stance: STANCE.SYN, subClaim: 'what these together show',
+        spans: uniq, closes: true });
+    }
+    case 'NUL': {
+      // A degenerate holding line over the last atom — register it, add nothing.
+      const spans = spansOf(last);
+      if (!spans.length) return null;
+      return selfProposition({ op, stance: STANCE.NUL, subClaim: last.subClaim, spans, nul: true });
+    }
+    default:
+      return null;
+  }
+};
+
+// Build a self-op proposition. Its spans are INHERITED (already covered), so its
+// spanSet adds no new coverage — the loop's monotone-coverage invariant holds and
+// external saturation is not advanced by a self-op. band is firm: the material is
+// already witnessed, since it can only reference what a prior atom already bound.
+const selfProposition = ({ op, stance, subClaim, against = null, spans, closes = false, recast = false, nul = false }) => {
+  const mass = spans.reduce((m, s) => m + (s.score || 0), 0) / Math.max(1, spans.length);
+  return Object.freeze({
+    move: op,
+    stance,
+    band: 'firm',
+    selfOp: true,
+    subClaim,
+    spans,
+    spanSet: spans.map(s => s.idx),
+    against,
+    closes,
+    recast,
+    nul,
+    floor: FLOOR_TOKENS,
+    ceiling: ceilingFor({ mass, spans }),
+  });
+};
+
+// Dedupe inherited spans by idx, preserving first-seen order (deposit order).
+const dedupeSpans = (spans) => {
+  const seen = new Set();
+  const out = [];
+  for (const s of spans) { if (s && !seen.has(s.idx)) { seen.add(s.idx); out.push(s); } }
+  return out;
 };

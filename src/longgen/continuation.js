@@ -23,13 +23,14 @@ import { foldConversation } from '../converse/history.js';
 import { generateSection, stripUnboundCorrective, REBIND_THRESHOLD, groundSaturation } from '../arc/index.js';
 import { bindAndVeto } from '../ground/index.js';
 import { predictDirection } from './direction.js';
-import { resolveProposition } from './resolve.js';
+import { resolveProposition, EDGE_OPS } from './resolve.js';
 import { answerabilityGate, followUpOffer } from './answerable.js';
 import { arcPhase, phaseBias } from './shape.js';
 import { speculateNext, readWindow } from './prompt.js';
 
 const MAX_STEPS = 24;            // runaway backstop; saturation should bind first
 const MAX_DRIFT = 2;             // consecutive drops that read as "the frame is gone"
+const LAND_DEVELOP = 2;          // self-op develops in the land phase before forcing the close
 
 // The leading run of bound claims — the grounded opening of a drifting unit, kept
 // when the tail confabulates (the arc's boundPrefixText, §5.5).
@@ -53,6 +54,7 @@ export const runContinuation = async ({
   arc = false,            // §8 — lean the draw by the significance arc (planner-ON)
   epsilon = undefined,    // §10 — the saturation knob; default is the arc's EPSILON
   speculate = false,      // §9 — pre-resolve the next move on a clean-verdict assumption
+  selfRegister = false,   // essay-backwards — edge ops resolve against the SELF, no fresh span
   signal = null,
 } = {}) => {
   // RECONSTRUCT — the tail and the fold, reused wholesale. Computed once: the same
@@ -85,6 +87,7 @@ export const runContinuation = async ({
   let stop = null;
   let drift = 0;
   let lastClean = true;
+  let landDevelops = 0;   // self-op develops taken in the land phase (essay-backwards)
   let spec = null;        // the speculated next {move, proposition}, when speculate is on
 
   for (let step = 0; step < maxSteps; step++) {
@@ -107,13 +110,42 @@ export const runContinuation = async ({
     if (speculate && spec && lastClean && spec.move === dir.move) {
       prop = spec.proposition;
     } else {
-      prop = resolveProposition({ move: dir.move, ground, covered, graph });
+      prop = resolveProposition({ move: dir.move, ground, covered, graph, units, selfRegister });
+    }
+    // A node op drew but the external pool is spent (nothing fresh to introduce). Under
+    // the self register, fall to DEVELOPING what the pool bought rather than ending the
+    // essay: draw the highest-posterior EDGE op and resolve it against the self. The arc
+    // then lands on a SYN close (or the predictor quiesces); the walk stops on the SELF
+    // running dry, not on the external pool. Without the register this is still a stop.
+    if (!prop && selfRegister && units.length && dir.posterior) {
+      const edgeMove = dir.posterior.find(([op]) => EDGE_OPS.has(op))?.[0];
+      if (edgeMove && edgeMove !== dir.move) {
+        prop = resolveProposition({ move: edgeMove, ground, covered, graph, units, selfRegister });
+        if (prop) { trace.push({ step, kind: 'develop-self', drew: dir.move, fell: edgeMove }); }
+      }
     }
     if (!prop) { stop = 'ground-exhausted'; trace.push({ step, kind: 'exhausted', move: dir.move }); break; }
 
+    // LAND (essay-backwards) — the coarse-grain arc close. Once the body has developed
+    // in the land phase, a recurrence-dominated EVA/REC stream will not let SYN win the
+    // draw (it out-probabilities the boosted close), so the walk would develop forever.
+    // After LAND_DEVELOP self-op develops in `land`, force the SYN close if one resolves.
+    // The FINE-grain rhythm (which develop, when to turn) is the predict-self seam
+    // (spec-generation.md "reading self back through the perceiver"); this lands the arc.
+    if (selfRegister && phase === 'land' && prop.selfOp && !prop.closes) {
+      if (landDevelops >= LAND_DEVELOP) {
+        const close = resolveProposition({ move: 'SYN', ground, covered, graph, units, selfRegister });
+        if (close?.closes) { prop = close; trace.push({ step, kind: 'land-close', after: landDevelops }); }
+      } else {
+        landDevelops += 1;
+      }
+    }
+
     // The budget is spent — the next deposit only re-cites the dregs. Stop, UNLESS
-    // this is the closing SYN that lands the arc (it cites already-covered spans).
-    if (sat.saturated && !prop.closes) {
+    // this is the closing SYN that lands the arc (it cites already-covered spans), or a
+    // self-op (essay-backwards): a self-op consumes no fresh external span, so external
+    // saturation must not end an essay that is still developing what the pool bought.
+    if (sat.saturated && !prop.closes && !prop.selfOp) {
       stop = 'saturated';
       trace.push({ step, kind: 'saturated', remainingFrac: round3(sat.remainingFrac) });
       break;
@@ -167,9 +199,16 @@ export const runContinuation = async ({
     // WELD (§7) — append the JUDGED unit. The verdict (boundFraction, vetoes) travels
     // with it, so the next direction read sees self-output with its verdict, never the
     // bare assertion: an evaluation of self orients the next step, never grounds it.
+    // The move the unit RECORDS is the one it REALIZED (prop.move), not the one drawn
+    // (dir.move) — when the loop fell to a self-op develop, the drawn move is not what
+    // was written. This distinction is the weld: selfMoveLog reads u.move, so recording
+    // the drawn move instead of the realized one traps the predictor's recurrence on the
+    // wrong op and the arc can never progress (essay-backwards).
     const unit = {
       i: units.length,
-      move: dir.move,
+      move: prop.move,
+      drew: dir.move,
+      selfOp: !!prop.selfOp,
       stance: prop.stance,
       band: prop.band,
       subClaim: prop.subClaim,
@@ -180,7 +219,7 @@ export const runContinuation = async ({
       action,
     };
     units.push(unit);
-    trace.push({ step, kind: 'append', move: dir.move, stance: prop.stance, action,
+    trace.push({ step, kind: 'append', move: prop.move, drew: dir.move, stance: prop.stance, action,
       phase, cited: gated.sources.length, boundFraction: round3(gated.boundFraction), sharpness: dir.sharpness });
 
     if (auditLog?.event) {
