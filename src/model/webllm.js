@@ -24,6 +24,18 @@ export const makeWebllmBackend = (defaults = {}) => (opts = {}) => {
   let tokenizer = null;     // the injected seam { encode, decode } | null when unavailable
   let stack = null;         // the registered LogitProcessor (the lens port) | null
 
+  // Live steering feed (the Gates surface, src/ui/gates-view.js): every logit-limit
+  // event the lens port fires — a void-gate suppression, a masked-name void-conflict, a
+  // span-gated re-grounding, the per-completion reset — forwarded to any UI subscriber as
+  // it happens, so the limits on the logits can be watched in real time during decode.
+  // Independent of drainEvents() (which the audit uses per turn); best-effort, never a
+  // decode is sunk. Empty listener set → the closure is a no-op, so the golden path is
+  // byte-identical whether or not a surface is listening.
+  const lensListeners = new Set();
+  const emitLensEvent = (ev) => {
+    for (const fn of lensListeners) { try { fn(ev); } catch { /* best-effort */ } }
+  };
+
   // Mirror web-llm's asyncLoadTokenizer: fetch tokenizer.json from the model artifact and
   // build a Tokenizer with @mlc-ai/web-tokenizers. Best-effort — a failure simply leaves the
   // lens port unavailable (the golden path is untouched), never a dead load.
@@ -56,6 +68,10 @@ export const makeWebllmBackend = (defaults = {}) => (opts = {}) => {
     lensApproved: () => (stack ? stack.approvedSurfaces() : []),
     lensRecGate:  (surface, sources) => (stack ? stack.recGate(surface, sources) : null),
     lensDecay:    (info) => stack?.decay(info),
+    // Subscribe to the live steering feed (the Gates surface): `fn` is called with each
+    // logit-limit event as the lens port fires it during decode. Returns an unsubscribe.
+    // Present only on a backend with a lens port; the UI feature-detects it.
+    onLensEvent:  (fn) => { lensListeners.add(fn); return () => lensListeners.delete(fn); },
     async load(onProgress) {
       if (engine)  return;
       if (loading) return loading;
@@ -69,7 +85,7 @@ export const makeWebllmBackend = (defaults = {}) => (opts = {}) => {
             onProgress?.({ phase: p.text || 'loading', pct: p.progress ?? 0 }),
         };
         if (tokenizer) {
-          stack = createLensStack({ tokenizer });
+          stack = createLensStack({ tokenizer, logSink: emitLensEvent });
           engineCfg.logitProcessorRegistry = new Map([[model, stack]]);
         }
         engine = await mod.CreateMLCEngine(model, engineCfg);
