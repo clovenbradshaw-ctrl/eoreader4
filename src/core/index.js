@@ -7,6 +7,13 @@ export { MODES, DOMAINS, GRAINS, OPERATORS, isOperator,
 export { createLog, isLog } from './log.js';
 export { eoAddressOfEvent, eoNotation } from './address.js';
 export { projectGraph, projectionStats, DEFAULT_PROJECTION_RULES } from './project.js';
+// The Conversation Fold (conversation-fold.js): a projection over the conversation
+// event log, sibling to projectGraph, that carries the STANCE forward so a turn
+// inherits what it's doing (continuation-by-default) instead of re-classifying a
+// bare string. See docs/conversation-fold.md.
+export { projectFold, routeStance, stanceDescOf, isExplicitCompose, composeKind,
+  composeSubject, transitionPrompt, foldRules, clearFoldMemo, VERDICTS as FOLD_VERDICTS,
+  COMPOSE_VERBS, COMPOSE_KINDS } from './conversation-fold.js';
 // The ontological asterisk (asterisk.js): identity held open as a question. The
 // read-only measurement (latentAsterisks), the EVA convergence/conflict decision
 // (evaluateSameAs, discriminatorIndex), the identity attention frontier
