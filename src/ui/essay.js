@@ -17,7 +17,8 @@
 // generation logic — the walk lives in the organ; here is only the surface and the wiring.
 
 import { createModel, streamPhrase } from '../model/index.js';
-import { composeEssay, ESSAY_MIN_WORDS } from '../organs/out/essay.js';
+import { composeEssay } from '../organs/out/essay.js';
+import { createEssayThread } from './essay-thread.js';
 
 const els = {
   status:  document.getElementById('status'),
@@ -36,7 +37,6 @@ const STATE = {
 };
 
 const setStatus = (s) => { els.status.textContent = s; };
-const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // The Write button doubles as a Stop button while a walk is in flight — the user must always be
 // able to halt a long generation.
@@ -72,6 +72,11 @@ const ensureModel = async () => {
 };
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
+// The multi-message emission (status → title card → per-section messages → closing card)
+// is shared with the chat app: ui/essay-thread.js, bound to this page's message list.
+
+const thread = createEssayThread(els.messages);
+const { statusMessage, titleMessage, sectionMessage, closingMessage } = thread;
 
 const renderUser = (text) => {
   const el = document.createElement('div');
@@ -80,107 +85,6 @@ const renderUser = (text) => {
   els.messages.appendChild(el);
   els.messages.scrollTop = els.messages.scrollHeight;
   return el;
-};
-
-const scrollDown = () => { els.messages.scrollTop = els.messages.scrollHeight; };
-
-// A plain assistant status message — the "Outlining the essay…" beat while the planner runs.
-const statusMessage = (text) => {
-  const el = document.createElement('div');
-  el.className = 'msg assistant essay thinking';
-  el.innerHTML = `<div class="essay-status"><span class="dots"></span><span class="lbl">${escapeHtml(text)}</span></div>`;
-  els.messages.appendChild(el);
-  scrollDown();
-  return {
-    el,
-    set: (msg) => { const l = el.querySelector('.lbl'); if (l) l.textContent = msg; },
-    remove: () => el.remove(),
-  };
-};
-
-// The TITLE card — the first message of the essay, once the arc is planned.
-const titleMessage = (title) => {
-  const el = document.createElement('div');
-  el.className = 'msg assistant essay done';
-  el.innerHTML = `<div class="essay-body"><h1>${escapeHtml(title)}</h1></div>`;
-  els.messages.appendChild(el);
-  scrollDown();
-};
-
-// One SECTION message — a fresh assistant bubble the section streams into, then reflows to
-// a heading + paragraphs on close. Each is its own message in the thread.
-const sectionMessage = (heading) => {
-  const el = document.createElement('div');
-  el.className = 'msg assistant essay streaming';
-  el.innerHTML = `<div class="essay-status"><span class="dots"></span><span class="lbl">Writing “${escapeHtml(heading)}”…</span></div>` +
-                 `<div class="essay-body"><h2>${escapeHtml(heading)}</h2><div class="sec"></div></div>`;
-  els.messages.appendChild(el);
-  scrollDown();
-  const sec = el.querySelector('.sec');
-  const lbl = el.querySelector('.lbl');
-  return {
-    stream: (piece) => { sec.textContent += piece; scrollDown(); },
-    // Close: drop the status, reflow the streamed text into paragraphs (blank-line split).
-    finalize: ({ text, words }) => {
-      el.classList.remove('streaming');
-      el.classList.add('done');
-      el.querySelector('.essay-status')?.remove();
-      const body = el.querySelector('.essay-body');
-      const paras = String(text || sec.textContent || '')
-        .split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
-      const html = [`<h2>${escapeHtml(heading)}</h2>`];
-      for (const p of paras) html.push(`<p>${p.split('\n').map(escapeHtml).join('<br>')}</p>`);
-      if (paras.length === 0 && sec.textContent.trim()) html.push(`<p>${escapeHtml(sec.textContent.trim())}</p>`);
-      body.innerHTML = html.join('');
-      void lbl; void words;
-      scrollDown();
-    },
-  };
-};
-
-const actionButton = (label, title, onClick) => {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.className = 'msg-action';
-  b.textContent = label;
-  b.title = title;
-  b.addEventListener('click', () => onClick(b));
-  return b;
-};
-
-// The CLOSING card — its own message, once every section has landed: the total word count
-// against the floor, with copy / download of the WHOLE assembled essay.
-const closingMessage = (res) => {
-  const el = document.createElement('div');
-  el.className = 'msg assistant essay done';
-  const meta = document.createElement('div');
-  meta.className = 'essay-meta';
-  const count = document.createElement('span');
-  count.innerHTML = res.aborted
-    ? `<span class="under">Stopped — ${res.words} words</span>`
-    : (res.words >= ESSAY_MIN_WORDS
-        ? `Essay complete · ${res.words} words across ${res.sections.length} sections — clears the ${ESSAY_MIN_WORDS.toLocaleString()}-word floor`
-        : `<span class="under">${res.words} words across ${res.sections.length} sections — under the ${ESSAY_MIN_WORDS.toLocaleString()}-word floor</span>`);
-  meta.appendChild(count);
-
-  const actions = document.createElement('span');
-  actions.className = 'essay-actions';
-  actions.appendChild(actionButton('⧉ Copy', 'Copy the whole essay', async (b) => {
-    try { await navigator.clipboard.writeText(res.text); b.textContent = '✓ Copied'; setTimeout(() => { b.textContent = '⧉ Copy'; }, 1200); } catch { /* ignore */ }
-  }));
-  actions.appendChild(actionButton('⇩ .md', 'Download the whole essay as Markdown', () => {
-    const blob = new Blob([res.text], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${(res.title || 'essay').replace(/[^\w-]+/g, '-').toLowerCase().slice(0, 60)}.md`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }));
-  meta.appendChild(actions);
-  el.appendChild(meta);
-  els.messages.appendChild(el);
-  scrollDown();
 };
 
 // ── The walk ────────────────────────────────────────────────────────────────

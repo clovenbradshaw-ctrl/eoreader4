@@ -67,3 +67,8 @@ export * as publish from './publish/index.js';
 // publish family it stays off OUTPUT_ORGANS and is re-exported as its own namespace. The
 // talker is injected; the walk is pure orchestration (organs/out/essay.js).
 export * as essay from './essay.js';
+
+// The essay TYPES — templates that LEARN (organs/out/essay-types.js): each type couples a
+// shipped voice cue + seed arc with a per-type profile folded from every completed essay,
+// steering the next one. Pure fold/steer/serialize; the surface owns persistence.
+export * as essayTypes from './essay-types.js';

@@ -67,13 +67,24 @@ const stripPreamble = (s) => String(s ?? '')
 // model bends that shape, and `planOutline` guarantees a usable arc no matter what comes
 // back (padding from DEFAULT_ARC, capping the count).
 
-export const planMessages = (topic) => ([
+// `cue` is the TYPE's voice — one plain sentence naming the kind of essay this is (from the
+// learned essay-type template, organs/out/essay-types.js). `hints` are headings that have
+// WORKED for this type before — the learned half — offered to the planner, never imposed:
+// the plan may use, adapt, or ignore them. Both absent → the prompt is byte-identical to
+// the unsteered organ.
+export const planMessages = (topic, { cue = null, hints = null } = {}) => ([
   { role: 'system', content:
     'You are an essayist planning a long-form essay. Given a commission, produce a working outline: ' +
     'a title, then the section headings the essay will move through — an opening, several developing ' +
-    'sections that each take a distinct angle, and a close. Reply in EXACTLY this format and nothing else:\n' +
+    'sections that each take a distinct angle, and a close. ' +
+    (cue ? `${cue} ` : '') +
+    'Reply in EXACTLY this format and nothing else:\n' +
     'TITLE: <the essay title>\n1. <first section heading>\n2. <second section heading>\n… (6 to 9 sections, ending on a conclusion).' },
-  { role: 'user', content: `Commission: ${String(topic || '').trim()}` },
+  { role: 'user', content:
+    `Commission: ${String(topic || '').trim()}` +
+    (Array.isArray(hints) && hints.length
+      ? `\n\nSection moves that have served this kind of essay well before — use, adapt, or ignore them as the subject demands: ${hints.join(' · ')}.`
+      : '') },
 ]);
 
 // Parse the planner's reply into { title, headings }. Tolerant: the title may be prefixed or
@@ -126,7 +137,7 @@ export const planOutline = (rawPlan, topic = '') => {
 // so the prose stays continuous and non-repeating. `targetWords` steers length; `role`
 // names the arc move so the opening opens and the close lands.
 
-export const sectionMessages = ({ topic, title, outline = [], heading, index = 0, total = 0, tail = '', targetWords = 380, role = 'develop' } = {}) => {
+export const sectionMessages = ({ topic, title, outline = [], heading, index = 0, total = 0, tail = '', targetWords = 380, role = 'develop', cue = null } = {}) => {
   const plan = outline.length ? `\nThe essay's outline: ${outline.join(' · ')}.` : '';
   const soFar = tail ? `\n\nThe essay so far ends:\n"""\n${tail}\n"""\nContinue from there — do not repeat what is already written.` : '';
   const move = role === 'open'
@@ -136,7 +147,9 @@ export const sectionMessages = ({ topic, title, outline = [], heading, index = 0
       : 'Develop this section fully with its own angle — reasoning, specifics, and texture. Do not restate the introduction or pre-empt the conclusion.';
   return [
     { role: 'system', content:
-      'You are an accomplished essayist writing one section of a longer essay. Write flowing, substantive prose in ' +
+      'You are an accomplished essayist writing one section of a longer essay. ' +
+      (cue ? `${cue} ` : '') +
+      'Write flowing, substantive prose in ' +
       'full paragraphs — no lists, no headings, no meta-commentary about the essay or these instructions. Aim for about ' +
       `${targetWords} words. Write ONLY the prose of this section.` },
     { role: 'user', content:
@@ -189,6 +202,10 @@ export const composeEssay = async ({
                             //   backend's LogitProcessor pushes the decode toward situated prose
                             //   during generation — the model never sees the machinery. Null = the
                             //   golden phrase() path, byte-identical. The plan pass is left unsteered.
+  cue = null,                // THE TYPE'S VOICE (organs/out/essay-types.js): one plain sentence naming
+                            //   the kind of essay — rides the plan and every section system prompt.
+  planHints = null,          // THE LEARNED HALF of a type: headings that have worked for this type
+                            //   before, offered to the planner (use / adapt / ignore). Null = unsteered.
   hooks = {},
 } = {}) => {
   if (typeof talker !== 'function') throw new TypeError('composeEssay: a talker function is required');
@@ -199,7 +216,7 @@ export const composeEssay = async ({
   // 1) PLAN — outline the arc. A planner failure is non-fatal: planOutline backfills a neutral arc.
   hooks.onPhase?.('planning');
   let rawPlan = '';
-  try { rawPlan = await talker(planMessages(commission), { maxTokens: 400, temperature: 0.7, signal }); }
+  try { rawPlan = await talker(planMessages(commission, { cue, hints: planHints }), { maxTokens: 400, temperature: 0.7, signal }); }
   catch (err) { if (aborted()) throw err; /* else walk the default arc */ }
   const { title, body: bodyHeadings, conclusion } = planOutline(rawPlan, commission);
   const outline = [...bodyHeadings, conclusion];   // the whole planned arc, handed to each section
@@ -222,7 +239,7 @@ export const composeEssay = async ({
     let raw = '';
     try {
       raw = await talker(
-        sectionMessages({ topic: commission, title, outline, heading, index, total: queue.length + sections.length, tail: tailOf(out), targetWords: target, role }),
+        sectionMessages({ topic: commission, title, outline, heading, index, total: queue.length + sections.length, tail: tailOf(out), targetWords: target, role, cue }),
         { maxTokens: tokensFor(target), temperature, signal, onToken: (piece) => hooks.onToken?.(piece, heading), ...(lens ? { lens } : {}) },
       );
     } catch (err) {

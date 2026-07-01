@@ -28,6 +28,10 @@ import { renderUserMessage, createThinkingMessage, renderAssistantMessage, setMe
          updateThinking, finalizeThinking, streamThinking, streamImpression, renderMindBlock,
          renderWebProposal, renderWebResult, renderSearchNote, setThinkingNote, buildPropositions, finalizeSvg } from './chat.js';
 import { limn, VIEW_KINDS } from '../organs/out/limner/index.js';
+import { composeEssay } from '../organs/out/essay.js';
+import { ESSAY_TYPES, essayTypeOf, emptyProfile, foldEssay, steerFrom,
+         profileToJSON, profileFromJSON } from '../organs/out/essay-types.js';
+import { createEssayThread } from './essay-thread.js';
 import { createMind } from '../mind/index.js';
 import { foldImpression } from '../write/index.js';
 import { renderDoc, highlightSources, markSiteSentences } from './doc-view.js';
@@ -164,6 +168,8 @@ const els = {
   voiceTerse:    document.getElementById('voice-terse'),
   voiceCautious: document.getElementById('voice-cautious'),
   voiceConcrete: document.getElementById('voice-concrete'),
+  essayType: document.getElementById('essay-type'),
+  essayGo:   document.getElementById('essay-go'),
 };
 
 const setStatus = (s) => { els.status.textContent = s; };
@@ -675,6 +681,108 @@ const runWrite = async (rawQuestion, kindHint = null) => {
   setComposerBusy(false);
 };
 
+// ── THE ESSAY ORGAN, from the chat (organs/out/essay.js + essay-types.js) ─────
+//
+// An essay ask is neither a question (runTurn) nor a one-beat make-this (runWrite, capped
+// at ~700 tokens — the three-sentence-blurb failure). It is a WALK: composeEssay plans an
+// arc and composes section after section until the piece clears the ≥2500-word floor. The
+// walk is steered by the selected essay TYPE — a template that LEARNS: every completed
+// essay folds into the type's stored profile (which headings produced real prose, the
+// section length the type actually writes), and the profile steers the next essay of that
+// type. Profiles persist per type in localStorage; a bad stored profile is dropped, never
+// crashes the surface. The essay renders across many messages in this same chat thread
+// (ui/essay-thread.js): a title card, one streamed message per section, a closing card.
+
+const ESSAY_STORE_PREFIX = 'eoreader.essayType.';
+const loadEssayProfile = (typeId) => {
+  try { return profileFromJSON(localStorage.getItem(ESSAY_STORE_PREFIX + typeId)) || emptyProfile(typeId); }
+  catch { return emptyProfile(typeId); }
+};
+const saveEssayProfile = (profile) => {
+  try { localStorage.setItem(ESSAY_STORE_PREFIX + profile.type, profileToJSON(profile)); } catch { /* private mode etc. */ }
+};
+
+// The selected type, persisted like the other composer choices.
+const essayTypeSelected = () => essayTypeOf(els.essayType?.value)?.id || ESSAY_TYPES[0].id;
+
+const runEssay = async (topic, typeId = null) => {
+  const commission = String(topic || '').trim();
+  if (!commission) return;
+  const type = essayTypeOf(typeId) || essayTypeOf(essayTypeSelected()) || ESSAY_TYPES[0];
+  const ctl = new AbortController();
+  STATE.inflight = ctl;
+  setComposerBusy(true);
+  if (els.essayGo) els.essayGo.disabled = true;
+  renderUserMessage(els.messages, commission);
+  if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('chat');
+
+  const thread = createEssayThread(els.messages);
+  const status = thread.statusMessage(`Outlining ${/^[aeiou]/i.test(type.label) ? 'an' : 'a'} ${type.label.toLowerCase()} essay…`);
+
+  const done = () => { STATE.inflight = null; setComposerBusy(false); if (els.essayGo) els.essayGo.disabled = false; };
+
+  try {
+    await ensureModel();
+  } catch (err) {
+    status.fail(`Model failed to load: ${err?.message || err}`);
+    done();
+    return;
+  }
+  if (ctl.signal.aborted) { status.fail('Stopped.'); done(); return; }
+
+  // THE LEARNED STEER: the type's stored profile → the cue, the heading hints, and the
+  // word target the walk runs at. Run one steers from the shipped seed arc alone.
+  const profile = loadEssayProfile(type.id);
+  const steer = steerFrom(profile, type.id);
+  const talker = (messages, opts) => streamPhrase(STATE.model, messages, opts);
+
+  let current = null;   // the section message currently streaming
+  try {
+    const res = await composeEssay({
+      topic: commission,
+      talker,
+      signal: ctl.signal,
+      cue: steer.cue,
+      planHints: steer.planHints,
+      targetPerSection: steer.targetPerSection,
+      hooks: {
+        onPlan: ({ title }) => {
+          status.remove();
+          thread.titleMessage(title, `${type.label} essay${profile.runs ? ` · steered by ${profile.runs} earlier ${profile.runs === 1 ? 'essay' : 'essays'} of this type` : ''}`);
+        },
+        onSection: ({ heading }) => { current = thread.sectionMessage(heading); },
+        onToken: (piece) => { current?.stream(piece); },
+        onSectionEnd: ({ text }) => { current?.finalize({ text }); current = null; },
+      },
+    });
+    status.remove();
+
+    // FOLD THE RUN INTO THE TYPE — the learning. An aborted or empty walk teaches nothing.
+    const learned = foldEssay(profile, res);
+    let learnedNote = '';
+    if (learned !== profile) {
+      saveEssayProfile(learned);
+      const nextSteer = steerFrom(learned, type.id);
+      learnedNote = `✎ ${type.label} learned from this run — ${learned.runs} ${learned.runs === 1 ? 'essay' : 'essays'} folded in; ` +
+        `section target now ~${nextSteer.targetPerSection} words; next plan hints: ${nextSteer.planHints.slice(0, 3).join(' · ')}.`;
+      refreshEssayTypes();   // the dropdown tooltips carry what the type now knows
+    }
+    thread.closingMessage(res, { learnedNote });
+
+    // Commit the exchange to the session fold, capped: a 2500-word essay would swamp the
+    // small model's context on the next turn, so the history carries the head of the piece.
+    if (res.text && !res.aborted) {
+      const head = res.text.split(/\s+/).slice(0, 250).join(' ');
+      STATE.history.push({ role: 'user', content: commission });
+      STATE.history.push({ role: 'assistant', content: `${head}… [${type.label} essay, ${res.words} words — truncated in history]` });
+    }
+  } catch (err) {
+    if (ctl.signal.aborted) { current?.finalize({}); status.remove(); }
+    else status.fail(`The essay could not complete: ${err?.message || err}`);
+  }
+  done();
+};
+
 // Run one query through the pipeline and render it. Factored out of the composer so
 // an errored turn can offer a one-click retry (re-runs the very same question).
 const runQuery = async (rawQuestion) => {
@@ -684,9 +792,32 @@ const runQuery = async (rawQuestion) => {
   // artifact kind is auto-detected. It hands the request to the model to WRITE (runWrite) instead
   // of researching the topic and answering about it (runTurn) — the gap that turned "write an emily
   // dickinson poem" into a memory of Dickinson instead of a poem.
+  // THE ESSAY ORGAN: "/essay <topic>" — or any make-this whose artifact kind is an essay
+  // ("write an essay on dolphins", "compose a short essay about grief") — walks the arc to a
+  // ≥2500-word piece (runEssay), steered by the composer's selected essay type (the template
+  // that learns). This outranks the one-beat writer path below, which would cap it at a blurb.
+  const essayCmd = /^\/essay\b[\s:]*/i.exec(rawQuestion);
+  if (essayCmd) {
+    const topic = rawQuestion.slice(essayCmd[0].length).trim();
+    if (!topic) {
+      renderUserMessage(els.messages, rawQuestion);
+      renderAssistantMessage(els.messages,
+        'Give me a topic after /essay — e.g. “/essay the history of lighthouse keeping”. The dropdown by Send picks the essay type.',
+        [], { route: 'chat', mode: STATE.grounding });
+      return;
+    }
+    await runEssay(topic);
+    return;
+  }
   const writeCmd = /^\/(?:write|compose|draft|create)\b[\s:]*/i.exec(rawQuestion);
-  if (writeCmd) { await runWrite(rawQuestion.slice(writeCmd[0].length).trim()); return; }
+  if (writeCmd) {
+    const request = rawQuestion.slice(writeCmd[0].length).trim();
+    if (/\bessays?\b/i.test(artifactKindOf(request))) { await runEssay(request); return; }
+    await runWrite(request);
+    return;
+  }
   if (COMPOSE_VERB.test(rawQuestion) && artifactKindOf(rawQuestion) !== 'answer') {
+    if (/\bessays?\b/i.test(artifactKindOf(rawQuestion))) { await runEssay(rawQuestion); return; }
     await runWrite(rawQuestion);
     return;
   }
@@ -1141,6 +1272,48 @@ els.composer.addEventListener('submit', (e) => {
   e.preventDefault();
   send();
 });
+
+// ── The essay tools on the composer ─────────────────────────────────────────
+// The TYPE dropdown (one option per learned template, organs/out/essay-types.js) and the
+// trigger button. The selection persists; each option's tooltip shows what the type has
+// learned so far (runs folded in). The button commissions an essay on whatever is in the
+// box — same path as "write an essay on X" and "/essay X".
+const ESSAY_TYPE_KEY = 'eoreader.essayType.selected';
+const refreshEssayTypes = () => {
+  if (!els.essayType) return;
+  const prior = els.essayType.value || (() => { try { return localStorage.getItem(ESSAY_TYPE_KEY); } catch { return null; } })();
+  els.essayType.innerHTML = '';
+  for (const t of ESSAY_TYPES) {
+    const opt = document.createElement('option');
+    const profile = loadEssayProfile(t.id);
+    opt.value = t.id;
+    opt.textContent = `Essay · ${t.label}`;
+    opt.title = profile.runs
+      ? `${t.label} — learned from ${profile.runs} ${profile.runs === 1 ? 'essay' : 'essays'} (section target ~${steerFrom(profile, t.id).targetPerSection} words)`
+      : `${t.label} — nothing learned yet; steers from its seed arc`;
+    els.essayType.appendChild(opt);
+  }
+  if (prior && essayTypeOf(prior)) els.essayType.value = prior;
+};
+if (els.essayType) {
+  refreshEssayTypes();
+  els.essayType.addEventListener('change', () => {
+    try { localStorage.setItem(ESSAY_TYPE_KEY, els.essayType.value); } catch { /* ignore */ }
+  });
+}
+if (els.essayGo) {
+  els.essayGo.addEventListener('click', async () => {
+    if (STATE.inflight) return;   // a turn is running — Send is the Stop
+    const topic = els.input.value.trim();
+    if (!topic) {
+      els.input.placeholder = 'Name the essay topic here, then press ✍ Essay…';
+      els.input.focus();
+      return;
+    }
+    els.input.value = '';
+    await runEssay(topic);
+  });
+}
 els.input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();

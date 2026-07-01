@@ -10,34 +10,13 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="stylesheet" href="src/ui/styles.css">
   <style>
-    /* THE ESSAY ORGAN — a chat-shaped surface whose only output is an essay. It reuses the
-       shared chat styling (.msg, #messages, #composer) and adds only what the long-form
-       piece needs: a running status line while the arc walks, and full-bleed prose. */
+    /* THE ESSAY ORGAN — a chat-shaped surface whose only output is an essay. The message
+       rendering (.msg.assistant.essay, .essay-meta, …) is the shared thread emission in
+       src/ui/styles.css (ui/essay-thread.js); this page adds only its own layout. */
     #app > main { display: block; }
     #essay-pane { display: flex; flex-direction: column; min-height: 0; height: 100%; }
     #messages { max-width: 820px; width: 100%; margin: 0 auto; padding: 1.25rem 1rem; }
-    .msg.assistant.essay { max-width: 100%; }
-    .msg.assistant.essay .essay-status {
-      font-size: .8rem; color: #a1a1aa; font-style: italic;
-      display: flex; align-items: center; gap: .4rem; margin-bottom: .4rem;
-    }
-    .msg.assistant.essay.done .essay-status { color: #6ee7b7; font-style: normal; }
-    .msg.assistant.essay .essay-body h1 {
-      font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em;
-      margin: .2rem 0 1rem; color: #f4f4f5; line-height: 1.25;
-    }
-    .msg.assistant.essay .essay-body h2 {
-      font-size: 1.05rem; font-weight: 650; margin: 1.4rem 0 .5rem; color: #e4e4e7;
-    }
-    .msg.assistant.essay .essay-body p { margin: .6rem 0; line-height: 1.6; }
-    .msg.assistant.essay .essay-body .sec { white-space: pre-wrap; line-height: 1.6; }
-    .essay-meta {
-      font-size: .78rem; color: #a1a1aa; margin-top: 1rem;
-      border-top: 1px solid #27272c; padding-top: .5rem;
-      display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
-    }
-    .essay-meta .under { color: #f59e0b; }
-    .essay-actions { display: flex; gap: .4rem; margin-left: auto; }
+    .essay-meta { margin-top: 1rem; border-top: 1px solid #27272c; padding-top: .5rem; }
     #composer { max-width: 820px; width: 100%; margin: 0 auto; }
     .floor-note { font-size: .75rem; color: #71717a; }
   </style>
