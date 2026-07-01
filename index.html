@@ -114,7 +114,7 @@
         </div>
       </sc-if>
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
-        <a href="templates.html" title="Templates — the shapes the machine has learned from examples" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;line-height:1;text-decoration:none;" style-hover="background:#eef0f3;color:var(--ink)">▤</a>
+        <div onclick="{{ onOpenTemplates }}" title="Templates — the shapes the machine has learned from examples" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">▤</div>
       </sc-if>
       <div style="position:relative;flex:0 0 auto;">
         <button onclick="{{ onToggleSettings }}" title="EO settings" style="width:30px;height:30px;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
@@ -1386,6 +1386,20 @@
     </div>
   </sc-if>
 
+  <sc-if value="{{ templatesOpen }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ onCloseTemplates }}" style="position:fixed;inset:0;background:rgba(20,24,30,.34);z-index:60;display:flex;align-items:center;justify-content:center;padding:32px;">
+      <div onclick="{{ templatesStop }}" style="width:960px;max-width:100%;height:88vh;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(20,24,30,.3);overflow:hidden;animation:eopop .14s ease-out;">
+        <div style="padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex:0 0 auto;">
+          <div style="width:24px;height:24px;border-radius:7px;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:0 0 auto;">EO</div>
+          <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:700;line-height:1.2;">Templates</div><div style="font-size:11px;color:var(--ink3);margin-top:1px;">the shapes the machine has learned from examples</div></div>
+          <a href="templates.html" target="_blank" rel="noopener" title="Open templates in a new tab" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:5px 10px;cursor:pointer;flex:0 0 auto;text-decoration:none;" style-hover="border-color:var(--accline);color:var(--acc)">↗ Open</a>
+          <button onclick="{{ onCloseTemplates }}" title="Close" style="width:28px;height:28px;border:none;background:transparent;color:var(--ink3);border-radius:7px;cursor:pointer;font-size:18px;line-height:1;flex:0 0 auto;" style-hover="background:#eef0f3;color:var(--ink)">×</button>
+        </div>
+        <iframe src="templates.html" title="Templates" style="flex:1;min-height:0;width:100%;border:none;display:block;background:var(--card);"></iframe>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ hoverCardOn }}" hint-placeholder-val="{{ false }}">
     <div id="eo-hovercard" onmouseenter="{{ hoverCard.onEnter }}" onmouseleave="{{ hoverCard.onLeave }}" style="{{ hoverCard.wrap }}">
       <div style="display:flex;align-items:center;gap:9px;">
@@ -1531,7 +1545,7 @@ class Component extends DCLogic {
       hoverSrc:null, pinSrc:null, openSrc:null, mode:'breadth', direction:'', hoverEnt:null, hoverHref:null, hoverAhead:null, hoverXY:{x:0,y:0}, rev:0, sortMode:'updated',
       llm:true, llmAvail:false, svoBusy:false, svoStatus:'', pasteOpen:false, pasteText:'',
       srcWide:false, srcTab:'page', srcDoc:null, srcLoading:false, srcErr:null, linkMode:savedLink==='0'?false:true, linkChoice:null,
-      viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
+      viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null, templatesOpen:false,
       // How a READ source renders in the center: 'reader' is the stripped book view (clean
       // prose, chrome/ads gone, engine TOC + flagged passages); 'native' is the real fetched
       // page with its own layout, given the same contents nav + highlighted passages on top.
@@ -6168,6 +6182,7 @@ class Component extends DCLogic {
     const base={accentVar:_acc,accbgVar:this.mixWhite(_acc,.90),acclineVar:this.mixWhite(_acc,.70),
       settingsOpen:this.state.settingsOpen,onToggleSettings:()=>this.toggleSettings(),onCloseSettings:()=>this.closeSettings(),
       memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},onExportMem:()=>this.exportMemory(),mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
+      templatesOpen:this.state.templatesOpen,onOpenTemplates:()=>this.setState({templatesOpen:true,settingsOpen:false}),onCloseTemplates:()=>this.setState({templatesOpen:false}),templatesStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       memTab:this.state.memTab||'sources',memTabSources:(this.state.memTab||'sources')==='sources',memTabLog:this.state.memTab==='log',
       onMemSources:()=>this.setState({memTab:'sources'}),onMemLog:()=>this.setState({memTab:'log'}),
       memSourcesTabStyle:((this.state.memTab||'sources')==='sources'?'background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);'),
