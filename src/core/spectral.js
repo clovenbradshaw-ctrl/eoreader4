@@ -219,6 +219,30 @@ export const bornAssign = (dir, lenses, { signed = false } = {}) => {
   return idx;
 };
 
+// ── recognize ────────────────────────────────────────────────────────────────
+//
+// The online reading decision — the branch point of the GENERATE operators. bornAssign
+// always assigns a unit to its best reading; recognize instead ABSTAINS to −1 when even
+// the best reading only matches the unit at the chance `floor`. That −1 is where a new
+// reading is born (INS); a non-negative return is a returning reading the unit merges
+// into (SYN); and a reading set carried over from a prior context (REC) recognizes its
+// known readings through exactly this call. It is the streaming complement to
+// readingCount's batch void: a per-unit novelty gate against a set of standing readings.
+//
+//   dir     a (unit) direction.
+//   lenses  the standing readings (eigenLenses output or bare vectors).
+//   floor   the chance-match ceiling; best |⟨dir|lens⟩|² must exceed it to count as a
+//           match (0 = always match, i.e. plain bornAssign).
+//   signed  pole-aware matching (see bornAssign).
+// Returns the matched reading/pole index, or −1 for "novel" (no standing reading fits).
+export const recognize = (dir, lenses, { floor = 0, signed = false } = {}) => {
+  if (!lenses?.length) return -1;
+  const idx = bornAssign(dir, lenses, { signed });
+  const lens = lenses[signed ? idx >> 1 : idx]?.lens || lenses[signed ? idx >> 1 : idx];
+  let c = 0; for (let j = 0; j < dir.length; j++) c += dir[j] * lens[j];
+  return (c * c > floor) ? idx : -1;
+};
+
 // ── coupling ─────────────────────────────────────────────────────────────────
 //
 // The two-way holon coupling, as one atom. Given a `part` signal and the `whole` it
