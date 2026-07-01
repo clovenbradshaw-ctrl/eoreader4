@@ -17,6 +17,7 @@ export { fieldStrain, MIN_FIELD } from './field.js';
 export { holonicConfinement, toLensConfig } from './confine.js';
 export { relax, relaxMove } from './relax.js';
 export { exportAudit, diagnose } from './audit.js';
+export { nulGate, participationRatio } from './nul.js';
 export { resolveProposition, STANCE, EDGE_OPS } from './resolve.js';
 export {
   classifyWantedType, groundSupplies, answerabilityGate, refusalAtom,

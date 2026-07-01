@@ -295,8 +295,15 @@ const computeProjection = (log, frame) => {
     line = Number.isFinite(born) ? born : 0;
   }
 
+  // Cohered edges beat the line; the rest are HELD (the NUL cell — present but uncohered),
+  // surfaced rather than silently dropped when a Born floor is active. With no floor
+  // (line 0) everything coheres and `held` is empty, exactly as before.
   const edgesOut = [];
-  for (const r of raw) if (r.weight >= line) edgesOut.push({ ...r.e, from: r.f, to: r.t, weight: r.weight });
+  const held = [];
+  for (const r of raw) {
+    const edge = { ...r.e, from: r.f, to: r.t, weight: r.weight };
+    if (r.weight >= line) edgesOut.push(edge); else held.push(edge);
+  }
 
   // Canonicalise void endpoints through the same union-find the edges use, so a
   // carved absence on a merged referent matches a claim about any of its aliases.
@@ -314,6 +321,9 @@ const computeProjection = (log, frame) => {
   return Object.freeze({
     entities: merged,
     edges: edgesOut,
+    // The NUL cell — edges present but below the Born line: held as uncohered, not dropped.
+    // Empty unless a Born floor is active (docs/nul-hold-the-uncohered.md).
+    held: Object.freeze(held),
     voids: Object.freeze(voids),
     // Canonicalise any id to its merged referent — the binding of record the
     // edge-grounding veto resolves a talker claim's endpoints against, so a claim

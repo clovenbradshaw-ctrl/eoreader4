@@ -263,6 +263,46 @@ export const voidPeaks = (scores, { alpha = 0.05, tol = 1, indices = null } = {}
   return chosen.sort((a, b) => a - b);
 };
 
+// ---- nul: hold the uncohered — the ninth cell (Differentiate × Existence) ----
+//
+// The operator cube's ACT face is now built on ρ but for one cell: NUL, `hold
+// (non-transformation)` (core/operators.js). Every other operator is a positive act —
+// SEG cuts (voidPeaks), DEF counts (readingCount), SIG assigns, CON bonds, EVA
+// reinforces, INS/SYN/REC birth/merge/carry. NUL transforms nothing: it HOLDS material
+// that is present but does not cohere into structure. It is the resting state the void
+// already names — "SYN fires when the proposed structure beats the noise null; NUL holds
+// it and VOID asserts absence when it does not" (this file's head) — surfaced as a
+// first-class set instead of silently dropped.
+//
+// The three-way, kept distinct: SYN (it clears the null → cohered structure), VOID (it is
+// determinately absent → assert the hole), NUL (present, below the null → hold it,
+// assert nothing). NUL is NOT a claim of absence (that is VOID); it is the honest record
+// of "seen, unresolved" — the anti-confabulation of the other direction: do not erase
+// material that is there but does not cohere.
+//
+//   scores  per-item scores; non-finite / ≤0 are ABSENT (not NUL's concern — nothing to
+//           hold), a finite positive score is PRESENT.
+//   alpha   the bounded-void tolerance (default 0.05).
+//
+// Returns { held, cohered, line }: `held` are the present-but-uncohered item indices (the
+// NUL set), `cohered` beat the noise-null (SYN-able), `line` is the Born boundary. A thin
+// background (cold start) holds everything — assume nothing coheres until the void is
+// measured, exactly the abstention the rest of the file takes.
+export const nul = (scores = [], { alpha = 0.05 } = {}) => {
+  const present = [];
+  const vals = [];
+  scores.forEach((s, i) => { if (Number.isFinite(s) && s > 0) { present.push(i); vals.push(s); } });
+  if (vals.length < MIN_SAMPLES) return { held: present.slice(), cohered: [], line: null };
+  const line = boundedNull(vals, { alpha, ceiling: Infinity, fallback: median(vals) });
+  if (!Number.isFinite(line)) return { held: present.slice(), cohered: [], line: null };
+  const held = [], cohered = [];
+  scores.forEach((s, i) => {
+    if (!Number.isFinite(s) || s <= 0) return;      // absent — VOID's concern, not NUL's
+    (s >= line ? cohered : held).push(i);
+  });
+  return { held, cohered, line };
+};
+
 // ---- the streaming estimator: causal, adaptive, updated each step ----------
 
 // Maintain the background score distribution as a streaming estimate. `observe`
