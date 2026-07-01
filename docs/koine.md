@@ -1,11 +1,11 @@
 # KOINÉ — the parameter-mapping compiler
 
 > **Status — first slice landed** (`src/koine/`, `tests/koine.test.js`). The
-> modality-independent core — profile → compile → critique, over a visual and a
-> declared auditory channel catalog — exists and is proven by the §7 worked
-> example compiled to eye *and* ear from one profile. The render backends
-> (`toViewSpec`, `toScoreSpec`) and the patch-bay UI are the declared seam,
-> deferred; see [§ Status](#status--what-landed).
+> modality-independent core — profile → compile → critique — plus **CANTOR, the
+> auditory backend** (`toScoreSpec` → Web Audio), proven by the §7 worked example
+> compiled to eye *and* ear from one profile and sounded through an injected
+> AudioContext. The visual backend (`toViewSpec`) and the patch-bay UI are the
+> remaining seam, deferred; see [§ Status](#status--what-landed).
 >
 > **Name** is a placeholder — *koinē aísthēsis*, the common sense that unifies the
 > special senses. Rename freely.
@@ -169,12 +169,23 @@ after a governance event is *audible* where a static plot flattens it.
 - **`src/koine/compile.js`** — the deterministic CSP; **`critique.js`** — the L1–L8
   linter with severities; **`index.js`** — the one entrance.
 
+**CANTOR — the ear (landed).** `src/koine/cantor/` lowers a MapSpec to sound, the
+auditory mirror of LIMNER. `toScoreSpec(mapSpec, data)` is pure and deterministic: it
+turns each data row into a sounding event with a physical time / frequency / gain / pan
+and a `ref` back to the row (grounding). It owns the physics L3 deferred — `freqOf`
+places the data linearly on the **mel** scale (equal data steps sound like equal pitch
+steps, not equal Hz), `gainOf` on the **phon/sone** scale — reading the log/linear
+normalization off each binding so CANTOR and the compiler agree where a value sits.
+`playScore(score, ctx)` is a thin scheduler on a caller-**injected** AudioContext (no
+browser global at import, so it loads and tests in Node against a fake context — one
+oscillator + envelope + optional pan per event). The §7 donations profile compiled to
+the ear makes each donation a click on the time axis (`date → onset`) with the finding
+on pitch — the tight cluster before a vote is *audible*. Open (§8 Q1): live streaming
+(for SURFER) vs. offline scores; the current `toScoreSpec` is an offline score.
+
 Deferred (named so the boundary is honest):
 
-- **CANTOR — the auditory renderer** (§8 Q1). The channels are declared; the
-  `toScoreSpec → Web Audio` backend is not built. Confirm its channel set and whether
-  it streams live (for SURFER) or renders offline scores.
-- **`toViewSpec` / `toScoreSpec`.** The MapSpec → backend lowering. A visual backend's
+- **`toViewSpec`.** The MapSpec → visual backend lowering. A visual backend's
   encoding vocabulary (position-from-a-variable, √-size, lightness ramps) is broader
   than LIMNER's current graph/timeline marks, so this is a real backend extension, not
   a thin adapter — deliberately not forced onto LIMNER.

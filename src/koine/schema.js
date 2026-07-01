@@ -66,12 +66,13 @@ export const makeChannel = ({
 
 // makeBinding — one variable→channel edge of a MapSpec, with its L3 transfer and ranges.
 export const makeBinding = ({
-  variable, channel, transfer = 'linear', domain = null, range = null,
+  variable, channel, transfer = 'linear', normalize = 'linear', domain = null, range = null,
   polarity = null, reason = null,
 } = {}) => Object.freeze({
   variable: String(variable),
   channel:  String(channel),
-  transfer: oneOf(TRANSFERS, transfer, 'linear'),
+  transfer: oneOf(TRANSFERS, transfer, 'linear'),   // the CHANNEL's perceptual correction (L3, renderer-owned)
+  normalize: normalize === 'log' ? 'log' : 'linear', // the DATA-distribution inversion (L3, tool-owned)
   domain:   domain ? Object.freeze(domain.map((x) => (typeof x === 'number' ? x : String(x)))) : null,
   range:    range ? Object.freeze(range.map(Number)) : null,
   polarity: polarity == null ? null : String(polarity),

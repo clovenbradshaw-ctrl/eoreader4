@@ -83,7 +83,7 @@ export const compile = (variables, channels, budget = {}) => {
     const norm = normalizer(v);
     bindings.push({
       variable: v.id, channel: c.id,
-      transfer: c.transfer, domain: norm.domain, range: [0, 1], polarity: c.polarity,
+      transfer: c.transfer, normalize: norm.pre, domain: norm.domain, range: [0, 1], polarity: c.polarity,
       reason: `${v.measurement}/${v.temporal} → ${c.id} (${c.order}/${c.time_character}, eff ${c.effectiveness}${norm.pre === 'log' ? ', log-compressed' : ''})`,
     });
   };

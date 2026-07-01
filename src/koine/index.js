@@ -31,3 +31,6 @@ export { VISUAL_CHANNELS, AUDITORY_CHANNELS, channelsFor, VALENCE_QUARANTINE } f
 export { normalizer, applyTransfer, describeTransfer }  from './transfer.js';
 export { compile, KOINE_VERSION }                       from './compile.js';
 export { critique, critiqueBySeverity }                 from './critique.js';
+// CANTOR — the auditory render backend (the ear). MapSpec → ScoreSpec → Web Audio.
+export { toScoreSpec, makeScoreSpec, playScore, freqOf, gainOf } from './cantor/index.js';
+export * as cantor                                      from './cantor/index.js';
