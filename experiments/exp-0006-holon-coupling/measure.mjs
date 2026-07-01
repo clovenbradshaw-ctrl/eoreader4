@@ -1,16 +1,16 @@
-// exp-0006 · the two-way coupling measure — KEY-BLIND.
+// exp-0006 · the two-way CON measure — KEY-BLIND.
 //
 // Reads each stream's nodes + per-node positions & velocities (never the tree/waver/
 // ghost key). Computes, per node:
-//   pull   — DYNAMIC coupling: coupling(node velocity, the WHOLE's shared motion mode).
+//   pull   — DYNAMIC CON: CON(node velocity, the WHOLE's shared motion mode).
 //            The fraction of the part's motion the whole sets (downward regulation).
-//   constit— STRUCTURAL coupling: 1 − min bond CV, the rigidity of the part's most
+//   constit— STRUCTURAL CON: 1 − min bond CV, the rigidity of the part's most
 //            invariant bond (a constant bone length = constitutes the recognizable figure).
 //   parent — the discovered skeleton: the most-invariant partner (argmin bond CV).
-//   pull2  — LEVEL-2 pull: after removing the whole (coupling residual), the coupling to
+//   pull2  — LEVEL-2 pull: after removing the whole (CON residual), the CON to
 //            the residuals' own shared mode — the sub-holon level's regulation.
 // The scorer joins these with the held key.
-import { buildDensity, eigenLenses, coupling } from '../../src/core/index.js';
+import { buildDensity, eigenLenses, CON } from '../../src/core/index.js';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -33,12 +33,12 @@ for (const f of files) {
   const dirs = nodes.map((n) => demean(vel[n]));
   const shared = eigenLenses(buildDensity(dirs).rho)[0].lens;
   const pull = {}, residual = {};
-  for (const n of nodes) { const c = coupling(demean(vel[n]), shared); pull[n] = c.pull; residual[n] = c.residual; }
+  for (const n of nodes) { const c = CON(demean(vel[n]), shared); pull[n] = c.pull; residual[n] = c.residual; }
   // LEVEL-2: the residuals' own shared mode (the sub-holon regulation)
   const rdirs = nodes.map((n) => { const r = residual[n], nn = norm(r) || 1; return r.map((x) => x / nn); });
   const shared2 = eigenLenses(buildDensity(rdirs).rho)[0].lens;
   const pull2 = {};
-  for (const n of nodes) pull2[n] = coupling(residual[n], shared2).pull;
+  for (const n of nodes) pull2[n] = CON(residual[n], shared2).pull;
 
   // STRUCTURAL: rigidity of the most-invariant bond → constitution + discovered skeleton
   const bondCV = (i, j) => { const d = pos[i].map((p, k) => Math.hypot(p[0] - pos[j][k][0], p[1] - pos[j][k][1])); return std(d) / (mean(d) + 1e-9); };

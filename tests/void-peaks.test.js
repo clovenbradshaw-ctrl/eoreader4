@@ -1,10 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { voidPeaks } from '../src/core/index.js';
+import { SEG } from '../src/core/index.js';
 
-// ── the regression lock for exp-0004: voidPeaks, the change-point detector ────
+// ── the regression lock for exp-0004: SEG, the change-point detector ────
 //
-// voidPeaks reads a per-position score curve (a departure/incommensurability signal)
+// SEG reads a per-position score curve (a departure/incommensurability signal)
 // and returns the boundary positions: the LOCAL maxima that clear the bounded void
 // line (boundedNull), tol-suppressed. The capability:
 //   • it FINDS the planted peaks in a noisy curve and ignores the background;
@@ -22,41 +22,41 @@ const curveWithPeaks = (T, peaks, seed) => {
   return c;
 };
 
-test('voidPeaks finds the planted peaks and ignores the background', () => {
+test('SEG finds the planted peaks and ignores the background', () => {
   const peaks = [17, 41, 73];
-  const found = voidPeaks(curveWithPeaks(100, peaks, 7), { tol: 3 });
+  const found = SEG(curveWithPeaks(100, peaks, 7), { tol: 3 });
   assert.deepEqual(found, peaks, `should recover the planted peaks, got ${found}`);
 });
 
-test('voidPeaks suppresses within tol (no double-counting one boundary)', () => {
+test('SEG suppresses within tol (no double-counting one boundary)', () => {
   // three adjacent high bins at 40,41,42 are ONE boundary — collapse to a single peak
   const c = curveWithPeaks(80, [], 9);
   c[40] = 1.0; c[41] = 0.98; c[42] = 0.96;
-  const found = voidPeaks(c, { tol: 3 });
+  const found = SEG(c, { tol: 3 });
   assert.equal(found.length, 1, `one cluster → one peak, got ${found}`);
   assert.ok(Math.abs(found[0] - 40) <= 2);
 });
 
-test('voidPeaks maps peak positions through `indices`', () => {
+test('SEG maps peak positions through `indices`', () => {
   // a windowed score that starts at offset W=10 → array index k reports indices[k]
   const W = 10, scores = curveWithPeaks(50, [12, 33], 5);
   const indices = scores.map((_, k) => k + W);
-  const found = voidPeaks(scores, { tol: 3, indices });
+  const found = SEG(scores, { tol: 3, indices });
   assert.deepEqual(found, [22, 43], `offset positions, got ${found}`);
 });
 
-test('voidPeaks abstains on a flat curve and a thin background', () => {
+test('SEG abstains on a flat curve and a thin background', () => {
   let s = 3 >>> 0; const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
   const flat = Array.from({ length: 120 }, () => 0.5 + 0.001 * rnd());   // no prominent peak
-  assert.deepEqual(voidPeaks(flat, { tol: 3 }), [], 'a flat curve has no boundaries');
-  assert.deepEqual(voidPeaks([1, 2], { tol: 1 }), [], 'a thin background cannot set a line → abstain');
-  assert.deepEqual(voidPeaks([], { tol: 1 }), []);
+  assert.deepEqual(SEG(flat, { tol: 3 }), [], 'a flat curve has no boundaries');
+  assert.deepEqual(SEG([1, 2], { tol: 1 }), [], 'a thin background cannot set a line → abstain');
+  assert.deepEqual(SEG([], { tol: 1 }), []);
 });
 
-test('voidPeaks is pure: no mutation, deterministic', () => {
+test('SEG is pure: no mutation, deterministic', () => {
   const c = curveWithPeaks(60, [20, 45], 11);
   const before = c.slice();
-  const a = voidPeaks(c, { tol: 3 }), b = voidPeaks(c.slice(), { tol: 3 });
+  const a = SEG(c, { tol: 3 }), b = SEG(c.slice(), { tol: 3 });
   assert.deepEqual(c, before, 'input must not be mutated');
   assert.deepEqual(a, b, 'same curve → same peaks');
 });

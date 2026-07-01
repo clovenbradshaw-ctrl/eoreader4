@@ -1,14 +1,14 @@
 // exp-0007 · the GENERATE-column measure — KEY-BLIND on the units.
 //
 // Three readers, all sharing the Born rule; only the GENERATE behaviour differs:
-//   batch  — readingCount + bornAssign over global lenses (exp-0003/0005, no online birth).
-//   cold   — online INS+SYN: one forward pass, `recognize` each unit against the standing
+//   batch  — DEF + SIG over global lenses (exp-0003/0005, no online birth).
+//   cold   — online INS+SYN: one forward pass, `REC` each unit against the standing
 //            readings; −1 (novel) buffers toward an INS birth (a debounced centroid);
 //            a match is a SYN merge into that reading's identity. Starts empty.
 //   rec    — the SAME online reader, but SEEDED with a prior reading set (REC) learned
 //            (batch) from a paired stream. Known readings are recognised, not re-born.
 // The scorer joins boundaries with the held key and reads born counts.
-import { buildDensity, eigenLenses, readingCount, bornAssign, recognize, extremeValueZ } from '../../src/core/index.js';
+import { buildDensity, eigenLenses, DEF, SIG, REC, extremeValueZ } from '../../src/core/index.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -24,10 +24,10 @@ const load = (name) => { const D = JSON.parse(readFileSync(join(BATTERY, name)))
 
 // BATCH: global lenses + signed Born; also returns the lenses (the REC prior to carry)
 function batch(dirs) {
-  const L = eigenLenses(buildDensity(dirs).rho); const rc = readingCount(L.map((l) => l.weight));
+  const L = eigenLenses(buildDensity(dirs).rho); const rc = DEF(L.map((l) => l.weight));
   if (rc.k <= 1) return { bounds: [], ids: 1, prior: [] };
   const top = L.slice(0, rc.k);
-  const sm = mf(dirs.map((u) => bornAssign(u, top, { signed: true })), 5);
+  const sm = mf(dirs.map((u) => SIG(u, top, { signed: true })), 5);
   return { bounds: det(sm), ids: new Set(sm).size, prior: top };
 }
 // ONLINE INS+SYN, optionally REC-seeded with a prior reading set
@@ -38,7 +38,7 @@ function online(dirs, { alpha = 0.02, run = 4, prior = null } = {}) {
   let nextId = readings.length; const assign = []; let buf = []; let born = 0;
   for (const u of dirs) {
     if (norm(u) < 1e-9) { assign.push(assign.length ? assign[assign.length - 1] : -1); continue; }
-    const idx = recognize(u, readings, { floor: floor(readings.length + 1) });   // ← the GENERATE branch point
+    const idx = REC(u, readings, { floor: floor(readings.length + 1) });   // ← the GENERATE branch point
     if (idx >= 0) {                                   // SYN: merge into the returning identity
       const r = readings[idx], sgn = dot(u, r.lens) >= 0 ? 1 : -1, bl = 1 / (r.w + 1);
       for (let i = 0; i < D; i++) r.lens[i] = (1 - bl) * r.lens[i] + bl * sgn * u[i];

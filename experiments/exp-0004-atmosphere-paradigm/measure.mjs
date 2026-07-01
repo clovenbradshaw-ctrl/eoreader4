@@ -5,12 +5,12 @@
 //   lens  — lens-switching with the geography count (exp-0003 baseline).
 //   atmo  — atmosphere: peaks of S(ρ_L ‖ ρ_R), the local density DEPARTURE (relEntropy).
 //   para  — paradigm: peaks of ‖[ρ_L, ρ_R]‖_F, the local INCOMMENSURABILITY (commutator).
-//   gated — the abstention-gated UNION of the three; when readingCount abstains (flat
+//   gated — the abstention-gated UNION of the three; when DEF abstains (flat
 //           geography) no channel may fire, so the flat streams stay clean.
 // Atmosphere/paradigm run in the top-M reading subspace over a window ~5% of the stream,
-// and their peaks are picked by voidPeaks (the bounded-void change-point detector).
+// and their peaks are picked by SEG (the bounded-void change-point detector).
 // The scorer joins these detections with the held key.
-import { buildDensity, eigenLenses, relEntropy, commutator, readingCount, voidPeaks } from '../../src/core/index.js';
+import { buildDensity, eigenLenses, relEntropy, commutator, DEF, SEG } from '../../src/core/index.js';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -62,13 +62,13 @@ for (const f of files) {
   const D = JSON.parse(readFileSync(join(BATTERY, f)));   // ← reads D.units ONLY
   const dirs = centeredDirs(D.units);
   const lenses = eigenLenses(buildDensity(dirs).rho);
-  const rc = readingCount(lenses.map((l) => l.weight));
+  const rc = DEF(lenses.map((l) => l.weight));
   const M = Math.max(4, Math.min(12, 2 * rc.k));
   const W = Math.max(4, Math.round(D.units.length / 20));
   const bLens = lensSwitch(dirs, lenses, rc.k);
   const { atmo, para, idx } = channelScores(dirs, lenses, M, W);
-  const bAtmo = voidPeaks(atmo, { alpha: 0.05, tol: D.tol, indices: idx });
-  const bPara = voidPeaks(para, { alpha: 0.05, tol: D.tol, indices: idx });
+  const bAtmo = SEG(atmo, { alpha: 0.05, tol: D.tol, indices: idx });
+  const bPara = SEG(para, { alpha: 0.05, tol: D.tol, indices: idx });
   const union = mergeWithin([...bLens, ...bAtmo, ...bPara], D.tol);
   const gated = rc.abstain ? [] : union;
   out.push({ name: f.replace('.json', ''), modality: D.modality, T: D.units.length,

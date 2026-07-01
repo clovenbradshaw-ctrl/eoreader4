@@ -2,9 +2,9 @@
 //
 // For each stream: seed a reading from the opening `window` (a firm convention), set the
 // membership `expect` from how well the opening fits itself (self-calibrated), then fold
-// every unit's fit into the reading's ledger with `evaluate`. Emit whether/when the
+// every unit's fit into the reading's ledger with `EVA`. Emit whether/when the
 // reading was defeated. The scorer joins the held `defeats` flag.
-import { evaluate } from '../../src/core/index.js';
+import { EVA } from '../../src/core/index.js';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -31,7 +31,7 @@ for (const f of files) {
   const fits = [];
   for (let t = 0; t < units.length; t++) {
     const c = dot(units[t], seed), fit = c * c; fits.push(+fit.toFixed(3));
-    ledger = evaluate(ledger, fit, { gamma: 0.9, expect, minEvidence: 0.8 });
+    ledger = EVA(ledger, fit, { gamma: 0.9, expect, minEvidence: 0.8 });
     if (ledger.defeated && defeatAt < 0) defeatAt = t;
   }
   out.push({ name: f.replace('.json', ''), note: D.note, expect: +expect.toFixed(3), defeatAt, fits });

@@ -147,7 +147,7 @@ export const deriveNull = (background, { scale = 'linear', alpha = 0.01, N, grai
   return Math.max(projection, grainFloor);
 };
 
-// ---- readingCount: how many readings the field's geography holds ------------
+// ---- DEF: how many readings the field's geography holds ------------
 //
 // eigenLenses ranks a field's readings by Born weight, but HOW MANY readings the
 // field actually holds is not a universal constant — it is a property of the
@@ -175,7 +175,7 @@ export const deriveNull = (background, { scale = 'linear', alpha = 0.01, N, grai
 //
 // Returns { k, gap, floor, abstain }. Pure on its input — reads no module state and
 // never mutates the array (parity: same spectrum, same reading count, forever).
-export const readingCount = (eigenvalues, { alpha = 0.05, maxK = 12, window = 20 } = {}) => {
+export const DEF = (eigenvalues, { alpha = 0.05, maxK = 12, window = 20 } = {}) => {
   const ev = (eigenvalues || []).filter(Number.isFinite);
   if (ev.length < 2) return { k: ev.length, gap: 0, floor: null, abstain: true };
   const lim = Math.min(ev.length, Math.max(2, window | 0));
@@ -220,7 +220,7 @@ export const boundedNull = (background, { alpha = 0.05, leaveOut = null, grain =
   return (Number.isFinite(line) && line < ceiling) ? line : fallback;
 };
 
-// ---- voidPeaks: the change-point complement to boundedNull -----------------
+// ---- SEG: the change-point complement to boundedNull -----------------
 //
 // A boundary detector reads a per-position score CURVE — a departure (relEntropy),
 // an incommensurability (commutator norm), any streaming change signal — and must
@@ -230,7 +230,7 @@ export const boundedNull = (background, { alpha = 0.05, leaveOut = null, grain =
 // bounded per-decision line (boundedNull — a change-point score is a bounded departure,
 // not a heavy tail, so it takes the N=2 Born line, never the log-tail bound), then
 // suppress any two chosen peaks within `tol` so one boundary is not counted twice.
-// boundedNull sets the line; voidPeaks reads the curve against it. Pure — no state.
+// boundedNull sets the line; SEG reads the curve against it. Pure — no state.
 //
 //   scores   the per-position score curve (non-finite / ≤0 entries are ignored).
 //   alpha    the bounded-void tolerance (default 0.05).
@@ -240,7 +240,7 @@ export const boundedNull = (background, { alpha = 0.05, leaveOut = null, grain =
 //
 // Returns the chosen peak positions, ascending. Empty when the background is too thin
 // to derive a line (cold start) — abstain rather than cut on an untrusted floor.
-export const voidPeaks = (scores, { alpha = 0.05, tol = 1, indices = null } = {}) => {
+export const SEG = (scores, { alpha = 0.05, tol = 1, indices = null } = {}) => {
   const at = (k) => (indices ? indices[k] : k);
   const vals = [];
   for (const s of scores) if (Number.isFinite(s) && s > 0) vals.push(s);

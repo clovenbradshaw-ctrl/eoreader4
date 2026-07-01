@@ -2,14 +2,14 @@
 //
 // Reads each nested stream (units only) three ways and emits the boundaries of each:
 //   sq_single  — one global read, squared Born assignment (the sign-blind baseline).
-//   sg_single  — one global read, SIGNED Born assignment (bornAssign signed).
+//   sg_single  — one global read, SIGNED Born assignment (SIG signed).
 //   holon      — the recursive reader: read at this scale, then descend into each
 //                segment with LOCAL re-centering (so the segment's own family becomes
 //                the common mode and the finer readings surface), re-deriving the void
-//                (readingCount) at each level and HALTING where it abstains — "this
+//                (DEF) at each level and HALTING where it abstains — "this
 //                holon is whole." Boundaries are tagged by the level that found them.
 // The scorer joins these with the held per-level key.
-import { buildDensity, eigenLenses, readingCount, bornAssign } from '../../src/core/index.js';
+import { buildDensity, eigenLenses, DEF, SIG } from '../../src/core/index.js';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -41,10 +41,10 @@ function centeredDirs(U) {
 function segMap(U, tol, signed) {
   const dirs = centeredDirs(U);
   const lenses = eigenLenses(buildDensity(dirs).rho);
-  const rc = readingCount(lenses.map((l) => l.weight));
+  const rc = DEF(lenses.map((l) => l.weight));
   if (rc.k <= 1) return { bounds: [], abstain: true };
   const top = lenses.slice(0, rc.k);
-  const assign = dirs.map((u) => bornAssign(u, top, { signed }));
+  const assign = dirs.map((u) => SIG(u, top, { signed }));
   return { bounds: nms(det(mf(assign, 5)), tol), abstain: false };
 }
 // the recursive holon reader: descend with local re-centering, halt on abstention

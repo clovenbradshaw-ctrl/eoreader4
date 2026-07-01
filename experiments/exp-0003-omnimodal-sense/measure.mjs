@@ -2,7 +2,7 @@
 //
 // Reads only each stream's `units` (never its boundaries/labels/tol). For every
 // stream it runs the REAL engine three ways and emits the detected boundaries of each:
-//   geo  — reading count from readingCount (the void over the eigengap spectrum).
+//   geo  — reading count from DEF (the void over the eigengap spectrum).
 //   mass — the incumbent harness rule: top lenses to 90% Born mass, cap 12.
 //   null — eigenvalues above the void floor (deriveNull on the eigenvalues).
 // Everything else is held identical: centered directions (common-mode removed),
@@ -11,7 +11,7 @@
 // The Born assignment is the universal invariant; only the count policy differs.
 //
 // The scorer (score.mjs) joins these detections with the held key and computes F1.
-import { buildDensity, eigenLenses, readingCount, deriveNull } from '../../src/core/index.js';
+import { buildDensity, eigenLenses, DEF, deriveNull } from '../../src/core/index.js';
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -53,7 +53,7 @@ for (const f of files) {
   const dirs = centeredDirs(D.units);            // ← uses D.units ONLY
   const lenses = eigenLenses(buildDensity(dirs).rho);
   const ev = lenses.map((l) => l.weight);
-  const rc = readingCount(ev);
+  const rc = DEF(ev);
   out.push({
     name: f.replace('.json', ''), modality: D.modality, note: D.note, T: D.units.length, dim: D.dim,
     geo: { k: rc.k, abstain: rc.abstain, bounds: boundariesFor(dirs, lenses, rc.k) },
