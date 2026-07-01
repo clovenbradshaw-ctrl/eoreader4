@@ -110,7 +110,7 @@ test('THE LEASH: a discovered thread that strays off the question is dropped and
   assert.ok(out.docs.every(d => !/vibranium/.test(d.text || '')), 'the strayed page never reached the ground');
 });
 
-test('THE BIN: a strayed reading is parsed but not stored as a source — held in the bin, leased by content', async () => {
+test('THE ARCHIVE: a strayed reading is parsed but not stored as a source — filed in the archive, leased by content', async () => {
   const pages = {
     'x-files revival': 'The X-Files revival will be directed by Coogler, Coogler, Coogler.',
     'x-files revival coogler': 'Coogler, the X-Files revival director, once made Wakanda, Wakanda, Wakanda.',
@@ -119,19 +119,19 @@ test('THE BIN: a strayed reading is parsed but not stored as a source — held i
   const search = async (q) => { const t = pages[q.toLowerCase()]; return t ? [{ doc: webDoc(t, { url: `https://x/${q.replace(/\s+/g, '-')}` }) }] : []; };
   const out = await runDeepResearch('X-Files revival', {
     search, maxHops: 8, salienceRatio: 0.5, strayPatience: 1, k: 1,
-    clock: () => 1_000, binTtlOpts: { msPerChar: 2, min: 100, max: 1e12 },
+    clock: () => 1_000, shredTtlOpts: { msPerChar: 2, min: 100, max: 1e12 },
   });
-  assert.ok(out.bin.length >= 1, 'the strayed reading landed in the bin, not the void');
-  const b = out.bin.find(e => /wakanda/i.test(e.text));
-  assert.ok(b, 'the off-topic Wakanda reading is held with its parsed text');
+  assert.ok(out.archive.length >= 1, 'the strayed reading landed in the archive, not the void');
+  const b = out.archive.find(e => /wakanda/i.test(e.text));
+  assert.ok(b, 'the off-topic Wakanda reading is stored with its parsed text');
   assert.equal(b.reason, 'strayed');
-  assert.ok(out.sources.every(s => s.url !== b.url), 'the binned reading never appears in the sources');
-  assert.equal(b.binnedAt, 1_000, 'stamped by the injected clock');
-  assert.equal(b.expiresAt, 1_000 + b.ttlMs, 'leased to delete after a content-scaled duration');
+  assert.ok(out.sources.every(s => s.url !== b.url), 'the archived reading never appears in the sources');
+  assert.equal(b.archivedAt, 1_000, 'stamped by the injected clock');
+  assert.equal(b.shredAt, 1_000 + b.ttlMs, 'leased to go to the shredder after a content-scaled duration');
   assert.ok(b.ttlMs >= b.chars * 2 - 1 && b.chars > 100, 'the lease scales with how much content was processed');
 });
 
-test('the report surfaces the bin distinct from the sources, and counts it in stats', async () => {
+test('the report surfaces the archive distinct from the sources, and counts it in stats', async () => {
   const pages = {
     'x-files revival': 'The X-Files revival will be directed by Coogler, Coogler, Coogler.',
     'x-files revival coogler': 'Coogler, the X-Files revival director, once made Wakanda, Wakanda, Wakanda.',
@@ -140,9 +140,9 @@ test('the report surfaces the bin distinct from the sources, and counts it in st
   const search = async (q) => { const t = pages[q.toLowerCase()]; return t ? [{ doc: webDoc(t, { url: `https://x/${q.replace(/\s+/g, '-')}` }) }] : []; };
   const walk = await runDeepResearch('X-Files revival', { search, maxHops: 8, salienceRatio: 0.5, strayPatience: 1, k: 1, clock: () => 0 });
   const report = deepResearchReport(walk, { query: 'X-Files revival', turn: { answer: 'ok' } });
-  assert.equal(report.bin.length, walk.bin.length, 'the report carries the bin');
-  assert.equal(report.stats.binned, walk.bin.length, 'and counts it');
-  assert.ok(report.stats.binned >= 1 && report.sources.length < walk.hops.length, 'binned readings are held, not counted as sources');
+  assert.equal(report.archive.length, walk.archive.length, 'the report carries the archive');
+  assert.equal(report.stats.archived, walk.archive.length, 'and counts it');
+  assert.ok(report.stats.archived >= 1 && report.sources.length < walk.hops.length, 'archived readings are stored, not counted as sources');
 });
 
 test('maxHops is the hard backstop across all branches', async () => {

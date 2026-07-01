@@ -136,9 +136,9 @@ test('THE LEASH: it stops when a thread strays too far from the question (salien
   assert.ok(out.docs.every(d => !/vibranium/.test(d.text || '')), 'the off-topic page never reached the answer ground');
 });
 
-test('THE BIN: a strayed reading is parsed but held (not grounded, not lost), leased by content', async () => {
-  // Same walk as the leash test — but the strayed Wakanda reading is not thrown away: it is binned,
-  // absent from the ground, with its parsed text kept and a lease set by how much content it processed.
+test('THE ARCHIVE: a strayed reading is parsed but filed (not grounded, not lost), leased by content', async () => {
+  // Same walk as the leash test — but the strayed Wakanda reading is not thrown away: it is filed in
+  // the archive, absent from the ground, with its parsed text kept and a lease set by content processed.
   const pages = {
     'x-files revival': 'The X-Files revival will be directed by Coogler, Coogler, Coogler.',
     'x-files revival coogler': 'Coogler, the X-Files revival director, once made Wakanda, Wakanda, Wakanda.',
@@ -146,14 +146,14 @@ test('THE BIN: a strayed reading is parsed but held (not grounded, not lost), le
   };
   const search = async (q) => { const t = pages[q.toLowerCase()]; return t ? [{ doc: webDoc(t) }] : []; };
   const out = await runCuriousResearch('X-Files revival', {
-    search, maxHops: 8, salienceRatio: 0.5, strayPatience: 1, k: 1, clock: () => 500, binTtlOpts: { msPerChar: 3, min: 100, max: 1e12 },
+    search, maxHops: 8, salienceRatio: 0.5, strayPatience: 1, k: 1, clock: () => 500, shredTtlOpts: { msPerChar: 3, min: 100, max: 1e12 },
   });
-  assert.ok(out.bin.length >= 1, 'the strayed reading landed in the bin');
-  const b = out.bin.find(e => /vibranium/.test(e.text));
-  assert.ok(b, 'the off-topic reading is held with its parsed text — a circle-back can re-use it');
+  assert.ok(out.archive.length >= 1, 'the strayed reading landed in the archive');
+  const b = out.archive.find(e => /vibranium/.test(e.text));
+  assert.ok(b, 'the off-topic reading is stored with its parsed text — a circle-back can re-use it');
   assert.equal(b.reason, 'strayed');
   assert.ok(out.docs.every(d => !/vibranium/.test(d.text || '')), 'yet it never reached the ground');
-  assert.equal(b.expiresAt, 500 + b.ttlMs, 'leased to delete after a content-scaled duration, stamped by the clock');
+  assert.equal(b.shredAt, 500 + b.ttlMs, 'leased to go to the shredder after a content-scaled duration, stamped by the clock');
 });
 
 test('maxHops is the hard backstop — even endlessly on-topic+surprising pages cannot run away', async () => {

@@ -35,7 +35,7 @@
 
 import { profileOf, curiosityOf, foldInto, leadsFrom, nextQuery, researchTerms } from './research.js';
 import { bornSalience } from '../surfer/salience.js';
-import { makeReadingBin } from './reading-bin.js';
+import { makeArchive } from './archive.js';
 import { normalizeQuery } from '../ui/prefetch.js';
 import { runTurn } from './pipeline.js';
 
@@ -149,11 +149,11 @@ export const runDeepResearch = async (seed, {
   onPlan = null,
   onHop = null,
   signal = null,          // an AbortSignal (the Stop button): stop the walk between hops, keeping what it gathered
-  clock = () => Date.now(),  // the bin's `now` — injected so a strayed reading's lease is deterministic in a test
-  binTtlOpts = {},        // { msPerChar, min, max } — how the bin scales a reading's lease by content processed
+  clock = () => Date.now(),  // the archive's `now` — injected so a reading's shred time is deterministic in a test
+  shredTtlOpts = {},      // { msPerChar, min, max } — how the archive scales a reading's lease by content processed
 } = {}) => {
   const q0 = String(seed || '').trim();
-  const empty = { docs: [], sources: [], bin: [], hops: [], facets: [], frontier: [], prior: new Map(), topic: new Map() };
+  const empty = { docs: [], sources: [], archive: [], hops: [], facets: [], frontier: [], prior: new Map(), topic: new Map() };
   if (typeof search !== 'function' || !q0) return empty;
 
   // 1. MULTIPLE PROMPT GENERATION — the facets, the mouths the search opens from.
@@ -175,7 +175,7 @@ export const runDeepResearch = async (seed, {
   const docs = [];                       // every kept page, deduped by docId
   const docIds = new Set();
   const sources = [];                    // provenance rows, in admission order
-  const bin = makeReadingBin({ clock, ...binTtlOpts });   // parsed-but-strayed readings, leased by content processed
+  const archive = makeArchive({ clock, ...shredTtlOpts });   // parsed-but-strayed readings, leased by content then shredded
   const hops = [];
   const visited = new Set();             // normalized queries already fetched — never re-fetch
   const seenLeads = new Set();           // lead terms already chased or already in a query
@@ -270,16 +270,17 @@ export const runDeepResearch = async (seed, {
     const strayed = hopDocs.length > 0 && salience < floor;
     if (!hopDocs.length || strayed) {
       // A strayed hop was PARSED but is not salient to the question. It never becomes a source —
-      // but the reading is not thrown away: bin it, leased to delete after a duration set by how
-      // much content it processed, so a later hop that circles back re-uses it instead of re-reading.
-      let binned = 0;
+      // but the reading is not thrown away: file it in the archive, leased to go to the shredder
+      // after a duration set by how much content it processed, so a later hop that circles back
+      // re-uses it instead of re-reading.
+      let archived = 0;
       if (strayed) for (const d of hopDocs) {
-        if (docIds.has(d.docId)) continue;   // already grounded elsewhere — it is a source, not binned
-        bin.hold(d, { facet: node.facet, depth: node.depth, query: node.query, term: node.term,
-                      curiosity: round(bits), salience: round4(salience), reason: 'strayed' });
-        binned += 1;
+        if (docIds.has(d.docId)) continue;   // already grounded elsewhere — it is a source, not archived
+        archive.file(d, { facet: node.facet, depth: node.depth, query: node.query, term: node.term,
+                          curiosity: round(bits), salience: round4(salience), reason: 'strayed' });
+        archived += 1;
       }
-      record(false, { leads: [], reason: strayed ? 'strayed' : 'empty', binned });
+      record(false, { leads: [], reason: strayed ? 'strayed' : 'empty', archived });
       if (++stray >= strayPatience) break;     // wandered off the question — stop, well short of maxHops
       continue;
     }
@@ -292,7 +293,7 @@ export const runDeepResearch = async (seed, {
     record(true, { leads: leads.map(l => l.term), exhausted: !novel });
   }
 
-  return { docs, sources, bin: bin.entries(), hops, facets, frontier, prior, topic };
+  return { docs, sources, archive: archive.entries(), hops, facets, frontier, prior, topic };
 };
 
 // deepResearchReport(walk, { query, turn }) → the thorough summary WITH provenance — the deliverable.
@@ -302,8 +303,9 @@ export const runDeepResearch = async (seed, {
 //   facets     the angles the search opened from — the multiple prompts it generated.
 //   sources    every page read, numbered, each with title · url · when AND the thread that found it
 //              (facet, query, depth) and the surprise/saliency that admitted it. The full provenance.
-//   bin        the readings that were PARSED but strayed off the question — held, not stored as
-//              sources (absent from `sources`), each leased to delete after a content-scaled duration.
+//   archive    the readings that were PARSED but strayed off the question — stored, not listed as
+//              sources (absent from `sources`), each leased to go to the shredder after a
+//              content-scaled duration.
 //   byFacet    the sources grouped by the facet that surfaced them — the report's sections.
 //   tree       the complete hop trace: which thread, at what depth, how surprising, kept or why dropped.
 //   stats      the shape of the walk: facets, hops, kept, strayed, sources, deepest hop, total bits.
@@ -312,7 +314,7 @@ export const runDeepResearch = async (seed, {
 export const deepResearchReport = (walk, { query = '', turn = null } = {}) => {
   const hops = walk?.hops || [];
   const sources = walk?.sources || [];
-  const bin = walk?.bin || [];
+  const archive = walk?.archive || [];
   const facets = walk?.facets || [];
   const byFacet = facets.map(facet => ({
     facet,
@@ -326,10 +328,11 @@ export const deepResearchReport = (walk, { query = '', turn = null } = {}) => {
     overview: String(turn?.answer || '').trim(),
     facets,
     sources,
-    // The BIN: readings that were parsed but strayed off the question — held, not stored as sources
-    // (they are deliberately absent from `sources` above), each leased to delete after a duration set
-    // by how much content it processed. Surfaced for transparency, kept distinct from the provenance.
-    bin,
+    // The ARCHIVE: readings that were parsed but strayed off the question — stored, not listed as
+    // sources (they are deliberately absent from `sources` above), each leased to go to the shredder
+    // after a duration set by how much content it processed. Surfaced for transparency, kept distinct
+    // from the provenance.
+    archive,
     byFacet,
     tree: hops,
     // The proposition audit (factcheck/propositions.js): every office the overview
@@ -345,7 +348,7 @@ export const deepResearchReport = (walk, { query = '', turn = null } = {}) => {
       kept: hops.filter(h => h.kept).length,
       strayed,
       sources: sources.length,
-      binned: bin.length,
+      archived: archive.length,
       maxDepth: hops.reduce((d, h) => Math.max(d, h.depth || 0), 0),
       bits: round(bits),
     },

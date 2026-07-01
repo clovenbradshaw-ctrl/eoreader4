@@ -10,4 +10,4 @@ export { runCuriousResearch, runTurnWithResearch, researchAnnouncement,
          curiosityOf, profileOf, foldInto, leadsFrom, plausibleLead, nextQuery, researchTerms } from './research.js';
 export { planQueries, modelPlanner, runDeepResearch, deepResearchReport,
          runTurnWithDeepResearch, deepResearchAnnouncement } from './deep-research.js';
-export { binTtl, makeReadingBin, sweepReadings, nextReadingExpiry } from './reading-bin.js';
+export { shredTtl, makeArchive, shredExpired, nextShredTime } from './archive.js';
