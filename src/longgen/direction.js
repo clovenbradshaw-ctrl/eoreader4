@@ -53,11 +53,20 @@ export const selfMoveLog = (units = [], opts = {}) => {
   const useSemantic = !!opts.semanticStrain;
   const seen = new Set();
 
+  // The field-read strain (docs/generation-by-field-reading.md), when the caller has
+  // read the accepted atoms back as a density field: strainByCursor[i] = 1 at a turn (a
+  // void-cleared atmosphere/paradigm boundary). It is the principled form of the lexical
+  // self-fold below and OVERRIDES it when present — the real density departure, not a
+  // spelling proxy.
+  const field = opts.strainByCursor || null;
+
   const frameByCursor = units.map((u, i) => {
     const bf = typeof u.boundFraction === 'number' ? u.boundFraction : 1;
     const driftStrain = clamp01(1 - bf);     // the floor's verdict read back
     let semStrain = 0;
-    if (useSemantic) {
+    if (field) {
+      semStrain = clamp01(field[i] || 0);    // the field boundary IS the strain
+    } else if (useSemantic) {
       const w = contentWords(unitText(u));
       semStrain = i === 0 ? 0 : noveltyVs(w, seen);  // the opener sets terms, never a turn
       for (const t of w) seen.add(t);                // the fold grows AFTER the measure
@@ -121,7 +130,7 @@ export const predictDirection = (units = [], opts = {}) => {
   if (units.length === 0) {
     return { move: opts.seedMove || SEED_MOVE, seeded: true, flat: false, sharpness: null, posterior: null };
   }
-  const log = selfMoveLog(units, { semanticStrain: opts.semanticStrain });
+  const log = selfMoveLog(units, { semanticStrain: opts.semanticStrain, strainByCursor: opts.strainByCursor });
   const i = log.moves.length - 1;            // predict the move AFTER the last unit
   const pred = predictNextMove(log, i, { weights: opts.weights });
 

@@ -20,6 +20,7 @@ import { dirname, join } from 'node:path';
 
 import { runContinuation } from '../src/longgen/index.js';
 import { createModel } from '../src/model/interface.js';
+import { createHashEmbedder } from '../src/model/embed-hash.js';
 import '../src/model/echo.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -72,16 +73,36 @@ const main = async () => {
 
   const rOff = report('register OFF  (spend-only — reproduces the early stop)', off);
   const rOn = report('register ON   (self register — develops and lands)', on);
-  report('register ON + self-fold (semantic strain — the turn licensed, not yet timed)', onFold);
-  const recFired = movesOf(onFold).includes('REC');
-  console.log(`  REC (the turn) : ${recFired ? 'YES — a turn fired live' : 'not live yet — see below'}`);
-  console.log(`    the self-fold that licenses REC on CLEAN-binding prose is unit-verified`);
-  console.log(`    (tests/essay-backwards.test.js); it does not fire in THIS walk because the`);
-  console.log(`    node ops front-load all ${CONCEPT_GROUND.length} concepts before the body develops, so nothing`);
-  console.log(`    novel is left to strain the frame. Firing it live needs the INTERLEAVE cadence`);
-  console.log(`    — and that is not coaxable from the move-predictor (biasing it off the last`);
-  console.log(`    move traps on CON·EVA·EVA·…, even at recurrence weight 0). It is the §4.2`);
-  console.log(`    plan→proposition resolver on a real graph. docs/essay-backwards.md §8.`);
+  report('register ON + self-fold (semantic strain — the lexical proxy for the turn)', onFold);
+
+  // THE FULL PIPELINE (generation-by-field-reading.md): read the atoms back as a density
+  // field, detect the turn where the field rotates (atmosphere/paradigm + the Born void),
+  // and realize it as a REC — with the interleave scheduler walking the ground so the turn
+  // lands after a develop. A turning ground (three topics) and the hash embedder.
+  const embed = createHashEmbedder().embed;
+  const turningGround = [
+    { idx: 0, score: 0.95, text: 'a small model is fluent past its knowledge' },
+    { idx: 1, score: 0.90, text: 'handed a gap the model will fill the gap' },
+    { idx: 2, score: 0.85, text: 'the fill is fluent and often wrong' },
+    { idx: 3, score: 0.80, text: 'a planner decides every structural move first' },
+    { idx: 4, score: 0.75, text: 'the planner grounds each claim on a span' },
+    { idx: 5, score: 0.70, text: 'a floor truncates whatever fails to bind' },
+    { idx: 6, score: 0.65, text: 'across messages the state persists and resumes' },
+    { idx: 7, score: 0.60, text: 'the resumed session widens the running fold' },
+  ];
+  const full = await runContinuation({
+    ground: turningGround, model, arc: true, temperature: 1, maxSteps: 40,
+    selfRegister: true, fieldRead: true, embed, interleave: true,
+  });
+  const rFull = report('FULL: self-register + field-read + interleave (the pipeline)', full);
+  const fullMoves = movesOf(full);
+  const recFired = fullMoves.includes('REC');
+  console.log(`  REC (the turn) : ${recFired ? 'YES — fired where the field rotates, after a develop' : 'no'}`);
+  console.log(`    the field read (relEntropy atmosphere + commutator paradigm, picked by the`);
+  console.log(`    Born void voidPeaks, gated by readingCount) locates the turn in the generated`);
+  console.log(`    field; the interleave scheduler lands it after an EVA and the loop realizes a`);
+  console.log(`    REC. This is the §4.2 seam, coarse: the cadence read off the field, not the`);
+  console.log(`    move-predictor. A real embedder sharpens WHICH turns; the mechanism is here.`);
 
   // The macro-arc: a run of node moves (open), then self-op develops (the body), then
   // a SYN close (land). The essay's shape, read off the realized trace.

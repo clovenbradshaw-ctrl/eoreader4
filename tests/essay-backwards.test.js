@@ -11,7 +11,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { resolveProposition, STANCE, EDGE_OPS, predictDirection } from '../src/longgen/index.js';
-import { propositionInstruction } from '../src/longgen/index.js';
+import { propositionInstruction, fieldStrain, runContinuation } from '../src/longgen/index.js';
+import { createModel } from '../src/model/interface.js';
+import '../src/model/echo.js';
 
 // A three-span ground pool, and a run of accepted units that already fired on it — the
 // SELF the edge ops operate on. Each unit carries the source idxs it cited (its ground).
@@ -128,6 +130,61 @@ test('self-fold: a clean EVA that turns raises REC mass; restating it does not',
   const turnRecOff = recMass(turning, {});
   const stayRecOff = recMass(restating, {});
   assert.equal(turnRecOff, stayRecOff, 'without the self-fold, a clean turn is invisible');
+});
+
+// ── The field read: the turn (REC) as a boundary in the generated field ───────
+//
+// generation-by-field-reading.md — read the accepted atoms back as a density field and
+// find the turn where the field rotates (atmosphere/paradigm cleared by the Born void),
+// gated by the geography abstention. This is the principled form of the lexical self-fold.
+// A clean embedder that tags atoms by topic isolates the DETECTOR from the weak hash
+// organ: a genuine A|B turn must fire a boundary at the turn; a flat field must abstain.
+
+const topicEmbed = async (t) => {                 // e0 for topic A, e1 for topic B
+  const v = new Array(16).fill(0);
+  v[/beta|two|second|planner|ground/.test(t) ? 1 : 0] = 1;
+  return v;
+};
+
+test('fieldStrain locates a turn: an A|B field boundary lands at the turn, not the frontier', async () => {
+  const A = ['alpha one', 'alpha first term', 'alpha again here', 'alpha still'];
+  const B = ['beta two', 'beta second term', 'beta other way', 'beta onward'];
+  const units = [...A, ...B].map((t, i) => ({ text: t, sources: [i], boundFraction: 1, move: 'CON' }));
+  const f = await fieldStrain(units, { embed: topicEmbed, window: 3 });
+  assert.ok(f.boundaries.length >= 1, 'the turn is detected');
+  // the cut sits at the A|B seam (cursor 4), not spuriously at the rank-1 frontier
+  assert.ok(f.boundaries.some((b) => Math.abs(b - 4) <= 1), `boundary near the seam, got ${JSON.stringify(f.boundaries)}`);
+});
+
+test('fieldStrain abstains on a flat field: no turn, geography reads one reading', async () => {
+  const units = Array.from({ length: 8 }, (_, i) => ({ text: 'alpha one same', sources: [i], boundFraction: 1, move: 'CON' }));
+  const f = await fieldStrain(units, { embed: topicEmbed, window: 3 });
+  assert.equal(f.boundaries.length, 0, 'a flat field turns nowhere');
+  assert.equal(f.abstain, true, 'and the geography abstains (the principled quiesce)');
+});
+
+test('the field read closes the loop: a turning ground fires a REC and lands a SYN', async () => {
+  const model = createModel('echo');
+  await model.load();
+  const ground = [
+    { idx: 0, score: 0.95, text: 'a small model is fluent past its knowledge' },
+    { idx: 1, score: 0.90, text: 'handed a gap the model will fill the gap' },
+    { idx: 2, score: 0.85, text: 'the fill is fluent and often wrong' },
+    { idx: 3, score: 0.80, text: 'a planner decides every structural move first' },
+    { idx: 4, score: 0.75, text: 'the planner grounds each claim on a span' },
+    { idx: 5, score: 0.70, text: 'a floor truncates whatever fails to bind' },
+    { idx: 6, score: 0.65, text: 'across messages the state persists and resumes' },
+    { idx: 7, score: 0.60, text: 'the resumed session widens the running fold' },
+  ];
+  const res = await runContinuation({
+    ground, model, arc: true, temperature: 1, maxSteps: 40,
+    selfRegister: true, fieldRead: true, embed: topicEmbed, interleave: true,
+  });
+  const moves = res.units.map((u) => u.move);
+  assert.ok(moves.includes('REC'), `a turn fires where the field rotates: ${moves.join(' ')}`);
+  // the REC is a self-op restructure, and it comes after a develop (an EVA), per the schedule
+  const ri = moves.indexOf('REC');
+  assert.equal(moves[ri - 1], 'EVA', 'the turn lands right after a develop beat');
 });
 
 test('a node op never self-resolves, even with the register on', () => {

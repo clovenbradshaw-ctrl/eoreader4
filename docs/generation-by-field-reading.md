@@ -101,27 +101,82 @@ against the expected (`common-sense.md`, SURFER coupling). Generation navigates 
 the same way: the self-fold's departure *is* that surprise, pointed at the generated field.
 One navigator, two sources.
 
-## The concrete next step (a prototype, not a rewrite)
+## Built — the field read is wired into the loop
 
-Read the accepted atoms back as a density field each step and let the field, not the
-move-predictor, carry the cadence:
+The prototype is in the tree, opt-in behind `fieldRead` + `interleave` (default off; the
+full suite stays green at 1772). `src/longgen/field.js` reads the accepted atoms back as a
+density field each step:
 
-1. embed the accepted atoms (the existing `embed`/`embed-hash` path) into direction
-   vectors; `buildDensity → eigenLenses` over a trailing window is the running field;
-2. at each cursor compute **atmosphere** `relEntropy(ρ_L, ρ_R)` and **paradigm**
-   `commutator(ρ_L, ρ_R)` over the window before/after the last atom — both already exist
-   on `main` (`src/core/spectral.js`);
-3. feed their peak (via `voidPeaks`) as the `strain` the structural prior reads, replacing
-   `1 − boundFraction` and the lexical self-fold — so REC fires on a real basis rotation;
-4. gate the whole step by `readingCount` over the field's spectrum: flat → quiesce;
-5. score against the target trace (generate-then-read parity) — the turns should land where
-   `essay-backwards.trace.json` has its REC/SYN.
+1. embed the atoms (any `embed` fn; the hash organ by default), **normalise but do not
+   center** — centering antipodes a low-cluster split and a density is sign-blind, so a
+   clean two-topic turn would collapse (verified: centered kills `A|B@4`);
+2. at each interior cursor compute **atmosphere** `relEntropy(ρ_L, ρ_R)` and **paradigm**
+   `commutator(ρ_L, ρ_R)` over trailing windows (skipping the rank-1 frontier, which reads
+   as a spurious departure against any field);
+3. pick the turns with the **Born void** `voidPeaks` over each curve, union them (exp-0004's
+   fusion), and mark the boundary and its wake as the `strain` the structural prior reads —
+   *replacing* `1 − boundFraction` and the lexical self-fold;
+4. read `readingCount` over the field spectrum; a flat field with no turn **quiesces**;
+5. the `interleave` scheduler walks the ground introduce/develop so a turn lands right after
+   an EVA, where the loop realizes it as a **REC**.
 
-`relEntropy`, `commutator`, `eigenLenses`, `buildDensity` are on `main` today.
-`readingCount` and `voidPeaks` live in `src/core/voidnull.js` on
-`claude/new-session-qnyzcs` (exp-0003/0004) and are new pure exports — this prototype is
-their first consumer on the generation side, the reason the user flagged the ingestion work
-as "certainly relevant for the generation pipeline." It is.
+`src/core/voidnull.js` now carries `readingCount`/`voidPeaks` (brought over from
+`claude/new-session-qnyzcs`, identical source so it merges clean); `relEntropy`/`commutator`/
+`eigenLenses`/`buildDensity` were already on `main`. **Result** (`npm run essay-backwards`,
+and `tests/essay-backwards.test.js`): on a three-topic turning ground the loop walks
+`CON·EVA·CON·EVA·CON·EVA·CON·EVA·CON·EVA·REC·CON·EVA·CON·EVA·CON·SYN` — introduce/develop
+pairs, a **REC where the field rotates**, and a **SYN** landing. The turn is read off the
+generated field, not coaxed from the move-predictor. The unit tests pin the detector: an
+`A|B` field fires a boundary at the seam; a flat field abstains.
+
+## How close are we to a full pipeline?
+
+The generation act is *navigate → resolve → realize → floor → weld*, guarded, shaped, and
+stopped. Component by component, on this branch:
+
+| piece | status | where |
+|---|---|---|
+| answerability gate (§3) | **built** | `longgen/answerable.js` |
+| navigate — p(next) predictor | **built** | `predict/`, `longgen/direction.js` |
+| resolve — self-register (edge ops on the self) | **built** | `longgen/resolve.js` |
+| realize — one-proposition render | **built (echo)**; needs a real small model | `arc/generate.js` |
+| floor — bind + veto | **built** | `ground/` |
+| weld — strain feedback | **built**, now **field-derived** | `longgen/direction.js` + `field.js` |
+| shape — significance arc | **built** | `longgen/shape.js` |
+| **field read — the turn as a boundary** | **built + verified** | `longgen/field.js` |
+| interleave — the §4.2 scheduler | **built, coarse** | `longgen/continuation.js` |
+| quiesce / saturation stops | **built** | `continuation.js`, `arc/saturation.js` |
+| prefix caching / atom speculation (§9) | **partial** (symbolic half) | `longgen/prompt.js` |
+| embedder that measures meaning | **stub** (hash is bag-of-words) | `model/embed-hash.js` |
+| real small-model render | **not wired here** (echo); exists in the mechanics harness | `eoreader4-eval/mechanics/` |
+| §4.2 resolver, full (edge on a real graph) | **coarse only** | `resolve.js` seam |
+| corpus-built concept graph | **authored/hand-fed** | — |
+
+**The read.** The *control structure* of a full generation pipeline now exists and runs end
+to end: it opens, develops on the self, **turns where its own output rotates**, lands, and
+stops on its own — every claim witnessed by the floor. That is the spine `spec-planner.md`
+and `spec-generation.md` describe, closed. Three gaps stand between this and *good essays*,
+and none is structural:
+
+1. **A meaning embedder.** The hash organ is `measuresMeaning:false` — spelling space. The
+   field read detects *lexical* turns today; a MiniLM-class embedder (already used by the
+   mechanics harness) makes the turns *semantic*. This is the highest-leverage swap and it is
+   a dependency injection, not a redesign.
+2. **A real renderer.** Echo returns spans verbatim, so the prose is not yet prose. Wiring
+   the SmolLM2 talker (present in `eoreader4-eval/mechanics/`) as the `model` gives real
+   sentences under the same one-proposition contract.
+3. **The full §4.2 resolver.** The interleave here is a coarse strict-alternation scheduler.
+   The full form resolves each move to a specific *edge on a referent-and-relation graph*, so
+   the develop/turn structure is read off the subject's own graph rather than the ground order.
+
+In short: **the pipeline is complete in mechanism and gated behind flags; it is stubbed in two
+organs (embedder, renderer) and coarse in one seam (the graph resolver).** Swap the two stubs
+for the components that already exist elsewhere in the repo and run it on a real document, and
+the generate-then-read parity control (`essay-backwards.trace.json`) becomes the measurement
+of how good the essays are — the toggle `spec-planner.md §11` always intended.
+
+## Files referenced
+
 
 ## Files referenced
 
