@@ -1668,11 +1668,12 @@ class Component extends DCLogic {
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
       if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Writing '+a+' '+kind+'…'}]};
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,draft:true,think:'Writing '+a+' '+kind+'…'}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();this._thinkClock();
+    // finish firms the draft to the final piece (draft:false) unless a patch says otherwise.
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,draft:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const guard=this._stallGuard();
     let model=null;
     try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
@@ -2298,6 +2299,9 @@ class Component extends DCLogic {
       // Render the model's markdown LIVE — even while the bubble is still pending — so lists, bold
       // and line breaks form as the answer streams in, not only once it finishes. User turns stay plain.
       const isMd=!isUser&&!!m.text;
+      // The FIRST GO: the draft is shown tentative — lighter, italic, labelled "here is my first go"
+      // — while the writer reads it back. On the final pass the flag clears and it firms to full ink.
+      const isDraft=!isUser&&!!m.draft;
       // Inline footnotes. The longform arc bakes ⟦cN⟧ sentinels into the text AS IT STREAMS and
       // rides its own registry on `m.cites`, so the superscripts grow with the essay — use it
       // directly (pending and settled). Any other answer gets the post-hoc binder once it settles
@@ -2450,9 +2454,9 @@ class Component extends DCLogic {
         relatedStyle:'max-width:80%;margin-top:7px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;',
         relatedHeadStyle:'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:1px;',
         relatedMoreStyle:'font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
-        hasNote:!!m.modelNote,note:m.modelNote||'',
+        hasNote:!!m.modelNote||isDraft,note:isDraft?'(here is my first go)':(m.modelNote||''),
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
-        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
+        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+((m.pending&&!m.text)||isDraft?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(isDraft?'font-style:italic;':'')+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
         noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
