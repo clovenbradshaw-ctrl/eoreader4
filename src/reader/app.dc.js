@@ -1532,8 +1532,14 @@ class Component extends DCLogic {
     // routing strips it to its subject and researches it — which is exactly why "write an emily
     // dickinson poem" came back as a memory of Dickinson instead of a poem. composeArtifact does
     // the three steps the request asks for: read examples of the form, then WRITE an original one.
-    if(this._composeIntent(q))return this.composeArtifact(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
+    // COMPOSE also RIDES THE THREAD. Once a turn has composed, the follow-up almost always elides
+    // the KIND — "write me one", "i said write me one", "just write the poem I asked for", "now one
+    // about the sea". _composeIntent needs a literal kind word, so those miss it and fall back into
+    // the grounding/research pipeline — which answers ABOUT writing (and only composed on the third
+    // explicit try, wrapped in a grounding apology). Treat a re-request/revision in an already-
+    // composing thread as more composing, so it writes on the first ask, every ask.
+    if(this._composeIntent(q)||this._composeFollowup(q,cur))return this.composeArtifact(q);
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
     // a question it can't ground in what's been read+folded sends the engine to the web first — it
     // fetches, FOLDS every page into memory (chatResearch → the curiosity walk → readURL→ingest),
@@ -1731,6 +1737,33 @@ class Component extends DCLogic {
     const s=String(q||'');
     return new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s)&&new RegExp('\\b(?:'+this._CK()+')\\b','i').test(s);
   }
+  // Is THIS chat already composing? True when the last settled assistant turn was itself a composed
+  // piece, or a recent user turn was an outright compose ask — so a request that fell short and is
+  // being re-asked ("i said write me one") still counts. Scans only the last few settled turns, so
+  // an old poem far up the thread doesn't hijack a later, unrelated question.
+  _composeMode(cur){
+    const msgs=((cur&&cur.messages)||[]).filter(m=>!m.pending);
+    for(let i=msgs.length-1;i>=0&&i>=msgs.length-4;i--){
+      const m=msgs[i];
+      if(m.role==='asst'&&m.compose)return true;
+      if(m.role==='user'&&this._composeIntent(m.text))return true;
+    }
+    return false;
+  }
+  // A COMPOSE FOLLOW-UP rides the thread instead of standing on its own words. In an already-
+  // composing thread, a bare re-request / revision / affirmation — "write me one", "just write it",
+  // "do it", "make it shorter", "now one about the sea" — is more composing, even with no KIND word.
+  // Conservative: a question about the piece ("what does line 3 mean?") or a plain thank-you is NOT
+  // a re-write, so those fall through to the ordinary answer path. History carries the real subject
+  // (the original "…poem about Drag Brunch") into composeArtifact, so the elided ask still lands.
+  _composeFollowup(q,cur){
+    const s=String(q||'').trim();
+    if(!s||/\?\s*$/.test(s))return false;                          // a question isn't a re-write
+    if(/^(?:thanks?|thank you|thx|ty|cool|nice|great|awesome|perfect|love it|lol|haha|ok(?:ay)?|k)\b[\s.!]*$/i.test(s))return false;
+    if(!this._composeMode(cur))return false;
+    if(new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s))return true;          // "write/make/give me…"
+    return /^(?:yes|yep|yeah|sure|please|go(?:\s+ahead|\s+on)?|do\s+it|again|another(?:\s+one)?|one\s+more|now\b|make\s+it\b|shorter|longer|more\b)/i.test(s);
+  }
   // The KIND phrase, kept whole ("emily dickinson poem", "haiku"), length/style words peeled. Used
   // only to label the work ("Writing a haiku…"); the model gets the request itself, not this.
   _composeKind(q){
@@ -1752,7 +1785,7 @@ class Component extends DCLogic {
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
       if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,draft:true,think:'Writing '+a+' '+kind+'…'}]};
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,draft:true,compose:true,think:'Writing '+a+' '+kind+'…'}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();this._thinkClock();
     // finish firms the draft to the final piece (draft:false) unless a patch says otherwise.
@@ -1764,8 +1797,12 @@ class Component extends DCLogic {
     if(!model){guard.clear();finish({text:'I couldn’t load a model to write the '+kind+'.'});return;}
     // The request itself is the prompt, in the plain assistant frame (no doc, no grounding) — the
     // same path that already writes a clean poem with the web off. Prior turns ride as history so
-    // "make it shorter" / "now one about the sea" continue the thread.
-    const history=prev.slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
+    // "make it shorter" / "now one about the sea" continue the thread. But DROP the reader's own
+    // grounding refusals ("I haven't read anything about Drag Brunch") — if a follow-up finally
+    // reaches this path after the pipeline bounced the earlier tries, those apologies would prime
+    // the writer to open with the same "I didn't find it in the text I read, but I can try…"
+    // preamble instead of just writing. Keep the user turns and any real composed drafts.
+    const history=prev.filter(m=>m.role==='user'||m.compose).slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
     const messages=this._ME.buildChatMessages({question:q,history,now:new Date()});
     let acc='',raf=0;
     const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
