@@ -1394,3 +1394,114 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
   .mnav-lbl { font-size: .6rem; }
   section { padding: .7rem .7rem 1rem; }
 }
+
+/* ── The Gates view: the limits on the logits (gates-view.js) ─────────────────────────
+   The lens port reshapes the decoder's logits; this surface shows how hard, and where.
+   Dark palette, monospace readouts — the same register as the Log and Audit panes. */
+.lg-root { font-size: .8rem; color: #d4d4d8; }
+.lg-head { border-bottom: 1px solid #27272a; padding-bottom: .6rem; margin-bottom: .6rem; }
+.lg-title { font-size: .82rem; color: #e4e4e7; font-weight: 600; }
+.lg-eq {
+  margin: .4rem 0; padding: .45rem .6rem; background: #131316; border: 1px solid #27272a;
+  border-radius: 6px; font-family: ui-monospace, monospace; font-size: .78rem; color: #a1a1aa;
+  letter-spacing: .01em;
+}
+.lg-eq-out { color: #e4e4e7; }
+.lg-legend { font-size: .68rem; color: #71717a; line-height: 1.7; }
+/* the four steering terms, colour-coded and reused as legend lamps */
+.lg-void   { color: #fca5a5; }   /* the hard −∞ conscience */
+.lg-mu     { color: #93c5fd; }   /* relevance up-weight */
+.lg-lambda { color: #c4b5fd; }   /* personality / the mounted voice */
+.lg-gate   { color: #6ee7b7; }   /* the entropy gate g(H) */
+.lg-lamp {
+  display: inline-block; padding: .02rem .3rem; border-radius: 4px; font-family: ui-monospace, monospace;
+  font-size: .66rem; border: 1px solid #3f3f46; background: #1a1a1e;
+}
+
+.lg-subhead {
+  font-family: ui-monospace, monospace; font-size: .7rem; color: #71717a;
+  text-transform: uppercase; letter-spacing: .04em; margin: .5rem 0 .3rem;
+  display: flex; align-items: baseline; gap: .5rem;
+}
+.lg-tape-status { text-transform: none; letter-spacing: 0; color: #52525b; font-size: .68rem; }
+
+/* the live tape — a scroll of logit interventions, newest at the top */
+.lg-tape {
+  max-height: 15rem; overflow-y: auto; border: 1px solid #27272a; border-radius: 6px;
+  background: #0d0d10; padding: .3rem;
+}
+.lg-tape:empty::after {
+  content: 'no interventions yet — the lens port fires here as the decoder runs';
+  color: #52525b; font-size: .68rem; font-style: italic; padding: .3rem; display: block;
+}
+.lg-ev {
+  display: flex; gap: .45rem; align-items: baseline; padding: .18rem .3rem;
+  font-family: ui-monospace, monospace; font-size: .7rem; line-height: 1.4;
+  border-bottom: 1px solid #18181b;
+}
+.lg-ev:first-child { animation: lg-flash .6s ease; }
+@keyframes lg-flash { from { background: #1e2436; } to { background: transparent; } }
+.lg-ev-icon { flex: 0 0 auto; width: 1rem; text-align: center; }
+.lg-ev-t { flex: 0 0 auto; color: #52525b; min-width: 2.6rem; }
+.lg-ev-text { color: #a1a1aa; }
+.lg-ev-suppress .lg-ev-icon { color: #fca5a5; }
+.lg-ev-suppress .lg-ev-text { color: #d4a5a5; }
+.lg-ev-conflict .lg-ev-icon, .lg-ev-conflict .lg-ev-text { color: #fbbf24; }
+.lg-ev-rec .lg-ev-icon, .lg-ev-rec .lg-ev-text { color: #6ee7b7; }
+.lg-ev-reset { opacity: .6; }
+.lg-ev-reset .lg-ev-icon { color: #71717a; }
+
+/* the per-turn cards */
+.lg-turns { display: flex; flex-direction: column; gap: .4rem; }
+.lg-empty { color: #52525b; font-size: .72rem; font-style: italic; padding: .4rem 0; line-height: 1.5; }
+.lg-turn {
+  border: 1px solid #27272a; border-radius: 6px; padding: .45rem .55rem; background: #131316;
+}
+.lg-turn.in-flight { border-color: #1e3a8a; }
+.lg-turn-head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; margin-bottom: .35rem; }
+.lg-q { color: #e4e4e7; font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lg-chips { flex: 0 0 auto; display: flex; gap: .3rem; align-items: baseline; }
+.lg-chip {
+  font-family: ui-monospace, monospace; font-size: .64rem; color: #a1a1aa;
+  background: #1a1a1e; border: 1px solid #3f3f46; border-radius: 4px; padding: .02rem .3rem;
+}
+.lg-chip-void { color: #fca5a5; border-color: #7f1d1d; background: #2a1216; }
+.lg-outcome.gated {
+  font-family: ui-monospace, monospace; font-size: .64rem; color: #fbbf24;
+  border: 1px solid #78350f; background: #271a06; border-radius: 4px; padding: .02rem .3rem;
+}
+
+/* the measured limits — labelled readouts that light when they bit */
+.lg-meters { display: flex; flex-wrap: wrap; gap: .35rem; }
+.lg-meter {
+  display: inline-flex; flex-direction: column; gap: .05rem; padding: .22rem .4rem;
+  border: 1px solid #27272a; border-radius: 5px; background: #0d0d10; min-width: 6.5rem;
+}
+.lg-meter-l { font-family: ui-monospace, monospace; font-size: .62rem; color: #71717a; }
+.lg-meter-v { font-family: ui-monospace, monospace; font-size: .72rem; color: #52525b; }
+.lg-meter.hot .lg-meter-v { color: #e4e4e7; }
+.lg-meter.lg-void.hot   { border-color: #7f1d1d; }
+.lg-meter.lg-void.hot .lg-meter-l { color: #fca5a5; }
+.lg-meter.lg-conflict.hot { border-color: #78350f; }
+.lg-meter.lg-conflict.hot .lg-meter-l { color: #fbbf24; }
+.lg-meter.lg-rec.hot { border-color: #065f46; }
+.lg-meter.lg-rec.hot .lg-meter-l { color: #6ee7b7; }
+.lg-meter.lg-mu .lg-meter-l { color: #60a5fa; }
+
+.lg-unconstrained { color: #71717a; font-size: .72rem; font-style: italic; line-height: 1.5; }
+
+/* the pantheon gods that mounted the λ voice */
+.lg-gods { margin-top: .4rem; display: flex; flex-wrap: wrap; gap: .3rem; align-items: baseline; }
+.lg-gods-l { font-family: ui-monospace, monospace; font-size: .64rem; color: #c4b5fd; }
+.lg-god {
+  font-family: ui-monospace, monospace; font-size: .64rem; color: #c4b5fd;
+  border: 1px solid #4c1d95; background: #1e1633; border-radius: 4px; padding: .02rem .3rem;
+}
+.lg-god-w { color: #8b7fb0; }
+
+.lg-flags { margin-top: .4rem; display: flex; flex-wrap: wrap; gap: .3rem; }
+.lg-flag {
+  font-family: ui-monospace, monospace; font-size: .64rem; color: #fbbf24;
+  border: 1px solid #78350f; background: #271a06; border-radius: 4px; padding: .02rem .3rem;
+}
+.lg-flag.refuses { color: #fca5a5; border-color: #7f1d1d; background: #2a1216; }

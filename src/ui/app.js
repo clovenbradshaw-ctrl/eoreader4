@@ -37,6 +37,7 @@ import { mountPredict } from './predict-view.js';
 import { mountReplay } from './replay-view.js';
 import { mountSurfer } from './surfer-view.js';
 import { mountIdle } from './idle-view.js';
+import { mountGates } from './gates-view.js';
 import { renderAuditTurn, renderEmptyAudit, exportAudit } from './audit-view.js';
 import { exportChat } from './chat-export.js';
 import { exportActivity } from './activity-export.js';
@@ -120,6 +121,7 @@ const els = {
   replayView: document.getElementById('replay-view'),
   surferView: document.getElementById('surfer-view'),
   predictView: document.getElementById('predict-view'),
+  gatesView: document.getElementById('gates-view'),
   idleView:  document.getElementById('idle-view'),
   docTabs:   document.getElementById('doc-tabs'),
   messages:  document.getElementById('messages'),
@@ -488,12 +490,14 @@ const setTab = (name) => {
   els.surferView.hidden = name !== 'surfer';
   els.feedView.hidden  = name !== 'feed';
   els.predictView.hidden = name !== 'predict';
+  els.gatesView.hidden = name !== 'gates';
   els.idleView.hidden  = name !== 'idle';
   els.dropzone.style.display = name === 'text' ? '' : 'none';
   if (name === 'graph') STATE.graph?.reheat?.();
   // The move-log / open-set / beat list are rebuilt only when the document changed
   // (refresh is a no-op otherwise), so opening the tab is cheap after the first build.
   if (name === 'predict') STATE.predict?.refresh();
+  if (name === 'gates')   STATE.gates?.refresh();
   if (name === 'surfer')  STATE.surfer?.refresh();
   if (name === 'idle')    STATE.idle?.refresh();
   // The replay plays on a timer; refresh when shown, pause when hidden so it never
@@ -1400,6 +1404,17 @@ STATE.replay = mountReplay(els.replayView, {
 STATE.surfer = mountSurfer(els.surferView, {
   getDoc: () => STATE.doc,
   getAudit: () => STATE.audit,
+  onSelectSentence: selectSentence,
+});
+
+// The Gates view: the limits on the logits, watched live. The lens port (src/write/lens-port.js)
+// is a LogitProcessor — it reshapes the model's next-token distribution during decode. This
+// surface reads the model's live per-token intervention feed (the void gate clamping an
+// ungrounded number, an invented name hitting the entity trie) and, off the audit, how hard
+// the logits were held on each prompted turn. Unconstrained when the Lens port is off (golden path).
+STATE.gates = mountGates(els.gatesView, {
+  getAudit: () => STATE.audit,
+  getModel: () => STATE.model,
   onSelectSentence: selectSentence,
 });
 
