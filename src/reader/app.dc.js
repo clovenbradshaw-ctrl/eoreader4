@@ -1567,6 +1567,30 @@ class Component extends DCLogic {
     }catch(e){finish({text:'Couldn’t draw that: '+(e&&e.message||e)});}
   }
 
+  // The Conversation Fold for a chat — a pure projection of its turns that carries
+  // the enacted STANCE (compose|ground) forward (src/core/conversation-fold.js). The
+  // projector is self-contained and loaded lazily, memoized in the module on
+  // (chatId, turn-count, decay-config). If it can't load, routing degrades to a
+  // null-stance fold — today's behavior, never worse. See docs/conversation-fold.md.
+  async _convFold(cur){
+    try{
+      const F=this._FOLD||(this._FOLD=await import(new URL('src/core/conversation-fold.js',document.baseURI).href));
+      return F.projectFold((cur&&cur.messages)||[],{chatId:(cur&&cur.id)||'',foldRules:{warmWindow:3}});
+    }catch(e){return {stance:null,focus:null,warm:[],stanceDesc:'an isolated assistant chat'};}
+  }
+  // The compose FOCUS enacted by a turn — the KIND that labels the work and the
+  // running SUBJECT slot. A turn that names its own kind ("write a haiku") or subject
+  // ("about the city") sets them; a bare "write me one" / "make it shorter" borrows
+  // the carried focus from the fold so the label and the thread stay coherent.
+  _composeFocus(q,fold){
+    const s=String(q||'');
+    const hasKind=new RegExp('\\b(?:'+this._CK()+')\\b','i').test(s);
+    const kind=hasKind?this._composeKind(q):((fold&&fold.focus&&fold.focus.kind)||'poem');
+    const m=s.match(/\b(?:about|on|regarding|concerning|describing|inspired\s+by|in\s+the\s+style\s+of)\s+(.+)$/i);
+    const subject=m?m[1].replace(/[?.!]+$/,'').trim():((fold&&fold.focus&&fold.focus.subject)||null);
+    return {kind,subject};
+  }
+
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
     this._stopGen=false;   // a fresh turn clears any prior stop
@@ -1578,6 +1602,22 @@ class Component extends DCLogic {
     // the three steps the request asks for: read examples of the form, then WRITE an original one.
     if(this._composeIntent(q))return this.composeArtifact(q);
     const cur=this.activeChatObj();
+    // CONTINUATION-BY-DEFAULT — the Conversation Fold (docs/conversation-fold.md §2,§5).
+    // "write me one", "do it", "now one about the city", "make it shorter" have no
+    // intrinsic KIND — their stance is inherited from the thread, not read off the
+    // string. So a follow-up in a thread that was already COMPOSING keeps composing,
+    // instead of falling through to the web/grounding path (which would strip it to a
+    // subject and answer ABOUT it — the "write an emily dickinson poem" → memory-of-
+    // Dickinson bug, one turn later). Model-free (rung 2): the carried stance is the
+    // whole decision; a warm model (rung 4) can later override on a clean switch. The
+    // absence of a detected switch means continue. Only a compose stance re-routes; a
+    // ground / null stance falls through to today's path unchanged.
+    const fold=await this._convFold(cur);
+    // An EXPLICIT research request ("research dolphins", "look into X") is a performed
+    // transition INTO grounding — a structural marker (§5), not an anaphor — so it
+    // breaks continuation and takes the web path below. Everything else in a composing
+    // thread continues to compose.
+    if(fold.stance==='compose'&&!this._researchIntent(q))return this.composeArtifact(q,fold);
     // The grounding scope for this turn: isolated (net-new, ground nothing from reading),
     // everything (sources:[]), or the tagged sources. An isolated chat answers plainly.
     const _sc=this._answerScope(cur,null);const isolated=_sc.isolated;const sources=_sc.sources;
@@ -1597,7 +1637,10 @@ class Component extends DCLogic {
       chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Thinking…',research:{steps:[{kind:'think',text:'Thinking…'}],done:false,mode:'think',t0:Date.now()}}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();this._thinkClock();
-    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    // Every turn this path enacts is a GROUND turn (an answer from the reading, the web,
+    // or the plain assistant) — tag it so the fold carries `ground` forward. The compose
+    // continuation above returns before here, so this never mislabels a compose turn.
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',stance:'ground',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     // 1) clock questions — no model
     const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
     // 1a) THE NAMED-SUBJECT GATE (offline). We are here only because the web didn't take this
@@ -1797,8 +1840,12 @@ class Component extends DCLogic {
   // The compose path: hand the request to the model in the plain writer frame and stream the piece
   // into the bubble. Deliberately minimal — no walk, no examples, no extra system constraints. The
   // model already writes the form; the job here is to stop the reading posture from intercepting it.
-  async composeArtifact(q){
-    const kind=this._composeKind(q);
+  async composeArtifact(q,fold){
+    // The enacted compose focus: the KIND that labels the work + the running SUBJECT.
+    // A bare "write me one" / "make it shorter" borrows both from the carried fold so
+    // "Writing a haiku…" stays a haiku across the thread, not a default poem.
+    const focus=this._composeFocus(q,fold);
+    const kind=focus.kind;
     const a=/^[aeiou]/i.test(kind)?'an':'a';
     let id=this.state.activeChat;
     const prevObj=this.activeChatObj();
@@ -1809,9 +1856,11 @@ class Component extends DCLogic {
       chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,draft:true,think:'Writing '+a+' '+kind+'…'}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();this._thinkClock();
-    // finish firms the draft to the final piece (draft:false) unless a patch says otherwise.
+    // finish firms the draft to the final piece (draft:false) unless a patch says otherwise,
+    // and tags the turn `stance:'compose'` with its focus so the fold carries the compose
+    // activity forward — the next "write me one" / "do it" continues it (§2, §5).
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,draft:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,draft:false,stance:'compose',focus,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const guard=this._stallGuard();
     let model=null;
     try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
@@ -1870,8 +1919,9 @@ class Component extends DCLogic {
     return this._answerSingle(id,q,gathered);
   }
   async _answerSingle(id,q,gathered){
+    // A grounded answer over the gathered/scoped reading — tag `ground` for the fold.
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,stance:'ground',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const cur=this.state.chats.find(c=>c.id===id);
     // Fold the freshly-gathered pages into the chat's scope: "everything" stays everything,
     // a tagged/gathered set widens to include them, and a net-new chat that gathered nothing
@@ -1936,8 +1986,9 @@ class Component extends DCLogic {
   //   NUL   …if it would only re-cite, skip it. Saturation, not a token target, sets the length.
   // Degrades to the single answer when supply is thin (<4 spans / <2 themes) or anything throws.
   async _longformArc(id,q,gathered){
+    // An essay/report is the GROUNDED arc (distinct from creative compose) — tag `ground`.
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,stance:'ground',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const cur=this.state.chats.find(c=>c.id===id);
     // A net-new chat that gathered nothing has no reading to build an arc over — don't fall back
     // to the whole library; answer plainly instead.

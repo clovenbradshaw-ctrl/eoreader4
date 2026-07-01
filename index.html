@@ -3091,6 +3091,30 @@ class Component extends DCLogic {
     }catch(e){finish({text:'Couldn’t draw that: '+(e&&e.message||e)});}
   }
 
+  // The Conversation Fold for a chat — a pure projection of its turns that carries
+  // the enacted STANCE (compose|ground) forward (src/core/conversation-fold.js). The
+  // projector is self-contained and loaded lazily, memoized in the module on
+  // (chatId, turn-count, decay-config). If it can't load, routing degrades to a
+  // null-stance fold — today's behavior, never worse. See docs/conversation-fold.md.
+  async _convFold(cur){
+    try{
+      const F=this._FOLD||(this._FOLD=await import(new URL('src/core/conversation-fold.js',document.baseURI).href));
+      return F.projectFold((cur&&cur.messages)||[],{chatId:(cur&&cur.id)||'',foldRules:{warmWindow:3}});
+    }catch(e){return {stance:null,focus:null,warm:[],stanceDesc:'an isolated assistant chat'};}
+  }
+  // The compose FOCUS enacted by a turn — the KIND that labels the work and the
+  // running SUBJECT slot. A turn that names its own kind ("write a haiku") or subject
+  // ("about the city") sets them; a bare "write me one" / "make it shorter" borrows
+  // the carried focus from the fold so the label and the thread stay coherent.
+  _composeFocus(q,fold){
+    const s=String(q||'');
+    const hasKind=new RegExp('\\b(?:'+this._CK()+')\\b','i').test(s);
+    const kind=hasKind?this._composeKind(q):((fold&&fold.focus&&fold.focus.kind)||'poem');
+    const m=s.match(/\b(?:about|on|regarding|concerning|describing|inspired\s+by|in\s+the\s+style\s+of)\s+(.+)$/i);
+    const subject=m?m[1].replace(/[?.!]+$/,'').trim():((fold&&fold.focus&&fold.focus.subject)||null);
+    return {kind,subject};
+  }
+
   async sendChat(){
     const q=this.norm(this.state.chatInput);if(!q)return;
     this._stopGen=false;   // a fresh turn clears any prior stop
@@ -3102,6 +3126,22 @@ class Component extends DCLogic {
     // the three steps the request asks for: read examples of the form, then WRITE an original one.
     if(this._composeIntent(q))return this.composeArtifact(q);
     const cur=this.activeChatObj();
+    // CONTINUATION-BY-DEFAULT — the Conversation Fold (docs/conversation-fold.md §2,§5).
+    // "write me one", "do it", "now one about the city", "make it shorter" have no
+    // intrinsic KIND — their stance is inherited from the thread, not read off the
+    // string. So a follow-up in a thread that was already COMPOSING keeps composing,
+    // instead of falling through to the web/grounding path (which would strip it to a
+    // subject and answer ABOUT it — the "write an emily dickinson poem" → memory-of-
+    // Dickinson bug, one turn later). Model-free (rung 2): the carried stance is the
+    // whole decision; a warm model (rung 4) can later override on a clean switch. The
+    // absence of a detected switch means continue. Only a compose stance re-routes; a
+    // ground / null stance falls through to today's path unchanged.
+    const fold=await this._convFold(cur);
+    // An EXPLICIT research request ("research dolphins", "look into X") is a performed
+    // transition INTO grounding — a structural marker (§5), not an anaphor — so it
+    // breaks continuation and takes the web path below. Everything else in a composing
+    // thread continues to compose.
+    if(fold.stance==='compose'&&!this._researchIntent(q))return this.composeArtifact(q,fold);
     // The grounding scope for this turn: isolated (net-new, ground nothing from reading),
     // everything (sources:[]), or the tagged sources. An isolated chat answers plainly.
     const _sc=this._answerScope(cur,null);const isolated=_sc.isolated;const sources=_sc.sources;
@@ -3121,7 +3161,10 @@ class Component extends DCLogic {
       chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Thinking…',research:{steps:[{kind:'think',text:'Thinking…'}],done:false,mode:'think',t0:Date.now()}}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();this._thinkClock();
-    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    // Every turn this path enacts is a GROUND turn (an answer from the reading, the web,
+    // or the plain assistant) — tag it so the fold carries `ground` forward. The compose
+    // continuation above returns before here, so this never mislabels a compose turn.
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'',stance:'ground',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     // 1) clock questions — no model
     const mech=this.mechanicalAnswer(q);if(mech){finish({text:mech});return;}
     // 1a) THE NAMED-SUBJECT GATE (offline). We are here only because the web didn't take this
@@ -3321,8 +3364,12 @@ class Component extends DCLogic {
   // The compose path: hand the request to the model in the plain writer frame and stream the piece
   // into the bubble. Deliberately minimal — no walk, no examples, no extra system constraints. The
   // model already writes the form; the job here is to stop the reading posture from intercepting it.
-  async composeArtifact(q){
-    const kind=this._composeKind(q);
+  async composeArtifact(q,fold){
+    // The enacted compose focus: the KIND that labels the work + the running SUBJECT.
+    // A bare "write me one" / "make it shorter" borrows both from the carried fold so
+    // "Writing a haiku…" stays a haiku across the thread, not a default poem.
+    const focus=this._composeFocus(q,fold);
+    const kind=focus.kind;
     const a=/^[aeiou]/i.test(kind)?'an':'a';
     let id=this.state.activeChat;
     const prevObj=this.activeChatObj();
@@ -3333,9 +3380,11 @@ class Component extends DCLogic {
       chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,draft:true,think:'Writing '+a+' '+kind+'…'}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();this._thinkClock();
-    // finish firms the draft to the final piece (draft:false) unless a patch says otherwise.
+    // finish firms the draft to the final piece (draft:false) unless a patch says otherwise,
+    // and tags the turn `stance:'compose'` with its focus so the fold carries the compose
+    // activity forward — the next "write me one" / "do it" continues it (§2, §5).
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,draft:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,draft:false,stance:'compose',focus,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const guard=this._stallGuard();
     let model=null;
     try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
@@ -3394,8 +3443,9 @@ class Component extends DCLogic {
     return this._answerSingle(id,q,gathered);
   }
   async _answerSingle(id,q,gathered){
+    // A grounded answer over the gathered/scoped reading — tag `ground` for the fold.
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,stance:'ground',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const cur=this.state.chats.find(c=>c.id===id);
     // Fold the freshly-gathered pages into the chat's scope: "everything" stays everything,
     // a tagged/gathered set widens to include them, and a net-new chat that gathered nothing
@@ -3460,8 +3510,9 @@ class Component extends DCLogic {
   //   NUL   …if it would only re-cite, skip it. Saturation, not a token target, sets the length.
   // Degrades to the single answer when supply is thin (<4 spans / <2 themes) or anything throws.
   async _longformArc(id,q,gathered){
+    // An essay/report is the GROUNDED arc (distinct from creative compose) — tag `ground`.
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,stance:'ground',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const cur=this.state.chats.find(c=>c.id===id);
     // A net-new chat that gathered nothing has no reading to build an arc over — don't fall back
     // to the whole library; answer plainly instead.
@@ -3949,8 +4000,8 @@ class Component extends DCLogic {
       // Grounding chips: the verbatim passages the answer leaned on (the richest, most
       // mechanical trail), then the source(s) and the entities it named. Each passage chip
       // opens its source; entity chips pivot the panel.
-      const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this.openHero(p.u)}));
-      const sources=(m.sources||[]).map(u=>({label:titleForUrl(u),title:u,onOpen:()=>this.openHero(u)}));
+      const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this.goWeb(p.u)}));
+      const sources=(m.sources||[]).map(u=>({label:titleForUrl(u),title:u,onOpen:()=>this.goWeb(u)}));
       const cites=passages.length?passages:sources;   // prefer passages; fall back to bare sources
       // Each entity carries the DOMAIN it was read from — the source provenance, shown as a muted
       // suffix on the chip. The primary source is the one that mentions the entity most (stable,
@@ -3958,16 +4009,14 @@ class Component extends DCLogic {
       // This is what surfaces the entity-collision case at a glance — "Dolphin · ifaw.org" reads
       // apart from "Dolphins · miamidolphins.com" without opening either.
       const entities=(m.entities||[]).map(id=>{
-        let dom='',extra=0,primary='';
+        let dom='',extra=0;
         if(this.master&&this.graph){
           const cnt={};
           for(const i of this.mentionsOf(id)){const u=this.master.sentenceSource[i];if(u)cnt[u]=(cnt[u]||0)+1;}
           const srcs=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
-          if(srcs.length){primary=srcs[0];dom=this.short(srcs[0]);extra=srcs.length-1;}
+          if(srcs.length){dom=this.short(srcs[0]);extra=srcs.length-1;}
         }
-        // Clicking a chip opens its source in the hero (centre) and slides the chat into its
-        // right-hand drawer; with no known source it falls back to pivoting to the entity profile.
-        return {label:this.labelOf(id),domain:dom,hasDomain:!!dom,hasExtra:extra>0,extraLabel:'+'+extra,onClick:primary?(()=>this.openHero(primary)):(()=>this.clickEntity(id)),
+        return {label:this.labelOf(id),domain:dom,hasDomain:!!dom,hasExtra:extra>0,extraLabel:'+'+extra,onClick:()=>this.clickEntity(id),
           style:'display:inline-flex;align-items:baseline;gap:5px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:2px 8px;cursor:pointer;margin:3px 4px 0 0;',
           domStyle:'font-size:9px;font-weight:500;color:var(--acc);opacity:.55;letter-spacing:.02em;white-space:nowrap;'};
       });
@@ -3996,7 +4045,7 @@ class Component extends DCLogic {
       // (featured-snippet research); longer than the old 46-char chip, clamped in the view so it
       // stays tidy. Each ref also carries its source identity (favicon + domain) and a hasIcon flag.
       const refOf=(u,n,text)=>({n,label:titleForUrl(u),domain:this.short(u)||titleForUrl(u),
-        preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.openHero(u)});
+        preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.goWeb(u)});
       let refs=[];
       if(liveReg){
         refs=Object.keys(liveReg).map(i=>liveReg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
@@ -4027,7 +4076,7 @@ class Component extends DCLogic {
       // Related docs — other read sources ranked by relevancy. Default to the top 3; a
       // "+N more" reveals the rest. Offered alongside an answer (and instead of weak
       // grounding when the in-scope sources didn't actually match the question).
-      const relAll=(m.related||[]).map(r=>({label:r.title,title:r.url,onOpen:()=>this.openHero(r.url),
+      const relAll=(m.related||[]).map(r=>({label:r.title,title:r.url,onOpen:()=>this.goWeb(r.url),
         chipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'}));
       const relKey=cur.id+':'+mi+':rel', relOn=!!gOpen[relKey];
       const related=relOn?relAll:relAll.slice(0,3);
@@ -5665,11 +5714,6 @@ class Component extends DCLogic {
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
   goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
-  // Open a source in the CENTRE (the hero) WITHOUT dropping the chat — unlike goWeb, which
-  // clears activeChat and so closes the thread. Clicking a chip inside a chat answer opens
-  // the source as the hero and, because viewUrl is now set, the chat reflows out of the
-  // centre into its right-hand drawer (chatVals' `docked`) instead of disappearing.
-  openHero(url){url=this.norm(url);if(!url)return;if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,rightOpen:true,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});
     // Now that the page is read it has propositions — re-render the open view in the
     // chosen mode (reader book, or the native page with its contents + flagged passages),
