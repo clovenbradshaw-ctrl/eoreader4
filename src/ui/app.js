@@ -15,9 +15,10 @@ import { runTurn, runWebFollowup, formulateSearchQuery, searchAnnouncement, load
          runCuriousResearch, researchAnnouncement,
          runDeepResearch, modelPlanner, deepResearchAnnouncement } from '../turn/index.js';
 import { createWebClient, searchAndAdmit, createRawStore } from '../ingest/index.js';
+import { artifactKindOf } from '../tasks/index.js';
 import { createSpeculativeWeb } from './prefetch.js';
 import { createAuditLog }   from '../audit/index.js';
-import { createModel, createHashEmbedder, createMiniLMEmbedder } from '../model/index.js';
+import { createModel, createHashEmbedder, createMiniLMEmbedder, buildChatMessages, streamPhrase } from '../model/index.js';
 import { bootGeometricReader } from '../boot/index.js';
 import { markSites }        from '../perceiver/index.js';
 import { createHorizon, structuralGround } from '../surfer/index.js';
@@ -536,10 +537,124 @@ const runSvg = async (rawQuestion, arg) => {
   }
 };
 
+// The compose verbs that open a GENERATIVE request — "write …", "compose …", "draft a …".
+// The gate, paired with `artifactKindOf` naming a real kind, that distinguishes "write an
+// emily dickinson poem" (a make-this) from "summarize this" or a bare question (a read-this).
+// Deliberately a lead-anchored verb set: a question never opens with one, so the grounded
+// answer path (runTurn) is untouched — only an explicit make-this crosses into the writer.
+const COMPOSE_VERB = /^\s*(?:please\s+)?(?:can you\s+|could you\s+|i'?d like you to\s+|i want you to\s+)?(?:write|compose|draft|create|generate|produce|pen|author|make)\b/i;
+
+// THE WRITER PATH. A generative request — "write an emily dickinson poem" — is not a question to
+// answer but an artifact to MAKE. The reading pipeline (runTurn) researches the topic and answers
+// ABOUT it; that is why it came back as a memory of Dickinson rather than a poem. The fix is not a
+// new apparatus — the model writes the form perfectly well from its own training. The job is only
+// to stop the reading posture from intercepting the request: hand it to the model in the plain
+// writer frame and stream the piece back. No research, no example scaffolding, no grounding
+// constraints — that prompting is exactly what flattens a poem into a write-up.
+const runWrite = async (rawQuestion, kindHint = null) => {
+  if (!rawQuestion) return;
+  const ctl = new AbortController();
+  STATE.inflight = ctl;
+  setComposerBusy(true);
+  renderUserMessage(els.messages, rawQuestion);
+  if (STATE.setPane && window.matchMedia('(max-width: 820px)').matches) STATE.setPane('chat');
+
+  const kind = kindHint || artifactKindOf(rawQuestion);
+  const label = kind && kind !== 'answer' ? kind : 'piece';
+  const thinking = createThinkingMessage(els.messages, `writing ${/^[aeiou]/i.test(label) ? 'an' : 'a'} ${label}…`);
+
+  try {
+    await ensureModel();
+  } catch (err) {
+    finalizeThinking(thinking, `Model failed to load: ${err?.message || err}`, [], {
+      route: 'error', mode: STATE.grounding, onRetry: () => runWrite(rawQuestion, kindHint),
+    });
+    STATE.inflight = null;
+    setComposerBusy(false);
+    return;
+  }
+  if (ctl.signal.aborted) {
+    finalizeThinking(thinking, '⏹ Stopped.', [], { route: 'chat', mode: STATE.grounding });
+    STATE.inflight = null;
+    setComposerBusy(false);
+    return;
+  }
+
+  // The request itself is the prompt, in the plain assistant frame (no doc, no grounding) — the
+  // same path that already writes a clean poem. Prior turns ride as history so a follow-up
+  // ("make it shorter", "now one about the sea") continues the thread.
+  const history = STATE.history.slice(-8).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content }));
+  const messages = buildChatMessages({ question: rawQuestion, history, now: new Date() });
+  let acc = '';
+  let raw = '';
+  try {
+    raw = await streamPhrase(STATE.model, messages, {
+      maxTokens: 700, temperature: 0.85, signal: ctl.signal,
+      onToken: (piece) => { acc += String(piece || ''); streamThinking(thinking, piece); },
+    });
+  } catch (err) {
+    if (!(ctl.signal.aborted)) {
+      finalizeThinking(thinking, acc.trim() || `Couldn't write that: ${err?.message || err}`, [], {
+        route: acc.trim() ? 'chat' : 'error', mode: STATE.grounding, onRetry: () => runWrite(rawQuestion, kindHint),
+      });
+      STATE.inflight = null;
+      setComposerBusy(false);
+      return;
+    }
+    raw = acc;
+  }
+
+  // THE FIRST GO, THEN EVALUATE. "Let me take a first go, and then I'll update if I need to." The
+  // draft above is the first go; the writer now reads it back against the request and only rewrites
+  // if it falls short — the lag posture / self-fold weld, write→evaluate→(maybe)revise, not plan
+  // it all up front. Any trouble, an empty verdict, or an OK keeps the first go untouched.
+  let artifact = String(raw || acc || '').trim();
+  if (artifact && !ctl.signal.aborted) {
+    try {
+      const review = [
+        { role: 'system', content: 'You are the writer, reviewing your own draft. Read it against the request — the form it should take, the voice, and exactly what was asked. If the draft already meets the request well, reply with only the word OK. If it falls short, reply with an improved, complete version of the piece and nothing else — no commentary, no preamble.' },
+        { role: 'user', content: `Request: ${rawQuestion}\n\nDraft:\n${artifact}` },
+      ];
+      setThinkingNote(thinking, '🔁 reading it back…');
+      const verdict = String(await streamPhrase(STATE.model, review, { maxTokens: 700, temperature: 0.7, signal: ctl.signal }) || '').trim();
+      if (verdict && !/^ok\b/i.test(verdict)) {
+        const revised = verdict.replace(/^(?:sure[,!.]?\s+|certainly[,!.]?\s+|here(?:'s| is| you go|’s)\b[^\n:]*:?\s*)/i, '').trim();
+        if (revised.replace(/[^a-z]/gi, '').length >= 20) artifact = revised;
+      }
+    } catch { /* keep the first go */ }
+  }
+
+  finalizeThinking(thinking, artifact || `I couldn't write that ${label}.`, [], {
+    route: 'chat', mode: STATE.grounding,
+    onRetry: () => runWrite(rawQuestion, kindHint),
+  });
+  if (ctl.signal.aborted) thinking.classList.add('stopped');
+
+  // Commit the exchange so a follow-up reads it back — the same session fold the grounded turns feed.
+  if (artifact) {
+    STATE.history.push({ role: 'user', content: rawQuestion });
+    STATE.history.push({ role: 'assistant', content: artifact });
+  }
+
+  STATE.inflight = null;
+  setComposerBusy(false);
+};
+
 // Run one query through the pipeline and render it. Factored out of the composer so
 // an errored turn can offer a one-click retry (re-runs the very same question).
 const runQuery = async (rawQuestion) => {
   if (!rawQuestion) return;
+  // THE WRITER PATH: a generative request is a make-this, not a question. "/write <request>" (or
+  // /compose, /draft) forces it; otherwise a request that opens with a compose verb and names an
+  // artifact kind is auto-detected. It hands the request to the model to WRITE (runWrite) instead
+  // of researching the topic and answering about it (runTurn) — the gap that turned "write an emily
+  // dickinson poem" into a memory of Dickinson instead of a poem.
+  const writeCmd = /^\/(?:write|compose|draft|create)\b[\s:]*/i.exec(rawQuestion);
+  if (writeCmd) { await runWrite(rawQuestion.slice(writeCmd[0].length).trim()); return; }
+  if (COMPOSE_VERB.test(rawQuestion) && artifactKindOf(rawQuestion) !== 'answer') {
+    await runWrite(rawQuestion);
+    return;
+  }
   // LIMNER SVG MODE (docs/limner.md): "/svg [kind] [focus]" renders the active
   // document's EO state as deterministic SVG — graph (default), timeline,
   // void_map, or path — optionally centred on a figure named by the focus text.

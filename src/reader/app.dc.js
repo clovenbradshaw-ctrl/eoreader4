@@ -1527,6 +1527,12 @@ class Component extends DCLogic {
     const q=this.norm(this.state.chatInput);if(!q)return;
     this._stopGen=false;   // a fresh turn clears any prior stop
     if(/^\/svg\b/i.test(q))return this._limnChat(q);
+    // COMPOSE — a generative artifact ("write an emily dickinson poem", "compose a sonnet about
+    // the sea") is a make-this, not a question. It must be caught BEFORE _shouldWeb, or the web
+    // routing strips it to its subject and researches it — which is exactly why "write an emily
+    // dickinson poem" came back as a memory of Dickinson instead of a poem. composeArtifact does
+    // the three steps the request asks for: read examples of the form, then WRITE an original one.
+    if(this._composeIntent(q))return this.composeArtifact(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
     // a question it can't ground in what's been read+folded sends the engine to the web first — it
@@ -1709,6 +1715,96 @@ class Component extends DCLogic {
   // target (that fights the model's grounded prior); the request only opts INTO the multi-section
   // shape. How long the answer actually runs is set by how much bindable evidence there is.
   _longformIntent(q){return /\b(essays?|treatise|report|deep[\s-]?dive|comprehensive(?:ly)?|in[\s-]?depth|at length|long[\s-]?form|thorough(?:ly)?|detailed|\d{3,}\s*words?|write\s+(?:me\s+)?(?:a|an)\b[^.?!]*\b(?:essay|report|overview|account|piece|article|guide|breakdown))\b/i.test(String(q||''));}
+  // ── COMPOSE: make the artifact, get out of the model's way ────────────────────────────────
+  // A small model writes in a named style — Dickinson's dashes, a haiku's 5-7-5, a limerick's bounce
+  // — perfectly well from its own training. The bug was NEVER capability; it was the reader's posture.
+  // A generative request fell through to the web walk, which stripped it to its subject, researched
+  // that, and answered ABOUT it behind a librarian frame — turning "write an emily dickinson poem"
+  // into a memory of Dickinson. So _composeIntent catches a request to MAKE a creative artifact and
+  // routes it to a plain WRITE: the model is handed the request almost verbatim, in the plain writer
+  // frame, and it composes. No web hop, no example scaffolding, no "cite your sources / output only"
+  // constraints — the prompting was the thing flattening the poem. Essays/reports stay the grounded
+  // arc (_longformArc). The gate is a compose VERB plus a creative KIND, so a question never trips it.
+  _CK(){return 'poems?|poetry|sonnets?|haikus?|limericks?|ballads?|odes?|verses?|villanelles?|couplets?|elegy|elegies|epigrams?|hymns?|psalms?|songs?|lyrics?|jingles?|raps?|stories|story|tales?|fables?|fairy[\\s-]?tales?|myths?|legends?|anecdotes?|jokes?|riddles?|dialogues?|monologues?|screenplays?|scripts?|plays?|skits?|rhymes?';}
+  _CV(){return 'write|compose|draft|create|pen|author|generate|make(?:\\s+me|\\s+up)?|come\\s+up\\s+with|give\\s+me|tell\\s+me';}
+  _composeIntent(q){
+    const s=String(q||'');
+    return new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s)&&new RegExp('\\b(?:'+this._CK()+')\\b','i').test(s);
+  }
+  // The KIND phrase, kept whole ("emily dickinson poem", "haiku"), length/style words peeled. Used
+  // only to label the work ("Writing a haiku…"); the model gets the request itself, not this.
+  _composeKind(q){
+    const m=String(q||'').match(new RegExp('\\b(?:'+this._CV()+')\\s+(?:me\\s+|us\\s+)?(?:an?|another|one|some|the)?\\s*([^.?!,;]*?\\b(?:'+this._CK()+'))\\b','i'));
+    let k=m?m[1].trim():'';
+    k=k.replace(/^\s*(?:(?:\d+|one|two|three|four|five|several|a\s+few)[-\s]?(?:word|line|stanza|verse)s?\s+)+/i,'').trim();
+    k=k.replace(/^\s*(?:short|long|longer|brief|quick|little|simple|original|creative|nice|good|beautiful|funny|sad|happy|silly)\s+/i,'').trim();
+    return k||'poem';
+  }
+  // The compose path: hand the request to the model in the plain writer frame and stream the piece
+  // into the bubble. Deliberately minimal — no walk, no examples, no extra system constraints. The
+  // model already writes the form; the job here is to stop the reading posture from intercepting it.
+  async composeArtifact(q){
+    const kind=this._composeKind(q);
+    const a=/^[aeiou]/i.test(kind)?'an':'a';
+    let id=this.state.activeChat;
+    const prevObj=this.activeChatObj();
+    const prev=((prevObj&&prevObj.messages)||[]).filter(m=>m.text&&!m.pending);
+    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,draft:true,think:'Writing '+a+' '+kind+'…'}]};
+      return {chats,activeChat:id,chatInput:''};});
+    this._scrollChat();this._thinkClock();
+    // finish firms the draft to the final piece (draft:false) unless a patch says otherwise.
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,draft:false,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    const guard=this._stallGuard();
+    let model=null;
+    try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
+    if(!model){guard.clear();finish({text:'I couldn’t load a model to write the '+kind+'.'});return;}
+    // The request itself is the prompt, in the plain assistant frame (no doc, no grounding) — the
+    // same path that already writes a clean poem with the web off. Prior turns ride as history so
+    // "make it shorter" / "now one about the sea" continue the thread.
+    const history=prev.slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
+    const messages=this._ME.buildChatMessages({question:q,history,now:new Date()});
+    let acc='',raf=0;
+    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+    const onToken=(piece)=>{const sx=String(piece||'');if(!sx)return;guard.feed();acc+=sx;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+    let raw='';
+    try{raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:700,temperature:0.85,onToken,signal:guard.signal}),guard.race]);}
+    catch(e){raw=acc;}
+    // THE FIRST GO, THEN EVALUATE. "Let me take a first go, and then I'll update if I need to." The
+    // draft above is the first go; now the writer reads it back against the request and only rewrites
+    // if it falls short. This is the lag posture (spec-enacted-writer §6) and the self-fold weld: read
+    // your own output, judge it, re-enter — write→evaluate→(maybe)revise, not plan-it-all-up-front.
+    let out=this.normMd(raw)||acc;
+    if(out&&out.trim()&&!guard.signal.aborted){
+      out=await this._reviseIfNeeded(model,q,out,guard,(t)=>{
+        // surface the second look in the bubble's status (the first go stays visible underneath)
+        this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+          if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],think:t};return {...c,messages:m};})}));
+      });
+    }
+    guard.clear();
+    finish({text:out||'(the model returned nothing to write)'});
+  }
+  // Read the first go back and update only if it falls short. One extra pass: the writer judges its
+  // own draft against the request — replies OK when it already lands, or a better full version when it
+  // doesn't. Conservative: any failure, an empty verdict, or an OK keeps the first go untouched.
+  async _reviseIfNeeded(model,q,draft,guard,onStatus){
+    try{
+      if(typeof onStatus==='function')onStatus('Reading it back…');
+      const msgs=[
+        {role:'system',content:'You are the writer, reviewing your own draft. Read it against the request — the form it should take, the voice, and exactly what was asked. If the draft already meets the request well, reply with only the word OK. If it falls short, reply with an improved, complete version of the piece and nothing else — no commentary, no preamble.'},
+        {role:'user',content:'Request: '+q+'\n\nDraft:\n'+draft},
+      ];
+      const verdict=await Promise.race([this._ME.streamPhrase(model,msgs,{maxTokens:700,temperature:0.7,onToken:()=>guard.feed(),signal:guard.signal}),guard.race]);
+      let v=(this.normMd(verdict)||'').trim();
+      if(!v||/^ok\b/i.test(v))return draft;                 // it judged the first go good enough
+      v=v.replace(/^(?:sure[,!.]?\s+|certainly[,!.]?\s+|here(?:'s| is| you go|’s)\b[^\n:]*:?\s*)/i,'').trim();
+      return v.replace(/[^a-z]/gi,'').length>=20?v:draft;   // a real rewrite, not a stray token
+    }catch(e){return draft;}                                 // any trouble → keep the first go
+  }
   async _answerInto(id,q,gathered,opts){
     // OPT-IN LONGFORM (the arc, in the reader's own primitives): SEG the gathered evidence into one
     // section per source (a fold), CON each grounded ONLY in that source's spans (re-prompt per
@@ -2293,6 +2389,9 @@ class Component extends DCLogic {
       // Render the model's markdown LIVE — even while the bubble is still pending — so lists, bold
       // and line breaks form as the answer streams in, not only once it finishes. User turns stay plain.
       const isMd=!isUser&&!!m.text;
+      // The FIRST GO: the draft is shown tentative — lighter, italic, labelled "here is my first go"
+      // — while the writer reads it back. On the final pass the flag clears and it firms to full ink.
+      const isDraft=!isUser&&!!m.draft;
       // Inline footnotes. The longform arc bakes ⟦cN⟧ sentinels into the text AS IT STREAMS and
       // rides its own registry on `m.cites`, so the superscripts grow with the essay — use it
       // directly (pending and settled). Any other answer gets the post-hoc binder once it settles
@@ -2447,9 +2546,9 @@ class Component extends DCLogic {
         relatedStyle:'max-width:80%;margin-top:7px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;',
         relatedHeadStyle:'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:1px;',
         relatedMoreStyle:'font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
-        hasNote:!!m.modelNote,note:m.modelNote||'',
+        hasNote:!!m.modelNote||isDraft,note:isDraft?'(here is my first go)':(m.modelNote||''),
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
-        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+(m.pending&&!m.text?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
+        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+((m.pending&&!m.text)||isDraft?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(isDraft?'font-style:italic;':'')+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
         noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
