@@ -175,6 +175,18 @@ for the components that already exist elsewhere in the repo and run it on a real
 the generate-then-read parity control (`essay-backwards.trace.json`) becomes the measurement
 of how good the essays are — the toggle `spec-planner.md §11` always intended.
 
+**The real-model swap is now wired.** `eoreader4-eval/essay-real-model.mjs` injects the
+mechanics harness's SmolLM2-360M talker (`model`) and MiniLM meaning organ (`embed`, so the
+field turns are *semantic*) into `runContinuation` with `dynamics + fieldRead + confine`, and
+exports the audit. The adapter is dependency-injection only and is locked in CI by
+`tests/real-model-wiring.test.js` (real-model-*shaped* async organs → the pipeline runs and the
+audit reads WORKING) and demonstrable without any download via `npm run essay-real-model:mock`.
+The real path (`npm run essay-real-model`) does **not** complete in the standard agent
+environment: `onnxruntime-node`'s post-install downloads its native binary from GitHub releases
+and the egress policy returns **403 Forbidden**, so the ONNX runtime and the q8 weights cannot
+be fetched here. Run it where that fetch is permitted and the two models reach the HF cache; the
+wiring is verified and waiting.
+
 ## Files referenced
 
 

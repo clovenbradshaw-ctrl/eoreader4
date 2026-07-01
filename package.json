@@ -28,7 +28,9 @@
     "segment": "node scripts/predict-segment.mjs",
     "task-creator": "node scripts/task-creator-e2e.mjs",
     "mechanics": "node eoreader4-eval/mechanics/run.mjs ABCD",
-    "essay-backwards": "node eoreader4-eval/essay-backwards.mjs"
+    "essay-backwards": "node eoreader4-eval/essay-backwards.mjs",
+    "essay-real-model": "node eoreader4-eval/essay-real-model.mjs",
+    "essay-real-model:mock": "node eoreader4-eval/essay-real-model.mjs --mock"
   },
   "engines": {
     "node": ">=20"
