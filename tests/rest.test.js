@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   reproject, reprojectIntegral, descend, reverseLearn,
-  holdAsGround, recouple, markHypothesis, rest,
+  holdAsGround, recouple, markHypothesis, recombine, rest,
   NIGHT_VOLUME, BLINK_VOLUME,
 } from '../src/rest/index.js';
 import { createFold } from '../src/write/fold.js';
@@ -127,6 +127,57 @@ test('markHypothesis stamps a regenerated figure as ungrounded — it cannot gro
   assert.equal(h.grounded, false, 'the firewall: only a wake re-coupling to EVA can promote it');
 });
 
+// ── recombine — the dreamer: strengthen the meaningful-but-untraversed (the Born walk) ─
+
+test('recombine rhymes only the UNtraversed pairs, ranked by the Born rule (amplitude²)', () => {
+  // three referents; a—b already traversed awake (skip it), a—c strongly rhymes, b—c weakly.
+  const items = ['a', 'b', 'c'];
+  const aff = { 'a|c': 0.9, 'b|c': 0.3, 'a|b': 1.0 };
+  const key = (x, y) => [x, y].sort().join('|');
+  const { proposals, considered, mass } = recombine(items, {
+    affinity: (x, y) => aff[key(x, y)] ?? 0,
+    traversed: (x, y) => key(x, y) === 'a|b',     // the reading already walked a—b
+  });
+  assert.equal(considered, 2, 'only the two untraversed pairs are in the field');
+  // the walk never surfaces the traversed pair
+  assert.ok(!proposals.some(p => key(p.a, p.b) === 'a|b'), 'a—b was traversed; the dream skips it');
+  // Born ranking: the strong rhyme dominates. weight ∝ amp² normalized: 0.81 vs 0.09.
+  assert.equal(proposals[0].a === 'a' || proposals[0].b === 'a', true);
+  assert.equal(key(proposals[0].a, proposals[0].b), 'a|c', 'the strong latent rhyme ranks first');
+  assert.ok(proposals[0].weight > proposals[1].weight, 'the Born rule sharpens the field');
+  // squaring sharpens: 0.81/0.9 = 0.9 of the mass to the top, not 0.9/1.2 = 0.75 (linear)
+  assert.ok(proposals[0].weight > 0.85, 'amplitude² concentrates the measure on the strong rhyme');
+  assert.ok(mass > 0);
+});
+
+test('recombine marks a faded prior a strengthen, a bare rhyme a propose — both ungrounded', () => {
+  const { proposals } = recombine(['x', 'y', 'z'], {
+    affinity: () => 0.8,
+    prior: (a, b) => ([a, b].sort().join('|') === 'x|y' ? 0.2 : 0),  // x—y carried a faded bond
+  });
+  const xy = proposals.find(p => [p.a, p.b].sort().join('|') === 'x|y');
+  const xz = proposals.find(p => [p.a, p.b].sort().join('|') === 'x|z');
+  assert.equal(xy.kind, 'strengthen', 'a meaningful connection the reading under-traversed');
+  assert.equal(xz.kind, 'propose', 'a latent rhyme with no prior bond');
+  // every proposal is a hypothesis — ungrounded, cannot ground itself (the firewall)
+  for (const p of proposals) { assert.equal(p.hypothesis, true); assert.equal(p.grounded, false); }
+});
+
+test('recombine keeps only the top-N by weight — most of the field evaporates (as it should)', () => {
+  const items = ['a', 'b', 'c', 'd'];
+  const strong = new Set(['a|b']);
+  const { proposals } = recombine(items, {
+    affinity: (x, y) => strong.has([x, y].sort().join('|')) ? 0.95 : 0.1,
+    top: 2,
+  });
+  assert.equal(proposals.length, 2, 'only the top-N survive');
+  assert.equal([proposals[0].a, proposals[0].b].sort().join('|'), 'a|b', 'the strongest rhyme survives');
+});
+
+test('recombine throws without an injected affinity (the rhyme test is not its to invent)', () => {
+  assert.throws(() => recombine(['a', 'b'], {}), /affinity/);
+});
+
 // ── rest — the cadence (the blink and the night) ─────────────────────────────────
 
 test('a blink re-integrates the recent at near-full volume, without descending or forgetting', () => {
@@ -170,4 +221,41 @@ test('a night descends, forgets, holds Ground, and re-projects toward baseline',
   for (const h of report.hypotheses) assert.equal(h.grounded, false);
   // the integral came down toward baseline with headroom returned
   assert.ok(report.reprojected[0].headroom > 0);
+});
+
+test('a night with the dreamer opted in ALSO strengthens the meaningful-but-untraversed', () => {
+  const fold = createFold();
+  fold.appear('r#1', { head: 'Gregor' });
+  fold.record('r#1', { t: 2, op: 'DEF', attr: 'turned to an insect', res: 'firm' });
+
+  // three referents; the reading traversed Gregor—Grete but never Gregor—the-lodgers,
+  // though they share the household (a meaningful latent rhyme). The dream surfaces it.
+  const items = ['gregor', 'grete', 'lodgers'];
+  const aff = { 'gregor|lodgers': 0.8, 'grete|lodgers': 0.5 };
+  const key = (a, b) => [a, b].sort().join('|');
+
+  const report = rest(
+    { fold, hashes: ['r#1'], events: [], residue: [], items },
+    {
+      mode: 'night', t: 10,
+      recombine: {
+        affinity: (a, b) => aff[key(a, b)] ?? 0,
+        traversed: (a, b) => key(a, b) === 'gregor|grete',   // already read
+      },
+    },
+  );
+  assert.ok(report.strengthened, 'the dreamer ran');
+  assert.equal(report.strengthened.considered, 2, 'only the untraversed rhymes were in the field');
+  const top = report.strengthened.proposals[0];
+  assert.equal(key(top.a, top.b), 'gregor|lodgers', 'the strongest latent rhyme leads');
+  // its proposals are hypotheses on the same firewall as the descent's
+  assert.ok(report.hypotheses.some(h => h.from === 'recombine'), 'the proposals join the night\'s hypotheses');
+  for (const h of report.hypotheses) assert.equal(h.grounded, false, 'nothing the dream makes is grounded');
+});
+
+test('a night WITHOUT the dreamer leaves strengthened null (opt-in, per the doc)', () => {
+  const fold = createFold();
+  fold.appear('r#1', { head: 'x' });
+  const report = rest({ fold, hashes: ['r#1'], events: [], residue: [] }, { mode: 'night', t: 5 });
+  assert.equal(report.strengthened, null, 'the generative face stays off unless opted into');
 });

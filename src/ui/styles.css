@@ -1094,8 +1094,53 @@ section h2 .tabs { display: inline-flex; gap: .25rem; }
 .iv-ok { color: #6ee7b7 !important; border-color: #065f46 !important; }
 .iv-cite { color: #93c5fd; cursor: pointer; font-family: ui-monospace, monospace; }
 .iv-cite:hover { text-decoration: underline; }
-.iv-drive { display: flex; gap: .5rem; margin-top: .6rem; padding-top: .5rem; border-top: 1px solid #1f1f23; }
+.iv-drive { display: flex; gap: .5rem; margin-top: .6rem; padding-top: .5rem; border-top: 1px solid #1f1f23; flex-wrap: wrap; }
 .iv-drive button[disabled] { opacity: .4; cursor: default; }
+.iv-dream { color: #c4b5fd !important; border-color: #4c1d95 !important; }
+
+/* ── the Dream panel (dream-view.js) — pruning and strengthening, side by side ──────
+   A night held still. Violet is the dreaming register (distinct from the green rest and
+   the blue surf); every proposal is a hypothesis, shown ungrounded (dashed) per §8. */
+.dv-wrap { margin-top: .7rem; border: 1px solid #2a2140; border-radius: 8px; padding: .7rem .8rem; background: linear-gradient(180deg, rgba(76,29,149,.08), rgba(19,19,22,.2)); }
+.dv-head { display: flex; align-items: center; gap: .45rem; color: #c4b5fd; }
+.dv-head .rest-icon { animation: dv-glow 3s ease-in-out infinite; }
+@keyframes dv-glow { 0%, 100% { opacity: .6; } 50% { opacity: 1; } }
+.dv-title { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+.dv-stats { margin-left: auto; font-size: .68rem; color: #71717a; font-family: ui-monospace, monospace; }
+.dv-note { font-size: .72rem; color: #8b8b93; font-style: italic; margin: .4rem 0 .2rem; line-height: 1.5; }
+.dv-sec-h { display: flex; align-items: center; gap: .5rem; margin-top: .7rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: #a78bfa; }
+.dv-sub { font-size: .72rem; color: #71717a; font-style: italic; margin: .1rem 0 .35rem; }
+.dv-list { display: flex; flex-direction: column; gap: .3rem; }
+
+/* strengthened — latent rhymes, dashed (ungrounded hypotheses), a Born-weight bar. */
+.dv-rhyme { border: 1px dashed #4c3f6b; border-radius: 6px; padding: .45rem .55rem; background: rgba(139,92,246,.04); }
+.dv-rhyme-top { display: flex; align-items: center; gap: .5rem; }
+.dv-kind { font-size: .6rem; text-transform: uppercase; letter-spacing: .05em; padding: .05rem .35rem; border-radius: 3px; border: 1px solid #4c3f6b; color: #c4b5fd; white-space: nowrap; }
+.dv-kind--strengthen { color: #a7f3d0; border-color: #065f46; }
+.dv-kind--propose { color: #c4b5fd; border-color: #4c1d95; }
+.dv-pair { font-size: .86rem; color: #e4e4e7; }
+.dv-tie { color: #a78bfa; padding: 0 .1rem; }
+.dv-rhyme-why { font-size: .68rem; color: #71717a; margin: .2rem 0 .3rem; }
+.dv-weight { display: flex; align-items: center; gap: .5rem; }
+.dv-bar { flex: 1; height: 6px; background: #201a30; border-radius: 3px; overflow: hidden; max-width: 220px; }
+.dv-bar-fill { display: block; height: 100%; background: linear-gradient(90deg, #7c3aed, #c4b5fd); border-radius: 3px; }
+.dv-amp { font-size: .64rem; color: #8b8b93; font-family: ui-monospace, monospace; white-space: nowrap; }
+
+/* pruned — forgotten, struck through. */
+.dv-prune { display: flex; align-items: baseline; gap: .5rem; padding: .2rem 0; border-bottom: 1px solid #1f1f23; }
+.dv-strike { text-decoration: line-through; color: #6b6b73; font-size: .84rem; }
+.dv-why { font-size: .66rem; color: #52525b; }
+
+/* re-projected — the dropped faded relations. */
+.dv-reproj { padding: .25rem 0; border-bottom: 1px solid #1f1f23; }
+.dv-reproj-head { font-size: .82rem; color: #d4d4d8; }
+.dv-headroom { font-size: .64rem; color: #6ee7b7; font-family: ui-monospace, monospace; margin-left: .3rem; }
+.dv-drops { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .25rem; }
+.dv-keep { font-size: .66rem; color: #a7f3d0; border: 1px solid #065f46; border-radius: 3px; padding: .05rem .35rem; }
+.dv-drop { font-size: .66rem; color: #71717a; border: 1px solid #27272a; border-radius: 3px; padding: .05rem .35rem; text-decoration: line-through; }
+.dv-drop.dv-more { text-decoration: none; color: #52525b; }
+.dv-ground { margin-top: .6rem; font-size: .72rem; color: #8b8b93; font-style: italic; }
+.dv-ground-tag { font-size: .62rem; text-transform: uppercase; letter-spacing: .05em; color: #a78bfa; border: 1px solid #4c3f6b; border-radius: 3px; padding: .05rem .35rem; margin-right: .35rem; font-style: normal; }
 
 /* ===========================================================================
    Responsive layer

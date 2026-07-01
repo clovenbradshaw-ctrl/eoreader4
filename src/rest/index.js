@@ -211,6 +211,72 @@ export const recouple = (figures, evaluate) => {
 export const markHypothesis = (figure) =>
   Object.freeze({ ...figure, hypothesis: true, grounded: false });
 
+// ── recombine — the dreamer: strengthen the meaningful-but-untraversed (the Born walk) ─
+// The night's other three faces subtract: reproject renormalizes the loud day, descend
+// forgets by failing to regenerate, holdAsGround parks the untestable. None of them
+// GENERATES. recombine is the one face that does the thing the online pass is
+// structurally barred from doing: produce candidate structure by walking across material
+// that never co-occurred in the input stream. Awake, the surfer answers to the next
+// arrival, so its frame is clamped and it can only strengthen what the reading actually
+// traversed. The dreamer runs when the frontier holds still — the only time the frame
+// comes off and a walk can rhyme two referents that arrived a thousand sentences apart.
+//
+// THE BORN RULE, all over the place. holdAsGround leaves the residue as one UNCOLLAPSED
+// field (the measurement problem: a field forced to one definite Figure proliferates).
+// recombine walks that field WITHOUT collapsing it: every untraversed pair is a rhyme
+// with an AMPLITUDE (its meaningfulness, injected), and the probability that the walk
+// surfaces it is |amplitude|² normalized over the field — the Born rule. Squaring is not
+// decoration: it sharpens the field so a strong latent rhyme dominates a spray of weak
+// coincidences, which is exactly the "most of its output should evaporate" the dreamer
+// wants. The weights are a distribution over the field, never a collapse of it.
+//
+// What it emits is HYPOTHESES, never findings (the desert cell: SYN has no verb in the
+// Ground column — you cannot synthesize a whole out of pure Ground). So a proposal is a
+// candidate LINK/strengthening under REC pressure, marked ungrounded; the climb back up
+// (recouple, on wake) is what tests it. A pair that already carried a faded bond is a
+// 'strengthen' (a meaningful connection the reading under-traversed); a pair with none is
+// a 'propose' (a latent rhyme). Both are the same operation: raise what the day left low.
+//
+//   items       the field to walk — the referents/ground members to rhyme across
+//   affinity    INJECTED (a,b) → [0,1]  the rhyme's amplitude (the faculty's, like surf)
+//   traversed   INJECTED (a,b) → bool   already bound awake? the dream rhymes what was NOT
+//   prior       INJECTED (a,b) → [0,1]  an existing faded bond (>0 ⇒ 'strengthen')
+//   born        square the amplitude (the Born rule); false ⇒ linear amplitude
+//   top         keep only the top-N by weight (most evaporate — that is correct)
+//   minAffinity ignore rhymes below this amplitude (the field's floor)
+// Returns { proposals, considered, mass } — proposals are ungrounded hypotheses, ranked.
+export const recombine = (items, {
+  affinity, traversed = () => false, prior = () => 0,
+  born = true, top = Infinity, minAffinity = 0,
+} = {}) => {
+  if (typeof affinity !== 'function') throw new Error('recombine: affinity(a,b) must be injected');
+  const xs = items || [];
+  const pairs = [];
+  for (let i = 0; i < xs.length; i++) {
+    for (let j = i + 1; j < xs.length; j++) {
+      const a = xs[i], b = xs[j];
+      if (traversed(a, b)) continue;                 // the dream rhymes the UNtraversed
+      const amp = clamp01(Number(affinity(a, b)) || 0);
+      if (amp <= minAffinity) continue;
+      pairs.push({ a, b, amplitude: round(amp), prior: round(clamp01(Number(prior(a, b)) || 0)) });
+    }
+  }
+  // The Born rule: measure ∝ |amplitude|², normalized over the considered field so the
+  // weights are a DISTRIBUTION (the field's own measure), not raw magnitudes — the field
+  // is weighed, never collapsed.
+  const amp2 = (p) => born ? p.amplitude * p.amplitude : p.amplitude;
+  const mass = pairs.reduce((s, p) => s + amp2(p), 0);
+  for (const p of pairs) p.weight = mass > 0 ? round(amp2(p) / mass) : 0;
+  pairs.sort((x, y) => y.weight - x.weight || y.amplitude - x.amplitude);
+  const kept = top === Infinity ? pairs : pairs.slice(0, Math.max(0, top));
+  const proposals = kept.map(p => markHypothesis({
+    from: 'recombine',
+    kind: p.prior > 0 ? 'strengthen' : 'propose',
+    a: p.a, b: p.b, amplitude: p.amplitude, weight: p.weight, prior: p.prior,
+  }));
+  return { proposals, considered: pairs.length, mass: round(mass) };
+};
+
 // ── rest — the cadence (the blink and the night) ────────────────────────────────
 // One instruction told at two frequencies. The BLINK re-integrates briefly and often
 // at near-full volume — the short quiet a waking system takes to fold a few seconds
@@ -227,10 +293,14 @@ export const markHypothesis = (figure) =>
 //   opts.volume     override the re-projection volume for this rest
 //   opts.figurable  the Figure test for holdAsGround (night only)
 //   opts.t          the cursor to re-project the integral at
+//   opts.recombine  the dreamer's config { affinity, traversed, prior, born, top, … } —
+//                   OPT-IN (off unless supplied, per docs/how-to-rest.md). The generative
+//                   face: strengthen the meaningful-but-untraversed, Born-weighted.
+//   state.items     the field recombine walks (defaults to `hashes` — the referents)
 // Returns a report of the rest — the same shape for both modes, the night's extra
-// faces null on a blink.
-export const rest = (state = {}, { mode = 'night', volume, figurable, t = Infinity, keep, gamma } = {}) => {
-  const { fold, hashes = [], events = [], residue = [] } = state;
+// faces null on a blink. `strengthened` is null unless recombine was opted into.
+export const rest = (state = {}, { mode = 'night', volume, figurable, t = Infinity, keep, gamma, recombine: recombineOpts } = {}) => {
+  const { fold, hashes = [], events = [], residue = [], items } = state;
   const blink = mode === 'blink';
   const vol = volume != null ? volume : (blink ? BLINK_VOLUME : NIGHT_VOLUME);
 
@@ -240,7 +310,7 @@ export const rest = (state = {}, { mode = 'night', volume, figurable, t = Infini
     : [];
 
   if (blink) {
-    return { mode, volume: vol, reprojected, forgotten: null, ground: null, hypotheses: null };
+    return { mode, volume: vol, reprojected, forgotten: null, ground: null, hypotheses: null, strengthened: null };
   }
 
   // The night descends the ladder.
@@ -248,12 +318,17 @@ export const rest = (state = {}, { mode = 'night', volume, figurable, t = Infini
   const { figures, ground } = figurable
     ? holdAsGround(residue, figurable)
     : { figures: [], ground: Object.freeze({ kind: 'ground', collapsed: false, members: Object.freeze(residue.slice()) }) };
+  // The dreamer (opt-in): walk the uncollapsed field and strengthen the meaningful-but-
+  // untraversed, Born-weighted. Its proposals are hypotheses too — ungrounded until wake.
+  const strengthened = recombineOpts ? recombine(items || hashes, recombineOpts) : null;
   // The kept patterns regenerated coherent instances — they are the night's figures,
-  // each a hypothesis until wake re-couples it to EVA.
+  // each a hypothesis until wake re-couples it to EVA. The dreamer's proposals join them.
   const hypotheses = kept.map(p => markHypothesis({ layer: p.layer, terms: p.terms, from: 'descent' }))
-    .concat(figures.map(f => markHypothesis({ figure: f, from: 'ground' })));
+    .concat(figures.map(f => markHypothesis({ figure: f, from: 'ground' })))
+    .concat(strengthened ? strengthened.proposals : []);
 
-  return { mode, volume: vol, reprojected, forgotten, kept, ground, hypotheses };
+  return { mode, volume: vol, reprojected, forgotten, kept, ground, hypotheses, strengthened };
 };
 
 const round = (x) => Math.round(x * 1000) / 1000;
+const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);

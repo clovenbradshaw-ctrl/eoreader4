@@ -24,6 +24,7 @@ import { createIdleLoop, seededRng } from '../write/idle.js';
 import { openLedger } from '../write/voids.js';
 import { firm } from '../core/index.js';
 import { restIconSvg, restStateLabel } from './rest-icon.js';
+import { buildDream, renderDream } from './dream-view.js';
 
 // ── the derivation: what the first ingress left open (pure) ──────────────────
 // Read the projected graph and split each entity's edges at an INGRESS HORIZON (a
@@ -178,10 +179,11 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
   let reach = 0;             // the sentence index processed up to (the deeper read)
   let cands = [];            // surfaced reafferent candidates awaiting your verdict
   let phase = 'resting';     // resting | surfing — drives the field
+  let dream = null;          // the last night's report (buildDream) — null until told to dream
   let raf = 0, amp = 2, targetAmp = 2, t = 0;
 
   const empty = () => {
-    built = null; st = null; cands = [];
+    built = null; st = null; cands = []; dream = null;
     stopField();
     root.innerHTML = `<div class="feed-empty">Load a document, then come back here to watch the instrument keep ` +
       `working what the first read left open — referents it introduced but could not yet characterize, names ` +
@@ -197,6 +199,7 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
       built = doc;
       reach = st.horizon;
       cands = [];
+      dream = null;
       phase = 'resting';
       render();
       startField();
@@ -224,6 +227,20 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
   };
 
   const restNow = () => { phase = 'resting'; targetAmp = 2; if (st) st.reach = reach; render(); };
+
+  // dreamNow — tell the model to DREAM: hold the frontier still and run a night over the
+  // document's real graph — prune the spurious, re-project the loud day toward baseline,
+  // and (the dreamer) strengthen the meaningful-but-untraversed, Born-weighted. What it
+  // produces is hypotheses; the panel shows the pruning and the strengthening side by side.
+  const dreamNow = () => {
+    const doc = getDoc?.();
+    if (!doc) return;
+    phase = 'resting'; targetAmp = 6;
+    try { dream = buildDream(doc); }
+    catch (err) { dream = { error: String(err?.message || err) }; }
+    render();
+  };
+  const wakeFromDream = () => { dream = null; targetAmp = 2; render(); };
 
   // confirm = the witness act (§16): ground the candidate and CLOSE the gap. The
   // engine records a firm descriptor, the referent leaves the open set, and we jump
@@ -275,11 +292,20 @@ export const mountIdle = (root, { getDoc, onSelectSentence } = {}) => {
         `<div class="iv-drive">` +
           `<button type="button" class="small iv-more"${done ? ' disabled' : ''}>Process further ▸</button>` +
           `<button type="button" class="small iv-rest">Let it rest</button>` +
+          `<button type="button" class="small iv-dream">Dream ☾</button>` +
+          (dream ? `<button type="button" class="small iv-wake">Wake</button>` : '') +
         `</div>` +
+        (dream
+          ? (dream.error
+              ? `<div class="feed-empty">could not dream — ${escapeHtml(dream.error)}</div>`
+              : renderDream(dream))
+          : '') +
       `</div>`;
 
     root.querySelector('.iv-more')?.addEventListener('click', processFurther);
     root.querySelector('.iv-rest')?.addEventListener('click', restNow);
+    root.querySelector('.iv-dream')?.addEventListener('click', dreamNow);
+    root.querySelector('.iv-wake')?.addEventListener('click', wakeFromDream);
     root.querySelectorAll('[data-confirm]').forEach(b => b.addEventListener('click', () => confirm(b.dataset.confirm)));
     root.querySelectorAll('[data-dismiss]').forEach(b => b.addEventListener('click', () => dismiss(b.dataset.dismiss)));
     root.querySelectorAll('[data-idx]').forEach(b => b.addEventListener('click', () => onSelectSentence?.(parseInt(b.dataset.idx, 10))));
