@@ -13,7 +13,8 @@
 import { ingestText }       from '../organs/in/index.js';
 import { runTurn, runWebFollowup, formulateSearchQuery, searchAnnouncement, loadShapeLibrary,
          runCuriousResearch, researchAnnouncement,
-         runDeepResearch, modelPlanner, deepResearchAnnouncement } from '../turn/index.js';
+         runDeepResearch, modelPlanner, deepResearchAnnouncement,
+         shredExpired, nextShredTime } from '../turn/index.js';
 import { createWebClient, searchAndAdmit, createRawStore } from '../ingest/index.js';
 import { artifactKindOf } from '../tasks/index.js';
 import { createSpeculativeWeb } from './prefetch.js';
@@ -91,6 +92,9 @@ const STATE = {
                          //   the deliberate, dig-hard mode — far larger than the auto walk, since depth is
                          //   the point. The saliency leash is still the real governor.
   researchFacets: 4,     // how many ANGLES deep research plans from the one concise query (multiple prompts).
+  archive:   [],         // THE ARCHIVE (docs/deep-research.md, archive.js): pages a research walk PARSED
+                         //   but that strayed off the question — stored here, absent from the sources, each
+                         //   leased to go to the shredder after a content-scaled duration, run on a timer.
   transparency: true,    // the per-claim source view: every proposition traced to its source (or marked
                          //   unsupported). Default ON; the toggle beneath each answer persists the choice.
   // The MIND — eoreader's read corpus, held as memory (src/mind). A pinned, opt-in
@@ -101,6 +105,27 @@ const STATE = {
   mindReady: false,      // the OPFS index is built and queryable
   mindMode:  'off',      // 'off' | 'recall' (show beneath) | 'weave' (fold into prompt) — persisted
   mindBuilding: false,   // a build is in flight (chip shows progress)
+};
+
+// fileReadings(readings) — file a research walk's ARCHIVED readings (parsed but strayed off the
+// question; docs/deep-research.md, archive.js) in session state, and arm the SHREDDER. Each reading
+// carries its own `shredAt`, a lease already set by how much content it processed, so the shredder is
+// a single timer armed to the SOONEST shred time: when it fires it destroys whatever has expired and
+// re-arms for the next. A reading archived from a strayed hop is thus not lost (a later question can
+// still surface it) but does not linger — it goes to the shredder on the schedule its content bought.
+// Idempotent and self-rescheduling; fileReadings([]) just re-shreds and re-arms.
+let shredTimer = null;
+const fileReadings = (readings = []) => {
+  const now = Date.now();
+  const { kept } = shredExpired([...STATE.archive, ...(readings || [])], now);
+  STATE.archive = kept;
+  if (shredTimer) { clearTimeout(shredTimer); shredTimer = null; }
+  const next = nextShredTime(STATE.archive);
+  if (next == null) return;
+  // clamp the delay: never negative, and cap so a very long lease still re-checks (setTimeout in a
+  // browser saturates past ~24.8 days anyway). +50ms so the entry is truly past its lease when we wake.
+  const delay = Math.min(6 * 3_600_000, Math.max(0, next - now) + 50);
+  shredTimer = setTimeout(() => { shredTimer = null; fileReadings([]); }, delay);
 };
 
 // The corpus the mind reads — the ~3,400-book English Project Gutenberg parquet.
@@ -871,6 +896,9 @@ const runQuery = async (rawQuestion) => {
         // here are its provenance, surfaced by renderWebResult (the research plan + deep-research walk).
         webGather = { query: q, docs: walk.docs, research: walk.hops, facets: walk.facets, deep: true };
       }
+      // Readings the walk parsed but that strayed off the question: file them in the archive (absent
+      // from the sources above), leased to go to the shredder on the schedule their content bought.
+      if (walk.archive?.length) fileReadings(walk.archive);
     } catch { /* network/search/plan failed — fall through to the ungrounded turn */ }
     // Hand off from the per-hop research feedback to the synthesis pass with a note that
     // names what was read, so the transition isn't a blank "thinking…" (the per-stage labels
@@ -903,6 +931,8 @@ const runQuery = async (rawQuestion) => {
         turnArgs.groundGraph = true;                     // feed the talker the MEANING GRAPH of what was gathered
         webGather = { query: q, docs: webDocs, research: walk.hops };
       }
+      // Same as the deep path: archive the readings this walk parsed but strayed past, leased by content.
+      if (walk.archive?.length) fileReadings(walk.archive);
     } catch { /* network/search failed — fall through to the ungrounded turn */ }
     // Same hand-off as the deep path: name the pages gathered as the synthesis starts, rather
     // than blanking back to a bare "thinking…" for the slow read-and-write over them.

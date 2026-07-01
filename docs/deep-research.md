@@ -82,8 +82,17 @@ wraps that prose with the full provenance:
   that found it (which facet, which query, what depth) **and** the surprise + saliency that admitted
   it. Nothing the summary used is opaque.
 - **`byFacet`** — those sources grouped by the angle that surfaced them (the report's sections).
+- **`archive`** — the readings the walk **parsed but strayed past**: an off-topic page is read
+  (fetch, parse, surprise/saliency all paid) but, being not salient to the question, is **not** stored
+  as a source — it is **absent from `sources`**. Rather than throw the reading away the instant it
+  strays (a strayed page often sits on the very *edge* of the question, and a later hop can circle
+  back), it is **filed in the archive**, each entry leased to go to the **shredder** after a duration
+  set by **how much content it processed** (`archive.js` `shredTtl` — bigger reading, longer lease;
+  floored and capped). So "parse every source, but only *store* the salient ones" is literal: the
+  non-salient reading is kept just long enough that a circle-back re-uses it instead of re-reading,
+  then the shredder destroys it on the schedule its content bought.
 - **`tree`** — the complete hop trace: which thread, at what depth, how surprising, kept or why
-  dropped (`strayed` / `empty` / `exhausted`).
+  dropped (`strayed` / `empty` / `exhausted`), and how many strayed readings it `archived`.
 - **`stats`** — the shape of the sweep: facets, hops, kept, strayed, sources, deepest hop, total
   bits of surprise.
 
