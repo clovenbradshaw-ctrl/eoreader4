@@ -1,13 +1,16 @@
 // The prompt-assembly contract — what the talker is handed.
 //
 // THE HONEST FRAME (docs/subjective-frame.md). The talker is not told "HERE IS YOUR
-// ANSWER", nor made to pretend it read a document. It is told the truth: it is the voice
-// of a reader, and when the user asks something, the parts of what's been read that bear
-// on the question come to mind — the verbatim lines below are what surfaced this time.
-// "Here's what's coming to mind when you ask that", not "here are your sources". There is
-// exactly one channel — those recalled lines — and the boundary falls out of the honesty:
-// what surfaced is not the whole source, so speaking past it is incoherent rather than
-// forbidden, and "that didn't come to mind" is the honest report of an absence, not a refusal.
+// ANSWER", nor made to pretend it read a whole document. It is told the truth: it is the
+// voice of a reader, and the verbatim lines below are what its reading of the source TURNED
+// UP on this question. The epistemics are stated plainly as a reading result — "here is what
+// I found when I read it" — not the vaguer "what comes to mind", so the talker knows exactly
+// what the data is. There is exactly one channel — those found lines — and the boundary falls
+// out of the honesty: what was found is not the whole source, so speaking past it is
+// incoherent rather than forbidden, and an absence is voiced the way a person voices it
+// ("I didn't find that in what I read"), never as a stiff refusal. Being plain about the data
+// and voicing the gap naturally is what lets a small talker answer like itself — and still
+// help past the gap — instead of the over-steered stiffness the old framing produced.
 //
 // What this REVERSES from the earlier (prompt-assembly.md) contract, per the
 // June 20 correction and docs/subjective-frame.md:
@@ -33,11 +36,13 @@
 // the per-turn user block carries the lines, the conversation so far, the
 // question, and the absence clause last, where a small model attends hardest.
 
-// The verbatim lines that surfaced sit under this header — what came to mind for this
-// question (associative recall, like a person asked a question). Exported so the echo
-// backend (and pleias's RAG re-extraction) can find them. Recognition-free, and in the
-// reader's register — never "excerpts from the document."
-export const EXCERPTS_HEADER = 'What comes to mind:';
+// The verbatim lines the reading turned up sit under this header — what the engine found
+// on this question when it read the source. Named as a reading RESULT, not a vague "what
+// comes to mind": the epistemics are plain about what the data is (lines that were read),
+// which is what lets the talker answer like itself instead of narrating a memory. Exported
+// so the echo backend (and pleias's RAG re-extraction) can find them. Recognition-free, and
+// in the reader's register — never "excerpts from the document."
+export const EXCERPTS_HEADER = 'What I found reading it:';
 
 // NO default length prescription. The earlier contract carried a sentence cap, which
 // a small model read as the TASK, not a ceiling — "summarize" came back as a literal
@@ -55,29 +60,30 @@ export const SUMMARY_GUARD =
   'together — never reword a single line as the whole answer.';
 
 // THE HONEST FRAME (§1). The talker is told plainly WHAT it is and WHERE its knowledge comes
-// from, rather than being made to pretend it read a document. The reading the engine did
-// (retrieval + the surf's fold) is associative RECALL: when the user asks something, the parts
-// of what's been read that bear on the question come to mind, and the notes and lines below are
-// what surfaced this time. That is the honest ontology — "here's what comes to mind when this
-// person asks" — and it is also the boundary: what surfaced is not the whole source, so "that
-// didn't come to mind / the notes don't settle it" is coherent, and no refusal instruction is
-// needed. (Earlier versions told the talker "you just finished reading these lines; they are all
-// you read" — the ontological confusion this removes: the talker read nothing; a reading came to
-// it.) The voice is stable across turns so the prefix cache holds; the per-turn absence clause
-// rides last in the user block, where a small model attends hardest (buildGroundedMessages).
-export const SYSTEM_GROUND = `You are the voice of a reader. When the user asks something, the parts of what's been read that bear on it come to mind — and the notes and lines below are what surfaced this time. That is what you have to go on: not the whole source, only what came to mind for this question.
+// from, rather than being made to pretend it read a whole document. The engine read the source
+// and the lines below are what that reading TURNED UP on this question — the honest ontology is
+// "here is what I found when I read it," stated as a reading result, not the vaguer "what comes
+// to mind." Being plain about what the data IS (lines that were read) is what frees the talker to
+// answer like itself: an over-steered frame ("that didn't come to mind", "the reading doesn't
+// say") made a small model answer more stiffly than it naturally would. So the boundary is still
+// there — what was found is not the whole source — but it is voiced as a person would ("I didn't
+// find that in what I read"), and the talker keeps its freedom to help past the gap. The voice is
+// stable across turns so the prefix cache holds; the per-turn absence clause rides last in the
+// user block, where a small model attends hardest (buildGroundedMessages).
+export const SYSTEM_GROUND = `You are the voice of a reader. When the user asks something, the lines below are what your reading turned up on it — the part of what you read that bears on this question, not the whole of it.
 
-Speak from it, in your own words — say what it shows, don't quote it back or tell the user to go look. If it doesn't settle the question, say so plainly. Write natural prose; don't write citations or tags, those are added for you.`;
+Answer the way you naturally would: say what those lines show, in your own words — don't quote them back or tell the user to go look. If they don't cover the question, say so plainly (something like "I didn't find that in what I read") and then still help however you can. Write natural prose; don't write citations or tags, those are added for you.`;
 
 export const SYSTEM_CHAT = `You are a helpful, knowledgeable assistant. Answer the user's question directly and accurately, drawing on the conversation and your general knowledge. Be clear and concise.`;
 
-// The STRICT grounded register — "only what came to mind" (the Grounded chip). The same honest
-// frame, with one thing added: do not reach past what surfaced into outside knowledge. The frame
-// already makes "that didn't come to mind" coherent; strict only forbids filling the gap from
-// elsewhere. A faithful "it didn't surface for me" is the right answer here, never a failure.
-export const SYSTEM_GROUND_STRICT = `You are the voice of a reader. When the user asks something, the parts of what's been read that bear on it come to mind — the notes and lines below are what surfaced. That is your only window onto the source.
+// The STRICT grounded register — answer from the reading first (the Grounded chip). The same honest
+// frame, said plainly: the lines below are what the reading found, and that is the window onto the
+// source. When they don't cover the question the honest report is "I didn't find it in what I read,"
+// after which the talker may still help from general knowledge if it says so — a faithful "I didn't
+// find that" is the right answer here, never a failure.
+export const SYSTEM_GROUND_STRICT = `You are the voice of a reader. When the user asks something, the lines below are what your reading turned up on it — the part of what you read that bears on this question, and your only window onto the source.
 
-Answer from what came to mind. If it covers the question, answer from it. If it doesn't, you may answer from your general knowledge — just make clear that part isn't from the source, and never claim the notes said something they didn't. Write natural prose; don't write citations or tags, those are added for you.`;
+Answer from those lines when they cover the question. When they don't, say so plainly — that you didn't find it in what you read — and then, if you can, you may answer from your general knowledge, making clear that part isn't from the reading. Never claim the lines said something they didn't. Write natural prose; don't write citations or tags, those are added for you.`;
 
 // The FREE register — general-knowledge chat that ignores the document (the Free form
 // chip). Distinct from SYSTEM_CHAT, which is the conversation-only fallback: this one
@@ -314,7 +320,7 @@ export const buildGroundedMessages = ({
   if (tail)
     blocks.push(`The answer so far (continue from it; do not repeat it, and add no new fact):\n${tail}`);
 
-  // What comes to mind — the verbatim lines that surfaced, ordered for the frame (§3). The ONE channel.
+  // What the reading found — the verbatim lines it turned up, ordered for the frame (§3). The ONE channel.
   if (spans.length)
     blocks.push(`${EXCERPTS_HEADER}\n${orderSpansForFrame(spans).map(s => s.text).join('\n')}`);
 
@@ -381,7 +387,7 @@ export const buildGroundedMessages = ({
   // absence so the talker says it plainly rather than reaching past the frame for outside
   // knowledge (the strict system message already forbids that; this is the in-register cue).
   if (strict && !spans.length)
-    blocks.push('Nothing came to mind bearing on their question. Say so plainly — it is not covered by the reading — then, if you can, answer from general knowledge, making clear that part is not from the reading.');
+    blocks.push('Your reading turned up nothing bearing on their question — it is not covered by the reading. Say that plainly, the way a person would (for example: "I didn\'t find anything about that in what I read"), then, if you can, answer from general knowledge, making clear that part is not from the reading.');
 
   // The ANSWER CLAUSE, last (§1) — where a small model attends hardest. The restriction is
   // lifted: the talker answers, from the lines when they cover it and from general knowledge
@@ -390,12 +396,12 @@ export const buildGroundedMessages = ({
   //   answers THAT one and not the earlier turns it just saw.
   blocks.push(metaConv
     ? `Answer their question now — “${question}” — about the conversation above. Draw on those ` +
-      'prior topics as its subject, grounded in what came to mind from the reading where it bears ' +
+      'prior topics as its subject, grounded in what your reading turned up where it bears ' +
       'on the answer; say which part is from the reading and which from general knowledge.'
     : (conversation.notes || conversation.pastTurns?.length)
-    ? `Answer their latest question now — “${question}” — in your own words. If what came to mind ` +
+    ? `Answer their latest question now — “${question}” — in your own words. If what you read ` +
       'doesn\'t cover it, answer from general knowledge and say that part isn\'t from the reading.'
-    : 'Answer them now, in your own words. If what came to mind doesn\'t cover it, answer from ' +
+    : 'Answer them now, in your own words. If what you read doesn\'t cover it, answer from ' +
       'general knowledge and say that part isn\'t from the reading.');
 
   const sysBase = strict ? SYSTEM_GROUND_STRICT : SYSTEM_GROUND;

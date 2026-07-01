@@ -354,7 +354,7 @@ test('full turn: a stalled follow-up retrieves the open intent into the talker p
     embedder: createHashEmbedder(), auditLog: audit, history: SURVEILLANCE_HISTORY,
   });
   const t = audit.turns[0];
-  const excerpts = t.prompt.slice(t.prompt.indexOf('What comes to mind:'));
+  const excerpts = t.prompt.slice(t.prompt.indexOf('What I found reading it:'));
   assert.match(excerpts, /surveillance/i, 'the open intent reached the talker, not the song line');
 });
 

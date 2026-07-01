@@ -28,7 +28,7 @@ const coldEmbedder = { isWarm: () => false, embed: async () => new Float32Array(
 test('Chat-with-document (strict) uses the strict register — answers from the lines first, but the outside-knowledge restriction is lifted', () => {
   const [system] = buildGroundedMessages({ question: 'q', spans: [{ idx: 0, text: 'x' }], strict: true });
   assert.equal(system.content, SYSTEM_GROUND_STRICT);
-  assert.match(system.content, /Answer from what came to mind/i);
+  assert.match(system.content, /Answer from those lines/i);
   // the "only from the document / don't use general knowledge" restriction was removed
   assert.doesNotMatch(system.content, /ONLY from what you read/i);
   assert.match(system.content, /you may answer from your general knowledge/i);
