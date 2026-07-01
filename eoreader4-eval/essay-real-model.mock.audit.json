@@ -1,0 +1,606 @@
+{
+ "version": 1,
+ "label": "mock-shaped-organs",
+ "question": "",
+ "config": {
+  "arc": true,
+  "selfRegister": true,
+  "semanticStrain": false,
+  "fieldRead": true,
+  "interleave": false,
+  "dynamics": true,
+  "confine": true,
+  "temperature": 0
+ },
+ "summary": {
+  "atoms": 10,
+  "stop": "quiesce-flat",
+  "moves": [
+   "DEF",
+   "EVA",
+   "INS",
+   "EVA",
+   "INS",
+   "EVA",
+   "INS",
+   "EVA",
+   "REC",
+   "DEF"
+  ],
+  "sources": [
+   0,
+   1,
+   2,
+   3,
+   4
+  ],
+  "wantedType": null,
+  "fieldBoundaries": [],
+  "fieldK": 1
+ },
+ "atoms": [
+  {
+   "i": 0,
+   "move": "DEF",
+   "drew": "CON",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "define",
+   "action": "append",
+   "text": "A small language model is fluent far past the limit of what it actually knows. [s0]",
+   "sources": [
+    0
+   ],
+   "boundFraction": 1,
+   "vetoes": 1,
+   "confinement": {
+    "register": "defining",
+    "forbidClose": false,
+    "openness": 0.64,
+    "address": {
+     "operator": "DEF",
+     "terrain": "Lens",
+     "stance": "Dissecting"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "DEF",
+    "activations": {
+     "DEF": 1,
+     "SIG": 1,
+     "CON": 1,
+     "INS": 1
+    },
+    "currents": {
+     "DEF": 1.71,
+     "SIG": 1.71,
+     "CON": 1.71,
+     "INS": 1.71
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 0,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "open"
+  },
+  {
+   "i": 1,
+   "move": "EVA",
+   "drew": "EVA",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "append",
+   "text": "A small language model is fluent far past the limit of what it actually knows. [s0]",
+   "sources": [
+    0
+   ],
+   "boundFraction": 1,
+   "vetoes": 1,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 2,
+   "move": "INS",
+   "drew": "EVA",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "instantiate",
+   "action": "append",
+   "text": "Handed an open slot, the model fills it, because filling slots is the only thing it was trained to do. [s1]",
+   "sources": [
+    1
+   ],
+   "boundFraction": 1,
+   "vetoes": 1,
+   "confinement": {
+    "register": "minting",
+    "forbidClose": false,
+    "openness": 1,
+    "address": {
+     "operator": "INS",
+     "terrain": "Void",
+     "stance": "Cultivating"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "INS",
+    "activations": {
+     "DEF": 0.713,
+     "SIG": 0.628,
+     "CON": 0.68,
+     "INS": 1
+    },
+    "currents": {
+     "SEG": 0.498,
+     "DEF": 2.179,
+     "SIG": 2.081,
+     "CON": 2.141,
+     "EVA": 0.959,
+     "INS": 2.509
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 3,
+   "move": "EVA",
+   "drew": "EVA",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "append",
+   "text": "Handed an open slot, the model fills it, because filling slots is the only thing it was trained to do. [s1]",
+   "sources": [
+    1
+   ],
+   "boundFraction": 1,
+   "vetoes": 1,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 4,
+   "move": "INS",
+   "drew": "INS",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "instantiate",
+   "action": "append",
+   "text": "The filled slot is grammatical and confident, and its confidence when wrong is indistinguishable from its confidence when right. [s2]",
+   "sources": [
+    2
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "minting",
+    "forbidClose": false,
+    "openness": 1,
+    "address": {
+     "operator": "INS",
+     "terrain": "Void",
+     "stance": "Cultivating"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "INS",
+    "activations": {
+     "DEF": 0.713,
+     "SIG": 0.628,
+     "CON": 0.68,
+     "INS": 1
+    },
+    "currents": {
+     "SEG": 0.498,
+     "DEF": 2.179,
+     "SIG": 2.081,
+     "CON": 2.141,
+     "EVA": 0.959,
+     "INS": 2.509
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 5,
+   "move": "EVA",
+   "drew": "EVA",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "append",
+   "text": "The filled slot is grammatical and confident, and its confidence when wrong is indistinguishable from its confidence when right. [s2]",
+   "sources": [
+    2
+   ],
+   "boundFraction": 1,
+   "vetoes": 0,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 6,
+   "move": "INS",
+   "drew": "INS",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "instantiate",
+   "action": "append",
+   "text": "A separate planner makes every structural decision before the model is ever called. [s3]",
+   "sources": [
+    3
+   ],
+   "boundFraction": 1,
+   "vetoes": 1,
+   "confinement": {
+    "register": "minting",
+    "forbidClose": false,
+    "openness": 1,
+    "address": {
+     "operator": "INS",
+     "terrain": "Void",
+     "stance": "Cultivating"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "INS",
+    "activations": {
+     "DEF": 0.713,
+     "SIG": 0.628,
+     "CON": 0.68,
+     "INS": 1
+    },
+    "currents": {
+     "SEG": 0.498,
+     "DEF": 2.179,
+     "SIG": 2.081,
+     "CON": 2.141,
+     "EVA": 0.959,
+     "INS": 2.509
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 7,
+   "move": "EVA",
+   "drew": "EVA",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "evaluate",
+   "action": "append",
+   "text": "A separate planner makes every structural decision before the model is ever called. [s3]",
+   "sources": [
+    3
+   ],
+   "boundFraction": 1,
+   "vetoes": 1,
+   "confinement": {
+    "register": "testing",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "EVA",
+     "terrain": "Lens",
+     "stance": "Binding"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "EVA",
+    "activations": {
+     "DEF": 0.56,
+     "SIG": 0.502,
+     "CON": 0.538,
+     "EVA": 1,
+     "INS": 0.56
+    },
+    "currents": {
+     "SEG": 0.695,
+     "DEF": 2.376,
+     "SIG": 2.278,
+     "CON": 2.339,
+     "EVA": 3.127,
+     "INS": 2.376
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 1,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 8,
+   "move": "REC",
+   "drew": "REC",
+   "selfOp": true,
+   "band": "firm",
+   "stance": "restructure",
+   "action": "append",
+   "text": "A small language model is fluent far past the limit of what it actually knows. [s0]",
+   "sources": [
+    0
+   ],
+   "boundFraction": 1,
+   "vetoes": 1,
+   "confinement": {
+    "register": "restructuring",
+    "forbidClose": false,
+    "openness": 1,
+    "address": {
+     "operator": "REC",
+     "terrain": "Paradigm",
+     "stance": "Composing"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "REC",
+    "activations": {
+     "DEF": 0.143,
+     "SIG": 0.256,
+     "CON": 0.275,
+     "INS": 0.333,
+     "REC": 1
+    },
+    "currents": {
+     "DEF": 1.35,
+     "SIG": 1.704,
+     "CON": 1.765,
+     "EVA": 0.44,
+     "INS": 1.947,
+     "REC": 4.036
+    }
+   },
+   "field": {
+    "boundaries": [
+     6
+    ],
+    "k": 1,
+    "abstain": true,
+    "strainHere": 1
+   },
+   "phase": "develop"
+  },
+  {
+   "i": 9,
+   "move": "DEF",
+   "drew": "EVA",
+   "selfOp": false,
+   "band": "firm",
+   "stance": "define",
+   "action": "append",
+   "text": "The planner grounds each claim on a span of the source it can point at. [s4]",
+   "sources": [
+    4
+   ],
+   "boundFraction": 1,
+   "vetoes": 1,
+   "confinement": {
+    "register": "defining",
+    "forbidClose": false,
+    "openness": 0.8,
+    "address": {
+     "operator": "DEF",
+     "terrain": "Lens",
+     "stance": "Dissecting"
+    },
+    "floorOn": true
+   },
+   "decision": {
+    "by": "relaxation",
+    "winner": "DEF",
+    "activations": {
+     "DEF": 1,
+     "SIG": 1,
+     "CON": 1,
+     "INS": 1
+    },
+    "currents": {
+     "DEF": 1.71,
+     "SIG": 1.71,
+     "CON": 1.71,
+     "INS": 1.71
+    }
+   },
+   "field": {
+    "boundaries": [],
+    "k": 0,
+    "abstain": false,
+    "strainHere": 0
+   },
+   "phase": "open"
+  }
+ ],
+ "traceKinds": [
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "append",
+  "quiesce-flat"
+ ],
+ "answer": "A small language model is fluent far past the limit of what it actually knows. [s0]\n\nA small language model is fluent far past the limit of what it actually knows. [s0]\n\nHanded an open slot, the model fills it, because filling slots is the only thing it was trained to do. [s1]\n\nHanded an open slot, the model fills it, because filling slots is the only thing it was trained to do. [s1]\n\nThe filled slot is grammatical and confident, and its confidence when wrong is indistinguishable from its confidence when right. [s2]\n\nThe filled slot is grammatical and confident, and its confidence when wrong is indistinguishable from its confidence when right. [s2]\n\nA separate planner makes every structural decision before the model is ever called. [s3]\n\nA separate planner makes every structural decision before the model is ever called. [s3]\n\nA small language model is fluent far past the limit of what it actually knows. [s0]\n\nThe planner grounds each claim on a span of the source it can point at. [s4]",
+ "checks": {
+  "stops_on_own": {
+   "ok": true,
+   "why": "stop = 'quiesce-flat' (a token count would be 'max-steps')"
+  },
+  "opens": {
+   "ok": true,
+   "why": "first move 'DEF' sets terms (a node op)"
+  },
+  "develops": {
+   "ok": true,
+   "why": "5 self-operations (the essay's substance)"
+  },
+  "turns": {
+   "ok": true,
+   "why": "a REC fired where the field rotated (boundaries [])"
+  },
+  "lands": {
+   "ok": false,
+   "why": "ends on 'DEF' / stop 'quiesce-flat'"
+  },
+  "grounded": {
+   "ok": true,
+   "why": "every atom is witnessed (sources, or a void/self-op)"
+  },
+  "floor_on": {
+   "ok": true,
+   "why": "the void floor is on for every atom"
+  },
+  "decision_traced": {
+   "ok": true,
+   "why": "every atom carries WHY it was chosen (relaxation)"
+  },
+  "working": true,
+  "verdict": "WORKING — opens, develops, grounded, stops on 'quiesce-flat'; quality 1/2 (turn ✓, land ✗)"
+ }
+}
