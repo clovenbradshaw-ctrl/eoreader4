@@ -10,7 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { resolveProposition, STANCE, EDGE_OPS } from '../src/longgen/index.js';
+import { resolveProposition, STANCE, EDGE_OPS, predictDirection } from '../src/longgen/index.js';
 import { propositionInstruction } from '../src/longgen/index.js';
 
 // A three-span ground pool, and a run of accepted units that already fired on it — the
@@ -93,6 +93,41 @@ test('register OFF preserves the existing contract: EVA consumes the next uncove
   assert.equal(p.selfOp, undefined, 'the default resolution is not a self-op');
   assert.equal(p.spanSet[0], 1, 'it still grabs the next uncovered span, as before');
   assert.ok(p.against, 'and still carries a prior term to test against');
+});
+
+// ── The self-fold: semantic strain licenses REC on CLEAN-binding prose ────────
+//
+// The weld before read strain only off the floor's bind verdict (1 − boundFraction).
+// But the floor drops or re-binds drift, so every APPENDED unit binds ~1.0 and strain
+// is ~0 — REC (the argument's turn) could never fire in the live loop. The self-fold
+// reads a second strain: how far the grounded material has moved from its frame. A
+// clean-binding EVA that opens a NEW direction must raise REC mass over one that
+// restates the frame — and the OLD path (no self-fold) must be blind to the difference.
+
+const recMass = (units, opts) =>
+  Object.fromEntries(predictDirection(units, opts).posterior).REC;
+
+test('self-fold: a clean EVA that turns raises REC mass; restating it does not', () => {
+  // Both runs bind perfectly clean (boundFraction 1) — the floor sees nothing wrong.
+  const restating = [
+    { move: 'DEF', boundFraction: 1, sources: [0], text: 'alpha beta gamma frame terms' },
+    { move: 'EVA', boundFraction: 1, sources: [0], text: 'alpha beta gamma again restated' },
+  ];
+  const turning = [
+    { move: 'DEF', boundFraction: 1, sources: [0], text: 'alpha beta gamma frame terms' },
+    { move: 'EVA', boundFraction: 1, sources: [1], text: 'delta epsilon zeta wholly other direction' },
+  ];
+
+  // With the self-fold ON, the turning EVA strains the frame → more REC mass.
+  const turnRec = recMass(turning, { semanticStrain: true });
+  const stayRec = recMass(restating, { semanticStrain: true });
+  assert.ok(turnRec > stayRec, 'the self-fold licenses REC where the argument turns');
+
+  // With the self-fold OFF, both bind clean → identical strain (0) → identical REC.
+  // This is the failure the self-fold fixes: the old path is blind to a clean turn.
+  const turnRecOff = recMass(turning, {});
+  const stayRecOff = recMass(restating, {});
+  assert.equal(turnRecOff, stayRecOff, 'without the self-fold, a clean turn is invisible');
 });
 
 test('a node op never self-resolves, even with the register on', () => {

@@ -253,20 +253,51 @@ summary. The ON run spends the pool to open, **operates on what it already said*
 lands a `SYN` close. Length is decoupled from span exhaustion; the macro-arc
 open→develop→land holds.
 
-Three gaps remain, and they are honest, not hacks:
+## 7. The REC finding — the turn was dead, and why
 
-- the open is node-led but **CON-led, not DEF-led** — the recurrence seed out-draws the
-  `DEF` the open phase biases toward on a short self-log;
-- **no REC in the body** — the echo model binds every atom clean, so there is no strain
-  for a restructure to turn on; REC appears only with a model that actually drifts;
-- the **fine rhythm** (which develop, when to turn) is still the "read self back through
-  the perceiver" seam (`spec-generation.md`) — this cut lands the *macro* arc, not the
-  sentence-by-sentence cadence.
+Chasing the missing `REC` (the essay's turns — atoms 4, 10, 15, 20) surfaced the
+deepest thing yet. `structure.js:68` licenses REC by `W.rec · strain²`, and only right
+after an `EVA`. The generator's strain was `1 − boundFraction` — the floor's grounding
+verdict. But the floor **drops** badly-drifted atoms and **re-binds** truncated ones to
+~1.0, so every *appended* unit carries `boundFraction ≈ 1` → strain ≈ 0. A drifting
+model, run live, produces `stop: drift` with **zero** atoms appended and never a REC
+(verified: `eoreader4-eval` drift probe). **REC was dead in the live loop.**
 
-Steps 3–4 of §5 (a real relation-carrying prompt for edge moves; building the external
-graph from a corpus rather than authoring it) are the next increments.
+The cause is a conflation. `strain = 1 − boundFraction` equates *"the model
+confabulated"* with *"the argument should turn."* They are different. A grounded essay
+turns not because generation failed but because the developed, fully-witnessed material
+**strains the frame the opening set**. Grounding-drift is a floor concern; the turn is a
+reading concern. Reading them off the same number means the only REC the loop can
+express is a grounding failure, which the floor then discards.
 
-## 7. The one-line version
+The fix is a second strain, the **self-fold** (`semanticStrain`, opt-in): how far a
+unit's grounded content has moved from everything said before it (a lexical novelty
+measure, accumulated causally). The structural prior reads `max(driftStrain,
+semanticStrain)`, so a clean-binding EVA that opens a new direction can license a REC
+that a drift never could. This is the first cut of "read self back through the
+perceiver" (`spec-generation.md`); the full form reads the accepted prose back through
+the document reader. It is unit-verified: a clean turn raises REC mass, and the old path
+is blind to it (`tests/essay-backwards.test.js`).
+
+It does **not** fire in the harness walk yet, and the reason is the next seam: the node
+ops front-load all the concepts before the body develops, so nothing novel is left to
+strain the frame. The essay *interleaves* — introduce, develop, turn, introduce — and
+that per-cursor node/edge rhythm is the fine-grain seam below.
+
+## 8. The seams still open
+
+- the open is node-led but **CON-led, not DEF-led** — seeding `DEF` makes the predictor
+  quiesce at one atom (a lone `DEF` gives a flat posterior), so the open op mix waits on
+  the fine rhythm too, not a one-line seed change;
+- the **fine rhythm** — *which* develop, *when* to turn, *when* to introduce vs develop —
+  is the interleave the REC finding above needs, and the "read self back through the
+  perceiver" seam names it (`spec-generation.md`). This cut lands the *macro* arc
+  (open→develop→land); the sentence-by-sentence cadence is the next increment;
+- a real **relation-carrying prompt** for edge moves (two referents, not one span) and
+  **building the external graph from a corpus** rather than authoring it are steps 3–4
+  of §5, still ahead.
+
+## 9. The one-line version
 
 We were tuning the renderer and the stop-threshold. The essay says the bug is
 upstream of both: **the resolver only knows how to spend ground, and an essay is

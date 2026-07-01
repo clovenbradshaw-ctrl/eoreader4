@@ -65,10 +65,21 @@ const main = async () => {
   const common = { ground: CONCEPT_GROUND, model, arc: true, temperature: 1 };
 
   const off = await runContinuation({ ...common });                       // the failure
-  const on = await runContinuation({ ...common, selfRegister: true });    // the fix
+  const on = await runContinuation({ ...common, selfRegister: true });    // develops + lands
+  // + the self-fold: strain now comes from the argument moving off its frame, not only
+  // the floor's grounding verdict — so a REC (the turn) can fire on clean-binding prose.
+  const onFold = await runContinuation({ ...common, selfRegister: true, semanticStrain: true });
 
   const rOff = report('register OFF  (spend-only — reproduces the early stop)', off);
-  const rOn = report('register ON   (self register — the essay keeps developing)', on);
+  const rOn = report('register ON   (self register — develops and lands)', on);
+  report('register ON + self-fold (semantic strain — the turn licensed, not yet timed)', onFold);
+  const recFired = movesOf(onFold).includes('REC');
+  console.log(`  REC (the turn) : ${recFired ? 'YES — a turn fired live' : 'not live yet — see below'}`);
+  console.log(`    the self-fold that licenses REC on CLEAN-binding prose is unit-verified`);
+  console.log(`    (tests/essay-backwards.test.js); it does not fire in THIS walk because the`);
+  console.log(`    node ops front-load all ${CONCEPT_GROUND.length} concepts before the body develops, so nothing`);
+  console.log(`    novel is left to strain the frame. Firing it live needs the interleave rhythm`);
+  console.log(`    (introduce → develop → turn → introduce) — the fine-grain seam.`);
 
   // The macro-arc: a run of node moves (open), then self-op develops (the body), then
   // a SYN close (land). The essay's shape, read off the realized trace.

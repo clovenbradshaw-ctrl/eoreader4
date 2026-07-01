@@ -55,6 +55,7 @@ export const runContinuation = async ({
   epsilon = undefined,    // §10 — the saturation knob; default is the arc's EPSILON
   speculate = false,      // §9 — pre-resolve the next move on a clean-verdict assumption
   selfRegister = false,   // essay-backwards — edge ops resolve against the SELF, no fresh span
+  semanticStrain = false, // essay-backwards — the self-fold licenses REC on a clean-binding turn
   signal = null,
 } = {}) => {
   // RECONSTRUCT — the tail and the fold, reused wholesale. Computed once: the same
@@ -100,7 +101,11 @@ export const runContinuation = async ({
     // when the planner is on. A flat posterior is the predictor QUIESCING (§2): no
     // grounded expectation of what comes next, so the honest move is to stop.
     const phase = arc ? arcPhase({ stepIndex: step, units, remainingFrac: sat.remainingFrac }) : null;
-    const dir = predictDirection(units, { temperature, phaseBias: arc ? phaseBias(phase) : undefined });
+    const dir = predictDirection(units, {
+      temperature,
+      phaseBias: arc ? phaseBias(phase) : undefined,
+      semanticStrain,                        // the self-fold licenses REC on a clean turn
+    });
     if (dir.flat) { stop = 'quiesce'; trace.push({ step, kind: 'quiesce', sharpness: dir.sharpness }); break; }
 
     // RESOLVE (§4.2) — the drawn move-type → a proposition, operator honored. Reuse
