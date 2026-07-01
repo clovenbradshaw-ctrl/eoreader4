@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#151518">
+  <title>eoreader4 · essay</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="src/ui/styles.css">
+  <style>
+    /* THE ESSAY ORGAN — a chat-shaped surface whose only output is an essay. It reuses the
+       shared chat styling (.msg, #messages, #composer) and adds only what the long-form
+       piece needs: a running status line while the arc walks, and full-bleed prose. */
+    #app > main { display: block; }
+    #essay-pane { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+    #messages { max-width: 820px; width: 100%; margin: 0 auto; padding: 1.25rem 1rem; }
+    .msg.assistant.essay { max-width: 100%; }
+    .msg.assistant.essay .essay-status {
+      font-size: .8rem; color: #a1a1aa; font-style: italic;
+      display: flex; align-items: center; gap: .4rem; margin-bottom: .4rem;
+    }
+    .msg.assistant.essay.done .essay-status { color: #6ee7b7; font-style: normal; }
+    .msg.assistant.essay .essay-body h1 {
+      font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em;
+      margin: .2rem 0 1rem; color: #f4f4f5; line-height: 1.25;
+    }
+    .msg.assistant.essay .essay-body h2 {
+      font-size: 1.05rem; font-weight: 650; margin: 1.4rem 0 .5rem; color: #e4e4e7;
+    }
+    .msg.assistant.essay .essay-body p { margin: .6rem 0; line-height: 1.6; }
+    .msg.assistant.essay .essay-body .sec { white-space: pre-wrap; line-height: 1.6; }
+    .essay-meta {
+      font-size: .78rem; color: #a1a1aa; margin-top: 1rem;
+      border-top: 1px solid #27272c; padding-top: .5rem;
+      display: flex; gap: .75rem; align-items: center; flex-wrap: wrap;
+    }
+    .essay-meta .under { color: #f59e0b; }
+    .essay-actions { display: flex; gap: .4rem; margin-left: auto; }
+    #composer { max-width: 820px; width: 100%; margin: 0 auto; }
+    .floor-note { font-size: .75rem; color: #71717a; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>eoreader4 · essay</h1>
+      <span id="status" class="status">booting…</span>
+      <span class="spacer"></span>
+      <!-- This surface only makes essays. The reader and the general chat live elsewhere. -->
+      <a href="index.html" class="reader-link" title="Open the EO Reader">⟵ Reader</a>
+      <a href="chat.html" class="reader-link" title="Open the chat">Chat</a>
+      <!-- The same allowlist as the chat: only the backends that load reliably. The essay
+           organ walks MANY passes, so a capable talker (Llama-3.2-3B) is the default. -->
+      <select id="backend" title="Model backend">
+        <option value="echo">echo (instant, deterministic)</option>
+        <option value="structure">structure (embedder-free · this engine)</option>
+        <optgroup label="ONNX · transformers.js (WebGPU/CPU)">
+          <option value="smollm2-360m">SmolLM2-360M-Instruct · chat</option>
+        </optgroup>
+        <optgroup label="WebGPU · MLC">
+          <option value="webllm" selected>Llama-3.2-3B</option>
+        </optgroup>
+      </select>
+    </header>
+    <main>
+      <section id="essay-pane">
+        <div id="messages"></div>
+        <form id="composer">
+          <textarea id="input" rows="2"
+            placeholder="Name an essay — a topic, a title, a question. I only write essays (2500+ words)…"></textarea>
+          <button type="submit" id="send">Write</button>
+        </form>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="src/ui/essay.js"></script>
+</body>
+</html>

@@ -61,3 +61,9 @@ export { musicOrgan, renderMusic } from './music.js';
 // renderers (they carry no descriptor/ceiling), so they stay off OUTPUT_ORGANS and are
 // re-exported as their own namespace. Each is pure; the renderer is injected.
 export * as publish from './publish/index.js';
+
+// The ESSAY organ — a commission → a whole arc-walked, ≥2500-word piece. Not a task-leaf
+// renderer either (it walks MANY talker passes rather than lowering one leaf), so like the
+// publish family it stays off OUTPUT_ORGANS and is re-exported as its own namespace. The
+// talker is injected; the walk is pure orchestration (organs/out/essay.js).
+export * as essay from './essay.js';
