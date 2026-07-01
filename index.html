@@ -3029,18 +3029,17 @@ class Component extends DCLogic {
     // dickinson poem" came back as a memory of Dickinson instead of a poem. composeArtifact does
     // the three steps the request asks for: read examples of the form, then WRITE an original one.
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
-    // COMPOSE also RIDES THE THREAD. Once a turn has composed, the follow-up almost always elides
-    // the KIND — "write me one", "i said write me one", "just write the poem I asked for", "now one
-    // about the sea". _composeIntent needs a literal kind word, so those miss it and fall back into
-    // the grounding/research pipeline — which answers ABOUT writing (and only composed on the third
-    // explicit try, wrapped in a grounding apology). Treat a re-request/revision in an already-
-    // composing thread as more composing, so it writes on the first ask, every ask.
-    if(this._composeIntent(q)||this._composeFollowup(q,cur))return this.composeArtifact(q);
+    // ROUTE the turn — compose / research / answer. The judgment is the MODEL's when the turn is
+    // ambiguous and a model is warm; regex is kept only as the instant fast-path and the offline
+    // fallback (see _routeTurn). This is the fix for the whole class the whitelist kept missing —
+    // "write me one", "sample html", "a mermaid diagram" — without enumerating every artifact kind.
+    const mode=await this._routeTurn(q,cur,sources);
+    if(mode==='compose')return this.composeArtifact(q);
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
     // a question it can't ground in what's been read+folded sends the engine to the web first — it
     // fetches, FOLDS every page into memory (chatResearch → the curiosity walk → readURL→ingest),
     // then answers grounded in the new reading. Raw text only counts once it's parsed and folded.
-    if(this._shouldWeb(q,sources))return this.chatResearch(q);
+    if(mode==='research')return this.chatResearch(q);
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // append the user turn + a pending assistant bubble
     let id=this.state.activeChat;
@@ -3268,6 +3267,60 @@ class Component extends DCLogic {
     if(!this._composeMode(cur))return false;
     if(new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s))return true;          // "write/make/give me…"
     return /^(?:yes|yep|yeah|sure|please|go(?:\s+ahead|\s+on)?|do\s+it|again|another(?:\s+one)?|one\s+more|now\b|make\s+it\b|shorter|longer|more\b)/i.test(s);
+  }
+  // ── ROUTING: the model owns the judgment; regex is the fast-path and the fallback ─────────────
+  // "Why regex at all?" — because the reader is local-first: a turn must route instantly, and even
+  // with no model loaded. So the cheap, unambiguous calls stay regex (a clock question, an explicit
+  // "write me a poem"), and normal questions never pay for a model round-trip. But the compose-vs-not
+  // judgment on an AMBIGUOUS turn — an elided follow-up ("write me one"), a novel artifact kind ("a
+  // mermaid diagram", "boilerplate for a React hook") no whitelist enumerates — is semantic, so a
+  // warm model decides it. Everything degrades to the old regex behavior when the model is cold or
+  // the call fails, so the worst case is exactly today's routing, never worse.
+  async _routeTurn(q,cur,sources){
+    if(this._composeIntent(q))return 'compose';                    // explicit make-this — no model
+    const s=String(q||'').trim();
+    // Consult the model when the turn is compose-SHAPED but not explicit. The GATE decides only
+    // WHETHER to ask the model, never the verdict — so it's a GENEROUS net of creation verbs (a
+    // miss just falls to the deterministic router, i.e. today's behavior), kept off plain questions
+    // so those never pay for a round-trip. A re-request inside an already-composing thread qualifies
+    // too, even with no verb ("do it", "another"). "draw/build/code/sketch/design a…" all reach the
+    // model here, which is the point: the whitelist no longer has to enumerate every artifact verb.
+    const GATE=/\b(?:write|compose|draft|create|make|made|generate|produce|craft|build|code|draw|sketch|design|render|paint|implement|author|pen|invent|dream\s+up|give\s+me|show\s+me|come\s+up\s+with|put\s+together|whip\s+up|knock\s+up|spin\s+up|cook\s+up)\b/i;
+    const composeShaped=!/\?\s*$/.test(s)&&(GATE.test(s)||this._composeMode(cur));
+    if(composeShaped){
+      const m=await this._modelWantsCompose(q,cur);                // true / false / null(=no verdict)
+      if(m===true)return 'compose';
+      if(m===null&&this._composeFollowup(q,cur))return 'compose';  // no warm model → regex fallback
+    }
+    // Not a compose. Research-vs-answer stays the tuned deterministic split (respects the web toggle).
+    if(this._shouldWeb(q,sources))return 'research';
+    return 'answer';
+  }
+  // Ask a WARM model the one semantic question a keyword whitelist can't answer: is this a make-this?
+  // Only fires with an already-loaded model (never cold-loads just to route — that would stall the
+  // first turn), constrained to a single word, zero temperature. Returns true=compose, false=not, or
+  // null when there's no verdict (no model, a stall, an unparseable reply) so the caller falls back
+  // to regex. Grounded prose — summaries and essays/reports ABOUT the sources — is explicitly OTHER,
+  // so it stays the grounded answer / longform arc rather than being flattened into a bare compose.
+  async _modelWantsCompose(q,cur){
+    const model=this._chatModel;
+    if(!model||!this._ME||typeof this._ME.streamPhrase!=='function')return null;
+    try{
+      const recent=((cur&&cur.messages)||[]).filter(m=>m.text&&!m.pending).slice(-4)
+        .map(m=>(m.role==='user'?'User: ':'Assistant: ')+this.norm(m.text).slice(0,200)).join('\n');
+      const sys='You are a router for a document-reading assistant. Decide what the user wants for their LATEST message.\n'
+        +'Answer COMPOSE if they are asking the assistant to CREATE an original artifact from its own ability — a poem, story, joke, song, script, email, letter, or code/markup (HTML, CSS, SQL, a function, a regex, a diagram). This includes short follow-ups that continue such a request ("write me one", "do it", "now one about the sea").\n'
+        +'Answer OTHER for anything else: a question about the user\'s documents, a request to summarize or analyze them, a request for an essay or report ABOUT the sources, or a request to look something up.\n'
+        +'Reply with exactly one word: COMPOSE or OTHER.';
+      const user=(recent?('Conversation so far:\n'+recent+'\n\n'):'')+'Latest message: '+this.norm(q)+'\n\nOne word (COMPOSE or OTHER):';
+      const g=this._stallGuard();
+      const raw=await Promise.race([this._ME.streamPhrase(model,[{role:'system',content:sys},{role:'user',content:user}],{maxTokens:4,temperature:0,onToken:()=>g.feed(),signal:g.signal}),g.race]);
+      g.clear();
+      const w=String(raw||'').trim().toLowerCase();
+      if(/^(?:compose|compos|make|write|creat|yes)/.test(w))return true;
+      if(/^(?:other|answer|no\b|question|ask|research|look|summ)/.test(w))return false;
+      return null;                                                 // unparseable → let regex decide
+    }catch(e){return null;}                                        // stall / error → regex fallback
   }
   // The KIND phrase, kept whole ("emily dickinson poem", "haiku"), length/style words peeled. Used
   // only to label the work ("Writing a haiku…"); the model gets the request itself, not this.
