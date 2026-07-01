@@ -25,6 +25,12 @@ class Component extends DCLogic {
     this._activeGuards=new Set(); this._stopGen=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
+      // In-flight imports — a file starts here THE MOMENT it's picked, so it shows in the
+      // Sources panel instantly (with a live "what it's doing" status) instead of only
+      // appearing once the slow extractor — whisper, pdf.js, Tesseract — has finished. Each:
+      // { id, name, kind, status, error?, done?, chatId? }. On success it's dropped and the
+      // real read source lands in master.pages; on failure it stays, with its error, until dismissed.
+      imports:[],
       // Entity panel width — persisted + clamped. Chat column width (chatW) likewise.
       panelW:(()=>{try{return Math.max(300,Math.min(820,+localStorage.getItem('eo_panelw')||380));}catch(e){return 380;}})(),
       chatW:(()=>{try{return Math.max(320,Math.min(640,+localStorage.getItem('eo_chatw')||420));}catch(e){return 420;}})(),
@@ -751,27 +757,64 @@ class Component extends DCLogic {
     this.feedSep('imported a book');this.feedLine('read','Read “'+r.title+'” · '+(r.propCount!=null?r.propCount:r.sentenceCount)+' propositions');
     return r;
   }
-  onImportClick(){const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
+  // Open the OS file picker. `chatId` (optional) tags whatever is imported into that chat once
+  // it's read — the "Import a file…" affordance in a chat's Add-source picker rides this, so a
+  // file dropped from a chat lands as a tagged source, the way a pasted URL would.
+  onImportClick(chatId){this._importIntoChat=(typeof chatId==='string')?chatId:null;const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
   onImportFile(ev){
-    const f=ev&&ev.target&&ev.target.files&&ev.target.files[0];if(!f)return;
+    const files=ev&&ev.target&&ev.target.files?Array.from(ev.target.files):[];
+    const chatId=this._importIntoChat||null;this._importIntoChat=null;
     if(ev.target)ev.target.value='';
-    this._importAny(f);
+    // Kick every picked file off at once — each posts its own pending Source row and runs its
+    // own extractor, so a batch of files ALL show up instantly and progress independently.
+    for(const f of files)this._importAny(f,chatId);
   }
+  // A short, human kind for the pending Source row's status ("Audio", "PDF", …), from the file.
+  _importKind(f){const ext=(String(f&&f.name||'').split('.').pop()||'').toLowerCase(),mime=(f&&f.type||'').toLowerCase();
+    if(mime.startsWith('audio/')||['mp3','m4a','wav','ogg','oga','flac','aac','opus','weba'].includes(ext))return 'Audio';
+    if(mime.startsWith('video/')||['mp4','mov','webm','mkv','avi','m4v'].includes(ext))return 'Video';
+    if(mime==='application/pdf'||ext==='pdf')return 'PDF';
+    if(mime.startsWith('image/')||['png','jpg','jpeg','webp','gif','bmp','tif','tiff'].includes(ext))return 'Image';
+    if(/sheet|excel|spreadsheet|csv|tab-separated/.test(mime)||['xlsx','xls','csv','tsv'].includes(ext))return 'Table';
+    if(mime.includes('html')||['html','htm','xhtml'].includes(ext))return 'Web page';
+    return 'Text';}
+  // ── in-flight import ledger — the pending Source rows ─────────────────────
+  _addImport(rec){this.setState(s=>({imports:[...s.imports,rec]}));}
+  _patchImport(id,patch){this.setState(s=>({imports:s.imports.map(im=>im.id===id?{...im,...patch}:im)}));}
+  _dropImport(id){this.setState(s=>({imports:s.imports.filter(im=>im.id!==id)}));}
+  dismissImport(id){this._dropImport(id);}
   // Import ANY supported file. Plain text/markdown reads inline (no module load); a PDF,
   // scanned image, audio/video, spreadsheet or web page routes through the unified importer
   // (src/reader/import-file.js), which lazy-loads the right extractor and raises it onto the
   // spine via the ingestion organs — the reader then reads the extracted text as a book.
-  async _importAny(f){
+  //
+  // A pending Source row is posted BEFORE any work, so the file appears in the panel the instant
+  // it's picked; onProgress drives that row's live status (and the top activity bar); on success
+  // the row is dropped as the real read source lands; on failure the row keeps the error.
+  async _importAny(f,chatId){
     const name=f.name||'file'; const ext=(name.split('.').pop()||'').toLowerCase();
     const isText=(f.type&&f.type.startsWith('text/plain'))||['txt','md','markdown','text','log','rst'].includes(ext);
+    const id='imp'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    this._addImport({id,name,kind:this._importKind(f),status:isText?'Reading…':'Queued…',chatId:chatId||null});
+    const say=(m)=>{this._patchImport(id,{status:m});this.feedLine('read',m);};
     try{
-      if(isText){ const text=await f.text(); await this.importText(text,name.replace(/\.[^.]+$/,'')); return; }
-      this.feedSep('importing '+name);
-      const mod=await import(new URL('src/reader/import-file.js',document.baseURI).href);
-      const r=await mod.importAnyFile(f,{onProgress:(m)=>this.feedLine('read',m)});
-      if(!r||!r.text||!r.text.trim()){ this.feedLine('warn','No text could be read from '+name); return; }
-      await this.importText(r.text, r.title||name.replace(/\.[^.]+$/,''), r.meta||null);
-    }catch(e){ this.feedLine('warn','Could not import '+name+' — '+((e&&e.message)?e.message:String(e))); }
+      let r;
+      if(isText){ const text=await f.text(); r={text,title:name.replace(/\.[^.]+$/,''),meta:{modality:'text'}}; }
+      else{
+        this.feedSep('importing '+name);
+        const mod=await import(new URL('src/reader/import-file.js',document.baseURI).href);
+        // Transcription options ride along: `twoWitness` takes a second whisper pass so the
+        // readings can be audited (audio/video only; ignored by the other extractors).
+        r=await mod.importAnyFile(f,{onProgress:say,twoWitness:!!this.state.audioAudit});
+      }
+      if(!r||!r.text||!r.text.trim()){ this._patchImport(id,{error:'No readable text found.',status:''}); this.feedLine('warn','No text could be read from '+name); return; }
+      this._patchImport(id,{status:'Folding into memory…'});
+      const read=await this.importText(r.text, r.title||name.replace(/\.[^.]+$/,''), r.meta||null);
+      // Read and folded — drop the pending row (the real source now stands in its place) and,
+      // when this came from a chat's Add-source picker, tag it in so the chat is about it.
+      this._dropImport(id);
+      if(chatId&&read&&read.url)this.addChatSource(read.url,chatId);
+    }catch(e){ const msg=((e&&e.message)?e.message:String(e)); this._patchImport(id,{error:msg,status:''}); this.feedLine('warn','Could not import '+name+' — '+msg); }
   }
   // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
   // Each chat is a thread that answers from the read sentences/graph. A chat can be
@@ -817,8 +860,8 @@ class Component extends DCLogic {
   // Fold another read source into the active chat so it can be chatted with alongside the
   // rest. Tagging a specific source means the chat is ABOUT it — so it leaves the
   // "everything" scope (a narrowing), never silently keeps ranging over the whole library.
-  addChatSource(url){if(!url)return;this.setState(s=>({chatAddOpen:false,chats:s.chats.map(c=>{
-    if(c.id!==s.activeChat)return c;const src=this.chatSourcesOf(c);if(src.includes(url))return c;
+  addChatSource(url,chatId){if(!url)return;this.setState(s=>({chatAddOpen:false,chats:s.chats.map(c=>{
+    if(c.id!==(chatId||s.activeChat))return c;const src=this.chatSourcesOf(c);if(src.includes(url))return c;
     const sources=[...src,url];const title=(c.messages&&c.messages.length)?c.title:(((this.pageOf(sources[0])||{}).title)||this.short(sources[0]));
     return {...c,scopeAll:false,sources,title};})}));}
   removeChatSource(url){this.setState(s=>({chats:s.chats.map(c=>{
@@ -2878,6 +2921,9 @@ class Component extends DCLogic {
       // already ranging over everything and there is at least one source to range over.
       tagEveryOn:!isEvery&&nSrc>0,
       addOpen:!!this.state.chatAddOpen,addable,hasAddable:addable.length>0,noAddable:addable.length===0,onToggleAdd:()=>this.toggleChatAdd(),
+      // Attach a file straight from the chat — like a regular chatbot's paperclip. It imports,
+      // shows up instantly as a pending Source, and tags itself into THIS chat once read.
+      onImport:()=>this.onImportClick(cur.id),
       addEmptyMsg:nSrc?'All your sources are already tagged in this chat.':'Read a URL or import a book to tag a source.',
       messages:msgs,empty:msgs.length===0,
       // The empty-state copy tracks the scope: a fresh space reads as a blank slate.
@@ -3003,7 +3049,13 @@ class Component extends DCLogic {
     // Keep the raw text on the page so an imported book can be re-rendered as a
     // readable book in the center (see _bookHtml / loadCenter's text: branch).
     const page={url,title,text:String(text||''),events:doc.log.snapshot(),sentences:doc.sentences,propCount,ts:Date.now(),via:via||'read',_doc:doc,svo:0,image:image||null,parent:parent||null,wikiLinks:wikiLinks||null,
-      author:(meta&&meta.author)||null,authorDates:(meta&&meta.authorDates)||null,published:(meta&&meta.published)||null};
+      author:(meta&&meta.author)||null,authorDates:(meta&&meta.authorDates)||null,published:(meta&&meta.published)||null,
+      // How the source was READ, and — for audio/video — a playable handle plus the transcription
+      // organ's own record: its witness readings and the contested spans, so a media source can be
+      // played back with the transcript aligned and its non-objective readings audited.
+      modality:(meta&&meta.modality)||'text',
+      media:(meta&&meta.media)||null,mediaKind:(meta&&meta.mediaKind)||(meta&&meta.isVideo?'video':null),
+      _organ:(meta&&meta.doc)||null,audit:(meta&&meta.doc&&meta.doc.audit)||null};
     const pages=[...this.state.pages,page];this.rebuild(pages);
     this.setState(s=>({pages,rev:s.rev+1,selId:s.selId||this.topEntity()}));
     // Second reader: fold the LLM's SVO reading onto the same log, then re-project.
@@ -4451,6 +4503,23 @@ class Component extends DCLogic {
     // order on its own line, with the publication (or the author's era) beside it.
     const dateStr=p.published||p.authorDates||'';
     const authorHtml=p.author?'<div class="eo-author">'+esc(p.author)+(dateStr?'<span class="eo-life"> · '+esc(dateStr)+'</span>':'')+'</div>':'';
+    // Media playback: a source heard/watched from a file keeps a playable handle, so it plays
+    // back inline with the transcript below it. A blob URL from the parent shares this origin.
+    const mmss=s=>{s=Math.max(0,Math.floor(s||0));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');};
+    let mediaHtml='';
+    if(p.media){const tag=(p.mediaKind==='video')?'video':'audio';
+      mediaHtml='<div class="eo-media"><'+tag+' id="eo-player" src="'+esc(p.media)+'" controls preload="metadata" style="width:100%;'+(tag==='video'?'max-height:60vh;background:#000;border-radius:10px;display:block;':'')+'"></'+tag+'></div>';}
+    // The readings audit: a transcript is one hearing, not the objective truth of the waveform.
+    // This surfaces the witnesses and the contested spans (from the audio organ's DEF·EVA·REC
+    // record) so they can be inspected — and clicking a moment seeks the player to it.
+    let auditHtml='';const au=p.audit;
+    if(au&&(au.witnessCount>1||au.contestedCount||au.lowConfidence)){
+      const rows=(au.contested||[]).slice(0,60).map(c=>{const t=(c.span&&c.span[0])||0;
+        const alts=(c.alts||[]).map(a=>esc(a.surface)+' <span class="eo-cx-w">'+esc(a.witness)+'</span>').join(', ');
+        return '<div class="eo-cx"><span class="eo-cx-t">'+mmss(t)+'</span><span class="eo-cx-c">'+esc((c.chosen&&c.chosen.surface)||'')+'</span><span class="eo-cx-vs">vs</span><span class="eo-cx-a">'+alts+'</span></div>';}).join('');
+      auditHtml='<details class="eo-audit"'+(au.contestedCount?' open':'')+'><summary>Readings · '+au.witnessCount+' witness'+(au.witnessCount!==1?'es':'')+' · '+au.contestedCount+' contested · '+au.lowConfidence+' low-confidence</summary>'+
+        '<div class="eo-audit-note">A transcript is a hearing, not objective truth. Where the witnesses disagreed:</div>'+
+        (rows||'<div class="eo-audit-note">A single witness — no divergences to audit. Turn on “Audit readings” before importing to take a second hearing.</div>')+'</details>';}
     const html='<!doctype html><html'+htmlCls+'><head><meta charset="utf-8"><base target="_blank">'+
       '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('maxw',(rp.w||720)+'px')+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('bmbg',this.hexA(a,.10))+'}'+
       'html,body{margin:0;background:var(--eo-bg);}'+
@@ -4468,9 +4537,21 @@ class Component extends DCLogic {
       '.eo-bm{scroll-margin-top:18px;border-radius:0 7px 7px 0;transition:background .2s,box-shadow .2s;}'+
       'html.eo-bm-on .eo-bm{background:var(--eo-bmbg);box-shadow:inset 3px 0 0 var(--eo-acc);padding:.5em .8em;margin-left:-.8em;position:relative;}'+
       'html.eo-bm-on .eo-bm[data-eo-why]:not([data-eo-why=""])::before{content:"❖ " attr(data-eo-why);display:block;font:700 .58em/1.3 -apple-system,BlinkMacSystemFont,sans-serif;text-transform:uppercase;letter-spacing:.06em;color:var(--eo-acc);margin-bottom:.4em;}'+
+      // Media player + readings-audit styling — a calm card above the transcript.
+      '.eo-media{margin:0 0 20px;}'+
+      '.eo-audit{margin:0 0 30px;border:1px solid var(--eo-rule);border-radius:11px;padding:10px 14px;background:var(--eo-bmbg);font-family:-apple-system,BlinkMacSystemFont,sans-serif;}'+
+      '.eo-audit>summary{font:700 .74em/1.4 -apple-system,BlinkMacSystemFont,sans-serif;text-transform:uppercase;letter-spacing:.05em;color:var(--eo-acc);cursor:pointer;}'+
+      '.eo-audit-note{font-size:.78em;color:var(--eo-fg2);margin:9px 0 8px;line-height:1.5;}'+
+      '.eo-cx{display:flex;align-items:baseline;gap:9px;width:100%;text-align:left;border-top:1px solid var(--eo-rule);padding:7px 2px;color:var(--eo-fg);}'+
+      '.eo-cx-t{flex:0 0 auto;font:600 .72em/1.4 ui-monospace,monospace;color:var(--eo-acc);min-width:44px;}'+
+      '.eo-cx-c{flex:0 0 auto;font-size:.86em;font-weight:700;}'+
+      '.eo-cx-vs{flex:0 0 auto;font-size:.68em;color:var(--eo-fg2);text-transform:uppercase;letter-spacing:.05em;}'+
+      '.eo-cx-a{font-size:.86em;color:var(--eo-fg2);}'+
+      '.eo-cx-w{font-size:.82em;font-style:italic;opacity:.7;}'+
       '</style></head><body><div class="eo-book"><h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
       authorHtml+
-      '<div class="eo-byline">'+(p.propCount!=null?p.propCount:this.countPropositions(p.sentences))+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+(marks.length?' · '+marks.length+' marks':'')+' · read as a book</div>'+
+      '<div class="eo-byline">'+(p.propCount!=null?p.propCount:this.countPropositions(p.sentences))+' propositions'+(toc.length>1?' · '+toc.length+' sections':'')+(marks.length?' · '+marks.length+' marks':'')+(p.media?' · '+(p.mediaKind==='video'?'video':'audio')+', transcribed':' · read as a book')+'</div>'+
+      mediaHtml+auditHtml+
       parts.join('\n')+'</div></body></html>';
     return {html,toc,bookmarks};
   }
@@ -5091,6 +5172,26 @@ class Component extends DCLogic {
     return {busy,label,labelColor:color,text,dotStyle:dot,barBg:busy?'#fdfaf3':'var(--card)',trail,hasTrail:trail.length>0,textStyle:''};
   }
 
+  // The pending Source rows — one per in-flight (or failed) import. A live row spins with its
+  // status ("Transcribing…", "Read page 4 / 12…"); a failed row holds its error until dismissed.
+  // Rendered ABOVE the read sources so a just-picked file is the first thing you see.
+  _importRows(){
+    return (this.state.imports||[]).map(im=>{
+      const err=!!im.error;
+      const c=err?'#dc2626':'var(--acc)';
+      return {
+        id:im.id, name:this.truncLabel(im.name||'file',40), kind:im.kind||'File',
+        status:err?im.error:(im.status||'Working…'),
+        isErr:err, ok:!err,
+        onDismiss:()=>this.dismissImport(im.id),
+        dotStyle:err
+          ?'width:24px;height:24px;flex:0 0 auto;border-radius:7px;background:#fdecec;color:#dc2626;display:flex;align-items:center;justify-content:center;font-size:13px;line-height:1;'
+          :'width:24px;height:24px;flex:0 0 auto;border-radius:7px;background:var(--accbg);display:flex;align-items:center;justify-content:center;box-sizing:border-box;',
+        spinStyle:'width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;',
+        rowStyle:'display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;margin-bottom:3px;border:1px solid '+(err?'#f3caca':'var(--accline)')+';background:'+(err?'#fef6f6':'var(--accbg)')+';',
+        dismissStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:'+c+';border-radius:6px;cursor:pointer;font-size:13px;line-height:1;'};
+    });
+  }
   renderVals(){
     const ready=this.state.ready,g=this.graph,active=this.state.pinSrc||this.state.hoverSrc;
     const _acc=this.curAccent();
@@ -5150,7 +5251,12 @@ class Component extends DCLogic {
         {v:'qwen-coder-0.5b',label:'Qwen2.5-Coder 0.5B · code model, CPU'},
         {v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
-      sources:[],srcCount:0,srcEmpty:true,rightOpen:this.state.rightOpen,rightClosed:!this.state.rightOpen,onToggleRight:()=>this.toggleRight(),panelProfileOn:false,panelListOn:true,panelPageOn:false,pageOverview:null,listFromPage:false,onShowAllEntities:()=>this.showAllEntities(),onShowOverview:()=>this.showOverview(),panelProfile:null,previewOn:false,preview:null,
+      sources:[],srcCount:0,srcEmpty:true,imports:this._importRows(),hasImports:(this.state.imports||[]).length>0,onSrcImport:()=>this.onImportClick(),
+      // Transcription option — a second whisper witness so audio/video readings can be audited.
+      audioAudit:!!this.state.audioAudit,onToggleAudioAudit:()=>this.setState(s=>({audioAudit:!s.audioAudit})),
+      audioAuditStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;border-radius:7px;padding:5px 9px;cursor:pointer;border:1px solid '+(this.state.audioAudit?'var(--accline)':'var(--line2)')+';background:'+(this.state.audioAudit?'var(--accbg)':'var(--app)')+';color:'+(this.state.audioAudit?'var(--acc)':'var(--ink3)')+';',
+      audioAuditLabel:this.state.audioAudit?'Audit readings · on':'Audit readings · off',
+      rightOpen:this.state.rightOpen,rightClosed:!this.state.rightOpen,onToggleRight:()=>this.toggleRight(),panelProfileOn:false,panelListOn:true,panelPageOn:false,pageOverview:null,listFromPage:false,onShowAllEntities:()=>this.showAllEntities(),onShowOverview:()=>this.showOverview(),panelProfile:null,previewOn:false,preview:null,
       pageLinked:this.state.linkMode,onTogglePlain:()=>this.toggleLinkMode(),
       plainLabel:this.state.linkMode?'Names linked':'Plain text',
       plainTitle:this.state.linkMode?'Known names are highlighted and clickable. Click to read plain, unmarked text.':'Page is plain text. Click to highlight and link known names again.',
@@ -5379,7 +5485,7 @@ class Component extends DCLogic {
         dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?8:9)+'px;font-weight:800;',
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
-    base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0;
+    base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
 
     if(vu){
       this.hoverVals(base);

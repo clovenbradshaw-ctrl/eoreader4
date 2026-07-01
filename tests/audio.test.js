@@ -62,3 +62,43 @@ test('a flat word list is cut into utterances on a long pause', () => {
   ] });
   assert.equal(doc.units.length, 2);
 });
+
+// A transcript is a READING, not the objective truth of the waveform. The record carries
+// that: every word gets DEF attributes (when, whose hearing), a merge leaves a REC learned
+// rule beside its SYN, and an alternate witness's divergence raises an EVA the audit walks.
+test('every word carries DEF provenance — time and witness — on the log', () => {
+  const doc = ingestAudio(TRANSCRIPT);
+  const evs = doc.log.events;
+  const darcyDefs = evs.filter(e => e.op === 'DEF' && e.id === 'darcy');
+  assert.ok(darcyDefs.some(e => e.key === 'time'), 'a time DEF grounds when it was said');
+  assert.ok(darcyDefs.some(e => e.key === 'witness'), 'a witness DEF records whose hearing it is');
+  assert.equal(doc.witness, 'whisper · wasm');
+});
+
+test('a merge deposits a REC learned rule beside its SYN', () => {
+  const doc = ingestAudio(TRANSCRIPT);
+  const evs = doc.log.events;
+  assert.ok(evs.some(e => e.op === 'SYN' && e.from === 'darcy' && e.to === 'darcey'));
+  assert.ok(evs.some(e => e.op === 'REC' && e.token === 'darcy' && e.expansion === 'darcey'),
+    'the unification the ear committed is recorded as a learned rule');
+});
+
+test('a second witness that hears a different word raises an auditable EVA', () => {
+  const doc = ingestAudio({
+    ...TRANSCRIPT,
+    // The relisten heard "Marcy" where the first pass heard "Darcy" at 0.0–0.4s.
+    alternates: [{ label: 'relisten', words: [{ text: 'Marcy', start: 0.0, end: 0.4 }] }],
+  });
+  const evas = doc.log.events.filter(e => e.op === 'EVA' && e.reason === 'contested-reading');
+  assert.ok(evas.length >= 1, 'the divergence is evaluated, not silently overwritten');
+  assert.equal(doc.audit.witnessCount, 2);
+  assert.ok(doc.audit.contestedCount >= 1);
+  assert.equal(doc.contestedAt(0.2).length, 1, 'the contested moment is addressable by time');
+  assert.equal(doc.contestedAt(0.2)[0].alts[0].surface, 'Marcy');
+});
+
+test('a low-confidence hearing is flagged EVA — a shaky reading, not a fact', () => {
+  const doc = ingestAudio({ name: 'c', words: [{ text: 'mumble', start: 0, end: 0.4, conf: 0.2 }] });
+  assert.ok(doc.log.events.some(e => e.op === 'EVA' && e.reason === 'low-confidence-reading'));
+  assert.equal(doc.audit.lowConfidence, 1);
+});
