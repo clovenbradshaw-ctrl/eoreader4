@@ -2080,7 +2080,9 @@ class Component extends DCLogic {
       revised=(out!==firstGo);   // _reviseIfNeeded returns the SAME string on OK, a new one on rewrite
     }
     guard.clear();
-    finish(revised?{text:out,modelNote:'Revised after a second look'}:{text:out||'(the model returned nothing to write)'});
+    // Keep the first go alongside the revision so the bubble can offer a before/after affordance —
+    // the reader can open the original draft and see exactly what the second look changed.
+    finish(revised?{text:out,modelNote:'Revised after a second look',firstDraft:firstGo}:{text:out||'(the model returned nothing to write)'});
   }
   // Read the first go back and update only if it falls short. One extra pass: the writer judges its
   // own draft against the request — replies OK when it already lands, or a better full version when it
@@ -2768,6 +2770,11 @@ class Component extends DCLogic {
         chipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'}));
       const relKey=cur.id+':'+mi+':rel', relOn=!!gOpen[relKey];
       const related=relOn?relAll:relAll.slice(0,3);
+      // The COMPOSE before/after: when the second-look pass actually rewrote the draft, the turn
+      // keeps the first go (m.firstDraft). The "Revised after a second look" note becomes a toggle
+      // that opens the original draft beneath the shown piece — the reader sees what changed.
+      const revKey=cur.id+':'+mi+':rev', revOn=!!gOpen[revKey];
+      const hasRevision=!isUser&&!m.pending&&!!m.firstDraft&&String(m.firstDraft)!==String(m.text);
       // The RESEARCH TRAIL — the live, step-by-step record of the curiosity walk this turn ran
       // (searched · read · followed a surprising lead · set a strayer aside · done). While the
       // walk runs it stays open and grows; once done it collapses to a one-line summary the user
@@ -2868,7 +2875,15 @@ class Component extends DCLogic {
         relatedStyle:'max-width:80%;margin-top:7px;display:flex;flex-wrap:wrap;align-items:center;gap:6px;',
         relatedHeadStyle:'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:1px;',
         relatedMoreStyle:'font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
-        hasNote:!!m.modelNote,note:(m.modelNote||''),
+        // The plain note yields to the interactive affordance when there IS a before/after to show.
+        hasNote:!!m.modelNote&&!hasRevision,note:(m.modelNote||''),
+        hasRevision,revisionOpen:revOn,onToggleRevision:()=>this.toggleGround(revKey),
+        revisionLabel:(m.modelNote||'Revised after a second look'),revisionCaret:revOn?'▾':'▸',
+        revisionBefore:String(m.firstDraft||''),
+        revisionToggleStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink3);margin-top:5px;background:transparent;border:none;padding:0;cursor:pointer;',
+        revisionPanelStyle:'max-width:80%;margin-top:6px;border:1px solid var(--line);border-radius:11px;padding:9px 12px;background:var(--app);',
+        revisionHeadStyle:'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin:0 0 5px;',
+        revisionBeforeStyle:'font-size:13px;line-height:1.55;color:var(--ink2);white-space:pre-wrap;word-break:break-word;',
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
         bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+((m.pending&&!m.text)?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')+'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
         noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',

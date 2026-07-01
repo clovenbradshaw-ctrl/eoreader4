@@ -337,6 +337,15 @@
                       <sc-if value="{{ m.relatedHasMore }}" hint-placeholder-val="{{ false }}"><button onclick="{{ m.onToggleRelated }}" style="{{ m.relatedMoreStyle }}">{{ m.relatedMoreLabel }}</button></sc-if>
                     </div>
                   </sc-if>
+                  <sc-if value="{{ m.hasRevision }}" hint-placeholder-val="{{ false }}">
+                    <button onclick="{{ m.onToggleRevision }}" style="{{ m.revisionToggleStyle }}" style-hover="color:var(--acc)"><span>{{ m.revisionCaret }}</span><span>{{ m.revisionLabel }}</span></button>
+                    <sc-if value="{{ m.revisionOpen }}" hint-placeholder-val="{{ false }}">
+                      <div style="{{ m.revisionPanelStyle }}">
+                        <div style="{{ m.revisionHeadStyle }}">First draft — before the second look</div>
+                        <div style="{{ m.revisionBeforeStyle }}">{{ m.revisionBefore }}</div>
+                      </div>
+                    </sc-if>
+                  </sc-if>
                   <sc-if value="{{ m.hasNote }}" hint-placeholder-val="{{ false }}"><div style="{{ m.noteStyle }}">{{ m.note }}</div></sc-if>
                 </div>
               </sc-for>
@@ -914,6 +923,15 @@
                     <sc-for list="{{ m.related }}" as="rd" hint-placeholder-count="1"><span onclick="{{ rd.onOpen }}" title="{{ rd.title }}" style="{{ rd.chipStyle }}" style-hover="border-color:var(--accline);color:var(--acc)">{{ rd.label }}</span></sc-for>
                     <sc-if value="{{ m.relatedHasMore }}" hint-placeholder-val="{{ false }}"><button onclick="{{ m.onToggleRelated }}" style="{{ m.relatedMoreStyle }}">{{ m.relatedMoreLabel }}</button></sc-if>
                   </div>
+                </sc-if>
+                <sc-if value="{{ m.hasRevision }}" hint-placeholder-val="{{ false }}">
+                  <button onclick="{{ m.onToggleRevision }}" style="{{ m.revisionToggleStyle }}" style-hover="color:var(--acc)"><span>{{ m.revisionCaret }}</span><span>{{ m.revisionLabel }}</span></button>
+                  <sc-if value="{{ m.revisionOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="{{ m.revisionPanelStyle }}">
+                      <div style="{{ m.revisionHeadStyle }}">First draft — before the second look</div>
+                      <div style="{{ m.revisionBeforeStyle }}">{{ m.revisionBefore }}</div>
+                    </div>
+                  </sc-if>
                 </sc-if>
                 <sc-if value="{{ m.hasNote }}" hint-placeholder-val="{{ false }}"><div style="{{ m.noteStyle }}">{{ m.note }}</div></sc-if>
               </div>
