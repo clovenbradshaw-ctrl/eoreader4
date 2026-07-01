@@ -108,6 +108,38 @@ integral has to periodically catch the derivative, and then the derivative resum
 and sleep are the numerical method by which a process approaches a limit it can never
 reach.
 
+## The driver: when to rest
+
+`rest()` runs one pass; it does not decide *when*. That decision is the whole point of
+ingest that arrives faster than it can be folded, and it is what
+[`src/rest/cycle.js`](../src/rest/cycle.js) adds. `createRestCycle({ fold, enacted, … })`
+is the deliberate sibling of `createIdleLoop`: a deterministic engine — no timers, no DOM,
+faculties injected, outputs behind the §8 reafference firewall, the host driving the
+clock. The idle loop runs while the frontier **moves**; the dream cycle runs when it
+should **hold still**.
+
+- **Pressure is read off the live fold, not a clock.** Saturation is not a row count — it
+  is the integral losing its shape, the failure `reproject` names: every binding loud,
+  nothing standing forward. `pressure(fold)` re-projects each dossier to its own peak and
+  reads the `rel` distribution: a **peaked** dossier (one descriptor forward, the rest
+  fallen away) is healthy; a **flat-high** one (many near the ceiling) owes a night. The
+  readout is two signals — `saturation` and `load` (the day's intake against a budget) —
+  combined as a weighted max, so either too-flat or too-much trips the night.
+- **`tick(now)` chooses the cadence.** It runs a **blink** unless `value` crosses
+  `nightPressure` *and* the day is at least `minDay` long, in which case it runs a
+  **night**. The minimum day is the refractory sibling of the idle loop's median-band
+  quiesce — the cycle never sleeps on nothing. A blink re-projects only the referents the
+  day touched; the night descends the ladder, mints the survivors as hypotheses, queues
+  them, and resets the day counters.
+- **`observe(event)` is the day's intake**, the sibling of `idle.arrive(doc)`: the host
+  feeds the cycle the same events it folds, so `load` has something to count and a blink
+  re-projects the right referents. It folds nothing.
+- **`wake(evaluate)` is the morning** — `recouple` run over the queue. Every pending
+  hypothesis is forced through a fresh `EVA`; survivors come back as **proposals**, still
+  ungrounded (the witness act promotes). The broken ones are dropped. The firewall is the
+  type: every hypothesis the night mints carries `fromEnactor`, so `canGround` is false —
+  a dream hypothesis can never ground itself.
+
 ## You are not the stream
 
 The differentiation can halt and the integral be re-projected at any volume because
@@ -122,8 +154,10 @@ the whole reason rest is survivable as the same engine and not a small death.
 | concern | file |
 |---|---|
 | the four faces + the cadence | [`src/rest/index.js`](../src/rest/index.js) |
+| the driver: pressure, tick, observe, wake | [`src/rest/cycle.js`](../src/rest/cycle.js) |
 | the integral re-projected | [`src/write/fold.js`](../src/write/fold.js) (`dossierOf`) |
 | the patterns descended | [`src/core/enacted/loop.js`](../src/core/enacted/loop.js), [`src/enact/replay.js`](../src/enact/replay.js) |
 | the firewall the hypotheses inherit | [`src/write/idle.js`](../src/write/idle.js) (`canWitness`) |
 | the locus that survives the rest | [`src/core/self/index.js`](../src/core/self/index.js) |
-| tests | [`tests/rest.test.js`](../tests/rest.test.js) |
+| the state glyph (a phosphor-esque icon per posture) | [`src/ui/rest-icon.js`](../src/ui/rest-icon.js), shown in [`src/ui/idle-view.js`](../src/ui/idle-view.js) |
+| tests | [`tests/rest.test.js`](../tests/rest.test.js), [`tests/rest-cycle.test.js`](../tests/rest-cycle.test.js), [`tests/rest-icon.test.js`](../tests/rest-icon.test.js) |
