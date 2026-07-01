@@ -46,9 +46,9 @@
     .empty { color: var(--fg2, #8a8f98); font-size: 13px; padding: 18px 0; }
     .err { color: #ff8a8a; font-size: 13px; margin-top: 6px; }
     /* When embedded in the Reader's modal (iframe), the standalone chrome is redundant:
-       the modal supplies its own header + close button, so trim the page's own header. */
-    body.embedded .wrap { padding-top: 4px; }
-    body.embedded a.reader-link { display: none; }
+       the modal supplies its own header + close button, so drop the page's own header. */
+    body.embedded .wrap { padding-top: 14px; }
+    body.embedded header.tpl { display: none; }
   </style>
 </head>
 <body>
