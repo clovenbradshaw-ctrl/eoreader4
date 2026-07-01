@@ -94,6 +94,51 @@ test('composeEssay respects an abort signal', async () => {
   assert.ok(res.words < ESSAY_MIN_WORDS, 'an aborted walk stops short of the floor');
 });
 
+test('the essay is emitted across many messages — one section beat at a time', async () => {
+  const talker = stubTalker(200);
+  const plans = [];
+  const sectionEnds = [];
+  const opens = [];
+  const res = await composeEssay({
+    topic: 'the sea',
+    talker,
+    hooks: {
+      onPlan: (p) => plans.push(p),
+      onSection: (s) => opens.push(s),
+      onSectionEnd: (s) => sectionEnds.push(s),
+    },
+  });
+  // The plan is announced exactly once, before any section.
+  assert.equal(plans.length, 1);
+  assert.ok(plans[0].title && Array.isArray(plans[0].outline));
+  // Every section opens and closes; more than one message, and they pair up 1:1.
+  assert.ok(sectionEnds.length > 1, 'the essay spans multiple section messages');
+  assert.equal(opens.length, sectionEnds.length, 'each opened section is closed');
+  assert.equal(sectionEnds.length, res.sections.length);
+  // onSectionEnd carries a running total that climbs monotonically toward the floor.
+  for (let i = 1; i < sectionEnds.length; i++) {
+    assert.ok(sectionEnds[i].total >= sectionEnds[i - 1].total, 'the running total only grows');
+  }
+  // The per-message texts concatenate to the sections in the assembled essay.
+  assert.deepEqual(sectionEnds.map((s) => s.text), res.sections.map((s) => s.text));
+});
+
+test('a lens config is threaded into each section talker pass (not the plan)', async () => {
+  const seen = [];
+  const lens = { relevance: 'sea', enabled: true };
+  const talker = async (messages, opts = {}) => {
+    const sys = messages.find((m) => m.role === 'system')?.content || '';
+    const isPlan = /planning a long-form essay/i.test(sys);
+    seen.push({ isPlan, lens: opts.lens || null });
+    return isPlan ? 'TITLE: Sea\n1. Intro\n2. Conclusion' : Array.from({ length: 200 }, (_, i) => `w${i}`).join(' ');
+  };
+  await composeEssay({ topic: 'the sea', talker, lens });
+  const planCall = seen.find((c) => c.isPlan);
+  const sectionCalls = seen.filter((c) => !c.isPlan);
+  assert.equal(planCall.lens, null, 'the planning pass is left unsteered');
+  assert.ok(sectionCalls.length > 0 && sectionCalls.every((c) => c.lens === lens), 'every section pass carries the lens');
+});
+
 test('the organ is re-exported as a namespace off organs/out', () => {
   assert.equal(typeof essay.composeEssay, 'function');
   assert.equal(essay.ESSAY_MIN_WORDS, ESSAY_MIN_WORDS);

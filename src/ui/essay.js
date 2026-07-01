@@ -3,9 +3,14 @@
 // It looks like the chat (a thread of messages, a composer) and shares its styling, but it
 // answers nothing: every commission you send is treated as an essay to WRITE, and it walks the
 // arc (organs/out/essay.composeEssay) — open, develop, turn, land — over as many talker passes
-// as it takes to clear the ≥2500-word floor. No routing, no research, no short replies. The
-// commission goes in; a whole essay comes back, streamed section by section with a live word
-// count, then rendered as a titled, sectioned piece you can copy or download.
+// as it takes to clear the ≥2500-word floor. No routing, no research, no short replies.
+//
+// THE ESSAY GENERATES ACROSS MANY MESSAGES. The piece is not one blob: a title card lands first,
+// then EACH SECTION arrives as its own assistant message, streamed live, the way a long reply
+// comes in pieces in a real chat. Continuity across those message boundaries is the hard part,
+// and it is held in the organ — the tail of the running draft is fed into every section prompt —
+// not here. A closing card sums the whole piece (word count vs the floor) with copy/download of
+// the assembled essay.
 //
 // The model layer is shared with the chat (src/model): the selected backend auto-loads, and the
 // essay organ is handed a `talker` that is just streamPhrase over that model. This file owns no
@@ -77,55 +82,60 @@ const renderUser = (text) => {
   return el;
 };
 
-// The live essay bubble: a status line the walk updates ("Outlining…", "Writing “X” · N words")
-// and a body the sections stream into. Returns handles the walk's hooks drive.
-const createEssayBubble = () => {
+const scrollDown = () => { els.messages.scrollTop = els.messages.scrollHeight; };
+
+// A plain assistant status message — the "Outlining the essay…" beat while the planner runs.
+const statusMessage = (text) => {
   const el = document.createElement('div');
-  el.className = 'msg assistant essay';
-  el.innerHTML = '<div class="essay-status"><span class="dots"></span><span class="lbl">Outlining the essay…</span></div><div class="essay-body"></div>';
+  el.className = 'msg assistant essay thinking';
+  el.innerHTML = `<div class="essay-status"><span class="dots"></span><span class="lbl">${escapeHtml(text)}</span></div>`;
   els.messages.appendChild(el);
-  els.messages.scrollTop = els.messages.scrollHeight;
-  const statusLbl = el.querySelector('.essay-status .lbl');
-  const body = el.querySelector('.essay-body');
-  let currentSec = null;
-  let liveWords = 0;
+  scrollDown();
   return {
     el,
-    setStatus: (msg) => { statusLbl.textContent = msg; },
-    startSection: (heading) => {
-      const h = document.createElement('h2');
-      h.textContent = heading;
-      body.appendChild(h);
-      currentSec = document.createElement('div');
-      currentSec.className = 'sec';
-      body.appendChild(currentSec);
-      els.messages.scrollTop = els.messages.scrollHeight;
-    },
-    stream: (piece) => {
-      if (!currentSec) return;
-      currentSec.textContent += piece;
-      liveWords += (String(piece).match(/\S+/g) || []).length;
-      els.messages.scrollTop = els.messages.scrollHeight;
-    },
-    liveWords: () => liveWords,
+    set: (msg) => { const l = el.querySelector('.lbl'); if (l) l.textContent = msg; },
+    remove: () => el.remove(),
   };
 };
 
-// A titled block of prose becomes h1/h2/paragraphs. Escape-first (no model string reaches
-// innerHTML raw): every text node is escaped, then only OUR tags are introduced.
-const renderEssay = (bodyEl, text) => {
-  const blocks = String(text || '').split(/\n{2,}/);
-  const html = [];
-  for (const block of blocks) {
-    const b = block.replace(/\s+$/, '');
-    if (!b.trim()) continue;
-    const h1 = b.match(/^#\s+(.+)$/);
-    if (h1 && !b.includes('\n')) { html.push(`<h1>${escapeHtml(h1[1])}</h1>`); continue; }
-    const h2 = b.match(/^##\s+(.+)$/);
-    if (h2 && !b.includes('\n')) { html.push(`<h2>${escapeHtml(h2[1])}</h2>`); continue; }
-    html.push(`<p>${b.split('\n').map(escapeHtml).join('<br>')}</p>`);
-  }
-  bodyEl.innerHTML = html.join('');
+// The TITLE card — the first message of the essay, once the arc is planned.
+const titleMessage = (title) => {
+  const el = document.createElement('div');
+  el.className = 'msg assistant essay done';
+  el.innerHTML = `<div class="essay-body"><h1>${escapeHtml(title)}</h1></div>`;
+  els.messages.appendChild(el);
+  scrollDown();
+};
+
+// One SECTION message — a fresh assistant bubble the section streams into, then reflows to
+// a heading + paragraphs on close. Each is its own message in the thread.
+const sectionMessage = (heading) => {
+  const el = document.createElement('div');
+  el.className = 'msg assistant essay streaming';
+  el.innerHTML = `<div class="essay-status"><span class="dots"></span><span class="lbl">Writing “${escapeHtml(heading)}”…</span></div>` +
+                 `<div class="essay-body"><h2>${escapeHtml(heading)}</h2><div class="sec"></div></div>`;
+  els.messages.appendChild(el);
+  scrollDown();
+  const sec = el.querySelector('.sec');
+  const lbl = el.querySelector('.lbl');
+  return {
+    stream: (piece) => { sec.textContent += piece; scrollDown(); },
+    // Close: drop the status, reflow the streamed text into paragraphs (blank-line split).
+    finalize: ({ text, words }) => {
+      el.classList.remove('streaming');
+      el.classList.add('done');
+      el.querySelector('.essay-status')?.remove();
+      const body = el.querySelector('.essay-body');
+      const paras = String(text || sec.textContent || '')
+        .split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+      const html = [`<h2>${escapeHtml(heading)}</h2>`];
+      for (const p of paras) html.push(`<p>${p.split('\n').map(escapeHtml).join('<br>')}</p>`);
+      if (paras.length === 0 && sec.textContent.trim()) html.push(`<p>${escapeHtml(sec.textContent.trim())}</p>`);
+      body.innerHTML = html.join('');
+      void lbl; void words;
+      scrollDown();
+    },
+  };
 };
 
 const actionButton = (label, title, onClick) => {
@@ -138,30 +148,27 @@ const actionButton = (label, title, onClick) => {
   return b;
 };
 
-// Finalize: replace the streamed sections with the clean, titled render, and add the meta line
-// (word count against the floor) with copy / download actions.
-const finalizeEssay = (bubble, res) => {
-  bubble.el.classList.add('done');
-  const body = bubble.el.querySelector('.essay-body');
-  renderEssay(body, res.text);
-  bubble.setStatus(res.aborted
-    ? `Stopped — ${res.words} words so far`
-    : `Essay · ${res.words} words · ${res.sections.length} sections`);
-
+// The CLOSING card — its own message, once every section has landed: the total word count
+// against the floor, with copy / download of the WHOLE assembled essay.
+const closingMessage = (res) => {
+  const el = document.createElement('div');
+  el.className = 'msg assistant essay done';
   const meta = document.createElement('div');
   meta.className = 'essay-meta';
   const count = document.createElement('span');
-  count.innerHTML = res.words >= ESSAY_MIN_WORDS
-    ? `${res.words} words — clears the ${ESSAY_MIN_WORDS.toLocaleString()}-word floor`
-    : `<span class="under">${res.words} words — under the ${ESSAY_MIN_WORDS.toLocaleString()}-word floor</span>`;
+  count.innerHTML = res.aborted
+    ? `<span class="under">Stopped — ${res.words} words</span>`
+    : (res.words >= ESSAY_MIN_WORDS
+        ? `Essay complete · ${res.words} words across ${res.sections.length} sections — clears the ${ESSAY_MIN_WORDS.toLocaleString()}-word floor`
+        : `<span class="under">${res.words} words across ${res.sections.length} sections — under the ${ESSAY_MIN_WORDS.toLocaleString()}-word floor</span>`);
   meta.appendChild(count);
 
   const actions = document.createElement('span');
   actions.className = 'essay-actions';
-  actions.appendChild(actionButton('⧉ Copy', 'Copy the essay', async (b) => {
+  actions.appendChild(actionButton('⧉ Copy', 'Copy the whole essay', async (b) => {
     try { await navigator.clipboard.writeText(res.text); b.textContent = '✓ Copied'; setTimeout(() => { b.textContent = '⧉ Copy'; }, 1200); } catch { /* ignore */ }
   }));
-  actions.appendChild(actionButton('⇩ .md', 'Download as Markdown', () => {
+  actions.appendChild(actionButton('⇩ .md', 'Download the whole essay as Markdown', () => {
     const blob = new Blob([res.text], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -171,8 +178,9 @@ const finalizeEssay = (bubble, res) => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }));
   meta.appendChild(actions);
-  bubble.el.appendChild(meta);
-  els.messages.scrollTop = els.messages.scrollHeight;
+  el.appendChild(meta);
+  els.messages.appendChild(el);
+  scrollDown();
 };
 
 // ── The walk ────────────────────────────────────────────────────────────────
@@ -183,46 +191,49 @@ const write = async (commission) => {
   STATE.inflight = ctl;
   setBusy(true);
   renderUser(commission);
-  const bubble = createEssayBubble();
+  const status = statusMessage('Loading the model…');
 
   try {
     await ensureModel();
   } catch (err) {
-    bubble.setStatus(`Model failed to load: ${err?.message || err}`);
+    status.set(`Model failed to load: ${err?.message || err}`);
+    status.el.classList.remove('thinking');
     STATE.inflight = null; setBusy(false);
     return;
   }
   if (ctl.signal.aborted) {
-    bubble.setStatus('Stopped.');
+    status.set('Stopped.'); status.el.classList.remove('thinking');
     STATE.inflight = null; setBusy(false);
     return;
   }
 
-  // The talker: streamPhrase over the loaded model, exactly the contract the organ wants.
+  // The talker: streamPhrase over the loaded model, exactly the contract the organ wants. When a
+  // lens config is present (the phasepost steer), it rides in opts and the backend's LogitProcessor
+  // pushes the decode — the model never sees it. None today on this standalone surface; the seam is
+  // ready (composeEssay's `lens`).
   const talker = (messages, opts) => streamPhrase(STATE.model, messages, opts);
 
+  let current = null;   // the section message currently streaming
   try {
     const res = await composeEssay({
       topic: commission,
       talker,
       signal: ctl.signal,
       hooks: {
-        onPhase: (name) => {
-          if (name === 'planning') bubble.setStatus('Outlining the essay…');
-          if (name === 'done') bubble.setStatus('Finishing…');
-        },
-        onSection: ({ heading, role }) => {
-          bubble.startSection(heading);
-          const verb = role === 'open' ? 'Opening' : role === 'land' ? 'Landing' : 'Writing';
-          bubble.setStatus(`${verb} “${heading}” · ${bubble.liveWords()} words so far…`);
-        },
-        onToken: (piece) => bubble.stream(piece),
+        // The plan is known — drop the "outlining" status and lay down the title card.
+        onPlan: ({ title }) => { status.remove(); titleMessage(title); },
+        // Each section opens a NEW message in the thread (generation across many messages).
+        onSection: ({ heading }) => { current = sectionMessage(heading); },
+        onToken: (piece) => { current?.stream(piece); },
+        onSectionEnd: ({ text, words }) => { current?.finalize({ text, words }); current = null; },
       },
     });
-    finalizeEssay(bubble, res);
+    // If planning produced no plan hook path (defensive), make sure the status is gone.
+    status.remove();
+    closingMessage(res);
   } catch (err) {
-    if (!ctl.signal.aborted) bubble.setStatus(`The arc could not complete: ${err?.message || err}`);
-    else finalizeEssay(bubble, { text: bubble.el.querySelector('.essay-body').textContent, words: bubble.liveWords(), sections: [], aborted: true, title: commission });
+    if (!ctl.signal.aborted) { status.set(`The arc could not complete: ${err?.message || err}`); status.el.classList.remove('thinking'); }
+    else { current?.finalize({ text: '' }); status.remove(); closingMessage({ text: '', words: 0, sections: [], aborted: true, title: commission }); }
   } finally {
     STATE.inflight = null;
     setBusy(false);

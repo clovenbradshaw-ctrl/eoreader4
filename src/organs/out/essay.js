@@ -162,7 +162,19 @@ const tokensFor = (targetWords) => Math.max(256, Math.min(1024, Math.round(targe
 //
 //   talker(messages, { maxTokens, temperature, signal, onToken }) → Promise<string>
 //
-// hooks (all optional): { onPhase(name), onSection({heading, index, role}), onToken(piece) }.
+// The walk is deliberately EMITTED ACROSS MANY MESSAGES, not as one blob: each section is its
+// own beat, announced by onSection, streamed through onToken, and closed by onSectionEnd. A chat
+// surface renders each as a separate message bubble — the essay accumulates across the thread the
+// way a long reply arrives in pieces — while continuity is held by the tail of the running draft
+// fed into every section prompt. onPlan fires once the outline is known (title + arc) so the
+// surface can announce the piece before the first section lands.
+//
+// hooks (all optional):
+//   onPhase(name)                              — 'planning' | 'writing' | 'done'
+//   onPlan({ title, outline })                 — the arc, once planned
+//   onSection({ heading, index, role, words }) — a new section beat opens (start a new message)
+//   onToken(piece, heading)                    — a token of the current section
+//   onSectionEnd({ heading, index, role, text, words, total }) — the section beat closes
 export const composeEssay = async ({
   topic,
   talker,
@@ -172,6 +184,11 @@ export const composeEssay = async ({
   targetPerSection = 380,
   temperature = 0.85,
   signal = null,
+  lens = null,               // THE LENS PORT (write/lens-port.js): a logit-steer config passed
+                            //   straight through to each SECTION talker pass. When present, the
+                            //   backend's LogitProcessor pushes the decode toward situated prose
+                            //   during generation — the model never sees the machinery. Null = the
+                            //   golden phrase() path, byte-identical. The plan pass is left unsteered.
   hooks = {},
 } = {}) => {
   if (typeof talker !== 'function') throw new TypeError('composeEssay: a talker function is required');
@@ -186,6 +203,7 @@ export const composeEssay = async ({
   catch (err) { if (aborted()) throw err; /* else walk the default arc */ }
   const { title, body: bodyHeadings, conclusion } = planOutline(rawPlan, commission);
   const outline = [...bodyHeadings, conclusion];   // the whole planned arc, handed to each section
+  hooks.onPlan?.({ title, outline });
 
   // 2) WALK — compose the body, extending with fresh angles until the floor is cleared.
   const sections = [];
@@ -205,7 +223,7 @@ export const composeEssay = async ({
     try {
       raw = await talker(
         sectionMessages({ topic: commission, title, outline, heading, index, total: queue.length + sections.length, tail: tailOf(out), targetWords: target, role }),
-        { maxTokens: tokensFor(target), temperature, signal, onToken: (piece) => hooks.onToken?.(piece, heading) },
+        { maxTokens: tokensFor(target), temperature, signal, onToken: (piece) => hooks.onToken?.(piece, heading), ...(lens ? { lens } : {}) },
       );
     } catch (err) {
       if (aborted()) throw err;
@@ -213,10 +231,12 @@ export const composeEssay = async ({
     }
     const text = stripPreamble(raw);
     const bw = countWords(text);
+    const at = index;
     sections.push({ heading, text, role, words: bw });
     out += `## ${heading}\n\n${text}\n\n`;
     words += bw + countWords(heading);
     index += 1;
+    hooks.onSectionEnd?.({ heading, index: at, role, text, words: bw, total: words });
     // Stall guard: a talker that returns (almost) nothing twice running ends the walk rather
     // than looping to the section cap on empty passes.
     if (bw < 15) { stalls += 1; } else { stalls = 0; }
