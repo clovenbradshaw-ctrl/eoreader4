@@ -514,8 +514,10 @@ class Component extends DCLogic {
       if(t.length>=2&&t.length<=60&&!wikiLinks[t])wikiLinks[t]=base;
     });
     const blocks=[...main.querySelectorAll('h1,h2,h3,h4,p,li,blockquote,dd,td,figcaption')].map(n=>this._chromify(this._decruft(this.norm(n.textContent).replace(/https?:\/\/\S+/g,'').replace(/\s+/g,' ').trim()))).filter(t=>t.length>2&&!this._isCreditOnly(t));
-    if(blocks.length<2){ const body=this._chromify(this.norm(main.textContent||'')); if(body.length>=120) return {title,text:this.paras(body).slice(0,60000),image,wikiLinks}; }
-    return {title,text:[...new Set(blocks)].join('\n').slice(0,60000),image,wikiLinks};
+    // No length cap: read the WHOLE work, not the first ~60k chars — a full book (a Project
+    // Gutenberg text) must land in memory entire. Ingestion parses the lot; slow is acceptable.
+    if(blocks.length<2){ const body=this._chromify(this.norm(main.textContent||'')); if(body.length>=120) return {title,text:this.paras(body),image,wikiLinks}; }
+    return {title,text:[...new Set(blocks)].join('\n'),image,wikiLinks};
   }
   // Strip newsroom photo chrome that otherwise gets read as prose and poisons the
   // entity summaries ("Adrian Naranjo/AP hide caption …", "Juan Barreto/Getty Images …").
@@ -716,13 +718,21 @@ class Component extends DCLogic {
     this.graph=this.E.projectGraph(shim,{cursor:Math.max(0,m.sentences.length-1),rules:this.E.DEFAULT_PROJECTION_RULES});
     this.incident=new Map();for(const e of this.graph.edges){for(const id of [e.from,e.to])this.incident.set(id,(this.incident.get(id)||0)+(e.weight||0));}
   }
-  async readURL(url,via,parent){
+  async readURL(url,via,parent,opts){
     if(!this.E)return false;
     url=this.norm(url);if(!/^https?:\/\//i.test(url))url='https://'+url;
     if(this.state.pages.find(p=>p.url===url)){this.feedLine('warn','Already read: '+this.short(url));return false;}
     let ex;try{ex=await this.fetchPage(url);}catch(e){this.feedLine('warn','Couldn’t fetch '+this.short(url)+' — '+e.message);return false;}
     if(!ex.text||ex.text.length<60){this.feedLine('warn',this.short(url)+' — too little text');return false;}
-    return this.ingest(url,ex.title,ex.text,via,ex.image,parent,ex.wikiLinks);
+    // A long read (a full book) narrates its progress through opts.onStep and folds in slowly, so
+    // it doesn't land as one silent freeze. Threshold keeps ordinary pages on the fast path.
+    const onStep=opts&&opts.onStep; let onProgress=null;
+    if(onStep&&ex.text.length>40000){
+      onStep('read','“'+ex.title+'” is a long text — folding it in slowly…');
+      let lastPct=0;
+      onProgress=(p)=>{if(!p||!p.total)return;const pct=Math.floor(p.done/p.total*100);if(pct>=lastPct+20&&pct<100){lastPct=pct;onStep('read','Reading “'+ex.title+'” — '+pct+'% ('+p.done+' of '+p.total+' sentences)…');}};
+    }
+    return this.ingest(url,ex.title,ex.text,via,ex.image,parent,ex.wikiLinks,null,onProgress);
   }
   async readText(text,title,meta){
     if(!this.E)return false;
@@ -860,6 +870,37 @@ class Component extends DCLogic {
     const m=String(q||'').match(/^\s*(?:please\s+|can you\s+|could you\s+|go\s+|i want you to\s+|i'd like you to\s+)*(?:research|look\s+(?:into|up)|dig\s+into|investigate|explore|read\s+up\s+on|find\s+out\s+about)\b[:,\-\s]+(.+)$/i);
     if(m&&m[1]){const topic=this.norm(m[1]).replace(/[?.!]+$/,'').trim();if(topic.length>1)return {topic};}
     return null;}
+  // A "GO FIND / GO READ this WORK" turn — a retrieval/read command aimed at ONE specific work
+  // ("go find the book war and peace", "read the novel X", "no go get it", "i want you to get the
+  // actual text of the book from project gutenberg"). This is what the user kept asking for and the
+  // walk kept mis-hearing: taken literally, "no go get it" seeded the search with the words "go get
+  // it" and read the SONG "Go Get It" and the episode "Go Getters" instead of the book. Returns
+  // {hit, subject}: hit when the turn is such a command; subject is the NAMED work, or '' when the
+  // turn is DEICTIC ("it" / "the book") and the work must come from the conversation. A hit both
+  // FOCUSES the walk on the one work (no facet fan-out) and lets it fetch the actual text from
+  // Project Gutenberg. Purely string-mapping, same discipline as _subjectOf.
+  _findWorkSubject(q){
+    const before=this.norm(String(q||'')).replace(/[?.!]+$/,'').trim();
+    if(!before)return {hit:false,subject:''};
+    // (a) command wrapper (go / please / can you / "i want you to" / no, …) + a fetch/read verb.
+    let r=before.replace(/^\s*(?:no[,;.!:]?\s+)?(?:(?:please|kindly|hey|ok(?:ay)?|so|can\s+you|could\s+you|would\s+you|will\s+you|i(?:'d| would)?\s+(?:like|want|need)(?:\s+you)?\s+to|i\s+(?:want|need)|let'?s|just|now|go(?:\s+and)?)\s+)+(?:find|fetch|grab|locate|retrieve|pull\s+up|pull\s+down|dig\s+up|track\s+down|bring\s+up|get|open|read|go\s+get)\s+(?:me\s+|us\s+)?(?:the|a|an|that|this|my)?\s*(?:book|novel|text|article|essay|paper|story|poem|work|title|document|source)?\s*(?:(?:called|titled|named|entitled)\s+)?(.+)$/i,'$1');
+    // (b) no wrapper, but a fetch/read verb aimed squarely at a WORK noun ("read the novel X").
+    if(r===before)r=before.replace(/^\s*(?:no[,;.!:]?\s+)?(?:find|fetch|grab|locate|retrieve|pull\s+up|pull\s+down|dig\s+up|track\s+down|bring\s+up|get|open|read)\s+(?:me\s+|us\s+)?(?:the|a|an|that|this|my)\s+(?:book|novel|text|article|essay|paper|story|poem|work|title|document|source)\s+(?:(?:called|titled|named|entitled|about|on)\s+)?(.+)$/i,'$1');
+    if(r===before)return {hit:false,subject:before};
+    // Peel the residual chrome down to the bare work: the "from project gutenberg" source clause
+    // (typo-tolerant — "porject guttenberg" too), filler adjectives, "the text/copy of", a leading
+    // deictic doc-head ("the book"), and a trailing task clause ("… and read it").
+    r=r.replace(/[“”"'’]/g,' ')
+       .replace(/\b(?:from|on|off|via|at|in|out\s+of)\s+[a-z\s]*?\bgut+[a-z]*berg\b.*$/i,'')
+       .replace(/\b(?:actual|full|complete|entire|original|whole|real|raw|plain|proper|literal)\s+/gi,'')
+       .replace(/\b(?:text|copy|contents?|version|edition|pdf|e-?book|file)\s+of\s+/gi,'')
+       .replace(/^\s*(?:the|a|an|this|that|my)\s+(?:book|novel|text|story|poem|work|thing|one)\b\s*/i,'')
+       .replace(/\s+(?:and|then|to|&|so\s+you\s+can|so\s+we\s+can)\s+(?:read|summari[sz]e|analy[sz]e|review|go\s+through|explain|describe|break\s+down|tell\s+me\s+about|study|understand|know)\b.*$/i,'')
+       .replace(/[?.!]+$/,'').trim();
+    if(/^(?:it|this|that|those|these|them|one|the\s+(?:book|novel|text|one|thing|work))$/i.test(r))r='';
+    return {hit:true,subject:r};
+  }
+  _isFindWork(q){return this._findWorkSubject(q).hit;}
   // Is this message a META / CONTINUATION research request with no subject of its OWN — "do more
   // research", "research more", "keep digging", "go deeper", "research", "tell me more"? Such a
   // message is ABOUT the conversation, not a fresh topic. Taken literally it makes the walk chase
@@ -978,6 +1019,10 @@ class Component extends DCLogic {
     m=before.replace(
       /^\s*(?:please\s+|can\s+you\s+|could\s+you\s+|would\s+you\s+|i(?:'d| would)?\s+(?:like|want)(?:\s+you)?\s+to\s+|let'?s\s+|go\s+|just\s+)*(?:tell\s+me\s+(?:all\s+)?about|write\s+about|talk\s+about|teach\s+me\s+about|explain(?:\s+to\s+me)?|describe|discuss|summari[sz]e|elaborate\s+on|expand\s+on|give\s+(?:me\s+)?(?:an?\s+)?(?:overview|summary|rundown|breakdown|account|explanation)\s+(?:of|on|about|for))\s+(.+)$/i,'$1');
     if(m!==before&&m.trim())return m.trim();
+    // 3) "go find/read the book SUBJECT" — peel the retrieval frame down to the work (or '' when
+    // it's deictic, e.g. "no go get it", so the caller resolves the work from the conversation).
+    const fw=this._findWorkSubject(before);
+    if(fw.hit)return fw.subject;
     return before;
   }
   // Resolve a research turn into the topic to chase, the anchor the leash measures drift against,
@@ -989,6 +1034,16 @@ class Component extends DCLogic {
     // Peel the task framing first ("write me an essay about X" → "X") so the SUBJECT, not the chore,
     // is what gets researched — and so the meta-research test below reads the bare subject.
     const candidate=this._subjectOf((intent&&intent.topic)||q);
+    // A "go find/read this WORK" turn (never a research-verb intent) FOCUSES the walk on one work —
+    // read it (its actual text when Gutenberg has it) and its context, without fanning out.
+    const findWork=!intent&&this._isFindWork(q);
+    // A DEICTIC find-work turn ("no go get it", "get the text of the book") named no work of its
+    // own — _subjectOf peeled it to ''. The work lives in the conversation, so chase the chat's
+    // SUBJECT (the fix for reading "Go Get It" the SONG instead of the book we'd been discussing).
+    if(findWork&&!candidate){
+      const subject=this._chatSubject(cur);
+      if(subject)return {topic:subject,anchor:subject,derived:true,focus:true};
+    }
     // A CORRECTION turn ("he is no longer a council member") names no subject of its own — the
     // figure lives in the conversation. Treat it like a continuation: chase the chat's SUBJECT,
     // sharpened with the correction's own content words (the disputed attribute), so the walk
@@ -996,16 +1051,16 @@ class Component extends DCLogic {
     if(!intent&&this._isCorrection(q)){
       const subject=this._chatSubject(cur);
       if(subject){const cue=this._researchTerms(q).slice(0,4).join(' ');
-        return {topic:this.norm((subject+(cue?(' '+cue):'')).trim()),anchor:subject,derived:true};}
+        return {topic:this.norm((subject+(cue?(' '+cue):'')).trim()),anchor:subject,derived:true,focus:findWork};}
     }
     if(!this._isMetaResearch(candidate)){
       const topic=this.norm(candidate).replace(/[?.!]+$/,'').trim();
-      return {topic,anchor:topic||q,derived:false};
+      return {topic,anchor:topic||q,derived:false,focus:findWork};
     }
     const subject=this._chatSubject(cur);
-    if(subject)return {topic:subject,anchor:subject,derived:true};
+    if(subject)return {topic:subject,anchor:subject,derived:true,focus:findWork};
     const topic=this.norm(candidate).replace(/[?.!]+$/,'').trim();
-    return {topic:topic||q,anchor:topic||q,derived:false};}
+    return {topic:topic||q,anchor:topic||q,derived:false,focus:findWork};}
   // For a "go deeper" continuation: the most surprising recurring threads ALREADY surfaced in what
   // this chat has read, so "do more research" branches into genuinely new angles of the subject
   // instead of re-fetching the same pages. Reuses the walk's own lead ranking over the in-scope
@@ -1819,12 +1874,17 @@ class Component extends DCLogic {
     // raised (for a "this book" / continuation turn) plus a few facets, each its own seed query, so
     // the walk explores several independent threads around the subject instead of chaining off one.
     const lookup=!seed.derived&&this._isSimpleLookup(topic);
-    const extraSeeds=this._researchBattery(topic,seed.derived,this.chatSourcesOf(cur));
+    // A "go find/read this WORK" turn focuses on the ONE work: read it — its actual text when a
+    // Project Gutenberg edition exists — and its context, but do NOT fan out into a battery of facet
+    // angles (overview/analysis/history…) that wander off the book. Follow the thread; don't spider.
+    const extraSeeds=seed.focus?[]:this._researchBattery(topic,seed.derived,this.chatSourcesOf(cur));
     const angles=extraSeeds.map(t=>'“'+this._nextQuery(anchor,t)+'”').join(', ');
     const startText=seed.derived
       ? ('Picking up this chat — researching “'+topic+'”'+(angles?(' across '+angles):'')+'. Starting from Wikipedia, then following its cited sources.')
       : lookup
       ? ('Looking up “'+topic+'” — a quick fact, so I’ll read the best source and answer straight.')
+      : seed.focus
+      ? ('Finding “'+topic+'” and reading it — the full text if it’s on Project Gutenberg, then Wikipedia for context.')
       : ('Researching “'+topic+'”'+(angles?(' — also '+angles):'')+'. Starting from Wikipedia, then following its cited sources to ground it across several.');
     // Append the user turn + a pending assistant bubble carrying a live research trail.
     let id=this.state.activeChat;
@@ -1840,8 +1900,19 @@ class Component extends DCLogic {
       return {...c,messages:m};})}),()=>this._scrollChat());
     this._busy=true;this.setState({busy:true});
     const preEnts=(this.graph&&this.graph.entities&&this.graph.entities.size)||0;
+    // Actual text first: for a "find/read this work" turn, look the work up on Project Gutenberg and
+    // read its full plain text as the primary source, so the answer stands on the BOOK itself, not
+    // only articles about it. Fails soft — no match / a fetch error just falls back to the web walk.
+    let primaryUrl=null;
+    if(seed.focus){
+      pushStep('search','Checking Project Gutenberg for the full text of “'+topic+'”…');
+      try{const b=await this._gutenbergBook(topic);
+        if(b&&b.txtUrl){primaryUrl=b.txtUrl;pushStep('lead','Found “'+b.title+'”'+(b.author&&b.author!=='Unknown author'?(' by '+b.author):'')+' on Project Gutenberg — reading the actual text.');}
+        else pushStep('warn','No Project Gutenberg edition found — reading about it from the web instead.');
+      }catch(e){pushStep('warn','Couldn’t reach Project Gutenberg — reading about it from the web instead.');}
+    }
     let walk={readUrls:[],hops:[]};
-    try{walk=await this._curiosityWalk(topic,anchor,pushStep,{extraSeeds,lookup});}
+    try{walk=await this._curiosityWalk(topic,anchor,pushStep,{extraSeeds,lookup,primaryUrl});}
     catch(e){pushStep('warn','Research stopped — '+((e&&e.message)||e));}
     this._busy=false;this.setState({busy:false});
     // Stopped mid-walk — stopGeneration already finalized the bubble; don't push a "done" step or
@@ -2251,6 +2322,15 @@ class Component extends DCLogic {
     // dominate, enriched once by the first page actually read, then frozen.
     const topic=new Map();for(const t of this._researchTerms(anchor))topic.set(t,(topic.get(t)||0)+3);
     let baseline=0,topicFrozen=false,stray=0;
+    // The SUBJECT's identifying referents — the proper names captured from the FIRST (seed)
+    // article, minus the subject's own words. Cosine saliency alone is too generous a leash:
+    // "World War I", "Nuclear War: A Scenario" and "Democratic peace theory" all share the
+    // words "war"/"peace" with the book "War and Peace", so they scored salient and were SAVED.
+    // A page must share at least one of these specific referents (Tolstoy, Pierre, Napoleon…)
+    // to be about the SAME subject and not a namesake — the same standard research() applies.
+    const _stem=w=>w.replace(/ies$/,'y').replace(/(ches|shes|sses|xes)$/,m=>m.slice(0,-2)).replace(/s$/,'');
+    const anchorWords=new Set(this._researchTerms(anchor).map(_stem));
+    const subjectNames=new Set();
     const cfg=this._depthCfg();                 // shallow / deep / obsessive → the walk's reach
     // The frontier is a FIFO of leads; the seed (the Wikipedia entry point for the subject) leads.
     // A node normally carries {query,term} (searched, Wikipedia-first); a node may instead carry
@@ -2263,6 +2343,10 @@ class Component extends DCLogic {
     // the topic from several angles instead of chaining off one.
     const extra=(opts&&opts.extraSeeds)||[];
     for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
+    // PRIMARY TEXT — a Project Gutenberg full-text edition, read FIRST and directly so the BOOK
+    // itself (not an article about it) anchors the walk: its own characters and places become the
+    // referent set the relevance leash then checks every later page against.
+    if(opts&&opts.primaryUrl)frontier.unshift({url:opts.primaryUrl,term:'source',via:'gutenberg'});
     // BREADTH × DEPTH: the policy caps the hops — shallow stops at the strongest answer, obsessive
     // exhausts the threads — but never fewer than the seeded battery so every planned angle runs.
     // A LOOKUP overrides the dial entirely: one hop on the seed, the strongest answer, no fan-out
@@ -2300,7 +2384,7 @@ class Component extends DCLogic {
       let links=[];
       if(isUrl){
         links=[node.url];
-        step('read','Reading a source cited by Wikipedia — '+this.short(node.url)+' …');
+        step('read',node.via==='gutenberg'?('Reading the full text from Project Gutenberg — '+this.short(node.url)+' …'):('Reading a source cited by Wikipedia — '+this.short(node.url)+' …'));
       }else{
         step('search',node.term?('Following “'+node.term+'” — searching “'+node.query+'”'):('Searching Wikipedia for “'+node.query+'”'));
         // WIKIPEDIA FIRST (then its sources). A provider hiccup must not end the whole walk —
@@ -2318,12 +2402,23 @@ class Component extends DCLogic {
         // already gathered — isolate each read so the walk degrades to skipping that candidate.
         try{
           const preEnts=entCount();
-          const res=await this.readURL(url,'REAFFERENCE',this.state.viewUrl||null);
+          const res=await this.readURL(url,'REAFFERENCE',this.state.viewUrl||null,{onStep:step});
           if(!res)continue;   // blocked / too little text — readURL already logged why; try the next candidate
           const arrival=this._profile(this._pageText(url));
           const sal=this._saliency(topic,arrival);
-          if(!topicFrozen){baseline=sal;for(const t of arrival.keys())topic.set(t,(topic.get(t)||0)+1);topicFrozen=true;}
-          else if(baseline>0&&sal<0.34*baseline){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+          if(!topicFrozen){baseline=sal;for(const t of arrival.keys())topic.set(t,(topic.get(t)||0)+1);
+            // Seed the subject's referent set from the canonical first article, dropping the
+            // subject's own words (else every "war"/"peace" page would trivially "share" it).
+            const names=this.articleNames(this._pageText(url));for(const w of anchorWords)names.delete(w);for(const w of names)subjectNames.add(w);
+            topicFrozen=true;}
+          else{
+            if(baseline>0&&sal<0.34*baseline){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+            // NAMESAKE leash: known subject, but this page names none of its specific referents
+            // — same topic words, different subject. Don't save it. (Skipped when the subject is
+            // too sparse to judge, mirroring pageRelevant's <4 guard, so a thin seed never over-tosses.)
+            if(subjectNames.size>=4){const names=this.articleNames(this._pageText(url));let shared=false;for(const w of subjectNames){if(names.has(w)){shared=true;break;}}
+              if(!shared){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — not about “'+anchor+'” (no shared referents)');continue;}}
+          }
           got++;readUrls.push(url);keptText.push(this._pageText(url));
           const grew=Math.max(0,entCount()-preEnts);
           step('graph','Read “'+(res.title||this.short(url))+'” · +'+grew+' new entit'+(grew===1?'y':'ies'));
@@ -2813,6 +2908,17 @@ class Component extends DCLogic {
     catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
     return this._gutenBooks(data).slice(0,16);
   }
+  // The one Gutenberg edition that IS the requested work — so "go find the book war and peace"
+  // reads Tolstoy's actual text, not a Wikipedia article about it. Rank by how much the catalog
+  // title overlaps the asked-for title (a real match, not a namesake), then by popularity (the
+  // canonical edition). Null when nothing plain-text matches — the walk then falls back to the web.
+  async _gutenbergBook(title){
+    const want=new Set(this._researchTerms(title));if(!want.size)return null;
+    let books=[];try{books=await this.searchGutenberg(title);}catch(e){return null;}
+    const score=b=>{const t=new Set(this._researchTerms(b.title));let s=0;want.forEach(w=>{if(t.has(w))s++;});return s;};
+    const scored=books.filter(b=>b&&b.txtUrl&&score(b)>0).sort((a,b)=>(score(b)-score(a))||((b.downloads||0)-(a.downloads||0)));
+    return scored[0]||null;
+  }
   // Map a gutendex response to readable books — only those with a plain-text edition.
   _gutenBooks(data){
     return ((data&&data.results)||[]).map(b=>{
@@ -2885,8 +2991,14 @@ class Component extends DCLogic {
     this.setState({gutenReading:null,gutenResults:null,gutenQuery:''});
     if(r)this.feedLine('done','Read fully · '+(r.propCount!=null?r.propCount:r.sentenceCount)+' propositions — ready to chat');
   }
-  ingest(url,title,text,via,image,parent,wikiLinks,meta){
-    const doc=this.E.parseText(text,{coordSubjects:true});
+  async ingest(url,title,text,via,image,parent,wikiLinks,meta,onProgress){
+    // A long text (a whole book) folds in SLOWLY: given a progress sink the parser yields between
+    // chunks and reports how far it has read, so the tab stays alive and the reader narrates as it
+    // goes. Short texts keep the one-shot synchronous parse. An engine predating the chunked parser
+    // ignores onProgress and parses in a single pass — still correct, just not incremental.
+    const doc=(onProgress&&String(text||'').length>40000)
+      ? await this.E.parseText(text,{coordSubjects:true,chunkSize:250,onProgress})
+      : this.E.parseText(text,{coordSubjects:true});
     const propCount=this.countPropositions(doc.sentences);
     // Keep the raw text on the page so an imported book can be re-rendered as a
     // readable book in the center (see _bookHtml / loadCenter's text: branch).
