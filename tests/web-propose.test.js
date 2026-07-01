@@ -282,6 +282,29 @@ test('formulateSearchQuery strips quotes and a leading "query:" label', async ()
   assert.equal(await formulateSearchQuery({ model, question: 'q' }), 'X-Files new series 2026');
 });
 
+// ── Discourse-aware query generation ─────────────────────────────────────────
+test('formulateSearchQuery is discourse-aware: a referential stall resolves to the open intent, no model', async () => {
+  // The user opened a topic that went unanswered (an OPEN intent), then held on it with a pure
+  // stall that carries no subject of its own. With no model, the query must still be anchored on
+  // the discourse — the open intent's topic — not left as the bare, subject-less "tell me more".
+  const history = [{ role: 'user', content: 'How does photosynthesis convert sunlight?' }];
+  const q = await formulateSearchQuery({ question: 'tell me more about that', history });
+  assert.notEqual(q, 'tell me more about that');       // the subject-less turn did NOT stand alone
+  assert.match(q, /photosynthesis/i);                  // it was anchored on the open discourse intent
+});
+
+test('formulateSearchQuery hands the discourse subject to the model (discourse frame in the prompt)', async () => {
+  // Capture what the model actually sees: the discourse SUBJECT/open-intent frame must be present,
+  // so the rewrite is grounded in the conversation's subject, not just the six flat user lines.
+  let seen = '';
+  const model = { phrase: async (messages) => { seen = messages.map(m => m.content).join('\n'); return 'photosynthesis light reaction'; } };
+  const history = [{ role: 'user', content: 'How does photosynthesis convert sunlight?' }];
+  const q = await formulateSearchQuery({ model, question: 'tell me more about that', history });
+  assert.equal(q, 'photosynthesis light reaction');
+  assert.match(seen, /Discourse state:/);              // the discourse frame was handed to the model
+  assert.match(seen, /photosynthesis/i);               // carrying the subject the conversation is on
+});
+
 test('runWebFollowup reformulates the raw query before searching (conversation in scope)', async () => {
   let searched = null;
   const model = { phrase: async () => 'X-Files new series 2026 producer' };

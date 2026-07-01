@@ -13,6 +13,7 @@
 import { runTurn } from './pipeline.js';
 import { createCompositeDoc } from '../organs/in/index.js';
 import { createAuditLog } from '../audit/index.js';
+import { discourseFrame } from '../converse/index.js';
 
 // verifyAgainstWeb(answer, corpus) → does the web corpus SUPPORT the answer? An embedder-free
 // lexical check: how many of the answer's salient (content) terms appear in the fetched text.
@@ -48,31 +49,56 @@ export const verifyAgainstWeb = (answer, corpus, { question = '', floor = 0.5 } 
 // The proposer hands over the raw chat question ("no there's a newer one", "who is making the
 // new series as of 2026?"), which a search engine matches to nonsense (songs containing "no
 // there's"; random 2026 TV series) because the SUBJECT lives earlier in the thread, never in
-// the question. This asks the talker to rewrite the latest turn into a standalone query with
-// references resolved (the thread's "new series" → "X-Files (2025 revival)"). Model-assisted
-// and fully guarded: no model, a thin/odd rewrite, or any throw → the original query stands,
-// so behaviour only ever improves, never regresses. Returns a plain string.
+// the question. This rewrites the latest turn into a standalone query with references resolved
+// (the thread's "new series" → "X-Files (2025 revival)").
+//
+// DISCOURSE-AWARE by construction. Before the model is ever consulted, the live turn is read
+// against the DIALOGUE STATE (converse/dialogue-state.js): its operator (a pronoun, a stall like
+// "tell me more", a redirect like "no, the musician"), the WARM REFERENT the conversation is on
+// (the figure the cast holds), and the OPEN INTENT it left dangling. `resolveQuery` binds those
+// in deterministically — so "who is making it?" becomes "…making it <the figure in focus>" even
+// with NO model. That resolved query is (a) the answer when there is no model and (b) the discourse
+// frame handed to the model when there is one, so the search chases the CONVERSATION's subject, not
+// the latest sentence read in isolation. The answer firewall is preserved end to end: only the
+// user's own words and GROUNDED referent labels ride (never the talker's claims — the audit's
+// invented "Chris Carter, Frank Darabont" that once became the literal next search). Fully guarded:
+// a discourse-read fault, no model, a thin/odd rewrite, or any throw → the discourse-anchored query
+// (worst case the raw turn) stands, so behaviour only ever improves. Returns a plain string.
 export const formulateSearchQuery = async ({ model, question, history = [], fallback = '' } = {}) => {
   const base = String(question || fallback || '').trim();
-  if (!model?.phrase || !base) return base;
-  // The thread is the USER's turns only — never the talker's prior answers. The subject of a
-  // search is what the USER keeps asking about; a small talker's earlier reply may be a guess or
-  // a hallucination, and folding it in here makes the query chase that guess. (The audit's "who is
-  // behind the new X-Files reboot?" → the model's invented "Chris Carter, Frank Darabont" became
-  // the literal next search, dropping "X-Files" entirely and fetching pages about Godzilla / The
-  // Monkey.) Same discipline as groundedConversation (stages.js): the user's thread grounds coref.
+  if (!base) return base;
+
+  // Read the turn against the discourse: the deterministically-anchored query, the subject in
+  // focus, and the open intent (converse/dialogue-state.js). Best-effort by construction.
+  const { resolved, subject, open: openIntent } = discourseFrame(base, history);
+
+  if (!model?.phrase) return resolved;   // no model: the discourse-anchored query, not the raw turn
+
+  // The verbatim thread is the USER's turns only — never the talker's prior answers. A small
+  // talker's earlier reply may be a guess or a hallucination, and folding it in here makes the
+  // query chase that guess. The grounded discourse SUBJECT (below) is the sanctioned coref channel;
+  // the raw assistant text is not. Same discipline as groundedConversation (stages.js).
   const thread = (history || [])
     .filter(m => m && m.role === 'user' && m.content)
     .slice(-6)
     .map(m => `U: ${String(m.content).replace(/\s+/g, ' ').slice(0, 240)}`)
     .join('\n');
+  // The discourse frame handed to the model: WHO the conversation is currently about and WHAT it
+  // left open — read off the dialogue state, not guessed from six flat lines — so the rewrite is
+  // anchored on the discourse subject instead of whatever the latest sentence's words happen to be.
+  const frame = [
+    subject ? `Subject in focus: ${subject}` : '',
+    openIntent ? `Open question: ${openIntent}` : '',
+  ].filter(Boolean).join('\n');
   const messages = [
     { role: 'system', content:
-      'You turn a chat turn into ONE web search query. Resolve every pronoun and back-reference ' +
-      "from the user's earlier turns so the query stands alone, and KEEP THE SUBJECT they have been " +
-      'asking about — never drop that topic for a name you are unsure of. Keep it short — the ' +
-      'keywords a search engine needs, no filler, no question words, no quotes. Output ONLY the query.' },
-    { role: 'user', content: `${thread ? `User's earlier turns:\n${thread}\n\n` : ''}Latest turn: ${base}\n\nSearch query:` },
+      'You turn a chat turn into ONE web search query. You are given the DISCOURSE STATE: the ' +
+      'subject the conversation is currently about and the question it left open. Resolve every ' +
+      'pronoun and back-reference against that discourse so the query stands alone, and KEEP THE ' +
+      'SUBJECT in focus — never drop it for a name you are unsure of. Keep it short — the keywords ' +
+      'a search engine needs, no filler, no question words, no quotes. Output ONLY the query.' },
+    { role: 'user', content:
+      `${frame ? `Discourse state:\n${frame}\n\n` : ''}${thread ? `User's earlier turns:\n${thread}\n\n` : ''}Latest turn: ${base}\n\nSearch query:` },
   ];
   try {
     // maxTokens 32 with minPredict 0: a query is a few words. The reasoning-floor backends
@@ -83,10 +109,11 @@ export const formulateSearchQuery = async ({ model, question, history = [], fall
     const q = String(out || '')
       .split('\n').map(s => s.trim()).find(Boolean) || '';     // first non-empty line
     const cleaned = q.replace(/^(search query|query)\s*:\s*/i, '').replace(/^["'`]+|["'`]+$/g, '').trim();
-    // Guard: a usable rewrite is short and not the model refusing/echoing. Else keep the original.
+    // Guard: a usable rewrite is short and not the model refusing/echoing. Else keep the
+    // discourse-anchored query (still better than the raw turn — the subject is already bound in).
     if (cleaned && cleaned.length <= 120 && !/^i (cannot|can't|am unable)/i.test(cleaned)) return cleaned;
-  } catch { /* fall through to the original */ }
-  return base;
+  } catch { /* fall through to the discourse-anchored query */ }
+  return resolved;
 };
 
 export const runWebFollowup = async (args, first, {

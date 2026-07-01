@@ -209,10 +209,12 @@ test('runTurnWithResearch with no gather just runs the turn (no scope change)', 
   assert.equal(calls[0].groundGraph, undefined, 'an empty gather does not touch the turn args');
 });
 
-test('researchAnnouncement is a first-person, pre-walk beat naming the seed and the hop budget', () => {
+test('researchAnnouncement is a first-person, pre-walk beat naming the decision, the search query, and the hop budget', () => {
   const line = researchAnnouncement('X-Files revival', { maxHops: 4 });
+  assert.match(line, /research/i);                 // names the decision: I'm going to research this
+  assert.match(line, /searching for/i);            // "here's what I'm searching for" — names the query
   assert.match(line, /follow what surprises me/);
   assert.match(line, /4 hops/);
-  assert.match(line, /X-Files revival/);
+  assert.match(line, /X-Files revival/);           // the actual (LLM-formulated) seed query
   assert.equal(researchAnnouncement('   '), null);
 });

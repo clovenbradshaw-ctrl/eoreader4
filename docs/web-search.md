@@ -154,12 +154,22 @@ engine ALSO pulls the real result pages and answers the question FROM them, pres
 web-grounded answer is the deliverable; the model's parametric answer rides above it untouched
 (per "don't replace"). Two preconditions made this useful:
 
-- **Query formulation** (`formulateSearchQuery`, web.js). The proposer hands over the raw chat
-  turn; before fetching, `runWebFollowup` reformulates it against the recent conversation into a
-  standalone keyword query (the thread's "the new series" → "X-Files 2025 revival producer").
-  Without this the engine matched chat filler to nonsense — songs containing "no there's", random
-  2026 TV series. Fully guarded: no model / bad rewrite / throw → the original query stands. A
-  user-sharpened query (the confirmation card) still wins outright.
+- **Query formulation** (`formulateSearchQuery`, web.js) — **discourse-aware**. The proposer hands
+  over the raw chat turn; before fetching, it is rewritten into a standalone keyword query (the
+  thread's "the new series" → "X-Files 2025 revival producer"). The rewrite is not a flat pass over
+  the last few user lines: the live turn is first read against the **dialogue state**
+  (`resolveQuery`/`dialogueState`, `converse/dialogue-state.js`) — its operator (a pronoun, a stall
+  like "tell me more", a redirect like "no, the musician"), the **warm referent** the conversation
+  is on, and the **open intent** it left dangling. `resolveQuery` binds those in deterministically,
+  so a subject-less turn ("who is making it?", "tell me more about that") is anchored on the figure
+  and open question in focus **even with no model**; when a model is present, that same discourse
+  frame (subject in focus + open question) is handed to it so the rewrite keeps the conversation's
+  subject instead of guessing one from six flat lines. The **answer firewall** holds throughout:
+  only the user's own words and grounded referent *labels* ride, never the talker's claims (the
+  audit's invented "Chris Carter, Frank Darabont" that once became the literal next search). Fully
+  guarded: a discourse-read fault / no model / a bad rewrite / a throw → the discourse-anchored query
+  (worst case the raw turn) stands, so behaviour only improves. A user-sharpened query (the
+  confirmation card) still wins outright.
 - **Real pages, not Wikipedia.** Verify and gap both fetch with `kind:'auto', fetchPages:true`
   now; only a `witness` confirm still uses Wikipedia. The augmented answer is a grounded re-run
   over the fetched docs with the UI/audit callbacks stripped, so it never streams over the live

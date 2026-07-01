@@ -324,13 +324,16 @@ export const runTurnWithResearch = async (args, {
   };
 };
 
-// researchAnnouncement(seed, { maxHops }) → the first-person "let me dig into this" beat, the
-// multi-hop sibling of searchAnnouncement (propose.js). Said the moment a curiosity walk starts,
-// so the (slower, multi-fetch) gather reads as purposeful. Pure string-mapping, no model call.
+// researchAnnouncement(seed, { maxHops }) → the first-person "I'm going to research this" beat, the
+// multi-hop sibling of searchAnnouncement (propose.js). Said the moment a curiosity walk starts, so
+// the (slower, multi-fetch) gather reads as purposeful — it names the DECISION (I'm researching) and
+// the QUERY it's about to fire (`seed`, the LLM-formulated search from formulateSearchQuery, not the
+// raw chat turn), so "here's what I'm searching for" is literal, not a black box. Pure string-mapping,
+// no model call — the model already ran to produce `seed`; this only promotes it into voice.
 export const researchAnnouncement = (seed, { maxHops = 6 } = {}) => {
   const q = String(seed || '').trim();
   if (!q) return null;
-  return `Let me look into this — I'll follow what surprises me while it stays on topic, up to ${maxHops} hops. Starting with “${q}”…`;
+  return `I'm going to research this. Here's what I'm searching for: “${q}” — I'll follow what surprises me while it stays on topic, up to ${maxHops} hops.`;
 };
 
 const round  = (x) => Math.round(x * 100) / 100;

@@ -840,19 +840,28 @@ const runQuery = async (rawQuestion) => {
     // far larger hop budget than the single auto walk. Every kept page folds into the scope; the turn
     // below synthesizes ONE grounded pass over them, and the full provenance (facets + sources + hop
     // tree) rides back to the deep-research block.
-    setThinkingNote(thinking, '🔬 planning the research…');
+    setThinkingNote(thinking, "🔬 I'm going to research this — working out what to search for…");
     try {
       const search = (query, opts) => searchAndAdmit(query, { client: webClientOf(), rawStore: rawStoreOf(), ...opts });
-      const walk = await runDeepResearch(question, {
+      // Same LLM step as the auto walk: rewrite the chat turn into a standalone search query (refs
+      // resolved, filler dropped) before it becomes the anchor and facet 0. Guarded — a bad rewrite or
+      // no model falls back to the raw question, so the anchor is never worse than the user's words.
+      const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history }) || question;
+      setThinkingNote(thinking, '🔬 planning the research…');
+      const walk = await runDeepResearch(q, {
         search,
-        plan: modelPlanner(STATE.model),
-        anchor: question,
+        // Discourse-aware fan-out: the planner writes each research angle against the conversation
+        // (the subject in focus + what it left open), not the seed string alone. The raw `question`
+        // is threaded so discourseFrame reads the true turn's operator/referent off the dialogue —
+        // so the angles resolve back-references and keep the conversation's subject.
+        plan: modelPlanner(STATE.model, { history: STATE.history, question }),
+        anchor: q,
         maxFacets: STATE.researchFacets || 4,
         maxHops: STATE.deepResearchHops || 14,
         searchOpts: { kind: 'auto', fetchPages: true },
         signal: ctl.signal,    // the Stop button — end the walk between hops
 
-        onPlan: (facets) => setThinkingNote(thinking, `🔬 ${deepResearchAnnouncement(question, facets, { maxHops: STATE.deepResearchHops || 14 })}`),
+        onPlan: (facets) => setThinkingNote(thinking, `🔬 ${deepResearchAnnouncement(q, facets, { maxHops: STATE.deepResearchHops || 14 })}`),
         onHop: (h) => setThinkingNote(thinking, `🔎 ${h.depth === 0 ? `angle: “${h.query}”` : `${'↳'.repeat(h.depth)} hop ${h.index}: “${h.query}”`}…`),
       });
       if (walk.docs.length) {
@@ -860,7 +869,7 @@ const runQuery = async (rawQuestion) => {
         turnArgs.groundGraph = true;
         // The synthesized answer (the turn below) is the report body; the facets + hop trace + sources
         // here are its provenance, surfaced by renderWebResult (the research plan + deep-research walk).
-        webGather = { query: question, docs: walk.docs, research: walk.hops, facets: walk.facets, deep: true };
+        webGather = { query: q, docs: walk.docs, research: walk.hops, facets: walk.facets, deep: true };
       }
     } catch { /* network/search/plan failed — fall through to the ungrounded turn */ }
     // Hand off from the per-hop research feedback to the synthesis pass with a note that
@@ -869,7 +878,11 @@ const runQuery = async (rawQuestion) => {
     setThinkingNote(thinking, webGather?.docs?.length
       ? `✍️ Read ${webGather.docs.length} source${webGather.docs.length === 1 ? '' : 's'} — composing the answer…` : '');
   } else if (webMode === 'auto') {
-    setThinkingNote(thinking, '🌐 searching the web…');
+    // Two feedback beats, in the order the work happens: FIRST the LLM formulates the standalone
+    // search query from the chat turn (formulateSearchQuery — a real model call that can take a
+    // beat), so name that step rather than jumping to "searching…"; THEN, once we know the query,
+    // announce the research and what it's actually searching for (researchAnnouncement, below).
+    setThinkingNote(thinking, "🔎 I'm going to research this — working out what to search for…");
     try {
       const q = await formulateSearchQuery({ model: STATE.model, question, history: STATE.history });
       // CURIOSITY-GUIDED gather (docs/curiosity-research.md): instead of one query and four results,

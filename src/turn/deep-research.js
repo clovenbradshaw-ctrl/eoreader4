@@ -37,6 +37,7 @@ import { profileOf, curiosityOf, foldInto, leadsFrom, nextQuery, researchTerms }
 import { bornSalience } from '../surfer/salience.js';
 import { normalizeQuery } from '../ui/prefetch.js';
 import { runTurn } from './pipeline.js';
+import { discourseFrame } from '../converse/index.js';
 
 // The prose a hop reads from an admitted doc — the parsed full text, falling back to the source's
 // excerpt (a snippet-only result still carries one). Same accessor the single walk uses.
@@ -73,20 +74,34 @@ export const planQueries = async (seed, { plan, max = 4 } = {}) => {
   return out.slice(0, Math.max(1, max));
 };
 
-// modelPlanner(model) → an async plan(seed, { max }) → string[] backed by the talker. The same
-// discipline as formulateSearchQuery (web.js): a tiny, low-token utility call, temperature 0, the
-// output parsed line-by-line into bare queries. Returns [] (the seed stands alone) on any failure
-// or a refusal. Exported so the app injects it and the engine stays model-agnostic and testable.
-export const modelPlanner = (model) => async (seed, { max = 4 } = {}) => {
+// modelPlanner(model, { history }) → an async plan(seed, { max }) → string[] backed by the talker.
+// The same discipline as formulateSearchQuery (web.js), and DISCOURSE-AWARE the same way: a tiny,
+// low-token utility call, temperature 0, output parsed line-by-line into bare queries. When a
+// conversation `history` is threaded, the fan-out of research angles is written against the
+// DISCOURSE STATE (discourseFrame — the subject the conversation is on and the question it left
+// open), so every facet keeps the conversation's subject and resolves back-references, instead of
+// re-guessing the topic from the seed string alone. The firewall holds (only the grounded referent
+// label and the user's open-intent text ride, never the talker's claims). Returns [] (the seed
+// stands alone) on any failure or a refusal. Exported so the app injects it, engine stays testable.
+export const modelPlanner = (model, { history = [], question = '' } = {}) => async (seed, { max = 4 } = {}) => {
   if (!model?.phrase) return [];
   const n = Math.max(2, max - 1);                     // facet 0 is the seed itself; plan the rest
+  // Read discourse off the RAW user turn when the app threads it (the referent/operator live in the
+  // real turn, not the already-resolved seed); fall back to the seed when planning standalone.
+  const { subject, open } = discourseFrame(question || seed, history);
+  const frame = [
+    subject ? `Subject in focus: ${subject}` : '',
+    open ? `Open question: ${open}` : '',
+  ].filter(Boolean).join('\n');
   const messages = [
     { role: 'system', content:
-      `You plan web research. Given a topic, output ${n} DISTINCT search queries that each open a ` +
-      'different angle on it — e.g. its background, how it works, the evidence, the criticism, the ' +
-      'current state. Keep the SUBJECT in every query so each stands alone. One query per line, the ' +
-      'keywords a search engine needs — no numbering, no question words, no quotes, no commentary.' },
-    { role: 'user', content: `Topic: ${seed}\n\n${n} research queries:` },
+      `You plan web research. Given a topic${frame ? ' and the DISCOURSE STATE (the subject the ' +
+      'conversation is on and the question it left open)' : ''}, output ${n} DISTINCT search queries ` +
+      'that each open a different angle on it — e.g. its background, how it works, the evidence, the ' +
+      'criticism, the current state. ' + (frame ? 'Resolve references against the discourse and ' : '') +
+      'Keep the SUBJECT in every query so each stands alone. One query per line, the keywords a ' +
+      'search engine needs — no numbering, no question words, no quotes, no commentary.' },
+    { role: 'user', content: `${frame ? `Discourse state:\n${frame}\n\n` : ''}Topic: ${seed}\n\n${n} research queries:` },
   ];
   try {
     const out = await model.phrase(messages, { maxTokens: 96, temperature: 0, minPredict: 0 });
@@ -377,5 +392,5 @@ export const deepResearchAnnouncement = (seed, facets = [], { maxHops = 14 } = {
   const from = angles.length
     ? ` from ${angles.length + 1} angles (${[q, ...angles].slice(0, 3).map(a => `“${a}”`).join(', ')}${angles.length > 2 ? ', …' : ''})`
     : '';
-  return `Researching “${q}” deeply${from} — I'll follow what surprises me while it stays on topic, up to ${maxHops} hops, then write up everything I found with its sources.`;
+  return `I'm going to research “${q}” deeply${from} — I'll follow what surprises me while it stays on topic, up to ${maxHops} hops, then write up everything I found with its sources.`;
 };

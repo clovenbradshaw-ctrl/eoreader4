@@ -54,6 +54,24 @@ test('modelPlanner parses a numbered model list into bare queries; degrades to [
   assert.deepEqual(await modelPlanner(null)('x'), [], 'no model → no angles');
 });
 
+test('modelPlanner is discourse-aware: the planner prompt carries the conversation subject and open question', async () => {
+  // The fan-out of research angles must be written against the discourse, not the seed alone.
+  // Capture what the planner model sees when a conversation established an open topic.
+  let seen = '';
+  const model = { phrase: async (messages) => { seen = messages.map(m => m.content).join('\n'); return 'a\nb\nc'; } };
+  const history = [{ role: 'user', content: 'How does photosynthesis convert sunlight?' }];
+  await modelPlanner(model, { history, question: 'research this thoroughly' })('photosynthesis', { max: 4 });
+  assert.match(seen, /Discourse state:/);         // the discourse frame was handed to the planner
+  assert.match(seen, /photosynthesis/i);          // carrying the conversation's open subject
+});
+
+test('modelPlanner with no history plans from the seed alone (no discourse frame)', async () => {
+  let seen = '';
+  const model = { phrase: async (messages) => { seen = messages.map(m => m.content).join('\n'); return 'a\nb'; } };
+  await modelPlanner(model)('solar power', { max: 3 });
+  assert.ok(!/Discourse state:/.test(seen), 'no history → no discourse frame, just the topic');
+});
+
 // ── The multi-branch walk: opens from many facets, shares one prior + one leash ──
 
 test('it opens the search from EVERY facet (multiple prompts), all grounded', async () => {
@@ -218,6 +236,7 @@ test('runTurnWithDeepResearch with no gather just runs the turn (no scope change
 
 test('deepResearchAnnouncement names the subject, the angles, and the depth budget', () => {
   const line = deepResearchAnnouncement('quantum computing', ['quantum computing', 'quantum computing hardware'], { maxHops: 14 });
+  assert.match(line, /research/i);                 // names the decision: I'm going to research this
   assert.match(line, /quantum computing/);
   assert.match(line, /angles/);
   assert.match(line, /14 hops/);

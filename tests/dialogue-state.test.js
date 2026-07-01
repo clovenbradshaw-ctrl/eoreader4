@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { classifyTurn, dialogueState, resolveQuery, groundedThread, isReferentialStall, OP }
+import { classifyTurn, dialogueState, resolveQuery, discourseFrame, groundedThread, isReferentialStall, OP }
   from '../src/converse/dialogue-state.js';
 
 // These lock in the EO-operator reading of the audit conversation that drifted:
@@ -79,6 +79,22 @@ test('a self-standing question passes through; an unbound pronoun is anchored', 
   assert.match(q, /surveillance/, 'keeps its own topic');
   assert.ok(q.length > 'how has he been criticized for surveillance expansion?'.length,
     'gains a conversational anchor for the dangling "he"');
+});
+
+test('discourseFrame packages the anchored query, subject in focus, and open intent for prompt builders', () => {
+  const history = [
+    { role: 'user',      content: 'who is the mayor of nashville?' },
+    { role: 'assistant', content: 'The current mayor of Nashville is Freddie O\'Connell.' },
+    { role: 'user',      content: 'how has he been criticized for surveillance expansion?' },
+    { role: 'assistant', content: 'I couldn\'t find any information from the reading.' },
+  ];
+  const f = discourseFrame('find what i\'m talking about', history);
+  assert.match(f.resolved, /surveillance/, 'resolved query carries the open discourse intent');
+  assert.match(f.open, /surveillance/i, 'the open intent is surfaced for the prompt frame');
+  assert.ok(typeof f.subject === 'string', 'subject is a string (the warm referent label, may be empty)');
+  // Degenerate input never throws, and a self-standing turn is not polluted.
+  assert.deepEqual(discourseFrame('', []), { resolved: '', subject: '', open: '' });
+  assert.equal(discourseFrame('who is the mayor of nashville?', []).resolved, 'who is the mayor of nashville?');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
