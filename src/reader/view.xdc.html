@@ -63,7 +63,7 @@
         <input value="{{ url }}" oninput="{{ onUrlInput }}" onkeydown="{{ onUrlKey }}" placeholder="Search or read a URL into memory…" style="flex:1;min-width:0;font-size:12.5px;color:var(--ink);background:transparent;border:none;padding:7px 10px;outline:none;">
         <button onclick="{{ onReadUrl }}" style="{{ readBtnStyle }}">{{ readBtnLabel }}</button>
       </div>
-      <input type="file" data-eo-import="" accept=".txt,.md,.markdown,.text,.log,.rst,.html,.htm,.pdf,.csv,.tsv,.xlsx,.xls,image/*,audio/*,video/*,text/plain,text/html,application/pdf,text/csv" onchange="{{ onImportFile }}" style="display:none;">
+      <input type="file" data-eo-import="" multiple accept=".txt,.md,.markdown,.text,.log,.rst,.html,.htm,.pdf,.csv,.tsv,.xlsx,.xls,image/*,audio/*,video/*,text/plain,text/html,application/pdf,text/csv" onchange="{{ onImportFile }}" style="display:none;">
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
         <button onclick="{{ onImportClick }}" title="Import a file — text, PDF, audio or video, image, spreadsheet, or web page; read as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)"><i class="ph">&#xE61E;</i></button>
       </sc-if>
@@ -181,7 +181,9 @@
         <div style="font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.5;">Pages you’ve opened. Click one to revisit it here.</div>
       </div>
       <div style="padding:8px 9px;">
-        <button onclick="{{ onNewChat }}" title="Start a net-new chat — tag sources or everything you've read from inside it" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:8px;" style-hover="background:var(--card)"><span style="font-size:14px;line-height:1;">✦</span>New chat</button>
+        <button onclick="{{ onNewChat }}" title="Start a net-new chat — tag sources or everything you've read from inside it" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="background:var(--card)"><span style="font-size:14px;line-height:1;">✦</span>New chat</button>
+        <button onclick="{{ onSrcImport }}" title="Import a file — text, PDF, audio or video, image, spreadsheet, or web page; it appears here instantly and reads as a source" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><i class="ph" style="font-size:14px;line-height:1;">&#xE61E;</i>Import a file</button>
+        <div onclick="{{ onToggleAudioAudit }}" title="Take a second whisper witness of audio/video, so the two readings can be audited where they disagree — a transcript is a hearing, not objective truth" style="{{ audioAuditStyle }}margin-bottom:8px;">🎧 {{ audioAuditLabel }}</div>
         <sc-if value="{{ hasChats }}" hint-placeholder-val="{{ false }}">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:6px 4px 4px;">Chats</div>
           <sc-for list="{{ chats }}" as="c" hint-placeholder-count="0">
@@ -195,6 +197,18 @@
           </sc-for>
         </sc-if>
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:8px 4px 4px;">Sources</div>
+        <sc-for list="{{ imports }}" as="im" hint-placeholder-count="0">
+          <div style="{{ im.rowStyle }}">
+            <div style="{{ im.dotStyle }}"><sc-if value="{{ im.ok }}" hint-placeholder-val="{{ true }}"><span style="{{ im.spinStyle }}"></span></sc-if><sc-if value="{{ im.isErr }}" hint-placeholder-val="{{ false }}">!</sc-if></div>
+            <div style="min-width:0;flex:1;">
+              <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ im.name }}</div>
+              <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ im.kind }} · {{ im.status }}</div>
+            </div>
+            <sc-if value="{{ im.isErr }}" hint-placeholder-val="{{ false }}">
+              <button onclick="{{ im.onDismiss }}" title="Dismiss" style="{{ im.dismissStyle }}" style-hover="background:#fdecec">✕</button>
+            </sc-if>
+          </div>
+        </sc-for>
         <sc-for list="{{ sources }}" as="s" hint-placeholder-count="3">
           <div style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
             <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
@@ -244,6 +258,14 @@
               <button onclick="{{ chat.onToggleAdd }}" title="Tag a source to chat with" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px dashed var(--line2);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">+ Add source</button>
               <sc-if value="{{ chat.addOpen }}" hint-placeholder-val="{{ false }}">
                 <div style="position:absolute;top:100%;left:18px;right:18px;z-index:30;margin-top:4px;background:var(--card);border:1px solid var(--line2);border-radius:11px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:6px;max-height:260px;overflow-y:auto;">
+                  <div onclick="{{ chat.onImport }}" style="display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;cursor:pointer;" style-hover="background:var(--accbg)">
+                    <i class="ph" style="font-size:15px;line-height:1;color:var(--acc);flex:0 0 auto;">&#xE61E;</i>
+                    <div style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;">
+                      <span style="font-size:12.5px;font-weight:700;color:var(--acc);">Import a file…</span>
+                      <span style="font-size:10.5px;color:var(--ink3);">Text, PDF, audio/video, image — read and tagged here</span>
+                    </div>
+                  </div>
+                  <div style="height:1px;background:var(--line);margin:5px 8px 6px;"></div>
                   <sc-if value="{{ chat.tagEveryOn }}" hint-placeholder-val="{{ false }}">
                     <div onclick="{{ chat.onTagEverything }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 11px;border-radius:8px;cursor:pointer;" style-hover="background:var(--accbg)">
                       <span style="font-size:12.5px;font-weight:700;color:var(--acc);">✦ {{ chat.everyLabel }}</span>
@@ -814,6 +836,14 @@
             <button onclick="{{ chat.onToggleAdd }}" title="Tag a source to chat with" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px dashed var(--line2);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">+ Add source</button>
             <sc-if value="{{ chat.addOpen }}" hint-placeholder-val="{{ false }}">
               <div style="position:absolute;top:100%;left:18px;right:18px;z-index:30;margin-top:4px;background:var(--card);border:1px solid var(--line2);border-radius:11px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:6px;max-height:260px;overflow-y:auto;">
+                <div onclick="{{ chat.onImport }}" style="display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;cursor:pointer;" style-hover="background:var(--accbg)">
+                  <i class="ph" style="font-size:15px;line-height:1;color:var(--acc);flex:0 0 auto;">&#xE61E;</i>
+                  <div style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;">
+                    <span style="font-size:12.5px;font-weight:700;color:var(--acc);">Import a file…</span>
+                    <span style="font-size:10.5px;color:var(--ink3);">Text, PDF, audio/video, image — read and tagged here</span>
+                  </div>
+                </div>
+                <div style="height:1px;background:var(--line);margin:5px 8px 6px;"></div>
                 <sc-if value="{{ chat.tagEveryOn }}" hint-placeholder-val="{{ false }}">
                   <div onclick="{{ chat.onTagEverything }}" style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 11px;border-radius:8px;cursor:pointer;" style-hover="background:var(--accbg)">
                     <span style="font-size:12.5px;font-weight:700;color:var(--acc);">✦ {{ chat.everyLabel }}</span>
