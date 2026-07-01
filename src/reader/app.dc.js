@@ -42,6 +42,10 @@ class Component extends DCLogic {
       llm:true, llmAvail:false, svoBusy:false, svoStatus:'', pasteOpen:false, pasteText:'',
       srcWide:false, srcTab:'page', srcDoc:null, srcLoading:false, srcErr:null, linkMode:savedLink==='0'?false:true, linkChoice:null,
       viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
+      // The "+" new-tab surface: a blank tab with nothing chosen yet, offering the three
+      // kinds a tab can be — a chat, a live website, or a page in reader view. Set by newTab()
+      // and cleared the moment a destination is picked (a URL, a chat, an entity, a book).
+      newTabOpen:false,
       // How a READ source renders in the center: 'reader' is the stripped book view (clean
       // prose, chrome/ads gone, engine TOC + flagged passages); 'native' is the real fetched
       // page with its own layout, given the same contents nav + highlighted passages on top.
@@ -378,6 +382,31 @@ class Component extends DCLogic {
     try{localStorage.setItem('eo_viewmode',mode);}catch(e){}
     this._pageUrl=null;
     this.setState({viewMode:mode,tocOpen:false},()=>{if(this.state.viewUrl&&!/^text:/i.test(this.state.viewUrl))this.loadCenter(this.state.viewUrl);});}
+  // Set the reader/native default WITHOUT a page open (the new-tab chooser). Persists the
+  // preference so the next website you open honors it — a native page renders live; a reader
+  // page is stripped to clean prose once it's read. If a page IS open, re-render it in the
+  // new mode too (so the chooser feels live even when a tab is up).
+  setViewModePref(mode){mode=(mode==='reader')?'reader':'native';
+    try{localStorage.setItem('eo_viewmode',mode);}catch(e){}
+    this._pageUrl=null;
+    this.setState({viewMode:mode},()=>{if(this.state.viewUrl&&!/^text:/i.test(this.state.viewUrl))this.loadCenter(this.state.viewUrl);});}
+  // The new-tab / empty-state landing view-model: names the three kinds a tab can be (chat,
+  // live website, reader-view page), makes the reader/live choice explicit up front, and
+  // offers a few starters. Shared by the first-run empty state and the "+" new-tab surface.
+  landingVals(base){
+    const err=this.state.engineErr,ready=this.state.ready;
+    base.showPrompt=true;base.newTabLanding=true;
+    base.promptTitle=err?'Engine failed to load':(ready?'New tab':'Loading the reading engine…');
+    base.promptBody=err?String(err):'A tab can be a chat, a live website, or a page in a clean Reader view. Type a URL or a search in the bar above, start a chat, or pick a starter below.';
+    base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
+    const reader=this.state.viewMode==='reader';
+    base.landingModeReader=reader;base.landingModeNative=!reader;
+    base.onLandingPage=()=>this.setViewModePref('native');
+    base.onLandingReader=()=>this.setViewModePref('reader');
+    const seg=on=>'flex:1;text-align:center;font-size:12px;font-weight:600;padding:7px 10px;border-radius:7px;cursor:pointer;'+(on?'background:var(--card);color:var(--acc);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);');
+    base.landingModePageStyle=seg(!reader);base.landingModeReaderStyle=seg(reader);
+    base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
+    return base;}
   toggleSettings(){this.setState(s=>({settingsOpen:!s.settingsOpen}));}
   closeSettings(){this.setState({settingsOpen:false});}
   toggleAudit(){const v=!this.state.auditMode;try{localStorage.setItem('eo_audit',v?'1':'0');}catch(e){}this.setState({auditMode:v});}
@@ -834,7 +863,7 @@ class Component extends DCLogic {
     // scope until you tag "everything" or pick sources — so a fresh chat is a blank slate,
     // not silently grounded in the whole library.
     const sources=scopeUrl?[scopeUrl]:[];
-    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false,rightOpen:true}));
+    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false}));
     return id;
   }
   // The sources a chat is ABOUT, as a URL list. Tolerates the older single-`scope` shape
@@ -890,7 +919,7 @@ class Component extends DCLogic {
   }
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
-  openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false,rightOpen:true});}
+  openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false,rightOpen:true,newTabOpen:false});}
   closeChat(){this.setState({activeChat:null,chatAddOpen:false});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
@@ -3031,7 +3060,7 @@ class Component extends DCLogic {
   }
   // Type a query: a URL is opened; anything else searches Project Gutenberg.
   searchBooks(query){
-    this.setState({gutenLoading:true,gutenResults:null,gutenQuery:query,activeChat:null,viewUrl:null,selId:null});
+    this.setState({gutenLoading:true,gutenResults:null,gutenQuery:query,activeChat:null,viewUrl:null,selId:null,newTabOpen:false});
     this.searchGutenberg(query).then(res=>{this.setState({gutenLoading:false,gutenResults:res});if(!res.length)this.feedLine('warn','No books found for “'+query+'”.');});
   }
   // Read a chosen book FULLY (fetch → strip → parse) before it becomes a source.
@@ -4089,11 +4118,11 @@ class Component extends DCLogic {
   // ---- location/history: each entry is {t:'web',url} or {t:'ent',id} ----
   _locEq(a,b){return a&&b&&a.t===b.t&&(a.t==='web'?a.url===b.url:a.id===b.id);}
   _pushLoc(loc){let h=(this._hist||[]);let p=(this._hpos==null?-1:this._hpos);if(this._locEq(h[p],loc))return;h=h.slice(0,p+1);h.push(loc);this._hist=h;this._hpos=h.length-1;}
-  _applyLoc(loc){if(!loc)return;if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}else{this.setState(s=>({selId:loc.id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,histRev:(s.histRev||0)+1}));}}
+  _applyLoc(loc){if(!loc)return;if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}else{this.setState(s=>({selId:loc.id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}}
   // Opening an entity full takes over the centre column, so it closes any active chat the
   // same way navigating to a page does (see goWeb / doReadUrl). Otherwise the chat would keep
   // filling <main> and the centre-fill guard in the view-model would suppress the explorer.
-  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
+  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
   _scrollPanelTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-panel-scroll');if(a)a.scrollTop=0;});}
   clickEntity(id){if(this._gzMoved)return;const cur=this.state.panelSel;if(cur&&cur!==id)this._panelStack.push(cur);
     const patch={panelSel:id,rightOpen:true,panelLens:null,gz:{k:1,x:0,y:0}};
@@ -4442,7 +4471,7 @@ class Component extends DCLogic {
       onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');},
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
-  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
+  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});
     // Now that the page is read it has propositions — re-render the open view in the
     // chosen mode (reader book, or the native page with its contents + flagged passages),
@@ -4455,7 +4484,10 @@ class Component extends DCLogic {
   goForward(){if(this.canForward()){this._hpos++;this._applyLoc(this._hist[this._hpos]);}}
   goToHist(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hpos=i;this._applyLoc(this._hist[i]);}
   closeTab(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hist.splice(i,1);if(this._hpos>=i&&this._hpos>0)this._hpos--;if(this._hpos>=this._hist.length)this._hpos=this._hist.length-1;if(this._hpos>=0)this._applyLoc(this._hist[this._hpos]);else this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
-  newTab(){this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
+  // Open a fresh tab: clear every kind of open destination (page, entity, chat, book search)
+  // and raise the new-tab surface, so "+" always lands you on the blank tab that offers the
+  // three choices — a chat, a live website, or a reader-view page — no matter what was showing.
+  newTab(){this._pageUrl=null;this.setState(s=>({selId:null,viewUrl:null,activeChat:null,gutenResults:null,gutenQuery:'',gutenLoading:false,newTabOpen:true,histRev:(s.histRev||0)+1}));}
   tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?(this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
   buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';const isSearch=isWeb&&/^search:/i.test(loc.url);return {label:lab,i,active,isWeb,dotGlyph:isSearch?'\ue30c':'',dotStyle:isSearch?('font-family:\'Phosphor\';font-size:13px;line-height:1;color:#9aa1ab;flex:0 0 auto;'):('width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';'),onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};});return all.slice(-6);}
   // ---- live embed of the page shown in the CENTER viewport ----
@@ -4659,7 +4691,7 @@ class Component extends DCLogic {
   // tab strip treat it like any web page); loadCenter routes it to _renderSearch.
   doSearch(query){query=this.norm(query);if(!query)return;
     const vu='search:'+query;this._srcUrl=null;this._pushLoc({t:'web',url:vu});
-    this.setState(s=>({viewUrl:vu,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,gutenResults:null,gutenQuery:'',histRev:(s.histRev||0)+1}));
+    this.setState(s=>({viewUrl:vu,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gutenResults:null,gutenQuery:'',histRev:(s.histRev||0)+1}));
     this.loadCenter(vu);}
   // Fetch the results page (cached per query so back/forward re-renders without re-fetching)
   // and paint it into the center iframe as themed HTML.
@@ -5280,6 +5312,7 @@ class Component extends DCLogic {
       cursor:{label:ready&&this.master?('line '+this.master.sentences.length):'—',title:ready&&this.master?('Projection at the latest read · '+this.state.pages.length+' pages · '+this.master.sentences.length+' sentences'):'no data yet'},
       liveColor:this.state.busy?'#b45309':'#22a06b',liveLabel:this.state.busy?'Working…':(ready?'Engine ready':'Loading…'),
       hasSel:false,showPrompt:false,promptTitle:'',promptBody:'',suggestions:[],
+      newTabLanding:false,simplePrompt:false,landingModeNative:false,landingModeReader:false,landingModePageStyle:'',landingModeReaderStyle:'',onLandingPage:()=>{},onLandingReader:()=>{},
       ledger:[],ledgerCount:0,ledgerEmpty:true,hoverCardOn:false,srcOpen:false,
       direction:this.state.direction,onDirInput:e=>this.onDirInput(e),mode:this.state.mode,
       leftOpen:this.state.leftOpen,toggleLeft:()=>this.setState(s=>({leftOpen:!s.leftOpen})),
@@ -5440,11 +5473,7 @@ class Component extends DCLogic {
 
     if(!ready||!g||this.state.pages.length===0){
       if(!vu&&!base.chatOn&&!base.gutenOn){
-        base.showPrompt=true;
-        base.promptTitle=this.state.engineErr?'Engine failed to load':(ready?'Search the web — or read a URL':'Loading the reading engine…');
-        base.promptBody=this.state.engineErr?String(this.state.engineErr):'Type anything to search the web, paste a page URL to open it here, or use the import button to import your own text. Pages render as HTML; open a result and every entity is read into the graph on the right — then ask about it in a chat.';
-        base.suggestions=this.SUGG.map(s=>({label:s.label,onPick:s.book?(()=>this.readGutenberg(s.book)):(()=>{this.setState({url:s.url});setTimeout(()=>this.doReadUrl(),20);})}));
-        base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};
+        this.landingVals(base);
       }
       return base;
     }
@@ -5503,6 +5532,14 @@ class Component extends DCLogic {
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
 
+    // The "+" new-tab surface, once you already have sources read: a blank centre that offers
+    // the three kinds a tab can be. Side panels (sources / entities) are built above, so they
+    // stay populated; only the centre yields to the landing. A chat or a page takes precedence.
+    if(this.state.newTabOpen&&!vu&&!base.chatOn&&!base.gutenOn){
+      this.landingVals(base);
+      return base;
+    }
+
     if(vu){
       this.hoverVals(base);
       this.linkChoiceVals(base);
@@ -5523,7 +5560,7 @@ class Component extends DCLogic {
       else if(this.state.previewWiki){base.previewOn=true;base.panelListOn=false;base.preview=this.previewVals();}
       return base;
     }
-    if(!sel){base.showPrompt=true;base.promptTitle='Select an entity';base.promptBody='Pick one from the list, or read another URL.';base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};return base;}
+    if(!sel){base.showPrompt=true;base.simplePrompt=true;base.promptTitle='Select an entity';base.promptBody='Pick one from the list, or read another URL.';base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};return base;}
 
     const e=g.entities.get(sel),lab=this.labelOf(sel),mentions=this.mentionsOf(sel),srcs=this.sourcesOf(sel),nbrs=this.neighbors(sel);
     const aliasCands=this.aliasesOf(sel).filter(a=>a!==lab);
