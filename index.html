@@ -104,9 +104,9 @@
         <input value="{{ url }}" oninput="{{ onUrlInput }}" onkeydown="{{ onUrlKey }}" placeholder="Search or read a URL into memory…" style="flex:1;min-width:0;font-size:12.5px;color:var(--ink);background:transparent;border:none;padding:7px 10px;outline:none;">
         <button onclick="{{ onReadUrl }}" style="{{ readBtnStyle }}">{{ readBtnLabel }}</button>
       </div>
-      <input type="file" data-eo-import="" accept=".txt,.md,.markdown,.text,text/plain" onchange="{{ onImportFile }}" style="display:none;">
+      <input type="file" data-eo-import="" accept=".txt,.md,.markdown,.text,.log,.rst,.html,.htm,.pdf,.csv,.tsv,.xlsx,.xls,image/*,audio/*,video/*,text/plain,text/html,application/pdf,text/csv" onchange="{{ onImportFile }}" style="display:none;">
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
-        <button onclick="{{ onImportClick }}" title="Import a book or text file — read it as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)"><i class="ph">&#xE61E;</i></button>
+        <button onclick="{{ onImportClick }}" title="Import a file — text, PDF, audio or video, image, spreadsheet, or web page; read as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)"><i class="ph">&#xE61E;</i></button>
       </sc-if>
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
         <div title="Layout presets" style="display:flex;gap:2px;background:#eef0f3;border-radius:8px;padding:3px;flex:0 0 auto;">
@@ -2268,10 +2268,24 @@ class Component extends DCLogic {
   onImportClick(){const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
   onImportFile(ev){
     const f=ev&&ev.target&&ev.target.files&&ev.target.files[0];if(!f)return;
-    const fr=new FileReader();
-    fr.onload=()=>{this.importText(String(fr.result||''),f.name.replace(/\.(txt|md|markdown|text)$/i,''));if(ev.target)ev.target.value='';};
-    fr.onerror=()=>{this.feedLine('warn','Could not read that file.');};
-    fr.readAsText(f);
+    if(ev.target)ev.target.value='';
+    this._importAny(f);
+  }
+  // Import ANY supported file. Plain text/markdown reads inline (no module load); a PDF,
+  // scanned image, audio/video, spreadsheet or web page routes through the unified importer
+  // (src/reader/import-file.js), which lazy-loads the right extractor and raises it onto the
+  // spine via the ingestion organs — the reader then reads the extracted text as a book.
+  async _importAny(f){
+    const name=f.name||'file'; const ext=(name.split('.').pop()||'').toLowerCase();
+    const isText=(f.type&&f.type.startsWith('text/plain'))||['txt','md','markdown','text','log','rst'].includes(ext);
+    try{
+      if(isText){ const text=await f.text(); await this.importText(text,name.replace(/\.[^.]+$/,'')); return; }
+      this.feedSep('importing '+name);
+      const mod=await import(new URL('src/reader/import-file.js',document.baseURI).href);
+      const r=await mod.importAnyFile(f,{onProgress:(m)=>this.feedLine('read',m)});
+      if(!r||!r.text||!r.text.trim()){ this.feedLine('warn','No text could be read from '+name); return; }
+      await this.importText(r.text, r.title||name.replace(/\.[^.]+$/,''), r.meta||null);
+    }catch(e){ this.feedLine('warn','Could not import '+name+' — '+((e&&e.message)?e.message:String(e))); }
   }
   // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
   // Each chat is a thread that answers from the read sentences/graph. A chat can be

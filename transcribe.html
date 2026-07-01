@@ -124,10 +124,17 @@
 </div>
 
 <script>/* eoreader4 loaded by the module for coref uniform terms */</script>
-<script type="module">import * as TF from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/+esm';
-const { pipeline } = TF;
-let parseText=null;
-try{ const eo=await import('https://cdn.jsdelivr.net/gh/clovenbradshaw-ctrl/eoreader4@51bb5189604fb3eb6a11599d3fd38be28baa99f8/src/perceiver/parse/index.js'); parseText=eo.parseText; }catch(e){}
+<script type="module">
+// Lazy loaders — NOTHING here awaits at module top, so the drop zone and file picker are
+// WIRED (bottom of this script) even if a CDN is slow, blocked, or offline. Previously a
+// top-level `await import(...)` of the model gated the whole script: if it failed, the page
+// looked dead and would not accept a file. Now the model loads on first use, and a failure
+// surfaces in the error box instead of silently killing the page.
+let _pipeline=null;
+async function pipeline(...args){ if(!_pipeline){ const TF=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/+esm'); _pipeline=TF.pipeline; } return _pipeline(...args); }
+let parseText=null, _eoTried=false;
+async function ensureEo(){ if(_eoTried) return; _eoTried=true;
+  try{ const eo=await import('https://cdn.jsdelivr.net/gh/clovenbradshaw-ctrl/eoreader4@51bb5189604fb3eb6a11599d3fd38be28baa99f8/src/perceiver/parse/index.js'); parseText=eo.parseText; }catch(e){} }
 
 // ---------- DSP (validated) ----------
 const NFFT=512,HOP=256,SR=16000,NMEL=26,NCEP=13;
@@ -297,6 +304,7 @@ async function run(file){
   ['hearRow','gateRow','witRow'].forEach(id=>el(id).hidden=true); el('hearStream').textContent=''; el('gateFeed').textContent=''; el('witFeed').textContent=''; el('cfb').textContent='';
   ['s-seg','s-hear','s-gate','s-wit','s-uni'].forEach(s=>step(s,'')); fill(0);
   try{
+    await ensureDevice(); await ensureEo();
     // CUT
     step('s-seg','on'); phase('Cutting the audio','three nested grains, before transcription'); const dur=await loadAudio(file);
     const {L1,L2,L3}=nestedSeg(); el('psub').textContent=L1.length+' utterances · '+L2.length+' phrases · '+L3.length+' word units';
@@ -448,9 +456,11 @@ async function run(file){
   }catch(err){ el('work').classList.remove('show'); el('err').textContent='Could not transcribe: '+(err&&err.message?err.message:String(err)); el('err').classList.add('show'); el('drop').style.display='block'; }
 }
 
-let DEVICE='wasm';
-if(navigator.gpu){ try{ if(await navigator.gpu.requestAdapter()) DEVICE='webgpu'; }catch{} }
-el('foot').textContent='nested SEG · whisper-base hears · MFCC born gate · whisper-small only on discrepancies · '+(parseText?'eoreader4 unifies':'coref offline')+' · '+(DEVICE==='webgpu'?'WebGPU':'WASM');
+let DEVICE='wasm', _devTried=false;
+async function ensureDevice(){ if(_devTried) return; _devTried=true;
+  if(navigator.gpu){ try{ if(await navigator.gpu.requestAdapter()) DEVICE='webgpu'; }catch{} } refreshFoot(); }
+function refreshFoot(){ el('foot').textContent='nested SEG · whisper-base hears · MFCC born gate · whisper-small only on discrepancies · '+(parseText?'eoreader4 unifies':'coref offline')+' · '+(DEVICE==='webgpu'?'WebGPU':'WASM'); }
+refreshFoot();
 
 const drop=el('drop');
 el('file').addEventListener('change',e=>{ if(e.target.files[0]) run(e.target.files[0]); });

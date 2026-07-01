@@ -744,10 +744,24 @@ class Component extends DCLogic {
   onImportClick(){const i=document.querySelector('input[data-eo-import]');if(i)i.click();}
   onImportFile(ev){
     const f=ev&&ev.target&&ev.target.files&&ev.target.files[0];if(!f)return;
-    const fr=new FileReader();
-    fr.onload=()=>{this.importText(String(fr.result||''),f.name.replace(/\.(txt|md|markdown|text)$/i,''));if(ev.target)ev.target.value='';};
-    fr.onerror=()=>{this.feedLine('warn','Could not read that file.');};
-    fr.readAsText(f);
+    if(ev.target)ev.target.value='';
+    this._importAny(f);
+  }
+  // Import ANY supported file. Plain text/markdown reads inline (no module load); a PDF,
+  // scanned image, audio/video, spreadsheet or web page routes through the unified importer
+  // (src/reader/import-file.js), which lazy-loads the right extractor and raises it onto the
+  // spine via the ingestion organs — the reader then reads the extracted text as a book.
+  async _importAny(f){
+    const name=f.name||'file'; const ext=(name.split('.').pop()||'').toLowerCase();
+    const isText=(f.type&&f.type.startsWith('text/plain'))||['txt','md','markdown','text','log','rst'].includes(ext);
+    try{
+      if(isText){ const text=await f.text(); await this.importText(text,name.replace(/\.[^.]+$/,'')); return; }
+      this.feedSep('importing '+name);
+      const mod=await import(new URL('src/reader/import-file.js',document.baseURI).href);
+      const r=await mod.importAnyFile(f,{onProgress:(m)=>this.feedLine('read',m)});
+      if(!r||!r.text||!r.text.trim()){ this.feedLine('warn','No text could be read from '+name); return; }
+      await this.importText(r.text, r.title||name.replace(/\.[^.]+$/,''), r.meta||null);
+    }catch(e){ this.feedLine('warn','Could not import '+name+' — '+((e&&e.message)?e.message:String(e))); }
   }
   // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
   // Each chat is a thread that answers from the read sentences/graph. A chat can be

@@ -63,9 +63,9 @@
         <input value="{{ url }}" oninput="{{ onUrlInput }}" onkeydown="{{ onUrlKey }}" placeholder="Search or read a URL into memory…" style="flex:1;min-width:0;font-size:12.5px;color:var(--ink);background:transparent;border:none;padding:7px 10px;outline:none;">
         <button onclick="{{ onReadUrl }}" style="{{ readBtnStyle }}">{{ readBtnLabel }}</button>
       </div>
-      <input type="file" data-eo-import="" accept=".txt,.md,.markdown,.text,text/plain" onchange="{{ onImportFile }}" style="display:none;">
+      <input type="file" data-eo-import="" accept=".txt,.md,.markdown,.text,.log,.rst,.html,.htm,.pdf,.csv,.tsv,.xlsx,.xls,image/*,audio/*,video/*,text/plain,text/html,application/pdf,text/csv" onchange="{{ onImportFile }}" style="display:none;">
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
-        <button onclick="{{ onImportClick }}" title="Import a book or text file — read it as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)"><i class="ph">&#xE61E;</i></button>
+        <button onclick="{{ onImportClick }}" title="Import a file — text, PDF, audio or video, image, spreadsheet, or web page; read as a book" style="width:30px;height:30px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)"><i class="ph">&#xE61E;</i></button>
       </sc-if>
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
         <div title="Layout presets" style="display:flex;gap:2px;background:#eef0f3;border-radius:8px;padding:3px;flex:0 0 auto;">
