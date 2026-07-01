@@ -46,6 +46,7 @@ injects `surf` ([`write/idle.js`](../src/write/idle.js)) and the enacted loop in
 | `descend` | run the helix backwards — regenerate instances from patterns; forget what cannot regenerate | reverse learning | the enacted loop's frames |
 | `holdAsGround` | let the un-figurable rest as **Ground** — one uncollapsed field, never forced into proliferating Figures | — (no twin) | the day's residue |
 | `recouple` | **wake** — force each regenerated rhyme back through `EVA`; keep only what the world declines to break | two-phase wake/sleep | the dream's figures |
+| `recombine` | the **dreamer** — walk the uncollapsed field and strengthen the meaningful-but-untraversed, Born-weighted (`|amplitude|²`) | generative replay / overfitted-brain | far-apart referents that never co-occurred |
 
 ### reproject — re-project at lower volume
 
@@ -149,15 +150,50 @@ return ([`core/self/index.js`](../src/core/self/index.js)). That locus is the lo
 ontogeny, not a step in it, which is why the one who wakes is the one who slept. This is
 the whole reason rest is survivable as the same engine and not a small death.
 
+## The dreamer — telling the model to dream
+
+A night is not only subtraction. `reproject`, `descend`, and `holdAsGround` renormalize,
+prune, and defer — none of them *generates*. `recombine` is the one face that does the
+thing the online pass is structurally barred from doing: produce candidate structure by
+walking across material that never co-occurred in the input stream. Awake, the surfer
+answers to the next arrival, so its frame is clamped and it can only strengthen what the
+reading actually traversed; the dreamer runs when the frontier holds still — the only time
+the frame comes off and a walk can rhyme two referents that arrived a thousand sentences
+apart. So a night **prunes and strengthens in one operation**: raise what stands, drop
+what does not.
+
+**The Born rule, all over the place.** `holdAsGround` leaves the residue as one
+*uncollapsed* field (the measurement problem: a field forced to one definite Figure
+proliferates). `recombine` walks that field without collapsing it — every untraversed pair
+is a rhyme with an *amplitude* (its meaningfulness, injected), and the probability the walk
+surfaces it is `|amplitude|²` normalized over the field. The squaring is not decoration: it
+sharpens the field so a strong latent rhyme dominates a spray of coincidences, which is the
+"most of its output should evaporate" the dreamer wants. The weights are a *distribution*
+over the field, never a collapse of it.
+
+Everything the dreamer emits is a **hypothesis**, never a finding — the desert cell (`SYN`
+has no verb in the Ground column: you cannot synthesize a whole out of pure Ground). A
+proposal is a candidate *link* or *strengthening* under `REC` pressure, marked ungrounded;
+the climb back up (`recouple`, on wake) is what tests it. It stays **opt-in** (off unless a
+config is supplied to `rest`/the cycle) until a cheap read-only night shows a non-trivial
+recoupled-over-born ratio — the same discipline the doc asks for above.
+
+The read-only night is surfaced in the product: the **Rest view** has a *Dream* action
+([`src/ui/dream-view.js`](../src/ui/dream-view.js)) that runs a night over the document's
+real projected graph and shows both sides — the spurious pruned, the loud day re-projected
+(kept forward vs. dropped faded), and the Born-weighted latent rhymes strengthened — each
+one ungrounded, because waking is what would re-couple it to `EVA`.
+
 ## Where it lives
 
 | concern | file |
 |---|---|
-| the four faces + the cadence | [`src/rest/index.js`](../src/rest/index.js) |
+| the four faces + `recombine` + the cadence | [`src/rest/index.js`](../src/rest/index.js) |
 | the driver: pressure, tick, observe, wake | [`src/rest/cycle.js`](../src/rest/cycle.js) |
+| telling the model to dream (prune + strengthen, Born-weighted) | [`src/ui/dream-view.js`](../src/ui/dream-view.js), in the Rest view [`src/ui/idle-view.js`](../src/ui/idle-view.js) |
 | the integral re-projected | [`src/write/fold.js`](../src/write/fold.js) (`dossierOf`) |
 | the patterns descended | [`src/core/enacted/loop.js`](../src/core/enacted/loop.js), [`src/enact/replay.js`](../src/enact/replay.js) |
 | the firewall the hypotheses inherit | [`src/write/idle.js`](../src/write/idle.js) (`canWitness`) |
 | the locus that survives the rest | [`src/core/self/index.js`](../src/core/self/index.js) |
 | the state glyph (a phosphor-esque icon per posture) | [`src/ui/rest-icon.js`](../src/ui/rest-icon.js), shown in [`src/ui/idle-view.js`](../src/ui/idle-view.js) |
-| tests | [`tests/rest.test.js`](../tests/rest.test.js), [`tests/rest-cycle.test.js`](../tests/rest-cycle.test.js), [`tests/rest-icon.test.js`](../tests/rest-icon.test.js) |
+| tests | [`tests/rest.test.js`](../tests/rest.test.js), [`tests/rest-cycle.test.js`](../tests/rest-cycle.test.js), [`tests/rest-icon.test.js`](../tests/rest-icon.test.js), [`tests/dream-view.test.js`](../tests/dream-view.test.js) |
