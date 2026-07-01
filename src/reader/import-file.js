@@ -77,7 +77,8 @@ export async function importAnyFile(file, opts = {}) {
   // Audio / video — decode, then whisper hears it (audio organ). The speech only.
   if (mime.startsWith('audio/') || mime.startsWith('video/') || AUDIO_EXT.includes(ext) || VIDEO_EXT.includes(ext)) {
     say('Listening…');
-    return await fromMedia(file, title, name, say);
+    const isVideo = mime.startsWith('video/') || VIDEO_EXT.includes(ext);
+    return await fromMedia(file, title, name, say, { ...opts, isVideo });
   }
 
   // Last resort: if it decodes as text, read it as text; otherwise refuse clearly.
@@ -165,7 +166,22 @@ async function fromImage(file, title, name, say) {
   } finally { URL.revokeObjectURL(url); }
 }
 
-async function fromMedia(file, title, name, say) {
+// Whisper's timestamped chunks → utterances of timed words. Each chunk is a breath group;
+// its words get interpolated times, so the audio organ keeps a clock on every word.
+function _whisperUtterances(out, norm) {
+  const utterances = [];
+  for (const ch of (out && out.chunks) || []) {
+    const ts = ch.timestamp || []; let a = ts[0], b = ts[1];
+    const txt = String(ch.text || '').trim(); if (!txt || a == null) continue; if (b == null || b <= a) b = a + 0.5;
+    const ws = txt.split(/\s+/).filter(Boolean); const tot = ws.reduce((s, w) => s + w.length, 0) || 1;
+    let t = a; const words = [];
+    for (const w of ws) { const d = (b - a) * (w.length / tot); words.push({ text: w, norm: norm(w), start: a + (t - a), end: a + (t - a) + d }); t += d; }
+    if (words.length) utterances.push({ start: a, end: b, words });
+  }
+  return utterances;
+}
+
+async function fromMedia(file, title, name, say, opts = {}) {
   const SR = 16000;
   // Decode to mono 16 kHz — the rate whisper wants — via an offline graph.
   const AC = (typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext));
@@ -179,29 +195,38 @@ async function fromMedia(file, title, name, say) {
   const mono = (await off.startRendering()).getChannelData(0);
   const duration = decoded.duration;
 
+  // A playable handle on the original file, kept for the session so the source can be
+  // heard/watched back with the transcript aligned. (Not revoked — playback needs it.)
+  const media = (typeof URL !== 'undefined' && URL.createObjectURL) ? URL.createObjectURL(file) : null;
+
   say('Loading the speech model…');
   const dev = await device();
   const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/+esm');
   const asr = await pipeline('automatic-speech-recognition', 'onnx-community/whisper-base', { device: dev });
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
+  const witness = `whisper-base · ${dev}`;
+
   say('Transcribing…');
   const out = await asr(mono, { return_timestamps: true, chunk_length_s: 30, stride_length_s: 5 });
+  const utterances = _whisperUtterances(out, norm);
 
-  // Each timestamped chunk becomes an utterance; its words get interpolated times, so the
-  // audio organ keeps a clock on every word (utterances → units, words → timed referents).
-  const norm = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}']/gu, '');
-  const utterances = [];
-  for (const ch of (out && out.chunks) || []) {
-    const ts = ch.timestamp || []; let a = ts[0], b = ts[1];
-    const txt = String(ch.text || '').trim(); if (!txt || a == null) continue; if (b == null || b <= a) b = a + 0.5;
-    const ws = txt.split(/\s+/).filter(Boolean); const tot = ws.reduce((s, w) => s + w.length, 0) || 1;
-    let t = a; const words = [];
-    for (const w of ws) { const d = (b - a) * (w.length / tot); words.push({ text: w, norm: norm(w), start: a + (t - a), end: a + (t - a) + d }); t += d; }
-    if (words.length) utterances.push({ start: a, end: b, words });
+  // A transcript is one READING, not the objective truth of the waveform. When "audit readings"
+  // is on, take a SECOND witness — the same model relistening with a different chunking — so its
+  // divergences from the first pass become auditable EVA events instead of a silent single answer.
+  const alternates = [];
+  if (opts.twoWitness) {
+    say('Relistening for a second reading…');
+    try {
+      const out2 = await asr(mono, { return_timestamps: true, chunk_length_s: 20, stride_length_s: 3 });
+      const altWords = _whisperUtterances(out2, norm).flatMap(u => u.words);
+      if (altWords.length) alternates.push({ label: `whisper-base relisten · ${dev}`, words: altWords });
+    } catch (e) { /* the second witness is best-effort; the first reading still stands */ }
   }
+
   const fullText = (out && out.text ? String(out.text) : utterances.map(u => u.words.map(w => w.text).join(' ')).join(' ')).trim();
   if (!fullText) throw new Error('no speech found in the file');
 
   const { ingestAudio } = await IN();
-  const doc = ingestAudio({ name, duration, device: dev, utterances });
-  return { text: fullText, title, meta: { modality: 'audio', doc, duration } };
+  const doc = ingestAudio({ name, duration, device: dev, witness, utterances, alternates, media });
+  return { text: fullText, title, meta: { modality: 'audio', doc, duration, media, isVideo: !!opts.isVideo, mediaKind: opts.isVideo ? 'video' : 'audio' } };
 }
