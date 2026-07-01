@@ -37,6 +37,9 @@
     .badge.installed { color: #8ab4ff; border-color: #2c4470; }
     .badge.fallback { color: #c9a14a; border-color: #5b4a23; }
     .card .form { color: var(--fg2, #8a8f98); font-size: 12.5px; margin: 7px 0; }
+    .card .matter { font-size: 12.5px; margin: 0 0 7px; }
+    .card .matter .lbl { color: var(--fg2, #8a8f98); }
+    .card .matter .phrase { font-style: italic; }
     .card ol { margin: 6px 0 0; padding-left: 20px; }
     .card li { font-size: 13px; margin: 2px 0; }
     .card li .act { color: var(--accent, #5b34d6); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
@@ -62,6 +65,8 @@
     <p class="note">
       Each template is how a kind is built — learned by <b>reading good examples</b> and letting the
       structure emerge (the core engine finds the line/stanza cut from the examples' own surprise).
+      The learner reads both halves: the <b>form</b> (lines, meter, terminators) and the <b>matter</b>
+      (the recurring vocabulary, the stock phrases, what each section keeps being about).
       Nothing kind-specific is shipped; the only built-in shape is the universal arc. Learned shapes
       persist in this browser (localStorage), the way the CLI persists them to the <code>templates/</code> folder.
     </p>
@@ -132,6 +137,18 @@ That kept so many warm –`;
       return `${t.sections.length} sections · ${t.size} ${t.organ === 'music' ? 'beats' : 'tokens'}`;
     };
 
+    // The content half of a learned shape — what the examples keep being about, and the
+    // word runs they keep using. Form without this is unusable ("8 lines of 30 syllables"
+    // says nothing to a writer), so it gets its own line on the card.
+    const matterLine = (t) => {
+      const c = t.content;
+      if (!c || (!c.lexicon?.length && !c.phrases?.length)) return '';
+      const bits = [];
+      if (c.lexicon?.length) bits.push(`<span class="lbl">about</span> ${esc(c.lexicon.slice(0, 8).join(', '))}`);
+      if (c.phrases?.length) bits.push(`<span class="lbl">recurring</span> ${c.phrases.slice(0, 4).map((p) => `<span class="phrase">“${esc(p)}”</span>`).join(', ')}`);
+      return `<div class="matter">${bits.join(' · ')}</div>`;
+    };
+
     const card = (t, { removable }) => {
       const src = t.source || 'fallback';
       const sections = t.sections.map((s) =>
@@ -145,6 +162,7 @@ That kept so many warm –`;
           ${t.format ? `<span class="badge">${esc(t.format)}</span>` : ''}
         </div>
         <div class="form">${esc(formLine(t))}${t.note ? ` — ${esc(t.note)}` : ''}</div>
+        ${matterLine(t)}
         <ol>${sections}</ol>
         <div class="row2">
           <button data-json="${id}">view JSON</button>

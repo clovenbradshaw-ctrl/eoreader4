@@ -13,7 +13,9 @@ data — learned or installed, never hard-coded. See `docs/task-creator.md` and
 
 ## The format
 
-A template is a small JSON object describing the *structure* of a kind, not its content:
+A template is a small JSON object describing a kind — its *structure* (sections, budgets,
+form) and, when learned from examples, its *content* (the recurring vocabulary, stock
+phrases, and per-section themes read off the examples):
 
 ```json
 {
@@ -41,6 +43,8 @@ A template is a small JSON object describing the *structure* of a kind, not its 
 | `sections[].share` | its slice of the budget (relative; normalised at build) |
 | `sections[].dir` | a **neutral directive** — `{ act, detail }`. `act` ∈ open · develop · close · state · vary · resolve · enumerate · summarize. The output organ lowers it to an instruction (text → a sentence, music → a phrase), so a template is modality-neutral. |
 | `sections[].goal` | (alternative to `dir`) a literal text instruction; `{subject}` is substituted at build. Prefer `dir` for shapes meant to be shared across modalities. |
+| `form` | (learned-from-examples only) the observable form — stanzas, lines per stanza, syllable pattern, line terminator, and the core engine's segmentation score (`segF1`). |
+| `content` | (learned-from-examples only) the matter — `lexicon` (the kind's recurring open-class words) and `phrases` (repeated word runs: refrains, slogans). Per-section themes ride in each `dir.detail`. |
 
 `source` is `learned` (the machine built it), `installed` (a person added it), or
 `builtin`. The budget drives the structure: any section whose budget exceeds the organ's
