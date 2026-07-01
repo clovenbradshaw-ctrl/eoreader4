@@ -37,6 +37,10 @@
 <script src="vendor/react-dom.production.min.js"></script>
 <script>(function(){var R={"eoEngine":"src/reader/eoreader4-bundle.js","eoModel":"src/reader/model-entry.js","eoSvo":"src/reader/svo-llm.js","eoPhase":"src/reader/eo/phasepost.js","eoEmbed":"src/reader/eo/embed.js","eoCells":"src/reader/eo/phasepost-cells.json","eoCentroids":"src/reader/eo/centroids-27.json"},b=document.baseURI,o={};for(var k in R)o[k]=new URL(R[k],b).href;window.__resources=o;})();</script>
 <script src="vendor/dc-runtime.js"></script>
+<!-- The generation pipeline (src/longgen), exposed as window.eoGen so the chat routes an
+     essay ask through the arc (runContinuation) instead of a capped grounded blurb. Module,
+     loaded off the base URL so it works deployed; the app degrades to its old arc if absent. -->
+<script type="module">import(new URL('src/reader/eo-gen.js', document.baseURI).href).catch(e=>console.warn('eoGen load failed:', e));</script>
 </head>
 <body>
 <x-dc>
