@@ -37,10 +37,6 @@
 <script src="vendor/react-dom.production.min.js"></script>
 <script>(function(){var R={"eoEngine":"src/reader/eoreader4-bundle.js","eoModel":"src/reader/model-entry.js","eoSvo":"src/reader/svo-llm.js","eoPhase":"src/reader/eo/phasepost.js","eoEmbed":"src/reader/eo/embed.js","eoCells":"src/reader/eo/phasepost-cells.json","eoCentroids":"src/reader/eo/centroids-27.json"},b=document.baseURI,o={};for(var k in R)o[k]=new URL(R[k],b).href;window.__resources=o;})();</script>
 <script src="vendor/dc-runtime.js"></script>
-<!-- The generation pipeline (src/longgen), exposed as window.eoGen so the chat routes an
-     essay ask through the arc (runContinuation) instead of a capped grounded blurb. Module,
-     loaded off the base URL so it works deployed; the app degrades to its old arc if absent. -->
-<script type="module">import(new URL('src/reader/eo-gen.js', document.baseURI).href).catch(e=>console.warn('eoGen load failed:', e));</script>
 </head>
 <body>
 <x-dc>
@@ -2481,7 +2477,8 @@ class Component extends DCLogic {
     // scope until you tag "everything" or pick sources — so a fresh chat is a blank slate,
     // not silently grounded in the whole library.
     const sources=scopeUrl?[scopeUrl]:[];
-    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false}));
+    this._chatTab(id);
+    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
     return id;
   }
   // The sources a chat is ABOUT, as a URL list. Tolerates the older single-`scope` shape
@@ -2537,8 +2534,9 @@ class Component extends DCLogic {
   }
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
-  openChat(id){this.setState({activeChat:id,hoverEnt:null,chatAddOpen:false,rightOpen:true,newTabOpen:false});}
-  closeChat(){this.setState({activeChat:null,chatAddOpen:false});}
+  openChat(id){this._chatTab(id);this.setState(s=>({activeChat:id,viewUrl:null,selId:null,hoverEnt:null,chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+  // Closing a chat closes its tab (the chip goes too); the neighbour tab takes over.
+  closeChat(){this._ensureTabs();const t=this._liveTab();if(t&&t.kind==='chat')this.closeTab(t.id);else this.setState({activeChat:null,chatAddOpen:false});}
   onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
   // Per-answer grounding strip: collapsed by default (not overwhelming), one tap reveals
@@ -2821,6 +2819,50 @@ class Component extends DCLogic {
       if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
     }
     return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
+  // ── The generation pipeline as the essay path (src/reader/eo-gen.js) ──────────
+  // On unless explicitly disabled — persisted like the other composer toggles.
+  _essayPipelineOn(){try{return localStorage.getItem('eo_essay_pipeline')!=='0';}catch(e){return true;}}
+  toggleEssayPipeline(){let on=true;try{on=!this._essayPipelineOn();localStorage.setItem('eo_essay_pipeline',on?'1':'0');}catch(e){}this.setState(s=>({essayPipeline:on}));}
+  // A RICH ground for the arc: many in-scope sentences scored by keyword overlap (answerQuestion
+  // keeps only the top 3 — too thin to develop). Returns up to `n` spans {i,score,text,u}, the
+  // shape eo-gen.toGround consumes. Prose only; segmentation artifacts skipped. Falls back to the
+  // source's opening prose when the keyword match is thin, so the arc always has body to walk.
+  _essaySpans(q,sources,n=28){
+    if(!this.master||!this.master.sentences.length)return [];
+    const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    const qwords=String(q||'').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
+    const inScope=i=>!scope.length||scope.includes(this.master.sentenceSource[i]);
+    const scored=[];
+    for(let i=0;i<this.master.sentences.length;i++){
+      if(!inScope(i))continue;
+      const s=this.norm(this.master.sentences[i]);
+      if(s.length>this.MAX_PASSAGE)continue;
+      const low=s.toLowerCase();if(!this._proseOk(low))continue;
+      let v=0;for(const w of qwords)if(low.includes(w))v++;
+      if(v>0)scored.push({i,score:v,text:this._clipPassage(s),u:this.master.sentenceSource[i]});
+    }
+    scored.sort((a,b)=>b.score-a.score||a.i-b.i);
+    if(scored.length<6){
+      for(let i=0;i<this.master.sentences.length&&scored.length<n;i++){if(!inScope(i))continue;const s=this.norm(this.master.sentences[i]);if(s.length>this.MAX_PASSAGE)continue;const low=s.toLowerCase();if(!this._proseOk(low))continue;if(!scored.some(x=>x.i===i))scored.push({i,score:0.5,text:this._clipPassage(s),u:this.master.sentenceSource[i]});}
+    }
+    return scored.slice(0,n);
+  }
+  // Walk the arc over the ground (window.eoGen.essay → runContinuation) and finalize into the
+  // pending assistant bubble. The audit is kept for export (this._lastEssayAudit).
+  async _pipelineEssay(id,q,sources){
+    this._stopGen=false;
+    const spans=this._essaySpans(q,sources);
+    const guard=this._stallGuard();
+    try{
+      const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
+      const r=await window.eoGen.essay({spans,model,question:q,signal:guard.signal});
+      this._lastEssayAudit=r.audit;
+      const passages=spans.slice(0,3).map(x=>({text:this.norm(x.text),u:x.u}));
+      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:r.text||'(nothing to say)',stance:'ground',sources:r.sources||[],passages};return {...c,messages:m};})}),()=>this._scrollChat());
+    }catch(e){
+      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'The arc could not complete: '+((e&&e.message)||e),stance:'ground'};return {...c,messages:m};})}));
+    }
+  }
   // CREATIVE GENERATION over a topic — "write an emily dickinson poem about iced coffee",
   // "compose an essay on dolphins", "draft a haiku about the sea". The frame (write/compose/draft
   // + poem/essay/song/…) names a FORM, and the real topic rides in the "about/on X" tail. Taken at
@@ -3460,7 +3502,13 @@ class Component extends DCLogic {
     // (web off, or the reading already covers it) becomes a multi-section grounded piece — the arc
     // over the in-scope sources — instead of one capped answer. Needs grounded supply; _longformArc
     // itself falls back to the single answer when supply is thin. Never for an isolated chat.
-    if(!isolated&&this._longformIntent(q)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size)))return this._longformArc(id,q,[]);
+    if(!isolated&&this._longformIntent(q)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size))){
+      // THE GENERATION PIPELINE (src/reader/eo-gen.js): an essay ask WALKS THE ARC — open,
+      // develop, turn, land — over a rich ground (runContinuation), instead of the capped
+      // grounded blurb. On by default when the module is loaded; the old arc is the fallback.
+      if(typeof window!=='undefined'&&window.eoGen&&this._essayPipelineOn())return this._pipelineEssay(id,q,sources);
+      return this._longformArc(id,q,[]);
+    }
     // 2) the spans that surface for this question, scoped to the chat's sources (none when isolated)
     const ground=isolated?{spans:[],entities:[],sources:[],relevant:false}:this.groundNotes(q,sources);
     // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
@@ -5735,8 +5783,61 @@ class Component extends DCLogic {
   sleep(ms){return new Promise(r=>setTimeout(r,ms));}
   // ---- location/history: each entry is {t:'web',url} or {t:'ent',id} ----
   _locEq(a,b){return a&&b&&a.t===b.t&&(a.t==='web'?a.url===b.url:a.id===b.id);}
-  _pushLoc(loc){let h=(this._hist||[]);let p=(this._hpos==null?-1:this._hpos);if(this._locEq(h[p],loc))return;h=h.slice(0,p+1);h.push(loc);this._hist=h;this._hpos=h.length-1;}
-  _applyLoc(loc){if(!loc)return;if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}else{this.setState(s=>({selId:loc.id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}}
+  _pushLoc(loc){this._ensureTabs();let h=(this._hist||[]);let p=(this._hpos==null?-1:this._hpos);if(this._locEq(h[p],loc)){this._syncActiveBrowse();return;}h=h.slice(0,p+1);h.push(loc);this._hist=h;this._hpos=h.length-1;this._syncActiveBrowse();}
+  _applyLoc(loc){if(!loc)return;if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}else{this.setState(s=>({selId:loc.id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}this._syncPos();}
+  // ---- Independent, browser-like tabs. Every open tab is one of three kinds:
+  //   'browse' — a website / entity, with its OWN back-forward history (hist/hpos) and its
+  //              own reader-vs-native viewMode.
+  //   'chat'   — a chat thread (chatId).
+  //   'new'    — a blank tab showing the new-tab landing (pick chat / website / reader).
+  // The ACTIVE tab's browse history is mirrored into this._hist/_hpos and its render mode into
+  // state.viewMode, so all existing navigation keeps working untouched; switching tabs saves
+  // those into the outgoing tab and restores them from the incoming one. Tabs live only in
+  // memory (like the old history), so a reload starts fresh.
+  _tabId(){this._tabN=(this._tabN||0)+1;return 't'+this._tabN;}
+  _ensureTabs(){
+    if(this._tabs&&this._tabs.length)return;
+    const hist=this._hist||[];const hpos=(this._hpos==null?hist.length-1:this._hpos);
+    let kind='new',chatId=null;
+    if(this.state.activeChat){kind='chat';chatId=this.state.activeChat;}
+    else if(hist.length){kind='browse';}
+    const id=this._tabId();
+    this._tabs=[{id,kind,hist,hpos,viewMode:this.state.viewMode||'native',chatId}];
+    this._activeTab=id;
+  }
+  _liveTab(){this._ensureTabs();return this._tabs.find(t=>t.id===this._activeTab)||null;}
+  _activeTabKind(){const t=this._tabs&&this._tabs.find(x=>x.id===this._activeTab);return t?t.kind:'new';}
+  // Write the live navigation state back into the active tab (called before leaving it).
+  _saveLive(){const t=this._tabs&&this._tabs.find(x=>x.id===this._activeTab);if(!t)return;t.hist=this._hist||[];t.hpos=(this._hpos==null?-1:this._hpos);t.viewMode=this.state.viewMode||'native';}
+  // A browse navigation just happened on the active tab — make it a browse tab and capture it.
+  _syncActiveBrowse(){const t=this._liveTab();if(!t)return;t.kind='browse';t.chatId=null;t.hist=this._hist||[];t.hpos=(this._hpos==null?-1:this._hpos);t.viewMode=this.state.viewMode||'native';}
+  // Keep the active tab's history position current (after back / forward) so its chip label is right.
+  _syncPos(){const t=this._tabs&&this._tabs.find(x=>x.id===this._activeTab);if(t){t.hpos=(this._hpos==null?-1:this._hpos);t.hist=this._hist||[];}}
+  // Switch to a tab: save the outgoing one, then project the incoming tab into live state.
+  _activateTab(id){
+    if(id!==this._activeTab)this._saveLive();
+    const t=this._tabs.find(x=>x.id===id);if(!t)return;
+    this._activeTab=id;this._pageUrl=null;
+    this._hist=t.hist||[];this._hpos=(t.hpos==null?this._hist.length-1:t.hpos);
+    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,histRev:(this.state.histRev||0)+1};
+    if(t.kind==='chat'){this.setState({...patch,activeChat:t.chatId,viewUrl:null,selId:null,newTabOpen:false});return;}
+    if(t.kind==='new'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});return;}
+    const loc=(this._hpos>=0&&this._hist)?this._hist[this._hpos]:null;
+    if(loc&&loc.t==='web'){this.setState({...patch,activeChat:null,viewUrl:loc.url,selId:null,newTabOpen:false},()=>this.loadCenter(loc.url));}
+    else if(loc&&loc.t==='ent'){this.setState({...patch,activeChat:null,viewUrl:null,selId:loc.id,newTabOpen:false});}
+    else{this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});}
+  }
+  // Route a chat into a tab: reuse the tab already hosting it, else convert a blank new tab,
+  // else open a fresh chat tab. Live nav state (browse hist) is parked on the outgoing tab.
+  _chatTab(chatId){
+    this._ensureTabs();this._saveLive();
+    const existing=this._tabs.find(t=>t.kind==='chat'&&t.chatId===chatId);
+    if(existing){this._activeTab=existing.id;}
+    else{const t=this._tabs.find(x=>x.id===this._activeTab);
+      if(t&&t.kind==='new'){t.kind='chat';t.chatId=chatId;t.hist=[];t.hpos=-1;}
+      else{const id=this._tabId();this._tabs.push({id,kind:'chat',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId});this._activeTab=id;}}
+    this._hist=[];this._hpos=-1;this._pageUrl=null;
+  }
   // Opening an entity full takes over the centre column, so it closes any active chat the
   // same way navigating to a page does (see goWeb / doReadUrl). Otherwise the chat would keep
   // filling <main> and the centre-fill guard in the view-model would suppress the explorer.
@@ -6100,14 +6201,35 @@ class Component extends DCLogic {
   canForward(){return !!(this._hist&&this._hpos<this._hist.length-1);}
   goBack(){if(this.canBack()){this._hpos--;this._applyLoc(this._hist[this._hpos]);}}
   goForward(){if(this.canForward()){this._hpos++;this._applyLoc(this._hist[this._hpos]);}}
-  goToHist(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hpos=i;this._applyLoc(this._hist[i]);}
-  closeTab(i){if(!this._hist||i<0||i>=this._hist.length)return;this._hist.splice(i,1);if(this._hpos>=i&&this._hpos>0)this._hpos--;if(this._hpos>=this._hist.length)this._hpos=this._hist.length-1;if(this._hpos>=0)this._applyLoc(this._hist[this._hpos]);else this.setState(s=>({selId:null,viewUrl:null,histRev:(s.histRev||0)+1}));}
-  // Open a fresh tab: clear every kind of open destination (page, entity, chat, book search)
-  // and raise the new-tab surface, so "+" always lands you on the blank tab that offers the
-  // three choices — a chat, a live website, or a reader-view page — no matter what was showing.
-  newTab(){this._pageUrl=null;this.setState(s=>({selId:null,viewUrl:null,activeChat:null,gutenResults:null,gutenQuery:'',gutenLoading:false,newTabOpen:true,histRev:(s.histRev||0)+1}));}
+  // Close a tab by id. Closing the active one activates its left neighbour; closing the last
+  // tab leaves a fresh blank tab so the strip is never empty.
+  closeTab(id){this._ensureTabs();const i=this._tabs.findIndex(t=>t.id===id);if(i<0)return;const wasActive=(id===this._activeTab);
+    if(wasActive)this._activeTab=null;
+    this._tabs.splice(i,1);
+    if(!this._tabs.length){const nid=this._tabId();this._tabs.push({id:nid,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});this._activateTab(nid);return;}
+    if(wasActive){const ni=Math.max(0,i-1);this._activateTab(this._tabs[ni].id);}else{this.setState(s=>({histRev:(s.histRev||0)+1}));}}
+  // Open a fresh, blank tab and switch to it — "+" always adds a visible new tab chip and
+  // lands on the new-tab surface (chat / live website / reader view), whatever was showing.
+  newTab(){this._ensureTabs();this._saveLive();const id=this._tabId();this._tabs.push({id,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});this._activateTab(id);}
   tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?(this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
-  buildTabs(g){const h=this._hist||[];if(!h.length)return[];const all=h.map((loc,i)=>{const lab=this.tabLabel(loc,g);const c=this.hashColor(lab);const active=i===this._hpos;const isWeb=loc.t==='web';const isSearch=isWeb&&/^search:/i.test(loc.url);return {label:lab,i,active,isWeb,dotGlyph:isSearch?'\ue30c':'',dotStyle:isSearch?('font-family:\'Phosphor\';font-size:13px;line-height:1;color:#9aa1ab;flex:0 0 auto;'):('width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+(isWeb?'#9aa1ab':c)+';'),onClick:()=>this.goToHist(i),onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(i);},tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};});return all.slice(-6);}
+  // Build the tab strip from the tab list \u2014 one chip per open tab, its glyph marking the kind:
+  // chat (accent star) \u00b7 reader-view page \u00b7 search glyph \u00b7 a coloured dot for a live page /
+  // entity \u00b7 + for a blank new tab.
+  buildTabs(g){this._ensureTabs();return this._tabs.map(t=>{
+    const active=t.id===this._activeTab;const id=t.id;let label,dotGlyph='',dotStyle;
+    if(t.kind==='chat'){const c=(this.state.chats||[]).find(x=>x.id===t.chatId);label=this.truncLabel((c&&c.title)||'Chat',22);dotGlyph='\u2726';dotStyle='font-size:12px;line-height:1;color:var(--acc);flex:0 0 auto;';}
+    else{const loc=(t.kind==='browse'&&t.hpos>=0&&t.hist)?t.hist[t.hpos]:null;
+      if(!loc){label='New tab';dotGlyph='+';dotStyle='font-size:14px;line-height:1;color:var(--ink3);flex:0 0 auto;';}
+      else{label=this.tabLabel(loc,g);const isWeb=loc.t==='web';const isSearch=isWeb&&/^search:/i.test(loc.url);const reader=(t.viewMode==='reader')&&isWeb&&!isSearch;
+        if(isSearch){dotGlyph='\ue30c';dotStyle='font-family:\'Phosphor\';font-size:13px;line-height:1;color:#9aa1ab;flex:0 0 auto;';}
+        else if(reader){dotGlyph='\ud83d\udcd6';dotStyle='font-size:12px;line-height:1;flex:0 0 auto;';}
+        else if(isWeb){dotStyle='width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:#9aa1ab;';}
+        else{const c=this.hashColor(label);dotStyle='width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+c+';';}}}
+    return {label,active,dotGlyph,dotStyle,
+      onClick:()=>this._activateTab(id),
+      onClose:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.closeTab(id);},
+      tabStyle:'display:flex;align-items:center;gap:7px;max-width:190px;min-width:96px;padding:7px 9px 7px 11px;border-radius:9px 9px 0 0;cursor:pointer;font-size:12px;'+(active?'background:var(--card);color:var(--ink);font-weight:600;box-shadow:0 -1px 3px rgba(0,0,0,.04);':'background:rgba(255,255,255,.4);color:var(--ink2);')};
+  }).slice(-8);}
   // ---- live embed of the page shown in the CENTER viewport ----
   // A readable "book" rendering of an imported text source. The author's own
   // paragraphs (blank-line separated) are kept; if the text has no such structure
@@ -6893,7 +7015,7 @@ class Component extends DCLogic {
       auditDesc:this.state.auditMode?'On — each entity shows its raw graph contents, the integral fold vs. Wikipedia, and the sources in play.':'Off — turn on to inspect coref, definitions, and the propositions behind each profile.',
       auditSwitch:'flex:0 0 auto;width:34px;height:20px;border-radius:11px;padding:2px;transition:background .15s;background:'+(this.state.auditMode?'var(--acc)':'#cfd3da')+';',
       auditKnob:'width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s;transform:translateX('+(this.state.auditMode?'14px':'0')+');',
-      tabs:this.buildTabs(g),hasTabs:(this._hist&&this._hist.length>0),
+      tabs:this.buildTabs(g),hasTabs:(this._tabs&&this._tabs.length>0),
       backStyle:this.navBtnStyle(this.canBack()),fwdStyle:this.navBtnStyle(this.canForward()),
       readBtnLabel:this.state.busy?'…':'Read',readBtnStyle:'font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:7px;padding:6px 13px;flex:0 0 auto;cursor:pointer;'+(this.state.busy?'opacity:.6;':''),
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
@@ -7153,7 +7275,7 @@ class Component extends DCLogic {
     // The "+" new-tab surface, once you already have sources read: a blank centre that offers
     // the three kinds a tab can be. Side panels (sources / entities) are built above, so they
     // stay populated; only the centre yields to the landing. A chat or a page takes precedence.
-    if(this.state.newTabOpen&&!vu&&!base.chatOn&&!base.gutenOn){
+    if((this.state.newTabOpen||this._activeTabKind()==='new')&&!vu&&!base.chatOn&&!base.gutenOn){
       this.landingVals(base);
       return base;
     }
