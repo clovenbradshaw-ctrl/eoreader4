@@ -5,7 +5,7 @@ import {
   profile, compile, critique, critiqueBySeverity,
   channelsFor, VISUAL_CHANNELS, AUDITORY_CHANNELS,
   makeVariable, makeMapSpec, mapSpecHash, validateMapSpec,
-} from '../src/koine/index.js';
+} from '../src/thalamus/index.js';
 
 const chanById = (chans, id) => chans.find((c) => c.id === id);
 const bindOf = (spec, variable) => spec.bindings.find((b) => b.variable === variable);

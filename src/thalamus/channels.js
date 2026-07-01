@@ -1,4 +1,4 @@
-// koine/channels — the perceptual channel catalogs each render backend advertises.
+// thalamus/channels — the perceptual channel catalogs each render backend advertises.
 //
 // A channel is typed by its perceptual character (schema.js → makeChannel): its ORDER (can it
 // carry magnitude, category, or a cycle), its TIME character (does it hold a value or mark an
@@ -8,7 +8,7 @@
 // for magnitude (Cleveland–McGill for the eye; Walker/earcon work for the ear, L4). compile()
 // reads these tables; it hard-codes none of it — a new backend is a new table, nothing else.
 //
-// The auditory table is CANTOR's DECLARED capability (docs/koine.md §8 Q1). The descriptors
+// The auditory table is CANTOR's DECLARED capability (docs/thalamus.md §8 Q1). The descriptors
 // exist so the compiler can target the ear today; the renderer that turns a ScoreSpec into
 // Web Audio is deferred. Declaring a channel costs nothing and commits no sound.
 
@@ -44,7 +44,7 @@ export const AUDITORY_CHANNELS = Object.freeze([
 ]);
 
 // channelsFor(modality) — the catalog a target draws from. 'cross' offers both, so a finding
-// can be compiled to eye and ear from one call (the modality-independence proof, docs/koine.md).
+// can be compiled to eye and ear from one call (the modality-independence proof, docs/thalamus.md).
 export const channelsFor = (modality = 'visual') => {
   if (modality === 'auditory') return AUDITORY_CHANNELS;
   if (modality === 'cross')    return Object.freeze([...VISUAL_CHANNELS, ...AUDITORY_CHANNELS]);

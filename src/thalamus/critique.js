@@ -1,4 +1,4 @@
-// koine/critique — the linter. It enforces L1–L8 over a MapSpec and returns the violations,
+// thalamus/critique — the linter. It enforces L1–L8 over a MapSpec and returns the violations,
 // the parameter-mapping analog of LIMNER's grounding veto. It runs inside compile()'s guarantee
 // (a compiled spec is clean by construction) AND over a HAND-EDITED spec — a reader re-patches a
 // binding (an EVA on the log), and critique catches an edit that broke a law. So it takes the
@@ -59,7 +59,7 @@ export const critique = (mapSpec, { channels = [], variables = [] } = {}) => {
   return out;
 };
 
-// A convenience partition for the critique gutter (docs/koine.md §6.3).
+// A convenience partition for the critique gutter (docs/thalamus.md §6.3).
 export const critiqueBySeverity = (violations) => ({
   errors: violations.filter((v) => v.severity === 'error'),
   warns:  violations.filter((v) => v.severity === 'warn'),

@@ -1,9 +1,9 @@
-// koine/compile — the assignment compiler. Variables + channels + a budget → a MapSpec.
+// thalamus/compile — the assignment compiler. Variables + channels + a budget → a MapSpec.
 //
 // This is the intelligence, and it is DETERMINISTIC: same (variables, channels, budget) ⇒ same
 // MapSpec, every time. No model. The model's only optional job upstream is the importance
 // ranking (what the finding is) — selection, which small models do reliably; the hard part,
-// the assignment, is a constraint solve in code (docs/koine.md). The solve is Mackinlay's
+// the assignment, is a constraint solve in code (docs/thalamus.md). The solve is Mackinlay's
 // expressiveness/effectiveness compiler generalized across modalities, plus L2 (time-character)
 // and L8 (valence) which the visual lineage never needed.
 //
@@ -20,7 +20,7 @@ import { makeMapSpec, mapSpecHash } from './schema.js';
 import { normalizer } from './transfer.js';
 import { VALENCE_QUARANTINE } from './channels.js';
 
-export const KOINE_VERSION = '0.1';
+export const THALAMUS_VERSION = '0.1';
 
 // L1 — expressiveness: the channel's ORDER must be able to carry the variable's measurement.
 const ORDER_FOR = { nominal: 'categorical', ordinal: 'ordered', interval: 'ordered', ratio: 'ordered', cyclic: 'cyclic' };
@@ -94,7 +94,7 @@ export const compile = (variables, channels, budget = {}) => {
 
   const spec = makeMapSpec({
     bindings, unmapped, modality, valence_declarations: declarations,
-    provenance: { compiler_version: KOINE_VERSION, data_ref: budget.data_ref ?? null, profile_ref: budget.profile_ref ?? null, mapspec_hash: null },
+    provenance: { compiler_version: THALAMUS_VERSION, data_ref: budget.data_ref ?? null, profile_ref: budget.profile_ref ?? null, mapspec_hash: null },
   });
   // stamp the content hash into provenance (excluded from the hash itself).
   return makeMapSpec({

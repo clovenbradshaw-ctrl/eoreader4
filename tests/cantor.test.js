@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { profile, compile, channelsFor } from '../src/koine/index.js';
-import { toScoreSpec, freqOf, gainOf, playScore } from '../src/koine/cantor/index.js';
+import { profile, compile, channelsFor } from '../src/thalamus/index.js';
+import { toScoreSpec, freqOf, gainOf, playScore } from '../src/thalamus/cantor/index.js';
 
 // the §7 donations data, compiled to the ear
 const donations = () => {

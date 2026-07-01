@@ -1,4 +1,4 @@
-// koine/transfer — perceptual linearization (Law L3). The encoding is NEVER data→channel
+// thalamus/transfer — perceptual linearization (Law L3). The encoding is NEVER data→channel
 // directly; it is  channel = transfer( normalize(data, distribution) ).
 //
 // TWO nonlinearities are inverted, in order:

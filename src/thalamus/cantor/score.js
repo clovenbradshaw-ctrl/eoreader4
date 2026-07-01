@@ -1,6 +1,6 @@
 // cantor/score — MapSpec + data → a ScoreSpec. The auditory mirror of LIMNER's ViewSpec.
 //
-// KOINÉ's MapSpec is modality-independent: it names auditory CHANNELS (onset, pitch, loudness,
+// THALAMUS's MapSpec is modality-independent: it names auditory CHANNELS (onset, pitch, loudness,
 // pan, timbre) and the transfer each carries, but no Hz, no dB, no seconds. CANTOR lowers it to
 // a ScoreSpec — a deterministic list of sounding events, each with a physical time/frequency/
 // gain/pan and a `ref` back to the data row that produced it (grounding, exactly as every

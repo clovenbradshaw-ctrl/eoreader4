@@ -1,4 +1,4 @@
-// koine/profile — infer each data variable's TYPE from its values (the SIG stage).
+// thalamus/profile — infer each data variable's TYPE from its values (the SIG stage).
 //
 // A dataset is a set of columns; profiling types each one on the four axes compile() reasons
 // over (schema.js): role (domain axis vs. measure), measurement (nominal/ordinal/interval/

@@ -1,11 +1,11 @@
-// koine/schema — the two type systems and the compiled claim, as frozen records.
+// thalamus/schema — the two type systems and the compiled claim, as frozen records.
 //
-// KOINÉ compiles an assignment from a dataset's VARIABLES (typed by their data shape)
+// THALAMUS compiles an assignment from a dataset's VARIABLES (typed by their data shape)
 // to perception's CHANNELS (typed by their perceptual character). The compiled result
 // is a MapSpec — a modality-INDEPENDENT claim: "amount → size (√), date → position_x…".
 // Like LIMNER's ViewSpec it is inspectable, content-addressable, and emitted as data,
 // so the mapping is itself a claim a reader can read and contest (docs/parameter-mapping.md,
-// docs/koine.md). This module owns the shapes, their constructors, validation, and the hash.
+// docs/thalamus.md). This module owns the shapes, their constructors, validation, and the hash.
 //
 // Nothing here decides an assignment (that is compile.js) or judges one (critique.js). It
 // only fixes the vocabulary the two type systems and the claim are written in.
@@ -115,7 +115,7 @@ export const validateMapSpec = (spec) => {
 // ── Content hash ─────────────────────────────────────────────────────────────
 // The same FNV-1a-over-canonical-serialization idiom LIMNER's spec.js uses, kept local so
 // the organ has no cross-faculty dependency. STABLE on the bytes: same MapSpec → same hash,
-// which is what lets a compiled claim be a content address (docs/koine.md). Provenance is
+// which is what lets a compiled claim be a content address (docs/thalamus.md). Provenance is
 // excluded — the claim is identical whichever run minted it.
 const fnvHash = (text) => {
   let h1 = 0x811c9dc5, h2 = 0x811c9dc5;

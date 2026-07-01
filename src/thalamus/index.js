@@ -1,7 +1,8 @@
-// koine — the parameter-mapping compiler (docs/koine.md). Placeholder name, from koinē
-// aísthēsis (the common sense that unifies the special senses); rename freely.
+// thalamus — the parameter-mapping compiler (docs/thalamus.md). Named for the brain's sensory
+// relay (Greek thálamos, the inner chamber): the hub every sense passes through and is routed
+// from — exactly this organ's job, to route each data variable to the right perceptual channel.
 //
-// Domains are infinite; data SHAPES and perceptual CHANNELS are small finite sets. So KOINÉ
+// Domains are infinite; data SHAPES and perceptual CHANNELS are small finite sets. So THALAMUS
 // designs no per-domain view — it compiles over two type systems. Given a dataset and a
 // finding, it profiles each variable's type (SIG), then solves a deterministic constraint
 // problem (L1–L8) assigning variables to perceptual channels, and emits a MapSpec: a
@@ -29,7 +30,7 @@ export {
 export { profile, profileColumn }                       from './profile.js';
 export { VISUAL_CHANNELS, AUDITORY_CHANNELS, channelsFor, VALENCE_QUARANTINE } from './channels.js';
 export { normalizer, applyTransfer, describeTransfer }  from './transfer.js';
-export { compile, KOINE_VERSION }                       from './compile.js';
+export { compile, THALAMUS_VERSION }                       from './compile.js';
 export { critique, critiqueBySeverity }                 from './critique.js';
 // CANTOR — the auditory render backend (the ear). MapSpec → ScoreSpec → Web Audio.
 export { toScoreSpec, makeScoreSpec, playScore, freqOf, gainOf } from './cantor/index.js';

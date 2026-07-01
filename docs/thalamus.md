@@ -1,21 +1,23 @@
-# KOINÉ — the parameter-mapping compiler
+# THALAMUS — the parameter-mapping compiler
 
-> **Status — first slice landed** (`src/koine/`, `tests/koine.test.js`). The
+> **Status — first slice landed** (`src/thalamus/`, `tests/thalamus.test.js`). The
 > modality-independent core — profile → compile → critique — plus **CANTOR, the
 > auditory backend** (`toScoreSpec` → Web Audio), proven by the §7 worked example
 > compiled to eye *and* ear from one profile and sounded through an injected
 > AudioContext. The visual backend (`toViewSpec`) and the patch-bay UI are the
 > remaining seam, deferred; see [§ Status](#status--what-landed).
 >
-> **Name** is a placeholder — *koinē aísthēsis*, the common sense that unifies the
-> special senses. Rename freely.
+> **Name** — the *thalamus* is the brain's sensory relay (Greek *thálamos*, the inner
+> chamber): every sense passes through it and is routed onward. That is this organ's
+> job — route each data variable to the right perceptual channel. The auditory backend
+> is **CANTOR** (one who sings a score), the agent-name parallel to LIMNER.
 
 ## 1. The question
 
 The moment anyone points the system at *their own* data, one question arrives:
 given some data and a thing you're trying to see, **which perceptual channels
 should carry which variables, and how?** Domains are infinite; data *shapes* and
-human perceptual *channels* are small finite sets. So KOINÉ designs no per-domain
+human perceptual *channels* are small finite sets. So THALAMUS designs no per-domain
 view. It compiles over two type systems — the shape of the data, and the channels
 of perception — and the compiler is the intelligence.
 
@@ -34,7 +36,7 @@ plus two additions the visualization lineage never needed:
 
 ## 2. Architecture — a compiler above the render organs
 
-KOINÉ sits on a modality-independent layer. The MapSpec is the pivot: everything
+THALAMUS sits on a modality-independent layer. The MapSpec is the pivot: everything
 above it reasons about types; everything below it is a render backend.
 
 ```
@@ -70,7 +72,7 @@ Three properties, mirroring LIMNER's:
 
 The MapSpec is render-backend-agnostic on purpose. LIMNER is *a* visual backend that
 can drive position/size/lightness; a canvas/WebGL/DOM renderer would advertise the
-same visual catalog. KOINÉ does not import or depend on LIMNER.
+same visual catalog. THALAMUS does not import or depend on LIMNER.
 
 ## 3. The two type systems
 
@@ -109,7 +111,7 @@ effectiveness.
 - **L8 Valence.** The full MapSpec is inspectable data; high-valence channels are
   quarantined (not used for magnitude unless declared with a justification).
 
-## 5. API (`src/koine/`)
+## 5. API (`src/thalamus/`)
 
 ```js
 profile(dataset, hints)              // Variable[]  — SIG: type inference (hints override)
@@ -153,23 +155,23 @@ a skewed measure hides in ~5 loudness levels (L5) and loudness carries urgency (
 The auditory compile of the *same* profile makes each donation a click on the time
 axis (`date → onset`) with the finding variable on pitch — a burst of tight clicks
 after a governance event is *audible* where a static plot flattens it.
-(`tests/koine.test.js` compiles this to eye and ear and asserts both are law-clean.)
+(`tests/thalamus.test.js` compiles this to eye and ear and asserts both are law-clean.)
 
 ## Status — what landed
 
-- **`src/koine/schema.js`** — the two type systems, the MapSpec/Binding, validation,
+- **`src/thalamus/schema.js`** — the two type systems, the MapSpec/Binding, validation,
   and the content hash (the FNV-over-canonical idiom, kept local — no cross-faculty dep).
-- **`src/koine/profile.js`** — `profile` types columns (role/measurement/temporal/
+- **`src/thalamus/profile.js`** — `profile` types columns (role/measurement/temporal/
   cardinality/distribution) with deterministic heuristics; `hints` override any field
   (where a finding supplies `importance`).
-- **`src/koine/transfer.js`** — L3: `normalizer` inverts the data distribution,
+- **`src/thalamus/transfer.js`** — L3: `normalizer` inverts the data distribution,
   `applyTransfer` the channel's perceptual correction.
-- **`src/koine/channels.js`** — the visual catalog (Bertin variables, typed) and
+- **`src/thalamus/channels.js`** — the visual catalog (Bertin variables, typed) and
   CANTOR's declared auditory catalog; the valence quarantine threshold.
-- **`src/koine/compile.js`** — the deterministic CSP; **`critique.js`** — the L1–L8
+- **`src/thalamus/compile.js`** — the deterministic CSP; **`critique.js`** — the L1–L8
   linter with severities; **`index.js`** — the one entrance.
 
-**CANTOR — the ear (landed).** `src/koine/cantor/` lowers a MapSpec to sound, the
+**CANTOR — the ear (landed).** `src/thalamus/cantor/` lowers a MapSpec to sound, the
 auditory mirror of LIMNER. `toScoreSpec(mapSpec, data)` is pure and deterministic: it
 turns each data row into a sounding event with a physical time / frequency / gain / pan
 and a `ref` back to the row (grounding). It owns the physics L3 deferred — `freqOf`
@@ -200,8 +202,8 @@ Deferred (named so the boundary is honest):
 ## Relationship to the plexus
 
 `src/plexus/` (docs/parameter-mapping.md) wires a persistent holon from one organ into
-another with EOT as the carrier. KOINÉ maps a data variable onto a perceptual channel
+another with EOT as the carrier. THALAMUS maps a data variable onto a perceptual channel
 with a MapSpec as the claim. Both are the same spine — a **typed assignment emitted as
 an inspectable claim, re-patchable as an `EVA` on the log** — over two different type
-pairs. The plexus is organ↔organ; KOINÉ is variable↔channel. They are siblings under
+pairs. The plexus is organ↔organ; THALAMUS is variable↔channel. They are siblings under
 "parameter mapping," not the same wire.

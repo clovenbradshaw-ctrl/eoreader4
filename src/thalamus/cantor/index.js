@@ -1,8 +1,8 @@
-// cantor — the ear. KOINÉ's auditory render backend: a MapSpec lowers to a ScoreSpec (pure,
+// cantor — the ear. THALAMUS's auditory render backend: a MapSpec lowers to a ScoreSpec (pure,
 // deterministic, owns the mel/sone physics), which the Web Audio scheduler sounds. The mirror
 // of LIMNER: the hard part (turning a modality-independent claim into physical events) is code,
-// deterministic and content-addressable; the renderer is a thin, injected shim. Placeholder
-// name (a cantor sings a score); rename with KOINÉ.
+// deterministic and content-addressable; the renderer is a thin, injected shim. A cantor sings
+// a score — the agent-name parallel to LIMNER (one who limns/draws).
 //
 //   toScoreSpec(mapSpec, data, opts)  MapSpec → ScoreSpec (physical events, each with a data ref)
 //   playScore(score, ctx, opts)       schedule a ScoreSpec on an injected AudioContext
