@@ -1532,13 +1532,18 @@ class Component extends DCLogic {
     // routing strips it to its subject and researches it — which is exactly why "write an emily
     // dickinson poem" came back as a memory of Dickinson instead of a poem. composeArtifact does
     // the three steps the request asks for: read examples of the form, then WRITE an original one.
-    if(this._composeIntent(q))return this.composeArtifact(q);
     const cur=this.activeChatObj();const sources=this.chatSourcesOf(cur);
+    // ROUTE the turn — compose / research / answer. The judgment is the MODEL's when the turn is
+    // ambiguous and a model is warm; regex is kept only as the instant fast-path and the offline
+    // fallback (see _routeTurn). This is the fix for the whole class the whitelist kept missing —
+    // "write me one", "sample html", "a mermaid diagram" — without enumerating every artifact kind.
+    const mode=await this._routeTurn(q,cur,sources);
+    if(mode==='compose')return this.composeArtifact(q);
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
     // a question it can't ground in what's been read+folded sends the engine to the web first — it
     // fetches, FOLDS every page into memory (chatResearch → the curiosity walk → readURL→ingest),
     // then answers grounded in the new reading. Raw text only counts once it's parsed and folded.
-    if(this._shouldWeb(q,sources))return this.chatResearch(q);
+    if(mode==='research')return this.chatResearch(q);
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // append the user turn + a pending assistant bubble
     let id=this.state.activeChat;
@@ -1725,11 +1730,101 @@ class Component extends DCLogic {
   // frame, and it composes. No web hop, no example scaffolding, no "cite your sources / output only"
   // constraints — the prompting was the thing flattening the poem. Essays/reports stay the grounded
   // arc (_longformArc). The gate is a compose VERB plus a creative KIND, so a question never trips it.
-  _CK(){return 'poems?|poetry|sonnets?|haikus?|limericks?|ballads?|odes?|verses?|villanelles?|couplets?|elegy|elegies|epigrams?|hymns?|psalms?|songs?|lyrics?|jingles?|raps?|stories|story|tales?|fables?|fairy[\\s-]?tales?|myths?|legends?|anecdotes?|jokes?|riddles?|dialogues?|monologues?|screenplays?|scripts?|plays?|skits?|rhymes?';}
+  // Creative KINDS — literary forms the model composes from its own craft.
+  _CKlit(){return 'poems?|poetry|sonnets?|haikus?|limericks?|ballads?|odes?|verses?|villanelles?|couplets?|elegy|elegies|epigrams?|hymns?|psalms?|songs?|lyrics?|jingles?|raps?|stories|story|tales?|fables?|fairy[\\s-]?tales?|myths?|legends?|anecdotes?|jokes?|riddles?|dialogues?|monologues?|screenplays?|scripts?|plays?|skits?|rhymes?';}
+  // MADE KINDS — code, markup, and everyday text artifacts the model produces from knowledge, not
+  // from the reading. "write me some sample html" is a make-this exactly like "write me a poem", but
+  // "html"/"code"/"a function" weren't creative KINDS, so it fell into retrieval and answered ABOUT
+  // sample HTML ("the reading doesn't provide any actual code…") over Wikipedia. Grounded prose forms
+  // (essay, report, article, overview, guide, summary) are deliberately NOT here — those stay the
+  // grounded longform arc. These are unambiguously generated, so a compose VERB + one is a write.
+  _CKmade(){return 'html|xhtml|css|scss|sass|svg|json|ya?ml|xml|markdown|code|snippets?|functions?|methods?|programs?|algorithms?|components?|queries|query|sql|regexe?s?|regular\\s+expressions?|apis?|emails?|letters?|cover\\s+letters?|tweets?|captions?|headlines?|slogans?|taglines?|resumes?|recipes?';}
+  _CK(){return this._CKlit()+'|'+this._CKmade();}
   _CV(){return 'write|compose|draft|create|pen|author|generate|make(?:\\s+me|\\s+up)?|come\\s+up\\s+with|give\\s+me|tell\\s+me';}
   _composeIntent(q){
     const s=String(q||'');
     return new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s)&&new RegExp('\\b(?:'+this._CK()+')\\b','i').test(s);
+  }
+  // Is THIS chat already composing? True when the last settled assistant turn was itself a composed
+  // piece, or a recent user turn was an outright compose ask — so a request that fell short and is
+  // being re-asked ("i said write me one") still counts. Scans only the last few settled turns, so
+  // an old poem far up the thread doesn't hijack a later, unrelated question.
+  _composeMode(cur){
+    const msgs=((cur&&cur.messages)||[]).filter(m=>!m.pending);
+    for(let i=msgs.length-1;i>=0&&i>=msgs.length-4;i--){
+      const m=msgs[i];
+      if(m.role==='asst'&&m.compose)return true;
+      if(m.role==='user'&&this._composeIntent(m.text))return true;
+    }
+    return false;
+  }
+  // A COMPOSE FOLLOW-UP rides the thread instead of standing on its own words. In an already-
+  // composing thread, a bare re-request / revision / affirmation — "write me one", "just write it",
+  // "do it", "make it shorter", "now one about the sea" — is more composing, even with no KIND word.
+  // Conservative: a question about the piece ("what does line 3 mean?") or a plain thank-you is NOT
+  // a re-write, so those fall through to the ordinary answer path. History carries the real subject
+  // (the original "…poem about Drag Brunch") into composeArtifact, so the elided ask still lands.
+  _composeFollowup(q,cur){
+    const s=String(q||'').trim();
+    if(!s||/\?\s*$/.test(s))return false;                          // a question isn't a re-write
+    if(/^(?:thanks?|thank you|thx|ty|cool|nice|great|awesome|perfect|love it|lol|haha|ok(?:ay)?|k)\b[\s.!]*$/i.test(s))return false;
+    if(!this._composeMode(cur))return false;
+    if(new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s))return true;          // "write/make/give me…"
+    return /^(?:yes|yep|yeah|sure|please|go(?:\s+ahead|\s+on)?|do\s+it|again|another(?:\s+one)?|one\s+more|now\b|make\s+it\b|shorter|longer|more\b)/i.test(s);
+  }
+  // ── ROUTING: the model owns the judgment; regex is the fast-path and the fallback ─────────────
+  // "Why regex at all?" — because the reader is local-first: a turn must route instantly, and even
+  // with no model loaded. So the cheap, unambiguous calls stay regex (a clock question, an explicit
+  // "write me a poem"), and normal questions never pay for a model round-trip. But the compose-vs-not
+  // judgment on an AMBIGUOUS turn — an elided follow-up ("write me one"), a novel artifact kind ("a
+  // mermaid diagram", "boilerplate for a React hook") no whitelist enumerates — is semantic, so a
+  // warm model decides it. Everything degrades to the old regex behavior when the model is cold or
+  // the call fails, so the worst case is exactly today's routing, never worse.
+  async _routeTurn(q,cur,sources){
+    if(this._composeIntent(q))return 'compose';                    // explicit make-this — no model
+    const s=String(q||'').trim();
+    // Consult the model when the turn is compose-SHAPED but not explicit. The GATE decides only
+    // WHETHER to ask the model, never the verdict — so it's a GENEROUS net of creation verbs (a
+    // miss just falls to the deterministic router, i.e. today's behavior), kept off plain questions
+    // so those never pay for a round-trip. A re-request inside an already-composing thread qualifies
+    // too, even with no verb ("do it", "another"). "draw/build/code/sketch/design a…" all reach the
+    // model here, which is the point: the whitelist no longer has to enumerate every artifact verb.
+    const GATE=/\b(?:write|compose|draft|create|make|made|generate|produce|craft|build|code|draw|sketch|design|render|paint|implement|author|pen|invent|dream\s+up|give\s+me|show\s+me|come\s+up\s+with|put\s+together|whip\s+up|knock\s+up|spin\s+up|cook\s+up)\b/i;
+    const composeShaped=!/\?\s*$/.test(s)&&(GATE.test(s)||this._composeMode(cur));
+    if(composeShaped){
+      const m=await this._modelWantsCompose(q,cur);                // true / false / null(=no verdict)
+      if(m===true)return 'compose';
+      if(m===null&&this._composeFollowup(q,cur))return 'compose';  // no warm model → regex fallback
+    }
+    // Not a compose. Research-vs-answer stays the tuned deterministic split (respects the web toggle).
+    if(this._shouldWeb(q,sources))return 'research';
+    return 'answer';
+  }
+  // Ask a WARM model the one semantic question a keyword whitelist can't answer: is this a make-this?
+  // Only fires with an already-loaded model (never cold-loads just to route — that would stall the
+  // first turn), constrained to a single word, zero temperature. Returns true=compose, false=not, or
+  // null when there's no verdict (no model, a stall, an unparseable reply) so the caller falls back
+  // to regex. Grounded prose — summaries and essays/reports ABOUT the sources — is explicitly OTHER,
+  // so it stays the grounded answer / longform arc rather than being flattened into a bare compose.
+  async _modelWantsCompose(q,cur){
+    const model=this._chatModel;
+    if(!model||!this._ME||typeof this._ME.streamPhrase!=='function')return null;
+    try{
+      const recent=((cur&&cur.messages)||[]).filter(m=>m.text&&!m.pending).slice(-4)
+        .map(m=>(m.role==='user'?'User: ':'Assistant: ')+this.norm(m.text).slice(0,200)).join('\n');
+      const sys='You are a router for a document-reading assistant. Decide what the user wants for their LATEST message.\n'
+        +'Answer COMPOSE if they are asking the assistant to CREATE an original artifact from its own ability — a poem, story, joke, song, script, email, letter, or code/markup (HTML, CSS, SQL, a function, a regex, a diagram). This includes short follow-ups that continue such a request ("write me one", "do it", "now one about the sea").\n'
+        +'Answer OTHER for anything else: a question about the user\'s documents, a request to summarize or analyze them, a request for an essay or report ABOUT the sources, or a request to look something up.\n'
+        +'Reply with exactly one word: COMPOSE or OTHER.';
+      const user=(recent?('Conversation so far:\n'+recent+'\n\n'):'')+'Latest message: '+this.norm(q)+'\n\nOne word (COMPOSE or OTHER):';
+      const g=this._stallGuard();
+      const raw=await Promise.race([this._ME.streamPhrase(model,[{role:'system',content:sys},{role:'user',content:user}],{maxTokens:4,temperature:0,onToken:()=>g.feed(),signal:g.signal}),g.race]);
+      g.clear();
+      const w=String(raw||'').trim().toLowerCase();
+      if(/^(?:compose|compos|make|write|creat|yes)/.test(w))return true;
+      if(/^(?:other|answer|no\b|question|ask|research|look|summ)/.test(w))return false;
+      return null;                                                 // unparseable → let regex decide
+    }catch(e){return null;}                                        // stall / error → regex fallback
   }
   // The KIND phrase, kept whole ("emily dickinson poem", "haiku"), length/style words peeled. Used
   // only to label the work ("Writing a haiku…"); the model gets the request itself, not this.
@@ -1752,7 +1847,7 @@ class Component extends DCLogic {
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
       if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,draft:true,think:'Writing '+a+' '+kind+'…'}]};
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,draft:true,compose:true,think:'Writing '+a+' '+kind+'…'}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();this._thinkClock();
     // finish firms the draft to the final piece (draft:false) unless a patch says otherwise.
@@ -1764,8 +1859,12 @@ class Component extends DCLogic {
     if(!model){guard.clear();finish({text:'I couldn’t load a model to write the '+kind+'.'});return;}
     // The request itself is the prompt, in the plain assistant frame (no doc, no grounding) — the
     // same path that already writes a clean poem with the web off. Prior turns ride as history so
-    // "make it shorter" / "now one about the sea" continue the thread.
-    const history=prev.slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
+    // "make it shorter" / "now one about the sea" continue the thread. But DROP the reader's own
+    // grounding refusals ("I haven't read anything about Drag Brunch") — if a follow-up finally
+    // reaches this path after the pipeline bounced the earlier tries, those apologies would prime
+    // the writer to open with the same "I didn't find it in the text I read, but I can try…"
+    // preamble instead of just writing. Keep the user turns and any real composed drafts.
+    const history=prev.filter(m=>m.role==='user'||m.compose).slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
     const messages=this._ME.buildChatMessages({question:q,history,now:new Date()});
     let acc='',raf=0;
     const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
