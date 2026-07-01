@@ -87,6 +87,23 @@ export const diagnose = (audit = {}) => {
   const NODE = new Set(['DEF', 'INS', 'CON', 'SIG']);
   const EDGE = new Set(['EVA', 'REC', 'SYN', 'NUL']);
 
+  // HONEST TERMINALS — a NUL (held uncohered ground) or a refusal (unanswerable type) is a
+  // correct outcome, not a broken walk: the walk checks (opens/develops/lands) do not apply.
+  // The right thing to verify is that it did NOT confabulate — it cited nothing it could not
+  // ground and produced the honest hold/refusal. Report WORKING with the terminal named.
+  if (s.stop === 'nul-uncohered' || s.stop === 'unanswerable') {
+    const held = s.stop === 'nul-uncohered' ? 'held the uncohered ground (NUL)' : 'refused an unanswerable type (VOID)';
+    const clean = a.every((x) => (x.sources || []).length === 0);   // an honest terminal cites nothing
+    return {
+      honest_terminal: { ok: true, why: `${held}: ${moves.join(' ') || '—'}` },
+      cited_nothing_ungrounded: { ok: clean, why: clean ? 'the hold/refusal asserts and cites nothing' : 'a terminal atom cited a source it should not have' },
+      working: clean,
+      verdict: clean
+        ? `WORKING (honest terminal) — ${held}, did not confabulate a shape the ground cannot earn`
+        : `NOT WORKING — an honest terminal that still cited ungrounded material`,
+    };
+  }
+
   const has = (m) => moves.includes(m);
   const everyAtomGrounded = a.length > 0 && a.every((x) => (x.sources || []).length > 0 || x.band === 'void' || x.selfOp);
   const decisionTraced = a.length > 0 && a.every((x) => x.decision != null);

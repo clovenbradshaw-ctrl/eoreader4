@@ -43,6 +43,18 @@ test('the NUL gate holds uncohered ground instead of hedging', async () => {
   assert.match(res.answer, /do not cohere/);
 });
 
+test('the audit reads a NUL response as an HONEST terminal, not a broken walk', async () => {
+  const { exportAudit, diagnose } = await import('../src/longgen/index.js');
+  const model = createModel('echo');
+  await model.load();
+  const uncohered = Array.from({ length: 12 }, (_, i) => ({ idx: i, score: i === 0 ? 0.9 : 1e-190, text: 'sentence ' + i }));
+  const res = await runContinuation({ ground: uncohered, model, confine: true });
+  const d = diagnose(exportAudit(res, { config: { nul: true }, label: 'nul' }));
+  assert.equal(d.working, true, `a NUL hold is a correct outcome: ${d.verdict}`);
+  assert.match(d.verdict, /honest terminal/i);
+  assert.equal(d.honest_terminal.ok, true);
+});
+
 test('the NUL gate leaves a cohered walk and a small ground untouched', async () => {
   const model = createModel('echo');
   await model.load();
