@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Transcribe · nested referents, two witnesses on the hard parts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fbfbf9;--card:#fff;--ink:#1a1c1a;--ink-2:#3d4140;--ink-3:#6b716e;--faint:#9aa09c;
+    --line:#e7e6e0;--line-2:#d8d7cf;--accent:#3a7d6e;--accent-soft:#e8f2ef;
+    --commit:#2f7d5b;--commit-soft:#e6f1ec;--ask:#9a7a1e;--ask-soft:#f6efdc;--reject:#a85c52;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;--serif:'Newsreader',Georgia,serif;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{background:var(--bg);color:var(--ink);font-family:var(--serif);line-height:1.6;-webkit-font-smoothing:antialiased;padding:34px 20px 90px}
+  .wrap{max-width:760px;margin:0 auto}
+  .head{text-align:center;margin-bottom:22px}
+  .head h1{font-size:30px;font-weight:600;letter-spacing:-.01em;margin:0}
+  .head p{font-family:var(--mono);font-size:12px;color:var(--ink-3);margin:8px 0 0}
+  .head .priv{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:6px}
+  .drop{border:1.5px dashed var(--line-2);border-radius:12px;padding:46px 24px;text-align:center;cursor:pointer;background:var(--card);transition:.15s}
+  .drop:hover{border-color:var(--accent);background:var(--accent-soft)} .drop.over{border-color:var(--accent);background:var(--accent-soft)}
+  .drop .g{font-family:var(--mono);font-size:20px;color:var(--accent);letter-spacing:.2em}
+  .drop .b{font-size:19px;font-weight:600;margin:12px 0 4px} .drop .s{font-family:var(--mono);font-size:12px;color:var(--faint)}
+  .drop input{display:none}
+
+  .work{display:none;margin-top:18px} .work.show{display:block}
+  .steps{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .step{font-family:var(--mono);font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:99px;padding:5px 12px;display:flex;align-items:center;gap:7px}
+  .step .d{width:6px;height:6px;border-radius:50%;background:var(--line-2)}
+  .step.on{color:var(--accent);border-color:var(--accent)} .step.on .d{background:var(--accent);animation:pulse 1s infinite}
+  .step.done{color:var(--ink-2)} .step.done .d{background:var(--commit)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .phase{font-family:var(--mono);font-size:13px;color:var(--ink-2);margin-bottom:3px}
+  .phase-sub{font-family:var(--mono);font-size:11.5px;color:var(--faint);min-height:15px}
+  .bar{height:3px;background:var(--line);border-radius:2px;margin:12px 0;overflow:hidden}
+  .bar .f{height:100%;width:0;background:var(--accent);transition:width .2s}
+
+  .con{margin-top:8px}
+  .crow{margin-top:14px}
+  .ch{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-weight:600;display:flex;gap:8px;align-items:center}
+  .ch .meta{margin-left:auto;color:var(--faint);font-weight:400;font-variant-numeric:tabular-nums}
+  .stream{margin-top:7px;font-family:var(--mono);font-size:12px;line-height:1.65;color:var(--ink-2);background:#f4f4f0;border:1px solid var(--line);border-radius:8px;padding:11px 13px;max-height:130px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+  .stream.live::after{content:'▋';color:var(--accent)}
+  .feed{margin-top:8px;max-height:170px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#f4f4f0}
+  .fi{font-family:var(--mono);font-size:11.5px;display:flex;gap:9px;align-items:baseline;padding:6px 12px;border-bottom:1px solid #e9e8e2}
+  .fi:last-child{border-bottom:none}
+  .tag{font-size:9.5px;font-weight:600;border-radius:3px;padding:1px 6px;flex:none}
+  .tag.commit{background:var(--commit-soft);color:var(--commit)} .tag.ask{background:var(--ask-soft);color:var(--ask)} .tag.reject{background:#f3e3e0;color:var(--reject)} .tag.fix{background:var(--accent-soft);color:var(--accent)}
+  .fi .x{color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1} .fi .p{color:var(--faint);flex:none}
+
+  .result{display:none;margin-top:8px} .result.show{display:block}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:18px}
+  .rmeta{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-right:auto}
+  .rmeta b{color:var(--commit)} .rmeta i{color:var(--ask);font-style:normal}
+  .btn{font-family:var(--mono);font-size:12px;background:var(--card);border:1px solid var(--line-2);color:var(--ink-2);border-radius:7px;padding:7px 13px;cursor:pointer}
+  .btn:hover{border-color:var(--accent);color:var(--accent)} .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  #doc{font-size:18px;line-height:1.75} #doc p{margin:0 0 15px}
+  .uni{border-bottom:1.5px solid var(--accent-soft);cursor:default} .fixed{background:var(--accent-soft);border-radius:2px;padding:0 1px}
+  .hold{background:var(--ask-soft);border-radius:2px;padding:0 2px;cursor:pointer;border-bottom:1px dotted var(--ask)}
+  .keynote{font-family:var(--mono);font-size:11px;color:var(--faint);margin-top:18px;padding-top:14px;border-top:1px solid var(--line);line-height:1.7}
+  .confirm{margin-top:14px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .confirm .h{font-family:var(--mono);font-size:11px;color:var(--ink-3);padding:9px 12px;background:#f4f4f0;border-bottom:1px solid var(--line)}
+  .cf-row{display:flex;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid #efeee8;font-family:var(--mono);font-size:12px}
+  .cf-row:last-child{border-bottom:none}
+  .pbtn{background:none;border:1px solid var(--line-2);color:var(--ink-3);font-family:var(--mono);font-size:11px;border-radius:4px;padding:3px 8px;cursor:pointer}
+  .pbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .cf-row .opt{flex:none;border:1px solid var(--line-2);background:none;border-radius:4px;padding:3px 9px;cursor:pointer;color:var(--ink-2)}
+  .cf-row .opt:hover{border-color:var(--accent);color:var(--accent)} .cf-row .opt.chosen{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+  .err{display:none;background:#f6e9e6;border:1px solid #e3c5bf;color:#a14a3c;border-radius:10px;padding:14px;font-size:14px;font-family:var(--mono);margin-top:14px} .err.show{display:block}
+  .foot{font-family:var(--mono);font-size:11px;color:var(--faint);text-align:center;margin-top:32px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>Transcribe</h1>
+    <p id="tagline">cuts the audio into nested units, hears it, and re-hears only the utterances the first pass garbled</p>
+    <p class="priv">runs entirely on your device · nothing is uploaded</p>
+  </div>
+
+  <label class="drop" id="drop">
+    <div class="g">[ ↓ ]</div><div class="b">Drop an audio file</div>
+    <div class="s">or tap to choose · mp3, m4a, wav, ogg</div>
+    <input type="file" id="file" accept="audio/*">
+  </label>
+
+  <div class="work" id="work">
+    <div class="steps">
+      <div class="step" id="s-seg"><span class="d"></span>Cut</div>
+      <div class="step" id="s-hear"><span class="d"></span>Hear</div>
+      <div class="step" id="s-gate"><span class="d"></span>Merge</div>
+      <div class="step" id="s-wit"><span class="d"></span>Relisten</div>
+      <div class="step" id="s-uni"><span class="d"></span>Unify</div>
+    </div>
+    <div class="phase" id="phase">Preparing</div>
+    <div class="phase-sub" id="psub"></div>
+    <div class="bar"><div class="f" id="fill"></div></div>
+    <div class="con">
+      <div class="crow" id="hearRow" hidden><div class="ch"><span>hearing</span><span class="meta" id="hearMeta"></span></div><div class="stream live" id="hearStream"></div></div>
+      <div class="crow" id="gateRow" hidden><div class="ch"><span>merge gate, born-scored against the file noise floor</span><span class="meta" id="gateMeta"></span></div><div class="feed" id="gateFeed"></div></div>
+      <div class="crow" id="witRow" hidden><div class="ch"><span>relistening to garbled utterances</span><span class="meta" id="witMeta"></span></div><div class="feed" id="witFeed"></div></div>
+    </div>
+  </div>
+
+  <div class="result" id="result">
+    <div class="toolbar">
+      <span class="rmeta" id="rmeta"></span>
+      <button class="btn" id="again">New file</button>
+      <button class="btn" id="copy">Copy</button>
+      <button class="btn" id="exp">Export JSON</button>
+      <button class="btn primary" id="dl">Download .txt</button>
+    </div>
+    <div id="doc"></div>
+    <div class="confirm" id="confirm" hidden><div class="h">audio and text disagreed and the second witness could not settle it — your call</div><div id="cfb"></div></div>
+    <div class="keynote" id="keynote" hidden>Underlined terms were made uniform across the file. Shaded words were corrected by the second witness where the audio contradicted the first reading.</div>
+  </div>
+
+  <div class="err" id="err"></div>
+  <div class="foot" id="foot">nested SEG · whisper hears · MFCC born gate · second witness only on discrepancies · eoreader4 unifies referents</div>
+</div>
+
+<script>/* eoreader4 loaded by the module for coref uniform terms */</script>
+<script type="module">import * as TF from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/+esm';
+const { pipeline } = TF;
+let parseText=null;
+try{ const eo=await import('https://cdn.jsdelivr.net/gh/clovenbradshaw-ctrl/eoreader4@51bb5189604fb3eb6a11599d3fd38be28baa99f8/src/perceiver/parse/index.js'); parseText=eo.parseText; }catch(e){}
+
+// ---------- DSP (validated) ----------
+const NFFT=512,HOP=256,SR=16000,NMEL=26,NCEP=13;
+function fft(re,im){ const n=re.length;
+  for(let i=1,j=0;i<n;i++){ let bit=n>>1; for(;j&bit;bit>>=1) j^=bit; j^=bit; if(i<j){ const tr=re[i];re[i]=re[j];re[j]=tr; const ti=im[i];im[i]=im[j];im[j]=ti; } }
+  for(let len=2;len<=n;len<<=1){ const ang=-2*Math.PI/len,wr=Math.cos(ang),wi=Math.sin(ang);
+    for(let i=0;i<n;i+=len){ let cr=1,ci=0; for(let k=0;k<len/2;k++){ const a=i+k,b=i+k+len/2;
+      const vr=re[b]*cr-im[b]*ci,vi=re[b]*ci+im[b]*cr; re[b]=re[a]-vr;im[b]=im[a]-vi;re[a]+=vr;im[a]+=vi;
+      const ncr=cr*wr-ci*wi; ci=cr*wi+ci*wr; cr=ncr; } } } }
+const hz2mel=h=>2595*Math.log10(1+h/700), mel2hz=m=>700*(10**(m/2595)-1);
+const FB=(()=>{ const lo=hz2mel(0),hi=hz2mel(SR/2),pts=[]; for(let i=0;i<NMEL+2;i++)pts.push(mel2hz(lo+(hi-lo)*i/(NMEL+1)));
+  const bin=pts.map(h=>Math.floor((NFFT+1)*h/SR)),fb=[]; for(let m=1;m<=NMEL;m++){ const f=new Float32Array(NFFT/2+1);
+    for(let k=bin[m-1];k<bin[m];k++) if(bin[m]>bin[m-1]) f[k]=(k-bin[m-1])/(bin[m]-bin[m-1]);
+    for(let k=bin[m];k<bin[m+1];k++) if(bin[m+1]>bin[m]) f[k]=(bin[m+1]-k)/(bin[m+1]-bin[m]); fb.push(f);} return fb; })();
+const HANN=Float32Array.from({length:NFFT},(_,i)=>0.5-0.5*Math.cos(2*Math.PI*i/(NFFT-1)));
+const DCT=(()=>{ const M=[]; for(let c=0;c<NCEP;c++){ const r=new Float32Array(NMEL); for(let m=0;m<NMEL;m++) r[m]=Math.cos(Math.PI*c*(m+0.5)/NMEL); M.push(r);} return M; })();
+function mfccAll(sig){ const out=[]; for(let s=0;s+NFFT<=sig.length;s+=HOP){ const re=new Float32Array(NFFT),im=new Float32Array(NFFT);
+    for(let i=0;i<NFFT;i++) re[i]=sig[s+i]*HANN[i]; fft(re,im);
+    const mel=new Float32Array(NMEL); for(let m=0;m<NMEL;m++){ let e=0; const f=FB[m]; for(let k=0;k<f.length;k++){ const p=re[k]*re[k]+im[k]*im[k]; e+=f[k]*p; } mel[m]=Math.log(1e-8+e); }
+    const c=new Float32Array(NCEP); for(let q=0;q<NCEP;q++){ let v=0; const d=DCT[q]; for(let m=0;m<NMEL;m++) v+=d[m]*mel[m]; c[q]=v; }
+    out.push({c,s}); } return out; }
+function dtwE(A,B){ if(!A||!B||!A.length||!B.length) return 9; const n=A.length,m=B.length; let prev=new Float64Array(m+1).fill(Infinity); prev[0]=0;
+  for(let i=1;i<=n;i++){ const cur=new Float64Array(m+1).fill(Infinity);
+    for(let j=1;j<=m;j++){ let d=0; for(let q=1;q<NCEP;q++){ const x=A[i-1][q]-B[j-1][q]; d+=x*x; } d=Math.sqrt(d); cur[j]=d+Math.min(prev[j],cur[j-1],prev[j-1]); } prev=cur; }
+  return prev[m]/(n+m); }
+
+// ---------- helpers ----------
+const el=id=>document.getElementById(id);
+const tick=()=>new Promise(r=>setTimeout(r,0));
+const norm=s=>(s||'').toLowerCase().replace(/[^\p{L}\p{N}']/gu,'');
+const rnd=n=>Math.random()*n|0;
+const fmtT=s=>Math.floor(s/60)+':'+String(Math.round(s%60)).padStart(2,'0');
+const STOP=new Set(['the','a','an','and','of','to','in','is','it','i','you','he','that','this','was','for','on','as','with','his','my','me','we','are','at','but','not','so','do','if','or','be','by','our','us','have','had','has','its','am','were','they','them','then','than','too','can','will','would','could','should','i\'m','it\'s','don\'t']);
+const HALL=new Set(['you','thank you','thanks','bye','you you','thank you very much','thank you.','bye.','okay','mm','hmm']);
+function step(id,st){ const e=el(id); e.classList.remove('on','done'); if(st) e.classList.add(st); }
+function phase(t,s){ el('phase').textContent=t; if(s!=null) el('psub').textContent=s; }
+function fill(p){ el('fill').style.width=Math.max(0,Math.min(100,p))+'%'; }
+function esc(s){ const d=document.createElement('span'); d.textContent=s; return d.innerHTML; }
+function editWithin(a,b,max){ const la=a.length,lb=b.length; if(Math.abs(la-lb)>max) return max+1; let prev=[...Array(lb+1).keys()];
+  for(let i=1;i<=la;i++){ const cur=[i]; let rm=i; for(let j=1;j<=lb;j++){ const c=a[i-1]===b[j-1]?0:1; const v=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+c); cur[j]=v; if(v<rm)rm=v; } if(rm>max) return max+1; prev=cur; } return prev[lb]; }
+function feedRow(feedId,tag,text,p){ const f=el(feedId); const d=document.createElement('div'); d.className='fi';
+  const t=document.createElement('span'); t.className='tag '+tag; t.textContent=tag;
+  const x=document.createElement('span'); x.className='x'; x.textContent=text;
+  const pp=document.createElement('span'); pp.className='p'; pp.textContent=p||'';
+  d.append(t,x,pp); f.appendChild(d); f.scrollTop=1e9; while(f.children.length>120) f.removeChild(f.firstChild); }
+
+let audioMono=null, actx=null, FRAMES=null;
+async function loadAudio(file){ const buf=await file.arrayBuffer(); const C=window.AudioContext||window.webkitAudioContext; const t=new C();
+  const dec=await t.decodeAudioData(buf.slice(0)); t.close();
+  const off=new OfflineAudioContext(1,Math.max(1,Math.ceil(dec.duration*SR)),SR); const src=off.createBufferSource(); src.buffer=dec; src.connect(off.destination); src.start();
+  audioMono=(await off.startRendering()).getChannelData(0); return dec.duration; }
+function clip(a,b){ const s0=Math.floor(a*SR), s1=Math.min(audioMono.length,Math.ceil(b*SR)); return audioMono.subarray(s0,s1); }
+function playSpan(u){ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+  const n=Math.max(1,Math.floor((u.end-u.start)*SR)); const buf=actx.createBuffer(1,n,SR); const ch=buf.getChannelData(0);
+  const o=Math.floor(u.start*SR); for(let i=0;i<n;i++) ch[i]=audioMono[o+i]||0; const s=actx.createBufferSource(); s.buffer=buf; s.connect(actx.destination); s.start(); }
+
+// ---------- nested SEG ----------
+function segLevel(sig, offSec, minSilMs, maxLenS){
+  const FR=320,HP=160; const nf=Math.floor((sig.length-FR)/HP)+1; if(nf<4) return [];
+  const E=new Float64Array(nf); for(let f=0;f<nf;f++){ let s=0; const o=f*HP; for(let i=0;i<FR;i++){ const v=sig[o+i]; s+=v*v; } E[f]=Math.sqrt(s/FR); }
+  const Es=new Float64Array(nf); for(let f=0;f<nf;f++){ let s=0,c=0; for(let k=-2;k<=2;k++){ const j=f+k; if(j>=0&&j<nf){s+=E[j];c++;} } Es[f]=s/c; }
+  const sorted=[...Es].sort((a,b)=>a-b); const noise=sorted[Math.floor(0.15*nf)]||0, peak=sorted[Math.floor(0.95*nf)]||1;
+  const thr=noise+0.06*(peak-noise); const sil=f=>Es[f]<thr; const minSil=Math.max(1,Math.round(minSilMs/1000*SR/HP));
+  const segs=[]; let f=0;
+  while(f<nf){ while(f<nf&&sil(f)) f++; if(f>=nf) break; const st=f; let last=f;
+    while(f<nf){ if(sil(f)){ let g=f; while(g<nf&&sil(g)) g++; if(g-f>=minSil) break; f=g; } else { last=f; f++; } }
+    segs.push([st,last]); }
+  const out=[]; const maxLen=isFinite(maxLenS)?Math.round(maxLenS*SR/HP):Infinity;
+  for(const seg of segs){ const stack=[seg]; while(stack.length){ const [a,b]=stack.pop(); if(b-a<=maxLen){ out.push([a,b]); continue; }
+      const pad=Math.max(1,Math.round(0.06*SR/HP)); let vi=-1,vv=Infinity;
+      for(let k=a+pad;k<=b-pad;k++){ if(Es[k]<vv&&Es[k]<=Es[k-1]&&Es[k]<=Es[k+1]){ vv=Es[k]; vi=k; } }
+      if(vi<0){ out.push([a,b]); continue; } stack.push([a,vi]); stack.push([vi,b]); } }
+  out.sort((x,y)=>x[0]-y[0]);
+  return out.map(([a,b])=>[offSec+a*HP/SR, offSec+b*HP/SR]).filter(([a,b])=>b-a>=0.07);
+}
+let UID=0; const mk=lvl=>([a,b])=>({ id:lvl[0]+(UID++).toString(36), level:lvl, start:a, end:Math.min(b,a+4) });
+function nestedSeg(){
+  const L1=segLevel(audioMono,0,300,1e9).map(mk('utterance')); const L2=[],L3=[];
+  for(const u of L1){ let ph=segLevel(clip(u.start,u.end),u.start,120,1.2).map(mk('phrase')); if(!ph.length) ph=[{...u,level:'phrase'}]; u.kids=ph; L2.push(...ph);
+    for(const p of ph){ let wd=segLevel(clip(p.start,p.end),p.start,90,0.42).map(mk('word')); if(!wd.length) wd=[{...p,level:'word'}]; p.kids=wd; L3.push(...wd); } }
+  return {L1,L2,L3};
+}
+function computeFrames(){ const all=mfccAll(audioMono); const D=NCEP,mean=new Float64Array(D),std=new Float64Array(D),N=all.length||1;
+  for(const f of all)for(let q=0;q<D;q++) mean[q]+=f.c[q]; for(let q=0;q<D;q++) mean[q]/=N;
+  for(const f of all)for(let q=0;q<D;q++){const x=f.c[q]-mean[q];std[q]+=x*x;} for(let q=0;q<D;q++) std[q]=Math.sqrt(std[q]/N)+1e-6;
+  FRAMES=all.map(f=>{const o=new Float32Array(D);for(let q=0;q<D;q++)o[q]=(f.c[q]-mean[q])/std[q];return {v:o,s:f.s};}); }
+function fpFor(u){ const s0=Math.floor(u.start*SR), s1=Math.ceil(u.end*SR); const fr=[]; for(const f of FRAMES){ if(f.s>=s0-HOP && f.s<=s1) fr.push(f.v); } return fr; }
+
+// drop adjacent repeated words (the whisper-on-music artifact)
+function dedupRun(ws){ const out=[]; for(const w of ws){ const last=out[out.length-1]; if(last && last.norm===w.norm && w.norm.length>0) continue; out.push(w); } return out; }
+// ---------- witness A: per-utterance transcription, streamed ----------
+async function witnessA(asr, L1, dur){
+  const words=[]; let acc=''; let done=0;
+  for(const u of L1){ const c=clip(u.start,u.end); done++;
+    if(c.length<480){ continue; }
+    let out=null; try{ out=await asr(c,{return_timestamps:'word'}); }catch(e){}
+    if(!out||!out.chunks||!out.chunks.length){ try{ out=await asr(c,{return_timestamps:true}); }catch(e){} }
+    const chunks=(out&&out.chunks)||[]; const off=u.start; let raw=[];
+    for(const ch of chunks){ const ts=ch.timestamp||[]; let a=ts[0],b=ts[1]; const text=(ch.text||'').trim(); if(!text||a==null) continue; if(b==null||b<=a) b=a+0.25;
+      const ws=text.split(/\s+/).filter(Boolean); const tot=ws.reduce((s,w)=>s+w.length,0)||1; let t=a;
+      for(const w of ws){ const d=(b-a)*(w.length/tot); raw.push({text:w, norm:norm(w), t:off+t+d/2, start:off+t, end:off+t+d, utt:u}); t+=d; } }
+    const uwords=dedupRun(raw);
+    const phrase=uwords.map(w=>w.norm).filter(Boolean).join(' ');
+    if(uwords.length && uwords.length<=2 && HALL.has(phrase)){ u.words=[]; if(done%3===0){ fill(100*done/L1.length); await tick(); } continue; }
+    u.repLoad = raw.length ? (raw.length-uwords.length)/raw.length : 0;
+    u.words=uwords; for(const w of uwords) words.push(w);
+    acc+=(uwords.map(w=>w.text).join(' ')+'\n'); el('hearStream').textContent=acc; el('hearStream').scrollTop=1e9;
+    el('hearMeta').textContent=fmtT(u.end)+' / '+fmtT(dur);
+    fill(100*done/L1.length); if(done%3===0) await tick();
+  }
+  return words;
+}
+
+// ---------- union-find ----------
+function UF(){ const p=new Map(); const f=x=>{ if(!p.has(x))p.set(x,x); while(p.get(x)!==x){ p.set(x,p.get(p.get(x))); x=p.get(x);} return x; };
+  return { find:f, union:(a,b)=>{ const ra=f(a),rb=f(b); if(ra!==rb) p.set(ra,rb); }, groups:()=>{ const g=new Map(); for(const k of p.keys()){ const r=f(k); if(!g.has(r))g.set(r,[]); g.get(r).push(k); } return [...g.values()]; } }; }
+
+let LAST=null;
+async function run(file){
+  el('err').classList.remove('show'); el('result').classList.remove('show'); el('drop').style.display='none'; el('work').classList.add('show');
+  ['hearRow','gateRow','witRow'].forEach(id=>el(id).hidden=true); el('hearStream').textContent=''; el('gateFeed').textContent=''; el('witFeed').textContent=''; el('cfb').textContent='';
+  ['s-seg','s-hear','s-gate','s-wit','s-uni'].forEach(s=>step(s,'')); fill(0);
+  try{
+    // CUT
+    step('s-seg','on'); phase('Cutting the audio','three nested grains, before transcription'); const dur=await loadAudio(file);
+    const {L1,L2,L3}=nestedSeg(); el('psub').textContent=L1.length+' utterances · '+L2.length+' phrases · '+L3.length+' word units';
+    if(L3.length<8) throw new Error('only '+L3.length+' acoustic units — audio may be near-silent');
+    step('s-seg','done');
+
+    // HEAR (witness A, streamed)
+    step('s-hear','on'); el('hearRow').hidden=false; phase('Hearing','first witness, one utterance at a time');
+    const asrA=await pipeline('automatic-speech-recognition','onnx-community/whisper-base',{device:DEVICE});
+    let words=await witnessA(asrA,L1,dur);
+    if(!words.length) throw new Error('no speech transcribed');
+    step('s-hear','done');
+
+    // RELISTEN — re-hear whole utterances the first pass garbled (heavy repetition or fragment), with context
+    const relisten = L1.filter(u=>u.words&&u.words.length && ((u.repLoad||0)>=0.25 || (u.words.filter(w=>w.norm.length>1).length<2 && (u.end-u.start)>=0.6)));
+    const relistenLog=[];
+    if(relisten.length){ step('s-wit','on'); el('witRow').hidden=false; phase('Relistening','re-hearing the utterances the first pass garbled');
+      const asrB=await pipeline('automatic-speech-recognition','onnx-community/whisper-small',{device:DEVICE});
+      let done=0; el('witMeta').textContent='0 / '+relisten.length;
+      for(const u of relisten){ done++;
+        let out=null; try{ out=await asrB(clip(u.start,u.end),{return_timestamps:true}); }catch(e){}
+        let bw=[]; const chunks=(out&&out.chunks)||[]; const off=u.start;
+        for(const ch of chunks){ const ts=ch.timestamp||[]; let a=ts[0],b=ts[1]; const text=(ch.text||'').trim(); if(!text||a==null) continue; if(b==null||b<=a) b=a+0.25;
+          const ws=text.split(/\s+/).filter(Boolean); const tot=ws.reduce((s,w)=>s+w.length,0)||1; let t=a;
+          for(const w of ws){ const d=(b-a)*(w.length/tot); bw.push({text:w,norm:norm(w),t:off+t+d/2,start:off+t,end:off+t+d,utt:u}); t+=d; } }
+        if(!bw.length){ try{ const o2=await asrB(clip(u.start,u.end),{}); const tx=(o2&&o2.text||'').trim(); if(tx){ const ws=tx.split(/\s+/).filter(Boolean); const dd=(u.end-u.start)/Math.max(1,ws.length); ws.forEach((w,k)=>bw.push({text:w,norm:norm(w),t:u.start+k*dd+dd/2,start:u.start+k*dd,end:u.start+(k+1)*dd,utt:u})); } }catch(e){} }
+        const bd=dedupRun(bw); const before=u.words.map(w=>w.text).join(' '); const after=bd.map(w=>w.text).join(' ');
+        const bRep = bw.length? (bw.length-bd.length)/bw.length : 1;
+        if(bd.length && after!==before && bRep <= (u.repLoad||0)+0.05){ u.words=bd.map(w=>({...w,relisten:true})); relistenLog.push({at:fmtT(u.start),before,after}); feedRow('witFeed','fix',before+' → '+after,''); }
+        else { feedRow('witFeed','reject',(before||'(silence)')+' · kept',''); }
+        el('witMeta').textContent=done+' / '+relisten.length; if(done%2===0) await tick();
+      }
+      step('s-wit','done');
+    }
+    words=[]; for(const u of L1) if(u.words) for(const w of u.words) words.push(w);
+
+    // fingerprint word units, map words -> unit
+    phase('Fingerprinting','MFCC, normalized against the whole file'); computeFrames();
+    for(const u of L3) u.fp=fpFor(u);
+    const wunits=L3.filter(u=>u.fp.length>=3);
+    for(const w of words){ let best=null; for(const u of wunits){ if(w.t>=u.start-0.05 && w.t<=u.end+0.05){ best=u; break; } } w.unit=best; w.fp=best?best.fp:null; }
+    const cont=words.filter(w=>w.fp && w.norm.length>2 && !STOP.has(w.norm));
+
+    // noise floor at word grain
+    const floor=[]; const tgt=Math.min(700,cont.length*5);
+    for(let k=0;k<tgt && cont.length>3;k++){ const i=rnd(cont.length),j=rnd(cont.length); if(i===j||cont[i].norm===cont[j].norm) continue; floor.push(dtwE(cont[i].fp,cont[j].fp)); }
+    floor.sort((a,b)=>a-b); const p05= floor.length? floor[Math.floor(0.05*floor.length)] : 2;
+    const Psame=d=>{ if(!floor.length) return 0; let c=0; for(const x of floor) if(x>d) c++; return c/floor.length; };
+
+    // coref proposals (different spellings, same referent) from eoreader4
+    const corefLink=new Map(); // norm -> canonical norm
+    let corefCanon=new Map();  // norm -> canonical surface
+    if(parseText){ try{ const doc=parseText(words.map(w=>w.text).join(' '),{docId:file.name});
+        const ev=doc.log.events, ret=new Set(); for(const e of ev) if(e.op==='SEG'&&e.kind==='retract'&&e.refSeq!=null) ret.add(e.refSeq);
+        const lab=new Map(); for(const e of ev) if(e.op==='INS'&&e.label) lab.set(e.id,e.label);
+        const uf=UF(); for(const e of ev) if(e.op==='SYN'&&e.kind==='merge'&&!ret.has(e.seq)){ if(lab.has(e.from)&&lab.has(e.to)) uf.union(e.from,e.to); }
+        for(const grp of uf.groups()){ if(grp.length<2) continue; let canon=grp[0]; for(const id of grp) if((lab.get(id)||'').length>(lab.get(canon)||'').length) canon=id;
+          const cn=norm((lab.get(canon)||'').split(' ').pop()); const cs=lab.get(canon);
+          for(const id of grp){ const ln=norm((lab.get(id)||'').split(' ').pop()); if(ln){ corefLink.set(ln,cn); corefCanon.set(cn,cs);} } }
+      }catch(e){} }
+
+    // MERGE GATE — propose SYN, born-score, union the commits
+    step('s-gate','on'); el('gateRow').hidden=false; phase('Merging','same word, near spellings, and coref links, scored against the floor');
+    const uf=UF(); const merges=[]; let nC=0,nA=0,nR=0; const seen=new Set();
+    const byNorm=new Map(); for(const w of cont){ if(!byNorm.has(w.norm))byNorm.set(w.norm,[]); byNorm.get(w.norm).push(w); }
+    const consider=async(a,b,via)=>{ const key=[a.unit.id,b.unit.id].sort().join(); if(seen.has(key))return; seen.add(key);
+      const d=dtwE(a.fp,b.fp), P=Psame(d); const band=P>=0.9?'commit':P>=0.6?'ask':'reject';
+      const m={a,b,via,d,P,band}; merges.push(m);
+      if(band==='commit'){ uf.union(a.unit.id,b.unit.id); nC++; } else if(band==='ask'){ nA++; } else { nR++; }
+      feedRow('gateFeed',band, a.text+' ⋈ '+b.text+'  ·  '+via, 'P '+P.toFixed(2));
+      el('gateMeta').textContent=nC+' commit · '+nA+' ask · '+nR+' reject';
+    };
+    // same-word repeats (uniformity + discrepancy when they DON'T match)
+    for(const [nm,arr] of byNorm){ if(arr.length<2) continue; for(let i=0;i<arr.length-1;i++){ await consider(arr[i],arr[i+1],'same text'); } if(merges.length%12===0) await tick(); }
+    // fuzzy-near + coref different spellings
+    const forms=[...byNorm.keys()];
+    for(let i=0;i<forms.length;i++)for(let j=i+1;j<forms.length;j++){ const a=forms[i],b=forms[j];
+      const near=editWithin(a,b,2)<=2; const cor=(corefLink.get(a)&&corefLink.get(a)===corefLink.get(b))||corefLink.get(a)===b||corefLink.get(b)===a;
+      if(near||cor) await consider(byNorm.get(a)[0],byNorm.get(b)[0], cor?'coref':'fuzzy'); }
+    step('s-gate','done');
+
+    // relisten already happened at utterance grain; the gate only unifies terms here
+    const corrections=new Map(); const holds=[];
+
+    // UNIFY — uniform term per merged cluster (coref canonical, else cleanest/majority)
+    step('s-uni','on'); phase('Unifying','one term per referent across the file');
+    for(const w of cont){ if(!uf.find) break; }
+    const cl=new Map(); for(const w of cont){ const r=uf.find(w.unit.id); if(!cl.has(r))cl.set(r,[]); cl.get(r).push(w); }
+    const uniform=new Map(); // unit.id -> uniform surface
+    let clusterCount=0;
+    for(const [r,ws] of cl){ if(ws.length<2) continue; clusterCount++;
+      // candidate forms with clarity weight (longer fp = more mass), born-ish: amp = sqrt(sum mass)
+      const tally=new Map(); for(const w of ws){ const key=corrections.get(w.unit.id)||w.text; const mass=Math.sqrt(w.fp.length);
+        const e=tally.get(norm(key))||{surf:key,amp:0,n:0}; e.amp+=mass; e.n++; if(key.length>e.surf.length) e.surf=key; tally.set(norm(key),e); }
+      // coref canonical wins if present
+      let pick=null; for(const [nm,e] of tally){ if(corefCanon.has(corefLink.get(nm)||nm)){ pick={surf:corefCanon.get(corefLink.get(nm)||nm),amp:1e9}; break; } if(!pick||e.amp>pick.amp) pick=e; }
+      for(const w of ws) uniform.set(w.unit.id, pick.surf);
+    }
+    step('s-uni','done');
+
+    // ASSEMBLE — all tokens in time order; paragraphs break only on long pauses
+    const GAP=0.9; const toks=[];
+    for(const u of L1){ for(const w of (u.words||[])){ const uid=w.unit&&w.unit.id; let surf=w.text, kind=w.relisten?'fixed':'';
+      if(uid&&uniform.has(uid)){ const un=uniform.get(uid); if(norm(un)!==norm(surf)){ surf=un; kind=kind||'uni'; } }
+      toks.push({surf,kind,start:(w.start!=null?w.start:u.start),end:(w.end!=null?w.end:u.end)}); } }
+    toks.sort((a,b)=>a.start-b.start);
+    const out=[]; let para=[]; let lastEnd=null;
+    for(const tk of toks){ const last=para[para.length-1];
+      if(last && norm(last.surf)===norm(tk.surf) && norm(tk.surf).length>0) continue;
+      if(lastEnd!=null && tk.start-lastEnd>=GAP){ if(para.length) out.push(para); para=[]; }
+      para.push(tk); lastEnd=tk.end; }
+    if(para.length) out.push(para);
+
+    // render clean transcript
+    const docEl=el('doc'); docEl.innerHTML='';
+    let plain='';
+    for(const para of out){ const p=document.createElement('p'); plain+='';
+      for(let i=0;i<para.length;i++){ const tok=para[i]; const sp=document.createElement('span');
+        sp.textContent=tok.surf+(i<para.length-1?' ':''); plain+=tok.surf+' ';
+        if(tok.kind==='uni') sp.className='uni'; else if(tok.kind==='fixed') sp.className='fixed'; else if(tok.kind==='hold'){ sp.className='hold'; sp.title='audio and text disagreed'; }
+        p.appendChild(sp); }
+      plain+='\n\n'; docEl.appendChild(p); }
+    const cleanText=plain.replace(/[ \t]+/g,' ').replace(/ \n/g,'\n').trim();
+
+    // confirm panel for holds
+    if(holds.length){ el('confirm').hidden=false; const box=el('cfb');
+      holds.slice(0,40).forEach(h=>{ const row=document.createElement('div'); row.className='cf-row';
+        const lab=document.createElement('span'); lab.style.flex='1'; lab.textContent='heard "'+h.w.text+'"  vs  "'+h.other.text+'"';
+        const pa=document.createElement('button'); pa.className='pbtn'; pa.textContent='▶'; pa.onclick=()=>playSpan(h.w.unit||h.w);
+        const o1=document.createElement('button'); o1.className='opt'; o1.textContent=h.w.text;
+        const o2=document.createElement('button'); o2.className='opt'; o2.textContent=h.other.text;
+        o1.onclick=()=>{ o1.classList.add('chosen'); o2.classList.remove('chosen'); h.choice=h.w.text; };
+        o2.onclick=()=>{ o2.classList.add('chosen'); o1.classList.remove('chosen'); h.choice=h.other.text; };
+        row.append(lab,pa,o1,o2); box.appendChild(row); });
+    } else el('confirm').hidden=true;
+
+    // meta + state
+    const wc=cleanText.split(/\s+/).filter(Boolean).length;
+    el('rmeta').innerHTML=wc.toLocaleString()+' words · '+fmtT(dur)+' · <b>'+clusterCount+'</b> terms unified · <i>'+relistenLog.length+'</i> relistened';
+    el('keynote').hidden=false;
+    LAST={ file:file.name, duration:Math.round(dur), device:DEVICE,
+      pipeline:{ cut:{utterances:L1.length,phrases:L2.length,words:L3.length}, witnessA:'whisper-base · per utterance', witnessB:'whisper-small · garbled utterances only', floor_p05:+p05.toFixed(3), coref: parseText?'on':'off' },
+      summary:{ words:wc, clusters_unified:clusterCount, relistened:relistenLog.length, gate:{commit:nC,ask:nA,reject:nR} },
+      merges: merges.slice(0,400).map(m=>({a:m.a.text,b:m.b.text,via:m.via,dtw:+m.d.toFixed(3),P:+m.P.toFixed(3),band:m.band})),
+      relisten: relistenLog,
+      output: cleanText };
+    window.__clean=cleanText;
+    el('work').classList.remove('show'); el('result').classList.add('show');
+  }catch(err){ el('work').classList.remove('show'); el('err').textContent='Could not transcribe: '+(err&&err.message?err.message:String(err)); el('err').classList.add('show'); el('drop').style.display='block'; }
+}
+
+let DEVICE='wasm';
+if(navigator.gpu){ try{ if(await navigator.gpu.requestAdapter()) DEVICE='webgpu'; }catch{} }
+el('foot').textContent='nested SEG · whisper-base hears · MFCC born gate · whisper-small only on discrepancies · '+(parseText?'eoreader4 unifies':'coref offline')+' · '+(DEVICE==='webgpu'?'WebGPU':'WASM');
+
+const drop=el('drop');
+el('file').addEventListener('change',e=>{ if(e.target.files[0]) run(e.target.files[0]); });
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) run(f); });
+el('again').addEventListener('click',()=>{ el('result').classList.remove('show'); el('drop').style.display='block'; el('file').value=''; audioMono=null; });
+el('copy').addEventListener('click',async()=>{ try{ await navigator.clipboard.writeText(window.__clean||''); const b=el('copy'); b.textContent='Copied'; setTimeout(()=>b.textContent='Copy',1200);}catch{} });
+el('dl').addEventListener('click',()=>{ const b=new Blob([window.__clean||''],{type:'text/plain'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=(LAST.file||'transcript').replace(/\.[^.]+$/,'')+'.txt'; document.body.appendChild(a); a.click(); a.remove(); });
+el('exp').addEventListener('click',()=>{ if(!LAST)return; const b=new Blob([JSON.stringify(LAST,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=(LAST.file||'transcript').replace(/\.[^.]+$/,'')+'.work.json'; document.body.appendChild(a); a.click(); a.remove(); });
+</script>
+</body>
+</html>

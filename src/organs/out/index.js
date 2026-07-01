@@ -56,3 +56,8 @@ export const createOutputRegistry = (generators = {}) => {
 
 export { textOrgan, renderText } from './text.js';
 export { musicOrgan, renderMusic } from './music.js';
+
+// The archival publish family — doc/claim → a self-verifying artifact. Not task-leaf
+// renderers (they carry no descriptor/ceiling), so they stay off OUTPUT_ORGANS and are
+// re-exported as their own namespace. Each is pure; the renderer is injected.
+export * as publish from './publish/index.js';
