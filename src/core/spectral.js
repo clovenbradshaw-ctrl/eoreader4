@@ -219,6 +219,33 @@ export const bornAssign = (dir, lenses, { signed = false } = {}) => {
   return idx;
 };
 
+// ── coupling ─────────────────────────────────────────────────────────────────
+//
+// The two-way holon coupling, as one atom. Given a `part` signal and the `whole` it
+// belongs to (a reference signal — a shared mode, a parent trajectory), decompose the
+// part into the component the whole accounts for and the residual it does not:
+//
+//   part = k·whole + residual,   k = ⟨part|whole⟩ / ⟨whole|whole⟩   (the LS fit)
+//
+// `pull` = ⟨part|whole⟩² / (⟨part|part⟩⟨whole|whole⟩) is cos² = R², the fraction of the
+// part's energy the whole sets — the regulative coupling, "the high sets the probability
+// of the low." `residual` is the part's OWN motion, its autonomy — and the input to the
+// next holon level down (read the residual and its shared mode is the sub-whole). The
+// SAME coefficient read the other way is how well the part reveals the whole — "the low
+// sets the possibility of the high" — so one number carries both principles for a shared
+// mode; only a separate STRUCTURAL reading (a rigid bond) tells constitution from pull.
+//
+//   part, whole   equal-length signal vectors.
+// Returns { pull ∈ [0,1], k, residual }. Pure. pull=0 and residual=part when whole is null.
+export const coupling = (part, whole) => {
+  let pw = 0, ww = 0, pp = 0;
+  for (let i = 0; i < part.length; i++) { pw += part[i] * whole[i]; ww += whole[i] * whole[i]; pp += part[i] * part[i]; }
+  const k = ww > 1e-12 ? pw / ww : 0;
+  const residual = part.map((x, i) => x - k * whole[i]);
+  const pull = (pp > 1e-12 && ww > 1e-12) ? (pw * pw) / (pp * ww) : 0;
+  return { pull, k, residual };
+};
+
 // ── vonNeumann ───────────────────────────────────────────────────────────────
 //
 // S = −Σ λ ln λ over the eigenvalue spectrum — the concentration of readings (the

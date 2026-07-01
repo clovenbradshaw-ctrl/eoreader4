@@ -1,0 +1,16 @@
+{
+  "capability": "the two-way holon coupling is measurable and its two arrows are DISTINCT: dynamic pull (coupling(part, whole) — how much the whole's motion sets the part's, 'the high sets the probability of the low') and structural constitution (the rigidity of the part's bond — 'the low sets the possibility of the high'); the rigid bonds recover the skeleton, and a dynamically-autonomous but rigidly-attached part (a waving arm) dissociates the two arrows",
+  "claim": "a part of an articulated whole is coupled to it two ways. DOWNWARD (regulation): the whole's shared motion mode sets a large fraction of the part's motion — coupling(part, sharedMode).pull. UPWARD (constitution): the part is RIGIDLY attached (a constant bone length), which is what makes the whole a recognizable figure — measured as bond invariance, and the most-invariant partner recovers the skeleton. The arrows are NOT the same number: an off-gait WAVER limb has low dynamic pull (moves on its own) yet full structural constitution (still a rigid arm), and a floating GHOST has structural constitution below every real limb (not a part of the figure at all).",
+  "predictions": {
+    "whole_dominates": "mean dynamic pull over the limbs is substantial — most of each part's motion is set by the whole it belongs to",
+    "skeleton_from_invariance": "each real node's most-invariant partner is a true bone; the rigid bonds recover the kinematic tree (undirected) without being told it",
+    "dissociation": "the waver limb is dynamically autonomous (pull well below its structural constitution) yet fully constitutive (constit > 0.8) — motion and structure are separate couplings",
+    "ghost_rejected": "the floating ghost's structural constitution is below every real limb's — the invariance test refuses it as a limb of the figure"
+  },
+  "min_mean_pull": 0.35,
+  "min_skeleton_recall": 0.75,
+  "verdict_tag": "the two coupling arrows are measurable and distinct; rigid bonds recover the skeleton; the waver dissociates motion from structure; the ghost is rejected",
+  "control": "coupling is a NEW pure export (src/core/spectral.js); every default engine path is byte-identical (node --test tests/*.test.js green). The regression lock is tests/coupling.test.js. The measure reads only nodes/pos/vel; the tree, waver, and ghost are the held key.",
+  "mechanism": "DYNAMIC: demean each node's velocity series, buildDensity over the nodes, the top eigenlens is the whole's shared motion; pull_n = coupling(vel_n, shared).pull (cos^2 = R^2). LEVEL-2: coupling residuals -> their own shared mode -> pull2 (the sub-holon regulation). STRUCTURAL: bondCV(i,j) = std/mean of the time-series distance; constit_n = 1 - min_j bondCV, skeleton_n = argmin_j (the most invariant partner).",
+  "disposition": "coupling PROMOTED as an opt-in core primitive (the two-way pull atom, also the input to the next holon level via its residual). The stick-figure measure lives in the experiment; not wired into any default reader. Parity preserved."
+}
