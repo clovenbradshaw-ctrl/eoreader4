@@ -359,6 +359,17 @@
             <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
               <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
               <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ depthBtnIcon }}</span>{{ depthBtnLabel }}</button>
+              <!-- THE ESSAY ORGAN: the type dropdown (templates that LEARN, organs/out/essay-types.js)
+                   and the ✍ Essay trigger — a ≥2500-word essay on what's in the box, thinking out loud. -->
+              <span style="position:relative;flex:0 0 auto;display:inline-flex;">
+                <button onclick="{{ onEssayMenu }}" title="{{ essayTypeTitle }}" style="{{ essayTypeStyle }}" style-hover="border-color:var(--accline)">{{ essayTypeLabel }} ▾</button>
+                <sc-if value="{{ essayMenuOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;bottom:calc(100% + 6px);left:0;z-index:80;background:var(--card);border:1px solid var(--line2);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.16);padding:5px;display:flex;flex-direction:column;gap:2px;min-width:250px;">
+                    <sc-for list="{{ essayTypeOptions }}" as="et" hint-placeholder-count="5"><div onclick="{{ et.onPick }}" title="{{ et.title }}" style="{{ et.style }}" style-hover="background:var(--accbg)">{{ et.label }}<span style="display:block;font-weight:500;font-size:10.5px;color:var(--ink3);">{{ et.desc }}</span></div></sc-for>
+                  </div>
+                </sc-if>
+              </span>
+              <button onclick="{{ onEssayGo }}" title="{{ essayGoTitle }}" style="{{ essayGoStyle }}" style-hover="border-color:var(--acc)">✍ Essay</button>
               <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
@@ -974,6 +985,17 @@
           <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:8px;">
             <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
               <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ depthBtnIcon }}</span>{{ depthBtnLabel }}</button>
+            <!-- THE ESSAY ORGAN: the type dropdown (templates that LEARN, organs/out/essay-types.js)
+                 and the ✍ Essay trigger — a ≥2500-word essay on what's in the box, thinking out loud. -->
+            <span style="position:relative;flex:0 0 auto;display:inline-flex;">
+              <button onclick="{{ onEssayMenu }}" title="{{ essayTypeTitle }}" style="{{ essayTypeStyle }}" style-hover="border-color:var(--accline)">{{ essayTypeLabel }} ▾</button>
+              <sc-if value="{{ essayMenuOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;bottom:calc(100% + 6px);left:0;z-index:80;background:var(--card);border:1px solid var(--line2);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.16);padding:5px;display:flex;flex-direction:column;gap:2px;min-width:250px;">
+                  <sc-for list="{{ essayTypeOptions }}" as="et" hint-placeholder-count="5"><div onclick="{{ et.onPick }}" title="{{ et.title }}" style="{{ et.style }}" style-hover="background:var(--accbg)">{{ et.label }}<span style="display:block;font-weight:500;font-size:10.5px;color:var(--ink3);">{{ et.desc }}</span></div></sc-for>
+                </div>
+              </sc-if>
+            </span>
+            <button onclick="{{ onEssayGo }}" title="{{ essayGoTitle }}" style="{{ essayGoStyle }}" style-hover="border-color:var(--acc)">✍ Essay</button>
             <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">

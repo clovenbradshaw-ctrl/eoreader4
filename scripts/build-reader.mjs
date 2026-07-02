@@ -54,6 +54,12 @@ const html = `<!doctype html>
 <script src="vendor/react-dom.production.min.js"></script>
 <script>(function(){var R=${JSON.stringify(resources)},b=document.baseURI,o={};for(var k in R)o[k]=new URL(R[k],b).href;window.__resources=o;})();</script>
 <script src="vendor/dc-runtime.js"></script>
+<!-- The generation pipeline + the essay organ (src/reader/eo-gen.js), exposed as window.eoGen:
+     the chat routes an essay ask through the arc (runContinuation) or the commission-driven
+     organ walk (essayCompose, ≥2500-word floor, learned types). Loaded off the base URL so it
+     works deployed; the app degrades to its old paths if absent. Lives HERE in the builder —
+     it was once hand-added to index.html and a rebuild silently dropped it. -->
+<script type="module">import(new URL('src/reader/eo-gen.js', document.baseURI).href).catch(e=>console.warn('eoGen load failed:', e));</script>
 </head>
 <body>
 ${view}

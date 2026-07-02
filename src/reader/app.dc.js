@@ -80,6 +80,10 @@ class Component extends DCLogic {
       // has been read; answers are built from the read graph/sentences (no LLM; an
       // LLM refines them only if window.claude is present). Chats live in the left panel.
       chats:[], activeChat:null, chatInput:'', chatBusy:false, groundOpen:{},
+      // THE ESSAY ORGAN on the composer: the selected essay TYPE (a template that LEARNS —
+      // organs/out/essay-types.js) and its picker menu. Persisted like the other toggles.
+      essayType:(()=>{try{return localStorage.getItem('eo_essay_type')||'argument';}catch(e){return 'argument';}})(),
+      essayMenuOpen:false,
       // Project Gutenberg — "a source of sources". A non-URL query searches the catalog;
       // a chosen book is fetched and READ FULLY before it joins the sources (and so can
       // be chatted with). gutenReading holds the id while a book is being read.
@@ -1249,6 +1253,117 @@ class Component extends DCLogic {
       this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'The arc could not complete: '+((e&&e.message)||e),stance:'ground'};return {...c,messages:m};})}));
     }
   }
+  // ── THE ESSAY ORGAN in the reader's chat (src/organs/out/essay.js via eo-gen.js) ──────
+  //
+  // Distinct from _pipelineEssay above (the longgen arc over a READING ground): this is the
+  // commission-driven organ — plan an outline, write section after section until the piece
+  // clears the ≥2500-word floor, land on a conclusion — steered by the essay TYPE picked on
+  // the composer. Each type is a template that LEARNS (organs/out/essay-types.js): every
+  // completed essay folds into the type's stored profile (which headings produced real prose,
+  // the section length it actually writes), and the profile steers the next run. Profiles
+  // persist per type under eo_essay_profile_<id>; the selected type under eo_essay_type.
+  //
+  // THE THINKING IS VISIBLE: the walk narrates itself into the pending bubble's live trail —
+  // the plan lands as beats (the title, then every section of the outline), each section opens
+  // with a "Writing §n …" status and closes with its word count against the floor, and the
+  // essay itself STREAMS into the bubble as markdown while it is written. The same reasoning-
+  // trace surface every other turn uses (_setThink/_beat), fed by the organ's hooks.
+  _essayOrganReady(){return typeof window!=='undefined'&&!!(window.eoGen&&window.eoGen.essayCompose&&window.eoGen.essayTypes);}
+  _essayIntent(q){const s=String(q||'');return /\bessays?\b/i.test(s)&&new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s);}
+  // The UI list of types: the organ registry when loaded, else this fallback (same ids), so
+  // the picker renders before the module lands. `desc` is the picker's one-line gloss.
+  _ESSAY_FALLBACK(){return [
+    {id:'argument',label:'Argument',desc:'stake a claim, meet objections, press it home'},
+    {id:'explainer',label:'Explainer',desc:'make a hard subject genuinely clear'},
+    {id:'narrative',label:'Narrative',desc:'carry the ideas on scenes, people, and time'},
+    {id:'review',label:'Review',desc:'judge it against criteria, land a verdict'},
+    {id:'reflection',label:'Reflection',desc:'think on the page, in the first person'}];}
+  _essayTypesList(){const ET=this._essayOrganReady()?window.eoGen.essayTypes:null;const fall=this._ESSAY_FALLBACK();
+    if(!ET)return fall;
+    return ET.ESSAY_TYPES.map(t=>{const f=fall.find(x=>x.id===t.id);return {id:t.id,label:t.label,desc:(f&&f.desc)||''};});}
+  _essayTypeMeta(){const idv=this.state.essayType||'argument';const list=this._essayTypesList();return list.find(t=>t.id===idv)||list[0];}
+  // The learned profile for a type — localStorage, dropped (fresh) when malformed.
+  _essayProfile(typeId){const ET=this._essayOrganReady()?window.eoGen.essayTypes:null;if(!ET)return null;
+    try{return ET.profileFromJSON(localStorage.getItem('eo_essay_profile_'+typeId))||ET.emptyProfile(typeId);}
+    catch(e){return ET.emptyProfile(typeId);}}
+  _saveEssayProfile(p){try{localStorage.setItem('eo_essay_profile_'+p.type,window.eoGen.essayTypes.profileToJSON(p));}catch(e){}}
+  setEssayType(idv){try{localStorage.setItem('eo_essay_type',idv);}catch(e){}this.setState({essayType:idv,essayMenuOpen:false});}
+  toggleEssayMenu(){this.setState(s=>({essayMenuOpen:!s.essayMenuOpen}));}
+  // The ✍ Essay button: commission an essay on whatever is in the box. An empty box gets the
+  // scaffold dropped in instead, so the affordance teaches its own use.
+  essayGo(){if(!this._essayOrganReady())return;
+    const q=this.norm(this.state.chatInput);
+    if(!q){this.setState({chatInput:'write an essay on ',essayMenuOpen:false});return;}
+    this.runOrganEssay(q);}
+  async runOrganEssay(topic){
+    const q=this.norm(topic);if(!q)return;
+    this._stopGen=false;
+    const G=window.eoGen,ET=G.essayTypes;
+    const typeId=this.state.essayType||'argument';
+    const type=ET.essayTypeOf(typeId)||ET.ESSAY_TYPES[0];
+    const floor=G.ESSAY_MIN_WORDS||2500;
+    // Seed the user turn + the pending bubble with a live trail, mirroring sendChat.
+    let id=this.state.activeChat;
+    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Planning the essay…',research:{steps:[{kind:'think',text:'✍ '+type.label+' essay commissioned — a piece of at least '+floor.toLocaleString()+' words.'}],done:false,mode:'think',t0:Date.now()}}]};
+      return {chats,activeChat:id,chatInput:'',essayMenuOpen:false};});
+    this._scrollChat();this._thinkClock();
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,stance:'compose',kind:'essay',
+        research:m[li].research?{...m[li].research,done:true}:m[li].research,text:'',...patch};
+      return {...c,messages:m};})}),()=>this._scrollChat());
+    const guard=this._stallGuard();
+    let model;
+    try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}
+    catch(e){guard.clear();finish({text:(e&&e.stopped)?'_Stopped before the model loaded._':('The model could not load: '+((e&&e.message)||e))});return;}
+    // THE LEARNED STEER: the type's stored profile → the voice cue, the heading hints offered
+    // to the planner, and the word target the walk runs at. Run one steers from the seed arc.
+    const profile=this._essayProfile(typeId);
+    const steer=ET.steerFrom(profile,typeId);
+    this._setThink(id,'Outlining '+(/^[aeiou]/i.test(type.label)?'an ':'a ')+type.label.toLowerCase()+' essay'+((profile&&profile.runs)?(' — steered by '+profile.runs+' earlier run'+(profile.runs===1?'':'s')+' of this type'):' — first run of this type, steering from its seed arc')+'…');
+    // The essay STREAMS into the bubble as it is written — the live markdown render forms
+    // headings and paragraphs mid-walk. RAF-throttled, the same paint the other turns use.
+    let acc='',raf=null;
+    const paint=()=>{raf=null;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}));};
+    const push=(t)=>{if(!t)return;acc+=t;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+    try{
+      const res=await Promise.race([G.essayCompose({model,topic:q,signal:guard.signal,
+        cue:steer.cue,planHints:steer.planHints,targetPerSection:steer.targetPerSection,
+        hooks:{
+          onPlan:({title,outline})=>{guard.feed();
+            this._beat(id,'plan','Outlined “'+title+'” — '+outline.length+' sections planned:');
+            outline.forEach((h,i)=>this._beat(id,'plan','§'+(i+1)+' · '+h));
+            push('# '+title+'\n');},
+          onSection:({heading,index,words})=>{guard.feed();
+            this._setThink(id,'Writing §'+(index+1)+' “'+heading+'” — '+words.toLocaleString()+' of '+floor.toLocaleString()+' words so far…');
+            push('\n\n## '+heading+'\n\n');},
+          onToken:(piece)=>{guard.feed();push(String(piece||''));},
+          onSectionEnd:({heading,index,words,total})=>{guard.feed();
+            this._beat(id,'write','§'+(index+1)+' “'+heading+'” landed — '+words+' words ('+total.toLocaleString()+' of '+floor.toLocaleString()+' total)');},
+        }}),guard.race]);
+      guard.clear();
+      // FOLD THE RUN INTO THE TYPE — the learning. An aborted or thin walk teaches nothing.
+      let learnedLine='';
+      if(profile){const folded=ET.foldEssay(profile,res);
+        if(folded!==profile){this._saveEssayProfile(folded);
+          const next=ET.steerFrom(folded,typeId);
+          learnedLine=type.label+' learned from this run — '+folded.runs+' essay'+(folded.runs===1?'':'s')+' folded in; section target now ~'+next.targetPerSection+' words.';
+          this._beat(id,'think','✎ '+learnedLine);}}
+      this._beat(id,'think',res.words>=floor
+        ?('Done — '+res.words.toLocaleString()+' words across '+res.sections.length+' sections; clears the '+floor.toLocaleString()+'-word floor.')
+        :('Done — '+res.words.toLocaleString()+' words across '+res.sections.length+' sections; under the '+floor.toLocaleString()+'-word floor.'));
+      const meta='*'+res.words.toLocaleString()+' words · '+res.sections.length+' sections · '+type.label+' essay'+(learnedLine?(' · ✎ '+learnedLine):'')+'*';
+      finish({text:(res.text||acc||'').trim()+'\n\n---\n'+meta});
+    }catch(e){guard.clear();
+      const partial=acc.trim();
+      const words=(partial.match(/\S+/g)||[]).length;
+      if(e&&e.stopped)finish({text:partial?(partial+'\n\n---\n*⏹ Stopped at '+words.toLocaleString()+' words.*'):'_Stopped._',stopped:true});
+      else finish({text:partial?(partial+'\n\n---\n*The walk broke off at '+words.toLocaleString()+' words: '+((e&&e.message)||e)+'*'):('The essay could not complete: '+((e&&e.message)||e))});
+    }
+  }
   // CREATIVE GENERATION over a topic — "write an emily dickinson poem about iced coffee",
   // "compose an essay on dolphins", "draft a haiku about the sea". The frame (write/compose/draft
   // + poem/essay/song/…) names a FORM, and the real topic rides in the "about/on X" tail. Taken at
@@ -1827,6 +1942,16 @@ class Component extends DCLogic {
     // below can strip it to a "subject" and research it. The cheap sync pre-gate keeps a
     // non-math turn from ever loading the module; the module makes the strict final call.
     if(this._looksMath(q)&&await this._mathChat(q))return;
+    // THE ESSAY ORGAN — "/essay <topic>" or a compose-verb essay ask ("write an essay on
+    // dolphins") walks the organ (runOrganEssay): plan, then section after section to the
+    // ≥2500-word floor, steered by the composer's selected type, thinking out loud in the
+    // live trail. Caught BEFORE compose/web routing, which would cap or research it instead.
+    // Organ not loaded (eo-gen.js missing) → fall through to the old paths unchanged.
+    if(this._essayOrganReady()){
+      const essayCmd=/^\/essay\b[\s:]*/i.exec(q);
+      if(essayCmd){const t=this.norm(q.slice(essayCmd[0].length));if(t)return this.runOrganEssay(t);}
+      if(this._essayIntent(q))return this.runOrganEssay(q);
+    }
     // COMPOSE — a generative artifact ("write an emily dickinson poem", "compose a sonnet about
     // the sea") is a make-this, not a question. It must be caught BEFORE _shouldWeb, or the web
     // routing strips it to its subject and researches it — which is exactly why "write an emily
@@ -5418,6 +5543,24 @@ class Component extends DCLogic {
       depthBtnIcon:'\ue79e',depthBtnLabel:(this.state.researchDepth||'deep'),
       depthTitle:'How much research per question: shallow (the strongest answer) · deep (several angles) · obsessive (exhaust the threads). Click to cycle.',
       depthStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
+      // THE ESSAY ORGAN on the composer: the type picker (a dropdown of templates that LEARN —
+      // organs/out/essay-types.js) and the ✍ Essay trigger. The picker shows the selected type;
+      // each option's gloss carries what that type has learned so far (runs folded in).
+      essayTypeLabel:this._essayTypeMeta().label,
+      essayTypeTitle:'Essay type — a template that learns from every essay it writes. Click to pick.',
+      onEssayMenu:()=>this.toggleEssayMenu(),
+      essayMenuOpen:!!this.state.essayMenuOpen,
+      essayTypeOptions:this._essayTypesList().map(t=>{const sel=t.id===(this.state.essayType||'argument');
+        const p=this._essayProfile(t.id);const runs=(p&&p.runs)||0;
+        return {id:t.id,label:t.label,
+          desc:t.desc+(runs?(' · learned from '+runs+' run'+(runs===1?'':'s')):''),
+          title:runs?(t.label+' — learned from '+runs+' essay'+(runs===1?'':'s')+' (section target ~'+window.eoGen.essayTypes.steerFrom(p,t.id).targetPerSection+' words)'):(t.label+' — nothing learned yet; steers from its seed arc'),
+          onPick:()=>this.setEssayType(t.id),
+          style:'font-size:12px;font-weight:600;text-align:left;padding:7px 10px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'transparent')+';background:'+(sel?'var(--accbg)':'transparent')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
+      onEssayGo:()=>this.essayGo(),
+      essayGoTitle:'Write an essay (2,500+ words) on what’s in the box — steered by the selected type, thinking out loud as it plans and writes',
+      essayTypeStyle:'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;color:var(--ink2);background:var(--app);border:1px solid var(--line2);',
+      essayGoStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);',
       backend:this.state.backend||'webllm',
       backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},
         {v:'qwen-coder-1.5b',label:'Qwen2.5-Coder 1.5B · code model, WebGPU'},
