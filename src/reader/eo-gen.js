@@ -11,6 +11,9 @@
 // intents through eoGen.essay when the setting is on (default on), else keeps its old path.
 
 import { runContinuation, exportAudit } from '../longgen/index.js';
+import { composeEssay, ESSAY_MIN_WORDS } from '../organs/out/essay.js';
+import * as essayTypes from '../organs/out/essay-types.js';
+import { streamPhrase } from '../model/stream.js';
 
 // Build the pipeline ground from the app's scored spans. Each span is {text, score, i, u};
 // runContinuation wants {idx, score, text} ranked. Keep the source url on the side so the
@@ -38,9 +41,26 @@ const essay = async ({ spans = [], model, embed = null, question = '', signal = 
   return { text, audit, stop: res.stop, moves: res.units.map((u) => u.move), sources, units: res.units };
 };
 
+// ── THE ESSAY ORGAN, for the reader's chat (organs/out/essay.js + essay-types.js) ──
+//
+// Distinct from `essay` above (the longgen arc over a READING ground): this is the
+// commission-driven organ — plan an outline, walk section after section until the piece
+// clears the ≥2500-word floor, land on a conclusion — steered by a learned essay TYPE
+// (cue + plan hints + word target, essay-types.steerFrom). The app hands its chat model;
+// the talker is streamPhrase over it, so hooks.onToken streams live. The app owns the
+// type profiles (persistence) and the thinking-trail beats; this is the pure walk.
+const essayCompose = ({ model, topic, signal = null, cue = null, planHints = null, targetPerSection = undefined, hooks = {} } = {}) =>
+  composeEssay({
+    topic,
+    talker: (messages, opts) => streamPhrase(model, messages, opts),
+    signal, cue, planHints,
+    ...(targetPerSection ? { targetPerSection } : {}),
+    hooks,
+  });
+
 if (typeof window !== 'undefined') {
-  window.eoGen = { essay, toGround, version: 1 };
+  window.eoGen = { essay, toGround, essayCompose, essayTypes, ESSAY_MIN_WORDS, version: 2 };
   window.dispatchEvent(new Event('eogen-ready'));
 }
 
-export { essay, toGround };
+export { essay, toGround, essayCompose, essayTypes, ESSAY_MIN_WORDS };
