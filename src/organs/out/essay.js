@@ -72,7 +72,11 @@ const stripPreamble = (s) => String(s ?? '')
 // WORKED for this type before — the learned half — offered to the planner, never imposed:
 // the plan may use, adapt, or ignore them. Both absent → the prompt is byte-identical to
 // the unsteered organ.
-export const planMessages = (topic, { cue = null, hints = null } = {}) => ([
+// `sources` are excerpts research gathered on the subject (organs/out never fetches — the caller
+// hands them in). When present the planner is shown the material so the outline reflects what the
+// reading actually covers, not what the model guesses the subject is about. Absent (null/empty) →
+// the prompt is byte-identical to the unresearched plan.
+export const planMessages = (topic, { cue = null, hints = null, sources = null } = {}) => ([
   { role: 'system', content:
     'You are an essayist planning a long-form essay. Given a commission, produce a working outline: ' +
     'a title, then the section headings the essay will move through — an opening, several developing ' +
@@ -84,6 +88,9 @@ export const planMessages = (topic, { cue = null, hints = null } = {}) => ([
     `Commission: ${String(topic || '').trim()}` +
     (Array.isArray(hints) && hints.length
       ? `\n\nSection moves that have served this kind of essay well before — use, adapt, or ignore them as the subject demands: ${hints.join(' · ')}.`
+      : '') +
+    (Array.isArray(sources) && sources.length
+      ? `\n\nResearch has gathered the following source material on the subject. Let the outline follow what it actually covers, rather than a generic template:\n"""\n${sources.join('\n\n')}\n"""`
       : '') },
 ]);
 
@@ -137,9 +144,18 @@ export const planOutline = (rawPlan, topic = '') => {
 // so the prose stays continuous and non-repeating. `targetWords` steers length; `role`
 // names the arc move so the opening opens and the close lands.
 
-export const sectionMessages = ({ topic, title, outline = [], heading, index = 0, total = 0, tail = '', targetWords = 380, role = 'develop', cue = null } = {}) => {
+// `sources` are the research excerpts (same set the planner saw). When present each section is
+// written GROUNDED in them — the model is told to lean on the material and not invent facts beyond
+// what it and general knowledge support, which is the whole point of researching before writing on
+// a small model prone to confabulation. Absent → the prompt is byte-identical to the unresearched
+// section.
+export const sectionMessages = ({ topic, title, outline = [], heading, index = 0, total = 0, tail = '', targetWords = 380, role = 'develop', cue = null, sources = null } = {}) => {
   const plan = outline.length ? `\nThe essay's outline: ${outline.join(' · ')}.` : '';
   const soFar = tail ? `\n\nThe essay so far ends:\n"""\n${tail}\n"""\nContinue from there — do not repeat what is already written.` : '';
+  const grounded = Array.isArray(sources) && sources.length;
+  const src = grounded
+    ? `\n\nSource material research gathered on the subject — draw on it for this section, quote or paraphrase what bears on the heading, and do not assert facts beyond what it and well-established general knowledge support:\n"""\n${sources.join('\n\n')}\n"""`
+    : '';
   const move = role === 'open'
     ? 'This is the OPENING section — set the essay in motion: frame the subject, stake the question, and draw the reader in. Do not summarise the whole essay.'
     : role === 'land'
@@ -149,12 +165,13 @@ export const sectionMessages = ({ topic, title, outline = [], heading, index = 0
     { role: 'system', content:
       'You are an accomplished essayist writing one section of a longer essay. ' +
       (cue ? `${cue} ` : '') +
+      (grounded ? 'Ground the section in the provided source material rather than inventing detail. ' : '') +
       'Write flowing, substantive prose in ' +
       'full paragraphs — no lists, no headings, no meta-commentary about the essay or these instructions. Aim for about ' +
       `${targetWords} words. Write ONLY the prose of this section.` },
     { role: 'user', content:
       `Essay commission: ${String(topic || '').trim()}\nWorking title: ${title}.${plan}\n\n` +
-      `Section ${total ? `${index + 1} of ${total}+ ` : ''}— heading: "${heading}".\n${move}${soFar}` },
+      `Section ${total ? `${index + 1} of ${total}+ ` : ''}— heading: "${heading}".\n${move}${soFar}${src}` },
   ];
 };
 
@@ -206,17 +223,42 @@ export const composeEssay = async ({
                             //   the kind of essay — rides the plan and every section system prompt.
   planHints = null,          // THE LEARNED HALF of a type: headings that have worked for this type
                             //   before, offered to the planner (use / adapt / ignore). Null = unsteered.
+  ground = null,             // RESEARCH GROUND: excerpts (strings, or {text} spans) the caller gathered
+                            //   on the subject — from the web walk it ran before commissioning the essay,
+                            //   or the reading already in scope. When present the plan and every section
+                            //   are written grounded in this material instead of the model's thin prior,
+                            //   so a small model researches before it writes rather than confabulating.
+                            //   Null / empty = the parametric compose, byte-identical to before.
   hooks = {},
 } = {}) => {
   if (typeof talker !== 'function') throw new TypeError('composeEssay: a talker function is required');
   const commission = String(topic || '').trim();
   if (!commission) throw new Error('composeEssay: an essay commission (topic) is required');
   const aborted = () => !!(signal && signal.aborted);
+  // Normalise the research ground to a capped list of clean excerpt strings. Bounded so the digest
+  // (repeated into every section prompt) stays within a small model's context: the strongest spans
+  // the caller ranked, each clipped, up to a dozen. Empty → sources stays null → prompts unchanged.
+  const sources = (() => {
+    if (!Array.isArray(ground)) return null;
+    const seen = new Set();
+    const out = [];
+    for (const g of ground) {
+      const t = String((g && g.text != null) ? g.text : g).replace(/\s+/g, ' ').trim();
+      if (t.length < 20) continue;
+      const clipped = t.length > 320 ? `${t.slice(0, 320)}…` : t;
+      const key = clipped.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(clipped);
+      if (out.length >= 12) break;
+    }
+    return out.length ? out : null;
+  })();
 
   // 1) PLAN — outline the arc. A planner failure is non-fatal: planOutline backfills a neutral arc.
   hooks.onPhase?.('planning');
   let rawPlan = '';
-  try { rawPlan = await talker(planMessages(commission, { cue, hints: planHints }), { maxTokens: 400, temperature: 0.7, signal }); }
+  try { rawPlan = await talker(planMessages(commission, { cue, hints: planHints, sources }), { maxTokens: 400, temperature: 0.7, signal }); }
   catch (err) { if (aborted()) throw err; /* else walk the default arc */ }
   const { title, body: bodyHeadings, conclusion } = planOutline(rawPlan, commission);
   const outline = [...bodyHeadings, conclusion];   // the whole planned arc, handed to each section
@@ -239,7 +281,7 @@ export const composeEssay = async ({
     let raw = '';
     try {
       raw = await talker(
-        sectionMessages({ topic: commission, title, outline, heading, index, total: queue.length + sections.length, tail: tailOf(out), targetWords: target, role, cue }),
+        sectionMessages({ topic: commission, title, outline, heading, index, total: queue.length + sections.length, tail: tailOf(out), targetWords: target, role, cue, sources }),
         { maxTokens: tokensFor(target), temperature, signal, onToken: (piece) => hooks.onToken?.(piece, heading), ...(lens ? { lens } : {}) },
       );
     } catch (err) {
@@ -287,5 +329,7 @@ export const composeEssay = async ({
     words: countWords(text),
     metWords: countWords(text) >= minWords,
     aborted: aborted(),
+    grounded: !!sources,                 // was the piece written over researched source material?
+    sourceCount: sources ? sources.length : 0,
   };
 };

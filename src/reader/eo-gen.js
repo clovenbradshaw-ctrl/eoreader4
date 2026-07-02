@@ -49,12 +49,16 @@ const essay = async ({ spans = [], model, embed = null, question = '', signal = 
 // (cue + plan hints + word target, essay-types.steerFrom). The app hands its chat model;
 // the talker is streamPhrase over it, so hooks.onToken streams live. The app owns the
 // type profiles (persistence) and the thinking-trail beats; this is the pure walk.
-const essayCompose = ({ model, topic, signal = null, cue = null, planHints = null, targetPerSection = undefined, hooks = {} } = {}) =>
+// `ground` (optional) is the research the app gathered before commissioning the essay — excerpts
+// from the web walk it ran and/or the reading already in scope. Passed through to composeEssay so
+// the plan and every section are written grounded in real sources instead of the model's thin prior.
+const essayCompose = ({ model, topic, signal = null, cue = null, planHints = null, targetPerSection = undefined, ground = null, hooks = {} } = {}) =>
   composeEssay({
     topic,
     talker: (messages, opts) => streamPhrase(model, messages, opts),
     signal, cue, planHints,
     ...(targetPerSection ? { targetPerSection } : {}),
+    ...(ground ? { ground } : {}),
     hooks,
   });
 
