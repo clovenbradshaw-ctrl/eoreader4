@@ -8,14 +8,20 @@ import {
 import { composeEssay, planMessages, sectionMessages } from '../src/organs/out/essay.js';
 import { essayTypes } from '../src/organs/out/index.js';
 
-// A deterministic talker for the steered walk (mirrors essay-organ.test.js): the planner
-// call gets an outline, every section call gets `wordsPerSection` words of filler.
+// A deterministic talker for the steered walk (mirrors essay-organ.test.js): the planner call
+// gets an outline, every section call gets `wordsPerSection` words of filler keyed to the
+// heading so each section carries DISTINCT content (else the novelty gate drops the repeats).
+let stubCalls = 0;
 const stubTalker = (wordsPerSection = 200, record = null) => async (messages, opts = {}) => {
+  stubCalls += 1;
   const sys = messages.find((m) => m.role === 'system')?.content || '';
+  const usr = messages.find((m) => m.role === 'user')?.content || '';
   const isPlan = /planning a long-form essay/i.test(sys);
-  record?.push({ isPlan, sys, user: messages.find((m) => m.role === 'user')?.content || '', opts });
+  record?.push({ isPlan, sys, user: usr, opts });
   if (isPlan) return 'TITLE: On Tides\n1. Introduction\n2. The pull of the moon\n3. Conclusion';
-  return Array.from({ length: wordsPerSection }, (_, i) => `word${i}`).join(' ') + '.';
+  const heading = (usr.match(/heading: "([^"]+)"/) || [])[1] || `s${stubCalls}`;
+  const slug = (heading.toLowerCase().replace(/[^a-z]+/g, '') || `sec${stubCalls}`) + stubCalls;
+  return Array.from({ length: wordsPerSection }, (_, i) => `${slug}tok${i}`).join(' ') + '.';
 };
 
 // A composeEssay-shaped result to fold, without running a walk.
@@ -124,7 +130,7 @@ test('without a steer the prompts are byte-identical to the unsteered organ', ()
     sectionMessages({ topic: 't', title: 'T', heading: 'H', cue: null }));
 });
 
-test('composeEssay carries a type steer through the whole walk and still clears the floor', async () => {
+test('composeEssay carries a type steer through the whole walk and lands cleanly', async () => {
   const record = [];
   const steer = steerFrom(emptyProfile('argument'), 'argument');
   const res = await composeEssay({
@@ -134,7 +140,8 @@ test('composeEssay carries a type steer through the whole walk and still clears 
     planHints: steer.planHints,
     targetPerSection: steer.targetPerSection,
   });
-  assert.equal(res.metWords, true, 'the steered walk still clears the word floor');
+  assert.equal(res.aborted, false);
+  assert.equal(res.sections.at(-1).role, 'land', 'the steered walk lands on a conclusion');
   const planCall = record.find((c) => c.isPlan);
   assert.match(planCall.sys, /ARGUMENTATIVE/, 'the type cue reaches the planner');
   assert.match(planCall.user, /The claim/, 'the seed-arc hints reach the planner');

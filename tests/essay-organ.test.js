@@ -8,19 +8,25 @@ import { essay } from '../src/organs/out/index.js';
 
 // A stub talker: it never sees a real model. The planner request (it carries the strict
 // "TITLE:" system line) gets a small outline back; every other request is a section, answered
-// with `wordsPerSection` words of filler. This makes the walk fully deterministic so we can
-// assert the length floor is cleared and the walk terminates. `onToken` is exercised so the
-// streaming contract is covered too.
+// with `wordsPerSection` words of filler keyed to the section's heading so each section carries
+// DISTINCT content — otherwise the novelty gate (correctly) drops sections that only restate.
+// This makes the walk deterministic so we can assert it lands and terminates. `onToken` is
+// exercised so the streaming contract is covered too.
 const stubTalker = (wordsPerSection = 200) => {
   let calls = 0;
   const talker = async (messages, opts = {}) => {
     calls += 1;
     const sys = messages.find((m) => m.role === 'system')?.content || '';
+    const usr = messages.find((m) => m.role === 'user')?.content || '';
     let text;
     if (/planning a long-form essay/i.test(sys)) {
       text = 'TITLE: On the Sea\n1. Introduction\n2. The tides\n3. The deep\n4. Conclusion';
     } else {
-      text = Array.from({ length: wordsPerSection }, (_, i) => `word${i}`).join(' ') + '.';
+      // A slug unique to this heading (and to the running call count for extensions) so every
+      // section's content words are distinct — the walk keeps them all.
+      const heading = (usr.match(/heading: "([^"]+)"/) || [])[1] || `s${calls}`;
+      const slug = (heading.toLowerCase().replace(/[^a-z]+/g, '') || `sec${calls}`) + calls;
+      text = Array.from({ length: wordsPerSection }, (_, i) => `${slug}tok${i}`).join(' ') + '.';
     }
     if (typeof opts.onToken === 'function') for (const t of text.split(' ')) opts.onToken(t + ' ');
     return text;
@@ -35,12 +41,15 @@ test('parseOutline reads a strict planner reply', () => {
   assert.deepEqual(headings, ['The tides', 'The deep', 'Conclusion']);
 });
 
-test('planOutline pulls the conclusion out and backfills a thin plan', () => {
+test('planOutline pulls the conclusion out and pads a thin plan without a second opener', () => {
   const plan = planOutline('TITLE: X\n1. Intro\n2. Conclusion', 'topic x');
   assert.equal(plan.title, 'X');
   assert.equal(plan.conclusion, 'Conclusion');
   assert.ok(!plan.body.some((h) => /conclu/i.test(h)), 'conclusion is not left in the body');
-  assert.ok(plan.body.length >= 4, 'a thin plan is padded from the neutral arc');
+  assert.ok(plan.body.length >= 3, 'a thin plan is padded to a real body');
+  assert.equal(plan.body[0], 'Intro', 'the planner\'s opener stays the opener');
+  assert.ok(!plan.body.slice(1).some((h) => /^(?:introduction|background)/i.test(h)),
+    'no opener-role heading is backfilled after the planner\'s opener (the doubled-intro cure)');
 });
 
 test('planOutline falls back to a full arc when the planner returns nothing', () => {
@@ -57,16 +66,19 @@ test('sectionMessages marks the arc move (open / develop / land)', () => {
   assert.match(land[1].content, /CONCLUSION/);
 });
 
-test('composeEssay clears the ≥2500-word floor and lands on a conclusion', async () => {
+test('composeEssay walks the arc, gates each section, and lands on a conclusion', async () => {
+  // Length is emergent (saturation-governed), not measured against a floor — with distinct
+  // content every section is kept, the walk extends toward the aspiration, and it lands.
   const talker = stubTalker(120);
   const res = await composeEssay({ topic: 'the sea', talker });
-  assert.ok(res.words >= ESSAY_MIN_WORDS, `expected ≥${ESSAY_MIN_WORDS} words, got ${res.words}`);
-  assert.equal(res.metWords, true);
   assert.equal(res.aborted, false);
   const last = res.sections[res.sections.length - 1];
   assert.equal(last.heading, 'Conclusion', 'the walk always lands on a conclusion');
   assert.equal(last.role, 'land');
   assert.match(res.text, /^# On the Sea/, 'the piece opens with the title as an h1');
+  assert.ok(res.sections.every((s) => s.words > 0), 'no empty section survives into the essay');
+  assert.ok(Array.isArray(res.trace) && res.trace.length >= res.sections.length,
+    'the length-decision trace records every section, kept or dropped');
 });
 
 test('composeEssay terminates on a stalled talker instead of looping to the cap', async () => {
@@ -94,11 +106,12 @@ test('composeEssay respects an abort signal', async () => {
   assert.ok(res.words < ESSAY_MIN_WORDS, 'an aborted walk stops short of the floor');
 });
 
-test('the essay is emitted across many messages — one section beat at a time', async () => {
+test('the essay is emitted across many messages — kept sections close, dropped ones retract', async () => {
   const talker = stubTalker(200);
   const plans = [];
   const sectionEnds = [];
   const opens = [];
+  const drops = [];
   const res = await composeEssay({
     topic: 'the sea',
     talker,
@@ -106,16 +119,18 @@ test('the essay is emitted across many messages — one section beat at a time',
       onPlan: (p) => plans.push(p),
       onSection: (s) => opens.push(s),
       onSectionEnd: (s) => sectionEnds.push(s),
+      onSectionDrop: (d) => drops.push(d),
     },
   });
   // The plan is announced exactly once, before any section.
   assert.equal(plans.length, 1);
   assert.ok(plans[0].title && Array.isArray(plans[0].outline));
-  // Every section opens and closes; more than one message, and they pair up 1:1.
+  // More than one message; onSectionEnd pairs 1:1 with the KEPT sections in the result.
   assert.ok(sectionEnds.length > 1, 'the essay spans multiple section messages');
-  assert.equal(opens.length, sectionEnds.length, 'each opened section is closed');
-  assert.equal(sectionEnds.length, res.sections.length);
-  // onSectionEnd carries a running total that climbs monotonically toward the floor.
+  assert.equal(sectionEnds.length, res.sections.length, 'onSectionEnd fires once per kept section');
+  // Every opened beat resolves exactly once — it either closes (kept) or retracts (dropped).
+  assert.equal(opens.length, sectionEnds.length + drops.length, 'each opened section closes or retracts');
+  // onSectionEnd carries a running total that only grows.
   for (let i = 1; i < sectionEnds.length; i++) {
     assert.ok(sectionEnds[i].total >= sectionEnds[i - 1].total, 'the running total only grows');
   }

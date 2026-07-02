@@ -1,34 +1,55 @@
 // organs/out/essay — the ESSAY organ: prose lowered not as one beat but as a whole,
-// arc-walked piece with a hard length floor.
+// arc-walked piece whose LENGTH IS EMERGENT — it stops when a section stops adding, not at a
+// token count.
 //
 // The text organ (organs/out/text) renders a SINGLE task leaf into a sentence-scale beat:
 // one directive, one generate call, capped at its `ceiling` of tokens. That is the right
 // grain for an answer, and exactly the wrong one for an essay — it is why "write an essay
 // on dolphins" comes back as a three-sentence dolphin blurb. An essay is not a bigger beat;
 // it is a WALK: open, develop, turn, and land across many sections, each a full pass of the
-// talker, accumulated until the piece clears a real length floor (docs/generation-by-field-
-// reading.md, the arc — open/develop/close).
+// talker.
 //
-// This organ owns that walk. It is model-INJECTED like every other output organ (organs/out
-// never imports a talker): the caller hands a `talker(messages, opts) → Promise<string>`
-// (the same contract streamPhrase satisfies), and this plans an outline, composes each
-// section over the running draft, extends when the piece is short, and always lands on a
-// conclusion. Pure orchestration — the only non-determinism is the injected talker — so it
-// runs headless in a test with a stub talker as readily as it runs the chat surface's model.
+// THE GATES. A small model handed a long-form commission with nothing to draw on does two
+// things reliably: it CONFABULATES evidence to fill argumentative slots ("declined by 60%",
+// "a study published in Science"), and it REPEATS itself section to section because each pass
+// only sees a short tail of the draft. src/arc/ was built to stop exactly this — a span-veto
+// that strikes unwitnessed claims, a coverage gate that ends the walk when a section adds no
+// new ground, disjoint sub-claims so sections do not re-argue each other. This organ ports
+// those disciplines in a SOURCELESS form (there is no retrieval here — the essay surface runs
+// ungrounded by default), so the same failure modes are caught without a corpus to bind to:
+//
+//   evidenceVeto     — strike sentences that assert statistics, studies, or named institutions
+//                      the model cannot have witnessed (the sourceless bind-or-veto, src/arc
+//                      /ground bindAndVeto). On an ungrounded run these are always fabrications.
+//   sectionNovelty   — measure a section's fresh content against a ledger of what earlier
+//                      sections already said; drop a section that merely restates (the
+//                      sourceless evaCoverageGate, src/arc/saturation).
+//   concession gate  — an "against"/objection section that pivots back to agreement is not an
+//                      objection; hold its stance or cut it at the concession.
+//
+// Each defect gets ONE corrective regeneration that names exactly what failed; if the retry
+// still fails, the text is cleaned (struck / truncated) or the section is dropped. The walk
+// SATURATES — it stops developing when fresh sections stop landing — rather than padding to a
+// word count. Length falls out of what there is to say.
+//
+// Model-INJECTED like every other output organ (organs/out never imports a talker): the caller
+// hands a `talker(messages, opts) → Promise<string>` (the same contract streamPhrase satisfies).
+// Pure orchestration — the only non-determinism is the injected talker — so it runs headless in
+// a test with a stub talker as readily as it runs the chat surface's model.
 
-// THE LENGTH FLOOR. An essay is at least this many words; the walk does not stop developing
-// until the body clears it, then lands. "At least" — the conclusion pushes the final count a
-// little past. A floor, never a ceiling: a rich outline may run well over.
+// THE LENGTH ASPIRATION (not a floor). The walk TRIES to reach at least this many words by
+// extending with fresh angles — but it yields to saturation: once new sections stop adding
+// ground it lands, whatever the count. Kept for the surface's reporting and back-compat; it is
+// no longer the governor. A rich subject runs well over; a thin one lands honestly short.
 export const ESSAY_MIN_WORDS = 2500;
 
 // Words, counted the honest way: whitespace-delimited runs. Headings count too — they are
-// part of the piece — but the floor is really carried by the bodies.
+// part of the piece — but the bulk is carried by the bodies.
 export const countWords = (s) => (String(s ?? '').trim().match(/\S+/g) || []).length;
 
 // The neutral arc a bodiless commission still gets. If the planner returns nothing usable we
-// walk THIS — a real open/develop/turn/land skeleton — so the organ always has a shape to
-// fill and the floor is always reachable. The conclusion is handled separately (it always
-// lands last), so it is not in this list.
+// walk THIS — a real open/develop/turn/land skeleton. The conclusion is handled separately (it
+// always lands last), so it is not in this list.
 const DEFAULT_ARC = Object.freeze([
   'Introduction',
   'Background and context',
@@ -38,9 +59,16 @@ const DEFAULT_ARC = Object.freeze([
   'Wider implications',
 ]);
 
-// When the outline runs dry but the piece is still short, we develop further along these
-// angles rather than repeating a heading. Cycled in order, bounded by `maxSections`, so the
-// walk always terminates.
+// Padding for a THIN (but non-empty) plan. The planner's first heading is already the opener,
+// so padding must NOT reintroduce an opener-role heading — that is the doubled-"Introduction"
+// bug this list exists to avoid. Openers are excluded; only develop moves backfill.
+const PAD_ARC = Object.freeze(
+  DEFAULT_ARC.filter((h) => !/^(?:introduction|background)\b/i.test(h)),
+);
+
+// When the plan runs dry but the piece is still short of the aspiration, we develop further
+// along these angles rather than repeating a heading. Cycled in order, bounded by `maxSections`
+// and by SATURATION, so the walk always terminates.
 const DEVELOP_ANGLES = Object.freeze([
   'A closer look',
   'Another dimension',
@@ -54,28 +82,162 @@ const DEVELOP_ANGLES = Object.freeze([
 
 const CONCLUSION = 'Conclusion';
 
+// The smallest body a real plan needs before we stop padding it. A doubled opener never appears
+// because PAD_ARC carries no opener; three sections is enough to open, develop, and turn.
+const MIN_BODY = 3;
+
+// ── Gate thresholds ────────────────────────────────────────────────────────────
+// A develop/against section must bring at least this fraction of FRESH content words (measured
+// against the ledger of everything kept so far) or it triggers a corrective regen; below the
+// harder floor it is dropped as pure restatement.
+const NOVELTY_REGEN = 0.30;
+const NOVELTY_DROP = 0.18;
+// A kept section must clear this many words; below it the pass was a stall or was gutted by the
+// veto, and folding it would teach the piece to be thin.
+const MIN_SECTION_WORDS = 40;
+// Consecutive dropped EXTENSIONS that end the walk — the field has saturated, there is nothing
+// fresh left to say. (src/arc/saturation's loop-until-dry, K = 2.)
+const SATURATE_STOP = 2;
+// Consecutive EMPTY talker passes that end the walk — the model is dead, not the material. Kept
+// distinct from a gate drop: a drop is the gate working; an empty pass is a broken talker.
+const DEAD_STOP = 2;
+
 // Strip the assistant preamble a small model tends to prepend ("Sure! Here is…", "Certainly:")
-// so a section body starts on the prose, not the throat-clearing. Mirrors the writer path in
-// the chat app. Conservative: only a leading, single-line "here's/sure/certainly" opener goes.
+// so a section body starts on the prose, not the throat-clearing. Conservative: only a leading,
+// single-line "here's/sure/certainly" opener goes.
 const stripPreamble = (s) => String(s ?? '')
   .replace(/^\s*(?:sure[,!.]?\s+|certainly[,!.]?\s+|of course[,!.]?\s+|absolutely[,!.]?\s+|here(?:'s| is| you go|’s)\b[^\n:]*:?\s*)/i, '')
   .trim();
 
+// ── Sentence segmentation ──────────────────────────────────────────────────────
+// Split prose into sentences for the veto and the concession cut. Splits on a terminal
+// [.!?] followed by whitespace and a sentence-opening character (capital or quote). The final
+// sentence (no trailing delimiter+capital) is kept as the last element. Good enough for the
+// gates; it never needs to be perfect, only to isolate the offending clause.
+export const sentencesOf = (text) => String(text ?? '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .split(/(?<=[.!?])\s+(?=["'“(]?[A-ZÀ-ÖØ-Þ])/)
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+// ── evidenceVeto: strike the unwitnessed claim ─────────────────────────────────
+// On an UNGROUNDED run the model has no source to bind an evidentiary claim to, so any concrete
+// statistic, cited study, or named institution it produces is a fabrication. These shapes catch
+// the forms a small model reaches for to fill an argumentative slot. A sentence matching ANY of
+// them is struck. The prose contract also tells the model not to write them — so on a clean pass
+// there is nothing to strike; the veto is the backstop for when it does anyway.
+export const EVIDENCE_SHAPES = Object.freeze([
+  /\d+(?:\.\d+)?\s?%/,                                   // "60%", "30 %"
+  /\b\d+(?:\.\d+)?\s?percent\b/i,                        // "60 percent"
+  /\b(?:up to|as much as|as many as|as few as|as high as|as low as)\s+\d/i,
+  /\bestimates?\s+that\b/i,                              // "the WWF estimates that…"
+  /\b(?:a|an|the|one|another|recent|several)\s+stud(?:y|ies)\b/i,
+  /\bstud(?:y|ies)\s+(?:conducted|published|found|showed?|shows|suggests?|revealed?)\b/i,
+  /\bresearchers?\s+(?:at|from|found|have|had|observed|discovered|report(?:ed)?)\b/i,
+  /\bpublished\s+in\b/i,                                 // "published in the journal Science"
+  /\bin\s+the\s+journal\b/i,
+  /\bconducted\s+at\b/i,
+  // "According to the WWF / according to Smith" — the phrase either-cased, object capitalised.
+  /\b[Aa]ccording to (?:the )?(?:[A-Z]{2,}|[A-Z][a-z]+)/,
+  // A named institution: "Dolphin Research Center", "World Wildlife Fund", "Stanford University".
+  /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Research\s+)?(?:Cent(?:er|re)|Foundation|Institute|Fund|Society|University|Association|Laborator(?:y|ies)|Agency)\b/,
+]);
+
+// evidenceVeto(text) → { kept, struck, boundFraction }. `kept` is the prose with offending
+// sentences removed; `struck` is the list of removed sentences; `boundFraction` is the share of
+// sentences that survived (1 = clean, mirrors src/arc's boundFraction). Caller runs this only on
+// the ungrounded path — a grounded run binds against real sources instead.
+export const evidenceVeto = (text) => {
+  const sents = sentencesOf(text);
+  if (!sents.length) return { kept: '', struck: [], boundFraction: 1 };
+  const kept = [];
+  const struck = [];
+  for (const s of sents) {
+    if (EVIDENCE_SHAPES.some((re) => re.test(s))) struck.push(s);
+    else kept.push(s);
+  }
+  return {
+    kept: kept.join(' '),
+    struck,
+    boundFraction: sents.length ? kept.length / sents.length : 1,
+  };
+};
+
+// ── sectionNovelty: the sourceless coverage gate ───────────────────────────────
+// A ledger of content words already spent, and a section's novelty against it. Content words are
+// lowercased alphabetic runs of length ≥ 4, minus a small stop set — enough to tell "re-argues
+// intelligence and sociality again" from "opens a genuinely new line". novelty = fresh / total.
+const STOPWORDS = new Set([
+  'that', 'this', 'they', 'them', 'their', 'there', 'these', 'those', 'then', 'than',
+  'with', 'from', 'have', 'has', 'had', 'been', 'being', 'were', 'was', 'will', 'would',
+  'what', 'when', 'which', 'while', 'about', 'into', 'over', 'under', 'such', 'also',
+  'more', 'most', 'some', 'many', 'much', 'very', 'only', 'even', 'just', 'like', 'because',
+  'through', 'between', 'both', 'each', 'other', 'another', 'itself', 'themselves',
+  'however', 'moreover', 'furthermore', 'therefore', 'thus', 'here', 'they’re', 'their',
+  'often', 'still', 'rather', 'quite', 'indeed', 'perhaps', 'within', 'upon', 'against',
+]);
+
+export const contentWords = (text) => {
+  const set = new Set();
+  for (const w of String(text ?? '').toLowerCase().match(/[a-zà-öø-ÿ]{4,}/g) || []) {
+    if (!STOPWORDS.has(w)) set.add(w);
+  }
+  return set;
+};
+
+// novelty of `text` against a Set `ledger` of content words already spent. Empty text → 0 (a
+// stall adds nothing); empty ledger → 1 (the opening is all fresh by definition).
+export const sectionNovelty = (text, ledger) => {
+  const cw = contentWords(text);
+  if (cw.size === 0) return 0;
+  let fresh = 0;
+  for (const w of cw) if (!ledger.has(w)) fresh += 1;
+  return fresh / cw.size;
+};
+
+// ── The stance gate: an objection must actually oppose ─────────────────────────
+// A heading that reads as the "against"/objection move.
+export const isAgainstHeading = (heading) =>
+  /\b(?:against|objection|objections|counter|counterpoint|critique|drawback|drawbacks|limitation|limitations|case against|fails?|failure|the other side|weakness(?:es)?)\b/i
+    .test(String(heading ?? ''));
+
+// Phrases that betray an against-section collapsing back into agreement.
+const CONCESSION_SHAPES = Object.freeze([
+  /\bof course\b/i,
+  /\bnot to say that\b/i,
+  /\b(?:are|is)\s+(?:indeed\s+)?worth(?:y)?\s+of\b/i,
+  /\bworth(?:y)?\s+of\s+(?:protection|conservation|saving|preservation|respect)\b/i,
+  /\bwe\s+(?:should|must|ought to)\s+(?:protect|preserve|conserve|save|celebrate|revere|value)\b/i,
+  /\bmoral\s+imperative\b/i,
+  /\boverwhelming(?:ly)?\s+(?:evidence|clear|support|case)\b/i,
+  /\b(?:undeniabl|unquestionabl|indisputabl|without\s+doubt)/i,
+]);
+
+// concessionSplit(text) → { kept, conceded }. Keeps the sentences BEFORE the first concession
+// (the part that still argued against), flags that a concession was found. If the very first
+// sentence concedes, `kept` is empty — the whole section caved.
+export const concessionSplit = (text) => {
+  const sents = sentencesOf(text);
+  const kept = [];
+  let conceded = false;
+  for (const s of sents) {
+    if (CONCESSION_SHAPES.some((re) => re.test(s))) { conceded = true; break; }
+    kept.push(s);
+  }
+  return { kept: kept.join(' '), conceded };
+};
+
 // ── Planning ────────────────────────────────────────────────────────────────
-// The commission → an outline. The talker is asked for a title and a list of section
-// headings in a strict, easy-to-parse shape; `parseOutline` tolerates the ways a small
-// model bends that shape, and `planOutline` guarantees a usable arc no matter what comes
-// back (padding from DEFAULT_ARC, capping the count).
+// The commission → an outline. The talker is asked for a title and a list of section headings
+// in a strict, easy-to-parse shape; `parseOutline` tolerates the ways a small model bends that
+// shape, and `planOutline` guarantees a usable arc no matter what comes back.
 
 // `cue` is the TYPE's voice — one plain sentence naming the kind of essay this is (from the
 // learned essay-type template, organs/out/essay-types.js). `hints` are headings that have
-// WORKED for this type before — the learned half — offered to the planner, never imposed:
-// the plan may use, adapt, or ignore them. Both absent → the prompt is byte-identical to
-// the unsteered organ.
-// `sources` are excerpts research gathered on the subject (organs/out never fetches — the caller
-// hands them in). When present the planner is shown the material so the outline reflects what the
-// reading actually covers, not what the model guesses the subject is about. Absent (null/empty) →
-// the prompt is byte-identical to the unresearched plan.
+// WORKED for this type before — offered to the planner, never imposed. `sources` are excerpts
+// research gathered on the subject (organs/out never fetches — the caller hands them in). All
+// three absent → the prompt is byte-identical to the unsteered organ.
 export const planMessages = (topic, { cue = null, hints = null, sources = null } = {}) => ([
   { role: 'system', content:
     'You are an essayist planning a long-form essay. Given a commission, produce a working outline: ' +
@@ -122,34 +284,40 @@ export const parseOutline = (text, topic = '') => {
   return { title, headings };
 };
 
-// planOutline(rawPlan, topic) → { title, body:[headings], conclusion }. Guarantees a usable
-// arc: at least a handful of body sections (padded from DEFAULT_ARC), a title, and a single
-// conclusion pulled out to land last. Never trusts the planner to have produced enough.
+// planOutline(rawPlan, topic) → { title, body:[headings], conclusion }. Guarantees a usable arc.
+// The fix over the old organ: backfill by ROLE SUFFICIENCY, not by concatenating DEFAULT_ARC.
+//   • A non-empty plan keeps the planner's headings as-is — the FIRST is the opener, whatever it
+//     is named — and pads (only if under MIN_BODY) from PAD_ARC, which carries no opener. So a
+//     plan that already has an opening section never gets a second "Introduction" tacked on.
+//   • A truly empty plan walks the full neutral arc (whose first entry IS "Introduction").
+// This is the direct cure for the doubled-intro scaffold leak.
 export const planOutline = (rawPlan, topic = '') => {
   const { title, headings } = parseOutline(rawPlan, topic);
   // Pull any heading that reads as the close out to the end; the walk lands on it explicitly.
   const body = headings.filter((h) => !/\bconclu(?:sion|de|ding)\b|\bin closing\b|\bfinal thoughts\b/i.test(h));
-  // Backfill from the neutral arc until we have a real body to develop.
-  for (const h of DEFAULT_ARC) {
-    if (body.length >= DEFAULT_ARC.length) break;
+  if (body.length === 0) {
+    // Bodiless plan — supply the whole neutral arc, opener included.
+    return { title, body: [...DEFAULT_ARC], conclusion: CONCLUSION };
+  }
+  // Thin but non-empty — pad with DEVELOP moves only (never a second opener), to MIN_BODY.
+  for (const h of PAD_ARC) {
+    if (body.length >= MIN_BODY) break;
     if (!body.some((b) => b.toLowerCase() === h.toLowerCase())) body.push(h);
   }
-  // Keep the up-front plan bounded; the length floor extends it dynamically if needed.
-  const trimmed = body.slice(0, 9);
-  return { title, body: trimmed, conclusion: CONCLUSION };
+  return { title, body: body.slice(0, 9), conclusion: CONCLUSION };
 };
 
 // ── Composing one section ────────────────────────────────────────────────────
-// Each section is a full talker pass, prompted with the whole plan and a tail of the draft
-// so the prose stays continuous and non-repeating. `targetWords` steers length; `role`
-// names the arc move so the opening opens and the close lands.
+// Each section is a full talker pass, prompted with the whole plan and a tail of the draft so
+// the prose stays continuous. `role` names the arc move so the opening opens, an objection
+// opposes, and the close lands. `corrective` is the targeted directive a REGEN carries, naming
+// what the first pass got wrong (fabricated evidence, conceded the case, or restated).
 
-// `sources` are the research excerpts (same set the planner saw). When present each section is
-// written GROUNDED in them — the model is told to lean on the material and not invent facts beyond
-// what it and general knowledge support, which is the whole point of researching before writing on
-// a small model prone to confabulation. Absent → the prompt is byte-identical to the unresearched
-// section.
-export const sectionMessages = ({ topic, title, outline = [], heading, index = 0, total = 0, tail = '', targetWords = 380, role = 'develop', cue = null, sources = null } = {}) => {
+// `sources` are the research excerpts (same set the planner saw). Present → the section is
+// GROUNDED in them and told not to invent beyond them. Absent → the section carries the
+// no-invented-evidence contract instead (the sourceless discipline), so a small model argues
+// from reasoning rather than confabulating figures and studies.
+export const sectionMessages = ({ topic, title, outline = [], heading, index = 0, total = 0, tail = '', targetWords = 380, role = 'develop', cue = null, sources = null, corrective = '' } = {}) => {
   const plan = outline.length ? `\nThe essay's outline: ${outline.join(' · ')}.` : '';
   const soFar = tail ? `\n\nThe essay so far ends:\n"""\n${tail}\n"""\nContinue from there — do not repeat what is already written.` : '';
   const grounded = Array.isArray(sources) && sources.length;
@@ -160,18 +328,23 @@ export const sectionMessages = ({ topic, title, outline = [], heading, index = 0
     ? 'This is the OPENING section — set the essay in motion: frame the subject, stake the question, and draw the reader in. Do not summarise the whole essay.'
     : role === 'land'
       ? 'This is the CONCLUSION — land the essay: draw the threads together, say what it all amounts to, and close. Do not introduce a wholly new topic.'
-      : 'Develop this section fully with its own angle — reasoning, specifics, and texture. Do not restate the introduction or pre-empt the conclusion.';
+      : role === 'against'
+        ? 'This is the ADVERSARIAL section — argue the STRONGEST case AGAINST the essay\'s thesis. Press the opposing view on its own terms. Do NOT concede, hedge back to agreement, or end by re-affirming the thesis; the reader must feel the claim genuinely threatened.'
+        : 'Develop this section fully with its own angle — reasoning and argument. Do not restate the introduction, do not repeat points earlier sections already made, and do not pre-empt the conclusion.';
+  const fix = corrective ? `\n\nRevise your approach: ${corrective}` : '';
   return [
     { role: 'system', content:
       'You are an accomplished essayist writing one section of a longer essay. ' +
       (cue ? `${cue} ` : '') +
-      (grounded ? 'Ground the section in the provided source material rather than inventing detail. ' : '') +
+      (grounded
+        ? 'Ground the section in the provided source material rather than inventing detail. '
+        : 'Do not invent statistics, studies, named institutions, journals, or specific factual claims you cannot support; where you would otherwise need a source you do not have, argue from reasoning and well-established general knowledge instead. ') +
       'Write flowing, substantive prose in ' +
       'full paragraphs — no lists, no headings, no meta-commentary about the essay or these instructions. Aim for about ' +
       `${targetWords} words. Write ONLY the prose of this section.` },
     { role: 'user', content:
       `Essay commission: ${String(topic || '').trim()}\nWorking title: ${title}.${plan}\n\n` +
-      `Section ${total ? `${index + 1} of ${total}+ ` : ''}— heading: "${heading}".\n${move}${soFar}${src}` },
+      `Section ${total ? `${index + 1} of ${total}+ ` : ''}— heading: "${heading}".\n${move}${soFar}${src}${fix}` },
   ];
 };
 
@@ -186,58 +359,52 @@ const tailOf = (text, words = 90) => {
 const tokensFor = (targetWords) => Math.max(256, Math.min(1024, Math.round(targetWords * 1.7)));
 
 // ── The walk ─────────────────────────────────────────────────────────────────
-// composeEssay — plan, then walk the arc over the ground until the body clears ESSAY_MIN_WORDS,
-// then land on a conclusion. Model-injected; every talker pass streams through the hooks so a UI
-// can render live. Returns the assembled markdown, the sections, and the final word count.
+// composeEssay — plan, then walk the arc, GATING each section and letting the piece SATURATE:
+// develop until fresh sections stop landing, then land on a conclusion. Model-injected; every
+// talker pass streams through the hooks so a UI can render live. Returns the assembled markdown,
+// the KEPT sections, the final word count, and a length-decision TRACE (why the walk ran as long
+// as it did — every kept, corrected, and dropped section, with the reason).
 //
 //   talker(messages, { maxTokens, temperature, signal, onToken }) → Promise<string>
 //
 // The walk is deliberately EMITTED ACROSS MANY MESSAGES, not as one blob: each section is its
-// own beat, announced by onSection, streamed through onToken, and closed by onSectionEnd. A chat
-// surface renders each as a separate message bubble — the essay accumulates across the thread the
-// way a long reply arrives in pieces — while continuity is held by the tail of the running draft
-// fed into every section prompt. onPlan fires once the outline is known (title + arc) so the
-// surface can announce the piece before the first section lands.
+// own beat, announced by onSection, streamed through onToken, and then either closed by
+// onSectionEnd (kept) or retracted by onSectionDrop (a gate dropped it — a UI must REMOVE the
+// bubble it opened, not render it). onSectionEnd fires 1:1 with the kept sections in the result.
 //
 // hooks (all optional):
 //   onPhase(name)                              — 'planning' | 'writing' | 'done'
 //   onPlan({ title, outline })                 — the arc, once planned
 //   onSection({ heading, index, role, words }) — a new section beat opens (start a new message)
-//   onToken(piece, heading)                    — a token of the current section
-//   onSectionEnd({ heading, index, role, text, words, total }) — the section beat closes
+//   onToken(piece, heading)                    — a token of the current section (first pass only)
+//   onSectionEnd({ heading, index, role, text, words, total }) — a KEPT section beat closes
+//   onSectionDrop({ heading, role, reason })   — the opened beat was dropped by a gate (remove it)
 export const composeEssay = async ({
   topic,
   talker,
-  minWords = ESSAY_MIN_WORDS,
-  maxSections = 24,          // a BACKSTOP against a misbehaving talker, not the governor —
-                            //   the word floor stops the walk first at the ~380-word target.
+  minWords = ESSAY_MIN_WORDS,   // the length ASPIRATION (see ESSAY_MIN_WORDS) — extend toward it,
+                                //   but saturation, not this number, decides when to stop.
+  maxSections = 24,             // a BACKSTOP against a misbehaving talker, not the governor.
   targetPerSection = 380,
-  temperature = 0.85,
+  temperature = 0.7,            // lowered from 0.85: less ornament, less invention.
   signal = null,
-  lens = null,               // THE LENS PORT (write/lens-port.js): a logit-steer config passed
-                            //   straight through to each SECTION talker pass. When present, the
-                            //   backend's LogitProcessor pushes the decode toward situated prose
-                            //   during generation — the model never sees the machinery. Null = the
-                            //   golden phrase() path, byte-identical. The plan pass is left unsteered.
-  cue = null,                // THE TYPE'S VOICE (organs/out/essay-types.js): one plain sentence naming
-                            //   the kind of essay — rides the plan and every section system prompt.
-  planHints = null,          // THE LEARNED HALF of a type: headings that have worked for this type
-                            //   before, offered to the planner (use / adapt / ignore). Null = unsteered.
-  ground = null,             // RESEARCH GROUND: excerpts (strings, or {text} spans) the caller gathered
-                            //   on the subject — from the web walk it ran before commissioning the essay,
-                            //   or the reading already in scope. When present the plan and every section
-                            //   are written grounded in this material instead of the model's thin prior,
-                            //   so a small model researches before it writes rather than confabulating.
-                            //   Null / empty = the parametric compose, byte-identical to before.
+  lens = null,                  // THE LENS PORT (write/lens-port.js): a logit-steer config passed
+                                //   straight through to each SECTION talker pass. Null = the golden
+                                //   phrase() path, byte-identical. The plan pass is left unsteered.
+  cue = null,                   // THE TYPE'S VOICE (organs/out/essay-types.js): one plain sentence.
+  planHints = null,             // THE LEARNED HALF of a type: headings offered to the planner.
+  ground = null,                // RESEARCH GROUND: excerpts the caller gathered on the subject.
+                                //   Present → plan and sections written grounded in this material,
+                                //   and the veto stands down (real sources bind the claims).
   hooks = {},
 } = {}) => {
   if (typeof talker !== 'function') throw new TypeError('composeEssay: a talker function is required');
   const commission = String(topic || '').trim();
   if (!commission) throw new Error('composeEssay: an essay commission (topic) is required');
   const aborted = () => !!(signal && signal.aborted);
-  // Normalise the research ground to a capped list of clean excerpt strings. Bounded so the digest
-  // (repeated into every section prompt) stays within a small model's context: the strongest spans
-  // the caller ranked, each clipped, up to a dozen. Empty → sources stays null → prompts unchanged.
+
+  // Normalise the research ground to a capped list of clean excerpt strings. Empty → null → the
+  // ungrounded (veto-governed) path, prompts byte-identical to the parametric organ.
   const sources = (() => {
     if (!Array.isArray(ground)) return null;
     const seen = new Set();
@@ -254,6 +421,7 @@ export const composeEssay = async ({
     }
     return out.length ? out : null;
   })();
+  const grounded = !!sources;
 
   // 1) PLAN — outline the arc. A planner failure is non-fatal: planOutline backfills a neutral arc.
   hooks.onPhase?.('planning');
@@ -264,72 +432,199 @@ export const composeEssay = async ({
   const outline = [...bodyHeadings, conclusion];   // the whole planned arc, handed to each section
   hooks.onPlan?.({ title, outline });
 
-  // 2) WALK — compose the body, extending with fresh angles until the floor is cleared.
-  const sections = [];
+  // 2) WALK — compose the body, gating each section and extending with fresh angles until the
+  //    field SATURATES (fresh sections stop landing) or the aspiration is met.
+  const sections = [];           // KEPT sections only
+  const ledger = new Set();      // content words spent so far — the coverage ledger
+  const trace = [];              // the length-decision record: every section, kept or dropped
+  const droppedCandidates = [];  // veto-clean but too-thin/restating drops — for last resort
   let out = `# ${title}\n\n`;
   let words = countWords(title);
   const queue = [...bodyHeadings];
   let developIdx = 0;
-  let stalls = 0;
+  let consecutiveDrops = 0;
+  let deadPasses = 0;
   let index = 0;
 
+  // Run one talker pass for a section. `corrective` is empty on the first pass, a targeted
+  // directive on the regen. Streams tokens only on the first pass (the regen replaces the bubble
+  // on finalize anyway, so a double-stream would just flicker).
+  const generate = async (heading, role, target, corrective, stream) => {
+    const msgs = sectionMessages({
+      topic: commission, title, outline, heading, index,
+      total: queue.length + sections.length, tail: tailOf(out),
+      targetWords: target, role, cue, sources, corrective,
+    });
+    const raw = await talker(msgs, {
+      maxTokens: tokensFor(target), temperature, signal,
+      onToken: stream ? (piece) => hooks.onToken?.(piece, heading) : undefined,
+      ...(lens ? { lens } : {}),
+    });
+    return stripPreamble(raw);
+  };
+
+  // Clean a candidate for its role: strike fabricated evidence (ungrounded only), and cut an
+  // against-section at its first concession. Returns the cleaned text plus which fixes it needed.
+  const cleanFor = (text, role) => {
+    let t = text;
+    const needed = [];
+    if (!grounded) {
+      const v = evidenceVeto(t);
+      if (v.struck.length) { t = v.kept; needed.push('veto'); }
+    }
+    if (role === 'against') {
+      const c = concessionSplit(t);
+      if (c.conceded) { t = c.kept; needed.push('concede'); }
+    }
+    return { text: t.trim(), needed };
+  };
+
+  // Compose one section end-to-end: generate, clean, and — if the first pass tripped a gate —
+  // regenerate once with a corrective, keeping whichever result is stronger. Returns the decision
+  // { status:'kept'|'dropped'|'dead', text, words, reason, novelty }.
+  const composeSection = async (heading, role) => {
+    const target = role === 'land' ? Math.round(targetPerSection * 1.1) : targetPerSection;
+    const gated = role === 'develop' || role === 'against';   // open and land are never dropped
+
+    const first = await generate(heading, role, target, '', true);
+    if (!first) return { status: 'dead', text: '', words: 0, reason: 'empty', novelty: 0 };
+    const c1 = cleanFor(first, role);
+    const nov1 = gated ? sectionNovelty(c1.text, ledger) : 1;
+
+    // Does the first pass warrant a corrective regen? Yes if it fabricated / conceded, or (for a
+    // gated section) restated, or came back too thin.
+    const wants = new Set(c1.needed);
+    if (gated && nov1 < NOVELTY_REGEN) wants.add('restate');
+    if (countWords(c1.text) < MIN_SECTION_WORDS) wants.add('thin');
+
+    let best = { text: c1.text, novelty: nov1, needed: c1.needed };
+    if (wants.size && !aborted()) {
+      const corrective = [
+        wants.has('veto') && 'Your previous attempt stated statistics, studies, journals, or named institutions that cannot be sourced here. Do NOT cite any figures, studies, or organizations; argue from reasoning and general knowledge only.',
+        wants.has('concede') && 'Your previous attempt conceded the opposing case. Argue the strongest objection to the thesis without pivoting back to agreement.',
+        wants.has('restate') && 'Your previous attempt largely repeated points already made. Take a genuinely new angle the earlier sections have not covered.',
+        wants.has('thin') && 'Your previous attempt was too short. Develop the point fully across substantive paragraphs.',
+      ].filter(Boolean).join(' ');
+      const second = await generate(heading, role, target, corrective, false);
+      if (second) {
+        const c2 = cleanFor(second, role);
+        const nov2 = gated ? sectionNovelty(c2.text, ledger) : 1;
+        // Prefer the retry when it is cleaner (fewer forced fixes) or fresher and not thinner.
+        const better = (c2.needed.length < best.needed.length)
+          || (nov2 > best.novelty && countWords(c2.text) >= MIN_SECTION_WORDS);
+        if (better) best = { text: c2.text, novelty: nov2, needed: c2.needed };
+      }
+    }
+
+    const bw = countWords(best.text);
+    // Only GATED sections (develop / against) can be dropped. The opener and the landing are
+    // structural — they are kept as long as they are non-empty, however thin, so the essay
+    // always opens and always lands.
+    if (bw === 0) {
+      return { status: 'dropped', text: '', words: 0, reason: 'empty', novelty: 0 };
+    }
+    if (gated && bw < MIN_SECTION_WORDS) {
+      return { status: 'dropped', text: best.text, words: bw, reason: 'thin', novelty: best.novelty };
+    }
+    if (gated && best.novelty < NOVELTY_DROP) {
+      return { status: 'dropped', text: best.text, words: bw, reason: 'restates', novelty: best.novelty };
+    }
+    return { status: 'kept', text: best.text, words: bw, reason: best.needed.length ? `corrected:${best.needed.join('+')}` : 'clean', novelty: best.novelty };
+  };
+
+  // Write one section beat: open it, compose+gate it, then either keep (append, ledger, close) or
+  // drop (retract the bubble). Returns the decision so the walk can read saturation and deadness.
   const writeSection = async (heading, role) => {
     hooks.onPhase?.('writing');
     hooks.onSection?.({ heading, index, role, words });
-    // A closing section aims a little fuller so the landing does not feel clipped.
-    const target = role === 'land' ? Math.round(targetPerSection * 1.1) : targetPerSection;
-    let raw = '';
+    let decision;
     try {
-      raw = await talker(
-        sectionMessages({ topic: commission, title, outline, heading, index, total: queue.length + sections.length, tail: tailOf(out), targetWords: target, role, cue, sources }),
-        { maxTokens: tokensFor(target), temperature, signal, onToken: (piece) => hooks.onToken?.(piece, heading), ...(lens ? { lens } : {}) },
-      );
+      decision = await composeSection(heading, role);
     } catch (err) {
       if (aborted()) throw err;
-      raw = '';
+      decision = { status: 'dead', text: '', words: 0, reason: 'error', novelty: 0 };
     }
-    const text = stripPreamble(raw);
-    const bw = countWords(text);
-    const at = index;
-    sections.push({ heading, text, role, words: bw });
-    out += `## ${heading}\n\n${text}\n\n`;
-    words += bw + countWords(heading);
-    index += 1;
-    hooks.onSectionEnd?.({ heading, index: at, role, text, words: bw, total: words });
-    // Stall guard: a talker that returns (almost) nothing twice running ends the walk rather
-    // than looping to the section cap on empty passes.
-    if (bw < 15) { stalls += 1; } else { stalls = 0; }
-    return bw;
+
+    if (decision.status === 'kept') {
+      const at = index;
+      sections.push({ heading, text: decision.text, role, words: decision.words });
+      out += `## ${heading}\n\n${decision.text}\n\n`;
+      words += decision.words + countWords(heading);
+      for (const w of contentWords(decision.text)) ledger.add(w);
+      index += 1;
+      deadPasses = 0;
+      consecutiveDrops = 0;
+      trace.push({ heading, role, status: 'kept', reason: decision.reason, words: decision.words, novelty: Math.round(decision.novelty * 100) / 100 });
+      hooks.onSectionEnd?.({ heading, index: at, role, text: decision.text, words: decision.words, total: words });
+    } else if (decision.status === 'dead') {
+      deadPasses += 1;
+      trace.push({ heading, role, status: 'dead', reason: decision.reason, words: 0, novelty: 0 });
+      hooks.onSectionDrop?.({ heading, role, reason: decision.reason });
+    } else {
+      // A gate drop — the gate working, not a dead talker.
+      deadPasses = 0;
+      consecutiveDrops += 1;
+      if (decision.words > 0) droppedCandidates.push({ heading, role, text: decision.text, words: decision.words });
+      trace.push({ heading, role, status: 'dropped', reason: decision.reason, words: decision.words, novelty: Math.round(decision.novelty * 100) / 100 });
+      hooks.onSectionDrop?.({ heading, role, reason: decision.reason });
+    }
+    return decision;
   };
 
-  // Open, then develop. The opening is the first queued heading (usually "Introduction").
+  // Open, then develop. The opening is the first queued heading (usually "Introduction"); an
+  // objection heading is walked as an adversarial 'against' section.
   while (sections.length < maxSections - 1 && !aborted()) {
     let heading, role;
-    if (queue.length) { heading = queue.shift(); role = sections.length === 0 ? 'open' : 'develop'; }
-    else {
-      if (words >= minWords) break;                 // body floor cleared — go land it
+    if (queue.length) {
+      heading = queue.shift();
+      role = sections.length === 0 ? 'open' : (isAgainstHeading(heading) ? 'against' : 'develop');
+    } else {
+      if (words >= minWords) break;                 // aspiration met — go land it
+      if (consecutiveDrops >= SATURATE_STOP) break; // the field has saturated — nothing fresh left
       heading = DEVELOP_ANGLES[developIdx % DEVELOP_ANGLES.length];
       developIdx += 1;
-      role = 'develop';
+      role = isAgainstHeading(heading) ? 'against' : 'develop';
     }
     await writeSection(heading, role);
-    if (stalls >= 2) break;                          // the talker is stuck; stop developing
-    if (!queue.length && words >= minWords) break;   // enough body — land it
+    if (deadPasses >= DEAD_STOP) break;             // the talker is dead; stop the walk
+    if (!queue.length && consecutiveDrops >= SATURATE_STOP) break;  // saturated after the plan
   }
 
-  // 3) LAND — always close on a conclusion, unless the walk was aborted or the talker is dead.
-  if (!aborted() && stalls < 2) await writeSection(conclusion, 'land');
+  // FLOOR OF LAST RESORT: if the gates dropped EVERY body section (an over-repeating or gutted
+  // talker), the piece would collapse to a title and a conclusion. Restore the single strongest
+  // dropped candidate so the body is not empty — a gate is a decision, not a demolition.
+  if (sections.length === 0 && droppedCandidates.length && !aborted()) {
+    const best = droppedCandidates.slice().sort((a, b) => b.words - a.words)[0];
+    const at = index;
+    sections.push({ heading: best.heading, text: best.text, role: best.role, words: best.words });
+    out += `## ${best.heading}\n\n${best.text}\n\n`;
+    words += best.words + countWords(best.heading);
+    for (const w of contentWords(best.text)) ledger.add(w);
+    index += 1;
+    trace.push({ heading: best.heading, role: best.role, status: 'restored', reason: 'last-resort', words: best.words, novelty: 0 });
+    hooks.onSection?.({ heading: best.heading, index: at, role: best.role, words });
+    hooks.onSectionEnd?.({ heading: best.heading, index: at, role: best.role, text: best.text, words: best.words, total: words });
+  }
+
+  // 3) LAND — always close on a conclusion, unless the walk was aborted or the talker is DEAD.
+  //    A gate saturation is NOT a reason to skip the landing; only an unresponsive talker is. The
+  //    conclusion binds no new ground by design, so it is exempt from the novelty gate.
+  if (!aborted() && deadPasses < DEAD_STOP) await writeSection(conclusion, 'land');
 
   const text = out.trimEnd() + '\n';
   hooks.onPhase?.('done');
+  const finalWords = countWords(text);
   return {
     title,
     sections,
     text,
-    words: countWords(text),
-    metWords: countWords(text) >= minWords,
+    words: finalWords,
+    metWords: finalWords >= minWords,
+    saturated: consecutiveDrops >= SATURATE_STOP,     // did the walk stop because it ran dry?
+    dropped: trace.filter((t) => t.status === 'dropped' || t.status === 'dead').length,
+    trace,                                            // the length-decision audit log
     aborted: aborted(),
-    grounded: !!sources,                 // was the piece written over researched source material?
+    grounded,                                         // was the piece written over researched sources?
     sourceCount: sources ? sources.length : 0,
   };
 };
