@@ -8,8 +8,6 @@
 // renderers to whichever thread the essay lands in. DOM only; no generation logic (the walk
 // lives in organs/out/essay.js) and no model.
 
-import { ESSAY_MIN_WORDS } from '../organs/out/essay.js';
-
 const escapeHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export const createEssayThread = (messagesEl) => {
@@ -55,6 +53,10 @@ export const createEssayThread = (messagesEl) => {
     const sec = el.querySelector('.sec');
     return {
       stream: (piece) => { sec.textContent += piece; scrollDown(); },
+      // A gate dropped this section — retract the bubble it opened. A dropped section is the
+      // coverage/veto gate working (it restated, or fabricated evidence it could not source),
+      // not prose to render.
+      remove: () => el.remove(),
       // Close: drop the status, reflow the streamed text into paragraphs (blank-line split).
       finalize: ({ text } = {}) => {
         el.classList.remove('streaming');
@@ -91,11 +93,14 @@ export const createEssayThread = (messagesEl) => {
     const meta = document.createElement('div');
     meta.className = 'essay-meta';
     const count = document.createElement('span');
+    // Length is EMERGENT here, not measured against a floor: the walk lands when fresh sections
+    // stop landing (saturation), so the honest report is the count, the sections kept, and — when
+    // the gates dropped repeats or fabrications — how many, and whether the piece ran dry.
+    const dropNote = res.dropped ? ` · ${res.dropped} dropped by the gates` : '';
+    const settle = res.saturated ? ' — length settled by saturation' : '';
     count.innerHTML = res.aborted
       ? `<span class="under">Stopped — ${res.words} words</span>`
-      : (res.words >= ESSAY_MIN_WORDS
-          ? `Essay complete · ${res.words} words across ${res.sections.length} sections — clears the ${ESSAY_MIN_WORDS.toLocaleString()}-word floor`
-          : `<span class="under">${res.words} words across ${res.sections.length} sections — under the ${ESSAY_MIN_WORDS.toLocaleString()}-word floor</span>`);
+      : `Essay complete · ${res.words} words across ${res.sections.length} sections${dropNote}${settle}`;
     meta.appendChild(count);
 
     const actions = document.createElement('span');

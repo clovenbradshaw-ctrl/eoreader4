@@ -130,6 +130,9 @@ const write = async (commission) => {
         onSection: ({ heading }) => { current = sectionMessage(heading); },
         onToken: (piece) => { current?.stream(piece); },
         onSectionEnd: ({ text, words }) => { current?.finalize({ text, words }); current = null; },
+        // A gate dropped the section it streamed — retract the bubble rather than leave a
+        // half-written repeat or a fabrication on the thread.
+        onSectionDrop: () => { current?.remove(); current = null; },
       },
     });
     // If planning produced no plan hook path (defensive), make sure the status is gone.
