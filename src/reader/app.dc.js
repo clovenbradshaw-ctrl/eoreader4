@@ -1284,7 +1284,10 @@ class Component extends DCLogic {
     // nothing was gathered (→ [], parametric compose).
     const scope=[...new Set([...existing,...gathered])];
     if(!scope.length)return [];
-    return this._essaySpans(subject,scope,20).map(s=>this.norm(s.text)).filter(Boolean);
+    // Return the SPANS (text + source url + sentence index), not bare strings, so the essay organ
+    // can BIND each section's claims back to the span they rest on (eo-gen.essayBinder). The idx/u
+    // ride through composeEssay's ground normaliser into the binder's citation.
+    return this._essaySpans(subject,scope,20).map(s=>({text:this.norm(s.text),u:s.u,i:s.i})).filter(s=>s.text);
   }
   // Walk the arc over the ground (window.eoGen.essay → runContinuation) and finalize into the
   // pending assistant bubble. The audit is kept for export (this._lastEssayAudit).
@@ -1318,7 +1321,15 @@ class Component extends DCLogic {
   // essay itself STREAMS into the bubble as markdown while it is written. The same reasoning-
   // trace surface every other turn uses (_setThink/_beat), fed by the organ's hooks.
   _essayOrganReady(){return typeof window!=='undefined'&&!!(window.eoGen&&window.eoGen.essayCompose&&window.eoGen.essayTypes);}
-  _essayIntent(q){const s=String(q||'');return /\bessays?\b/i.test(s)&&new RegExp('\\b(?:'+this._CV()+')\\b','i').test(s);}
+  // The essay organ is ONE option, not the default for anything essay-shaped. It fires from three
+  // explicit places only: the /essay command, the ✍ Essay button (essayGo), and — here — a clear
+  // COMMISSION in natural language: a compose verb governing "essay" within a short window ("write
+  // an essay on X", "compose a long persuasive essay about Y", "draft me a short essay on Z"). A
+  // mere MENTION ("what does this essay argue?", "summarize the essay") and a SOFT ask ("tell me /
+  // give me an essay") are NOT commissions — they fall through to grounded chat, which grounds
+  // properly. Dropping the soft verbs is the "stop always trying to be an essay" fix.
+  _essayIntent(q){const s=String(q||'');
+    return /\b(?:write|compose|draft|pen|author|craft|generate|produce)\b[^.?!\n]{0,40}\bessays?\b/i.test(s);}
   // The UI list of types: the organ registry when loaded, else this fallback (same ids), so
   // the picker renders before the module lands. `desc` is the picker's one-line gloss.
   _ESSAY_FALLBACK(){return [
@@ -1416,7 +1427,13 @@ class Component extends DCLogic {
       this._beat(id,'think',res.words>=floor
         ?('Done — '+res.words.toLocaleString()+' words across '+res.sections.length+' sections; clears the '+floor.toLocaleString()+'-word floor.')
         :('Done — '+res.words.toLocaleString()+' words across '+res.sections.length+' sections; under the '+floor.toLocaleString()+'-word floor.'));
-      const groundedNote=res.grounded?(' · grounded in '+res.sourceCount+' researched source'+(res.sourceCount===1?'':'s')):'';
+      // The banner is HONEST about how much of the piece actually bound to the sources — the
+      // "grounded in N sources" label no longer stands on its own (that was the failure: a piece
+      // that touched no source still wore the badge). When binding ran, report the bound share.
+      const boundPct=(typeof res.boundFraction==='number')?Math.round(res.boundFraction*100):null;
+      const groundedNote=res.grounded
+        ?(' · grounded in '+res.sourceCount+' researched source'+(res.sourceCount===1?'':'s')+(boundPct!=null?(' · '+boundPct+'% of claims tied to them'):''))
+        :'';
       const meta='*'+res.words.toLocaleString()+' words · '+res.sections.length+' sections · '+type.label+' essay'+groundedNote+(learnedLine?(' · ✎ '+learnedLine):'')+'*';
       finish({text:(res.text||acc||'').trim()+'\n\n---\n'+meta});
     }catch(e){guard.clear();

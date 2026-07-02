@@ -109,15 +109,26 @@ const stripPreamble = (s) => String(s ?? '')
   .replace(/^\s*(?:sure[,!.]?\s+|certainly[,!.]?\s+|of course[,!.]?\s+|absolutely[,!.]?\s+|here(?:'s| is| you go|’s)\b[^\n:]*:?\s*)/i, '')
   .trim();
 
+// A section body must not carry its own heading — the walk prints "## <heading>" itself. A small
+// model sometimes echoes the heading (or the title) as a leading markdown line, which is the
+// "every heading printed twice" defect. Strike a single leading markdown heading line so it
+// appears once. Only a leading "# …"/"## …" line goes; prose that merely contains a "#" is safe.
+const stripSectionHeading = (s) => String(s ?? '').replace(/^\s*#{1,6}[ \t][^\n]*(?:\n+|$)/, '').trim();
+
 // ── Sentence segmentation ──────────────────────────────────────────────────────
 // Split prose into sentences for the veto and the concession cut. Splits on a terminal
 // [.!?] followed by whitespace and a sentence-opening character (capital or quote). The final
 // sentence (no trailing delimiter+capital) is kept as the last element. Good enough for the
 // gates; it never needs to be perfect, only to isolate the offending clause.
+// The negative lookbehinds keep a period that is NOT a sentence end from splitting a sentence in
+// two: a middle initial ("Thomas R. Unruh") or a title/abbreviation before a capitalised word
+// ("Dr. Maria Rodriguez", "Prof. Smith"). Without them the veto would see only a fragment of an
+// expert-attributed claim and let the rest through — exactly how "As entomologist Thomas R. Unruh
+// has pointed out…" slipped the veto.
 export const sentencesOf = (text) => String(text ?? '')
   .replace(/\s+/g, ' ')
   .trim()
-  .split(/(?<=[.!?])\s+(?=["'“(]?[A-ZÀ-ÖØ-Þ])/)
+  .split(/(?<=[.!?])(?<!\b[A-Z]\.)(?<!\b(?:Dr|Mr|Mrs|Ms|Prof|Sr|Jr|St|vs|Inc|Ltd|Co|Fig|No|Vol)\.)\s+(?=["'“(]?[A-ZÀ-ÖØ-Þ])/)
   .map((s) => s.trim())
   .filter(Boolean);
 
@@ -142,6 +153,33 @@ export const EVIDENCE_SHAPES = Object.freeze([
   /\b[Aa]ccording to (?:the )?(?:[A-Z]{2,}|[A-Z][a-z]+)/,
   // A named institution: "Dolphin Research Center", "World Wildlife Fund", "Stanford University".
   /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Research\s+)?(?:Cent(?:er|re)|Foundation|Institute|Fund|Society|University|Association|Laborator(?:y|ies)|Agency)\b/,
+  // ── The academic COSTUME (added after the mosquito essay) ──────────────────────
+  // The dolphins essay fabricated stats and institutions; the mosquito essay dressed its
+  // fabrications as scholarship — parenthetical author-date cites, "et al." reference lists, and
+  // quotes pinned to named "experts". A fabricated quote attributed to a real person is the
+  // hardest fabrication to catch and the one with real reputational exposure, so these are the
+  // shapes that most need striking. On an ungrounded run they are always fabrication; on a
+  // grounded run they are struck UNLESS the sentence also binds to a real span (see the binder).
+  //
+  // "(Williams et al., 2013)", "(Bergland 1984)", "(Smith and Jones, 2000)" — a parenthetical
+  // author-date cite. The year is required (a bare "(the pupal stage)" is untouched); a name or
+  // an "et al." must precede it (a bare "(2013)" year mention is left alone).
+  /\([A-Z][\w.'’-]+(?:\s+(?:et al\.?|and\s+[A-Z][\w.'’-]+|&\s+[A-Z][\w.'’-]+|[A-Z][\w.'’-]+))*[,.]?\s+(?:19|20)\d{2}[a-z]?\s*\)/,
+  // Inline author-year — "Bergland (1984)", "Hunt (2000)".
+  /\b[A-Z][\w.'’-]+\s+\((?:19|20)\d{2}[a-z]?\)/,
+  // "et al." anywhere — the reference-list tic. Vanishingly rare in honest general-knowledge
+  // prose, a dead giveaway of an invented citation apparatus ("Patel et al. 2015", "Williams et al.").
+  /\bet\s+al\b/i,
+  // A claim pinned to a named authority — "As entomologist Thomas R. Unruh has pointed out…",
+  // "As Dr. Maria Rodriguez notes…", "As noted by Dr. Jane Smith…", "As biologist John Taylor
+  // explains…". The fabricated-expert-quote shape.
+  /\bas\s+(?:noted|observed|argued|explained|pointed\s+out|shown|demonstrated|described|reported|put)\s+by\s+[A-Z]/i,
+  /\bas\s+(?:dr\.?|professor|prof\.?|mr\.?|ms\.?|mrs\.?)\s+[A-Z]/i,
+  /\bas\s+(?:the\s+)?(?:entomologist|biologist|ecologist|zoologist|researcher|scientist|professor|epidemiologist|physician|expert|economist|historian|psychologist|neuroscientist|philosopher|sociologist|virologist|immunologist|geneticist|chemist|physicist)\b/i,
+  // "Dr. Maria Rodriguez", "Professor Jane Smith" — a titled name anywhere in the claim.
+  /\b(?:Dr\.?|Professor|Prof\.?)\s+[A-Z][a-z]+/,
+  // A quotation attributed to a speaker — '"…," says Dr. John Taylor', '"…," notes Rodriguez'.
+  /["“][^"”“]{0,240}["”]\s*[,.]?\s*(?:said|says|noted|notes|explained|explains|argued|argues|observed|observes|wrote|writes|remarked|remarks)\b/i,
 ]);
 
 // evidenceVeto(text) → { kept, struck, boundFraction }. `kept` is the prose with offending
@@ -394,8 +432,13 @@ export const composeEssay = async ({
   cue = null,                   // THE TYPE'S VOICE (organs/out/essay-types.js): one plain sentence.
   planHints = null,             // THE LEARNED HALF of a type: headings offered to the planner.
   ground = null,                // RESEARCH GROUND: excerpts the caller gathered on the subject.
-                                //   Present → plan and sections written grounded in this material,
-                                //   and the veto stands down (real sources bind the claims).
+                                //   Present → plan and sections written grounded in this material.
+  bind = null,                  // THE SPAN-BINDER (ground/bind.js via eo-gen): bind(text, spans)
+                                //   → { kept, struck, boundFraction }. Injected on a grounded run so
+                                //   each section is BOUND to the real source spans — a claim tied to
+                                //   no span and making no lexical contact (fabricated fact / invented
+                                //   mechanism) is struck, which no surface veto can catch. Null → the
+                                //   surface veto is the only fabrication check (back-compat).
   hooks = {},
 } = {}) => {
   if (typeof talker !== 'function') throw new TypeError('composeEssay: a talker function is required');
@@ -403,8 +446,9 @@ export const composeEssay = async ({
   if (!commission) throw new Error('composeEssay: an essay commission (topic) is required');
   const aborted = () => !!(signal && signal.aborted);
 
-  // Normalise the research ground to a capped list of clean excerpt strings. Empty → null → the
-  // ungrounded (veto-governed) path, prompts byte-identical to the parametric organ.
+  // Normalise the research ground to a capped list of clean excerpt SPANS { idx, text, u }. The
+  // idx/u are kept so the binder can cite a section's claims back to the span they rest on. Empty
+  // → null → the ungrounded (veto-governed) path, prompts byte-identical to the parametric organ.
   const sources = (() => {
     if (!Array.isArray(ground)) return null;
     const seen = new Set();
@@ -416,17 +460,23 @@ export const composeEssay = async ({
       const key = clipped.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push(clipped);
+      out.push({ idx: (g && Number.isFinite(g.i)) ? g.i : out.length, text: clipped, u: (g && g.u) || null });
       if (out.length >= 12) break;
     }
     return out.length ? out : null;
   })();
   const grounded = !!sources;
+  // The excerpt STRINGS fed to the planner and each section prompt (unchanged shape), and the
+  // { idx, text } SPAN SET the binder cites against. Both derive from the same normalised sources.
+  const sourceTexts = sources ? sources.map((s) => s.text) : null;
+  const spanSet = sources ? sources.map((s) => ({ idx: s.idx, text: s.text })) : null;
+  // Binding only actually runs when a binder was injected AND there are spans to bind to.
+  const binds = grounded && typeof bind === 'function';
 
   // 1) PLAN — outline the arc. A planner failure is non-fatal: planOutline backfills a neutral arc.
   hooks.onPhase?.('planning');
   let rawPlan = '';
-  try { rawPlan = await talker(planMessages(commission, { cue, hints: planHints, sources }), { maxTokens: 400, temperature: 0.7, signal }); }
+  try { rawPlan = await talker(planMessages(commission, { cue, hints: planHints, sources: sourceTexts }), { maxTokens: 400, temperature: 0.7, signal }); }
   catch (err) { if (aborted()) throw err; /* else walk the default arc */ }
   const { title, body: bodyHeadings, conclusion } = planOutline(rawPlan, commission);
   const outline = [...bodyHeadings, conclusion];   // the whole planned arc, handed to each section
@@ -436,6 +486,7 @@ export const composeEssay = async ({
   //    field SATURATES (fresh sections stop landing) or the aspiration is met.
   const sections = [];           // KEPT sections only
   const ledger = new Set();      // content words spent so far — the coverage ledger
+  const boundFractions = [];     // per-kept-section share of claims tied to a source (grounded runs)
   const trace = [];              // the length-decision record: every section, kept or dropped
   const droppedCandidates = [];  // veto-clean but too-thin/restating drops — for last resort
   let out = `# ${title}\n\n`;
@@ -453,30 +504,44 @@ export const composeEssay = async ({
     const msgs = sectionMessages({
       topic: commission, title, outline, heading, index,
       total: queue.length + sections.length, tail: tailOf(out),
-      targetWords: target, role, cue, sources, corrective,
+      targetWords: target, role, cue, sources: sourceTexts, corrective,
     });
     const raw = await talker(msgs, {
       maxTokens: tokensFor(target), temperature, signal,
       onToken: stream ? (piece) => hooks.onToken?.(piece, heading) : undefined,
       ...(lens ? { lens } : {}),
     });
-    return stripPreamble(raw);
+    return stripSectionHeading(stripPreamble(raw));
   };
 
-  // Clean a candidate for its role: strike fabricated evidence (ungrounded only), and cut an
-  // against-section at its first concession. Returns the cleaned text plus which fixes it needed.
+  // Clean a candidate for its role and return the cleaned text, which fixes it needed, and (on a
+  // grounded run) the share of claims tied to a source. Two fabrication checks now run on BOTH
+  // paths, because the mosquito essay proved they catch DIFFERENT failures:
+  //   • the surface VETO strikes fabricated SCHOLARSHIP — stats, studies, institutions, author-
+  //     date cites, "et al." lists, expert-attributed quotes. It runs even when grounded: a run
+  //     that merely dresses an invention as scholarship gets it struck; a real figure the sources
+  //     witness survives because it also binds below.
+  //   • the injected BINDER strikes fabricated FACT — a claim tied to no span and making no
+  //     lexical contact with one (invented mechanism, a parallel literature about the real topic).
+  //     Only binding against real spans catches this; no surface pattern can, because the
+  //     falseness is semantic, not lexical. Grounded runs only (needs spans to bind to).
+  // Plus the against-section concession cut, as before.
   const cleanFor = (text, role) => {
     let t = text;
     const needed = [];
-    if (!grounded) {
-      const v = evidenceVeto(t);
-      if (v.struck.length) { t = v.kept; needed.push('veto'); }
+    let boundFraction = 1;
+    const v = evidenceVeto(t);
+    if (v.struck.length) { t = v.kept; needed.push('veto'); }
+    if (binds && t) {
+      const b = bind(t, spanSet);
+      boundFraction = Number.isFinite(b && b.boundFraction) ? b.boundFraction : 1;
+      if (b && Array.isArray(b.struck) && b.struck.length) { t = String(b.kept || '').trim(); needed.push('unground'); }
     }
     if (role === 'against') {
       const c = concessionSplit(t);
       if (c.conceded) { t = c.kept; needed.push('concede'); }
     }
-    return { text: t.trim(), needed };
+    return { text: t.trim(), needed, boundFraction };
   };
 
   // Compose one section end-to-end: generate, clean, and — if the first pass tripped a gate —
@@ -497,10 +562,11 @@ export const composeEssay = async ({
     if (gated && nov1 < NOVELTY_REGEN) wants.add('restate');
     if (countWords(c1.text) < MIN_SECTION_WORDS) wants.add('thin');
 
-    let best = { text: c1.text, novelty: nov1, needed: c1.needed };
+    let best = { text: c1.text, novelty: nov1, needed: c1.needed, boundFraction: c1.boundFraction };
     if (wants.size && !aborted()) {
       const corrective = [
-        wants.has('veto') && 'Your previous attempt stated statistics, studies, journals, or named institutions that cannot be sourced here. Do NOT cite any figures, studies, or organizations; argue from reasoning and general knowledge only.',
+        wants.has('veto') && 'Your previous attempt stated statistics, studies, journals, named institutions, author-date citations, or expert quotations that cannot be sourced here. Do NOT cite any figures, studies, organizations, references, or named authorities; argue from reasoning and general knowledge only.',
+        wants.has('unground') && 'Your previous attempt asserted facts the provided sources do not support — invented mechanisms, figures, or a parallel literature. Ground EVERY claim strictly in the source material; do not introduce any fact, mechanism, statistic, study, quotation, or named authority the sources do not contain.',
         wants.has('concede') && 'Your previous attempt conceded the opposing case. Argue the strongest objection to the thesis without pivoting back to agreement.',
         wants.has('restate') && 'Your previous attempt largely repeated points already made. Take a genuinely new angle the earlier sections have not covered.',
         wants.has('thin') && 'Your previous attempt was too short. Develop the point fully across substantive paragraphs.',
@@ -512,7 +578,7 @@ export const composeEssay = async ({
         // Prefer the retry when it is cleaner (fewer forced fixes) or fresher and not thinner.
         const better = (c2.needed.length < best.needed.length)
           || (nov2 > best.novelty && countWords(c2.text) >= MIN_SECTION_WORDS);
-        if (better) best = { text: c2.text, novelty: nov2, needed: c2.needed };
+        if (better) best = { text: c2.text, novelty: nov2, needed: c2.needed, boundFraction: c2.boundFraction };
       }
     }
 
@@ -529,7 +595,7 @@ export const composeEssay = async ({
     if (gated && best.novelty < NOVELTY_DROP) {
       return { status: 'dropped', text: best.text, words: bw, reason: 'restates', novelty: best.novelty };
     }
-    return { status: 'kept', text: best.text, words: bw, reason: best.needed.length ? `corrected:${best.needed.join('+')}` : 'clean', novelty: best.novelty };
+    return { status: 'kept', text: best.text, words: bw, reason: best.needed.length ? `corrected:${best.needed.join('+')}` : 'clean', novelty: best.novelty, boundFraction: best.boundFraction };
   };
 
   // Write one section beat: open it, compose+gate it, then either keep (append, ledger, close) or
@@ -551,10 +617,11 @@ export const composeEssay = async ({
       out += `## ${heading}\n\n${decision.text}\n\n`;
       words += decision.words + countWords(heading);
       for (const w of contentWords(decision.text)) ledger.add(w);
+      if (binds && Number.isFinite(decision.boundFraction)) boundFractions.push(decision.boundFraction);
       index += 1;
       deadPasses = 0;
       consecutiveDrops = 0;
-      trace.push({ heading, role, status: 'kept', reason: decision.reason, words: decision.words, novelty: Math.round(decision.novelty * 100) / 100 });
+      trace.push({ heading, role, status: 'kept', reason: decision.reason, words: decision.words, novelty: Math.round(decision.novelty * 100) / 100, ...(binds ? { bound: Math.round((decision.boundFraction ?? 0) * 100) / 100 } : {}) });
       hooks.onSectionEnd?.({ heading, index: at, role, text: decision.text, words: decision.words, total: words });
     } else if (decision.status === 'dead') {
       deadPasses += 1;
@@ -626,5 +693,11 @@ export const composeEssay = async ({
     aborted: aborted(),
     grounded,                                         // was the piece written over researched sources?
     sourceCount: sources ? sources.length : 0,
+    // The BOUND fraction: the mean share of kept-section claims actually tied back to a source
+    // span — the honest measure behind the "grounded in N sources" banner. Null when no binder ran
+    // (prompt-level grounding only, or the parametric path), so the banner can tell the two apart.
+    boundFraction: binds && boundFractions.length
+      ? Math.round((boundFractions.reduce((a, b) => a + b, 0) / boundFractions.length) * 100) / 100
+      : null,
   };
 };
