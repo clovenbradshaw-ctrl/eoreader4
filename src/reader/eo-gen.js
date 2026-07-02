@@ -14,6 +14,31 @@ import { runContinuation, exportAudit } from '../longgen/index.js';
 import { composeEssay, ESSAY_MIN_WORDS } from '../organs/out/essay.js';
 import * as essayTypes from '../organs/out/essay-types.js';
 import { streamPhrase } from '../model/stream.js';
+import { bindCitations, CONTACT_FLOOR } from '../ground/bind.js';
+
+// THE ESSAY SPAN-BINDER — the same cite-or-veto grounding normal chat uses (ground/bind.js),
+// adapted to the essay organ's bind(text, spans) → { kept, struck, boundFraction } contract.
+// composeEssay walks free prose; when the app gathered research it injects this so each section
+// is bound to the REAL sources. bindCitations splits the section into claims and cites each
+// against the spans (no doc → pure lexical, idf flat). A claim that cites nothing AND makes no
+// lexical contact with any span (score ≤ CONTACT_FLOOR) is prose from nowhere — a fabricated fact
+// or invented mechanism — so it is STRUCK. A cited claim, or one that at least contacts a span
+// (a paraphrase the lexical binder can't pin to one sentence), RIDES. boundFraction is the cited
+// share — the honest number behind the "grounded in N sources" banner. This is the check that
+// catches fake FACTS, which the surface veto (fake scholarship) cannot.
+const essayBinder = (draft, spans = []) => {
+  const text = String(draft || '');
+  const bound = bindCitations(text, Array.isArray(spans) ? spans : []);
+  if (!bound.length) return { kept: text, struck: [], boundFraction: 1 };
+  const kept = [];
+  const struck = [];
+  for (const b of bound) {
+    if (!b.citation && (b.score || 0) <= CONTACT_FLOOR) struck.push(b.claim);
+    else kept.push(b.claim);
+  }
+  const cited = bound.filter((b) => b.citation).length;
+  return { kept: kept.join(' '), struck, boundFraction: cited / bound.length };
+};
 
 // Build the pipeline ground from the app's scored spans. Each span is {text, score, i, u};
 // runContinuation wants {idx, score, text} ranked. Keep the source url on the side so the
@@ -58,13 +83,13 @@ const essayCompose = ({ model, topic, signal = null, cue = null, planHints = nul
     talker: (messages, opts) => streamPhrase(model, messages, opts),
     signal, cue, planHints,
     ...(targetPerSection ? { targetPerSection } : {}),
-    ...(ground ? { ground } : {}),
+    ...(ground ? { ground, bind: essayBinder } : {}),
     hooks,
   });
 
 if (typeof window !== 'undefined') {
-  window.eoGen = { essay, toGround, essayCompose, essayTypes, ESSAY_MIN_WORDS, version: 2 };
+  window.eoGen = { essay, toGround, essayCompose, essayBinder, essayTypes, ESSAY_MIN_WORDS, version: 2 };
   window.dispatchEvent(new Event('eogen-ready'));
 }
 
-export { essay, toGround, essayCompose, essayTypes, ESSAY_MIN_WORDS };
+export { essay, toGround, essayCompose, essayBinder, essayTypes, ESSAY_MIN_WORDS };
