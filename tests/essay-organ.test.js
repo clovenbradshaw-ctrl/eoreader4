@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  composeEssay, planOutline, parseOutline, sectionMessages, countWords, ESSAY_MIN_WORDS,
+  composeEssay, planMessages, planOutline, parseOutline, sectionMessages, countWords, ESSAY_MIN_WORDS,
 } from '../src/organs/out/essay.js';
 import { essay } from '../src/organs/out/index.js';
 
@@ -137,6 +137,52 @@ test('a lens config is threaded into each section talker pass (not the plan)', a
   const sectionCalls = seen.filter((c) => !c.isPlan);
   assert.equal(planCall.lens, null, 'the planning pass is left unsteered');
   assert.ok(sectionCalls.length > 0 && sectionCalls.every((c) => c.lens === lens), 'every section pass carries the lens');
+});
+
+test('research ground is woven into the plan and every section, but not the parametric prompts', () => {
+  const src = ['Dolphins are marine mammals of the order Cetacea.', 'They use echolocation to hunt.'];
+  // With sources: both the plan and a section carry the gathered material.
+  const plan = planMessages('dolphins', { sources: src });
+  assert.match(plan[1].content, /Research has gathered/);
+  assert.match(plan[1].content, /echolocation/);
+  const sec = sectionMessages({ topic: 'dolphins', title: 'D', heading: 'Intro', role: 'open', sources: src });
+  assert.match(sec[0].content, /Ground the section in the provided source material/);
+  assert.match(sec[1].content, /order Cetacea/);
+  // Without sources (the default): the prompts are byte-identical to the unresearched organ.
+  assert.equal(planMessages('dolphins').at(-1).content, planMessages('dolphins', { sources: null }).at(-1).content);
+  assert.equal(
+    sectionMessages({ topic: 'dolphins', title: 'D', heading: 'Intro', role: 'open' })[1].content,
+    sectionMessages({ topic: 'dolphins', title: 'D', heading: 'Intro', role: 'open', sources: [] })[1].content,
+  );
+});
+
+test('composeEssay grounds the walk in research excerpts and reports it', async () => {
+  const seen = [];
+  const talker = async (messages, opts = {}) => {
+    const sys = messages.find((m) => m.role === 'system')?.content || '';
+    const usr = messages.find((m) => m.role === 'user')?.content || '';
+    const isPlan = /planning a long-form essay/i.test(sys);
+    seen.push({ isPlan, usr });
+    if (isPlan) return 'TITLE: On Dolphins\n1. Introduction\n2. Echolocation\n3. Conclusion';
+    return Array.from({ length: 200 }, (_, i) => `word${i}`).join(' ') + '.';
+  };
+  const ground = [
+    'Dolphins are highly intelligent marine mammals that live in social pods.',
+    'They navigate and hunt using echolocation, emitting clicks and reading the echoes.',
+  ];
+  const res = await composeEssay({ topic: 'write me an essay on dolphins', talker, ground });
+  assert.equal(res.grounded, true, 'the result reports it was grounded');
+  assert.ok(res.sourceCount >= 1, 'it counts the sources it grounded on');
+  // Every talker pass (plan + sections) saw the gathered material.
+  assert.ok(seen.length > 1);
+  assert.ok(seen.every((c) => /echolocation/.test(c.usr)), 'each pass carries the research ground');
+});
+
+test('composeEssay stays parametric (grounded:false) when no ground is supplied', async () => {
+  const talker = stubTalker(120);
+  const res = await composeEssay({ topic: 'the sea', talker });
+  assert.equal(res.grounded, false);
+  assert.equal(res.sourceCount, 0);
 });
 
 test('the organ is re-exported as a namespace off organs/out', () => {

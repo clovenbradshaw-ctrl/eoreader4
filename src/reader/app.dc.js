@@ -1237,6 +1237,55 @@ class Component extends DCLogic {
     }
     return scored.slice(0,n);
   }
+  // RESEARCH BEFORE THE ESSAY — gather the ground the essay organ writes over. The essay organ
+  // (runOrganEssay → composeEssay) otherwise composes purely from the model's parametric prior,
+  // which on a 3B model means a confident, ungrounded dolphin blurb. This does what the chat's own
+  // research path does, one step ahead of writing: derive the SUBJECT (peeling "write me an essay
+  // about" down to "dolphins"), and — when the web is on and the reading doesn't already cover it —
+  // run the curiosity walk to read the web and FOLD every page into memory, narrating each hop into
+  // the same live trail. Then pool the strongest in-scope spans (the freshly read pages ∪ whatever
+  // this chat already reads) as the excerpts the organ grounds each section in.
+  //   returns [] — nothing to ground on (web off with nothing read, or no contentful subject);
+  //               the organ composes parametrically, exactly as before.
+  //   returns [excerpts] — the researched ground for composeEssay.
+  //   returns null — the user stopped mid-walk; the caller must bail (the bubble is finalized).
+  async _gatherEssayGround(id,q,cur){
+    const seed=this._researchSeed(q,cur);
+    const subject=this.norm(seed.topic||'');
+    const anchor=seed.anchor||subject;
+    // No contentful subject to chase (a bare "write an essay" with no topic) → nothing to research.
+    if(!subject||!this._researchTerms(subject).length)return [];
+    const existing=this.chatSourcesOf(cur);
+    const isolated=this.chatIsolated(cur);
+    let gathered=[];
+    // Go to the web only when it's on AND the in-scope reading doesn't already cover the subject —
+    // an isolated / net-new chat grounds nothing from the library, so it always reads when on.
+    const webOn=this.state.webBrain!==false;
+    const covered=!isolated&&this.groundNotes(subject,existing).relevant;
+    if(webOn&&!covered){
+      this._beat(id,'start','Researching “'+subject+'” before writing — reading the web and folding it into memory so the essay stands on real sources.');
+      this._busy=true;this.setState({busy:true});
+      const preEnts=(this.graph&&this.graph.entities&&this.graph.entities.size)||0;
+      const extraSeeds=seed.focus?[]:this._researchBattery(subject,seed.derived,existing);
+      let walk={readUrls:[],hops:[]};
+      try{walk=await this._curiosityWalk(subject,anchor,(k,t)=>this._beat(id,k,t),{extraSeeds});}
+      catch(e){this._beat(id,'warn','Research stopped — '+((e&&e.message)||e));}
+      this._busy=false;this.setState({busy:false});
+      if(this._stopGen)return null;   // user stopped mid-walk — stopGeneration finalized the bubble
+      gathered=[...new Set(walk.readUrls)];
+      const learned=Math.max(0,((this.graph&&this.graph.entities&&this.graph.entities.size)||0)-preEnts);
+      this._beat(id,'done',gathered.length
+        ?('Read '+gathered.length+' source'+(gathered.length!==1?'s':'')+(learned?(' · learned '+learned+' new '+(learned===1?'entity':'entities')):'')+' — writing the essay grounded in it.')
+        :'Couldn’t gather fresh sources — writing from what’s already known and read.');
+      for(const u of gathered)this.addChatSource(u,id);
+    }
+    // The ground for the piece: the strongest spans on the subject across the freshly read pages
+    // UNION what this chat already reads. Passed by url scope so isolated chats stay isolated when
+    // nothing was gathered (→ [], parametric compose).
+    const scope=[...new Set([...existing,...gathered])];
+    if(!scope.length)return [];
+    return this._essaySpans(subject,scope,20).map(s=>this.norm(s.text)).filter(Boolean);
+  }
   // Walk the arc over the ground (window.eoGen.essay → runContinuation) and finalize into the
   // pending assistant bubble. The audit is kept for export (this._lastEssayAudit).
   async _pipelineEssay(id,q,sources){
@@ -1298,6 +1347,7 @@ class Component extends DCLogic {
   async runOrganEssay(topic){
     const q=this.norm(topic);if(!q)return;
     this._stopGen=false;
+    const cur=this.activeChatObj();           // the chat being written into (for research scope/subject)
     const G=window.eoGen,ET=G.essayTypes;
     const typeId=this.state.essayType||'argument';
     const type=ET.essayTypeOf(typeId)||ET.ESSAY_TYPES[0];
@@ -1310,6 +1360,16 @@ class Component extends DCLogic {
       chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Planning the essay…',research:{steps:[{kind:'think',text:'✍ '+type.label+' essay commissioned — a piece of at least '+floor.toLocaleString()+' words.'}],done:false,mode:'think',t0:Date.now()}}]};
       return {chats,activeChat:id,chatInput:'',essayMenuOpen:false};});
     this._scrollChat();this._thinkClock();
+    // RESEARCH BEFORE WRITING — the "it needs to do research" fix. With the web on, read the subject
+    // and FOLD it into memory first (the same curiosity walk the chat uses), so the piece stands on
+    // real sources instead of a 3B model's thin, confabulation-prone prior. Web off — or the reading
+    // already covers the subject — gathers no fresh pages and composes from what's known, as before.
+    // The gathered excerpts ride into essayCompose as its ground. Null return = a user stop mid-walk
+    // (stopGeneration already finalized the bubble), so bail without writing over it.
+    let essayGround=[];
+    try{essayGround=await this._gatherEssayGround(id,q,cur);}
+    catch(e){essayGround=[];}
+    if(essayGround===null||this._stopGen)return;
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,stance:'compose',kind:'essay',
         research:m[li].research?{...m[li].research,done:true}:m[li].research,text:'',...patch};
@@ -1332,6 +1392,7 @@ class Component extends DCLogic {
     try{
       const res=await Promise.race([G.essayCompose({model,topic:q,signal:guard.signal,
         cue:steer.cue,planHints:steer.planHints,targetPerSection:steer.targetPerSection,
+        ground:essayGround&&essayGround.length?essayGround:null,
         hooks:{
           onPlan:({title,outline})=>{guard.feed();
             this._beat(id,'plan','Outlined “'+title+'” — '+outline.length+' sections planned:');
@@ -1355,7 +1416,8 @@ class Component extends DCLogic {
       this._beat(id,'think',res.words>=floor
         ?('Done — '+res.words.toLocaleString()+' words across '+res.sections.length+' sections; clears the '+floor.toLocaleString()+'-word floor.')
         :('Done — '+res.words.toLocaleString()+' words across '+res.sections.length+' sections; under the '+floor.toLocaleString()+'-word floor.'));
-      const meta='*'+res.words.toLocaleString()+' words · '+res.sections.length+' sections · '+type.label+' essay'+(learnedLine?(' · ✎ '+learnedLine):'')+'*';
+      const groundedNote=res.grounded?(' · grounded in '+res.sourceCount+' researched source'+(res.sourceCount===1?'':'s')):'';
+      const meta='*'+res.words.toLocaleString()+' words · '+res.sections.length+' sections · '+type.label+' essay'+groundedNote+(learnedLine?(' · ✎ '+learnedLine):'')+'*';
       finish({text:(res.text||acc||'').trim()+'\n\n---\n'+meta});
     }catch(e){guard.clear();
       const partial=acc.trim();
